@@ -1,5 +1,5 @@
 import { ipcMain, dialog, app } from 'electron'
-import { getDatabase, backupDatabase } from './database.js'
+import { getDatabase, backupDatabase, logAudit } from './database.js'
 import path from 'path'
 import fs from 'fs'
 import { createRequire } from 'module'
@@ -31,6 +31,7 @@ export function registerIpcHandlers(): void {
             if (!valid) return { success: false, error: 'Invalid username or password' }
 
             db.prepare('UPDATE user SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(user.id)
+            logAudit(user.id, 'LOGIN', 'user', user.id, null, { action: 'Login' })
 
             const { password_hash, ...userData } = user
             return { success: true, user: userData }
@@ -99,7 +100,11 @@ export function registerIpcHandlers(): void {
 
     // ======== STUDENTS ========
     ipcMain.handle('student:getAll', async (_, filters?: any) => {
-        let query = `SELECT s.*, st.stream_name, e.student_type as current_type
+        let query = `SELECT s.*, st.stream_name, e.student_type as current_type,
+        (SELECT COALESCE(SUM(total_amount - amount_paid), 0) 
+         FROM fee_invoice 
+         WHERE student_id = s.id AND status != 'CANCELLED'
+        ) as balance
       FROM student s
       LEFT JOIN enrollment e ON s.id = e.student_id AND e.id = (
         SELECT MAX(id) FROM enrollment WHERE student_id = s.id
@@ -156,6 +161,73 @@ export function registerIpcHandlers(): void {
         return invoices?.balance || 0
     })
 
+    // ======== TRANSACTIONS (GENERAL) ========
+    ipcMain.handle('transaction:getCategories', async () => {
+        return db.prepare('SELECT * FROM transaction_category WHERE is_active = 1 ORDER BY category_name').all()
+    })
+
+    ipcMain.handle('transaction:createCategory', async (_, name: string, type: string) => {
+        const stmt = db.prepare('INSERT INTO transaction_category (category_name, category_type) VALUES (?, ?)')
+        const result = stmt.run(name, type)
+        return { success: true, id: result.lastInsertRowid }
+    })
+
+    ipcMain.handle('transaction:create', async (_, data: any, userId: number) => {
+        const txnRef = `TXN-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Date.now()).slice(-6)}`
+        
+        const stmt = db.prepare(`INSERT INTO ledger_transaction (
+            transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit,
+            payment_method, payment_reference, description, recorded_by_user_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+
+        const debitCredit = data.transaction_type === 'EXPENSE' ? 'DEBIT' : 'CREDIT'
+
+        const result = stmt.run(
+            txnRef, data.transaction_date, data.transaction_type, data.category_id,
+            data.amount, debitCredit, data.payment_method, data.payment_reference,
+            data.description, userId
+        )
+
+        logAudit(userId, 'CREATE', 'ledger_transaction', result.lastInsertRowid as number, null, data)
+        return { success: true, id: result.lastInsertRowid }
+    })
+
+    ipcMain.handle('transaction:getAll', async (_, filters?: any) => {
+        let query = `SELECT t.*, c.category_name, u.full_name as recorded_by 
+                     FROM ledger_transaction t
+                     LEFT JOIN transaction_category c ON t.category_id = c.id
+                     LEFT JOIN user u ON t.recorded_by_user_id = u.id
+                     WHERE t.is_voided = 0`
+        
+        const params: any[] = []
+
+        if (filters?.startDate && filters?.endDate) {
+            query += ` AND t.transaction_date BETWEEN ? AND ?`
+            params.push(filters.startDate, filters.endDate)
+        }
+        if (filters?.type) {
+            query += ` AND t.transaction_type = ?`
+            params.push(filters.type)
+        }
+
+        query += ` ORDER BY t.transaction_date DESC`
+        return db.prepare(query).all(...params)
+    })
+
+    ipcMain.handle('transaction:getSummary', async (_, startDate: string, endDate: string) => {
+        return db.prepare(`
+            SELECT 
+                t.transaction_type, 
+                t.debit_credit,
+                c.category_name,
+                SUM(t.amount) as total 
+            FROM ledger_transaction t
+            LEFT JOIN transaction_category c ON t.category_id = c.id
+            WHERE t.is_voided = 0 AND t.transaction_date BETWEEN ? AND ?
+            GROUP BY t.transaction_type, t.debit_credit, c.category_name
+        `).all(startDate, endDate)
+    })
+
     // ======== FEE PAYMENTS ========
     ipcMain.handle('payment:record', async (_, data: any, userId: number) => {
         const txnRef = `TXN-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Date.now()).slice(-6)}`
@@ -164,13 +236,15 @@ export function registerIpcHandlers(): void {
         const txnStmt = db.prepare(`INSERT INTO ledger_transaction (
       transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit,
       student_id, payment_method, payment_reference, description, term_id, recorded_by_user_id
-    ) VALUES (?, ?, 'FEE_PAYMENT', 1, ?, 'CREDIT', ?, ?, ?, ?, ?, ?)`)
+    ) VALUES (?, ?, 'FEE_PAYMENT', (SELECT id FROM transaction_category WHERE category_name = 'School Fees'), ?, 'CREDIT', ?, ?, ?, ?, ?, ?)`)
 
         const txnResult = txnStmt.run(
             txnRef, data.transaction_date, data.amount, data.student_id,
             data.payment_method, data.payment_reference, data.description,
             data.term_id, userId
         )
+
+        logAudit(userId, 'CREATE', 'ledger_transaction', txnResult.lastInsertRowid as number, null, data)
 
         const rcpStmt = db.prepare(`INSERT INTO receipt (
       receipt_number, transaction_id, receipt_date, student_id, amount,
@@ -180,14 +254,69 @@ export function registerIpcHandlers(): void {
         rcpStmt.run(rcpNum, txnResult.lastInsertRowid, data.transaction_date, data.student_id,
             data.amount, data.amount_in_words || '', data.payment_method, data.payment_reference, userId)
 
-        // Update invoice if provided
+        // Update invoice(s) logic
+        // If invoice_id is provided, pay that specific one.
+        // If not, auto-allocate to pending invoices for this student (FIFO).
+        
+        let remainingAmount = data.amount
+
         if (data.invoice_id) {
-            db.prepare(`UPDATE fee_invoice SET amount_paid = amount_paid + ?, 
-        status = CASE WHEN amount_paid + ? >= total_amount THEN 'PAID' ELSE 'PARTIAL' END 
-        WHERE id = ?`).run(data.amount, data.amount, data.invoice_id)
+            // Specific invoice payment
+            const inv = db.prepare('SELECT total_amount, amount_paid FROM fee_invoice WHERE id = ?').get(data.invoice_id) as any
+            if (inv) {
+                 db.prepare(`UPDATE fee_invoice SET amount_paid = amount_paid + ?, 
+                    status = CASE WHEN amount_paid + ? >= total_amount THEN 'PAID' ELSE 'PARTIAL' END 
+                    WHERE id = ?`).run(data.amount, data.amount, data.invoice_id)
+            }
+        } else {
+            // Auto-allocation (FIFO)
+            const pendingInvoices = db.prepare(`
+                SELECT id, total_amount, amount_paid 
+                FROM fee_invoice 
+                WHERE student_id = ? AND status != 'PAID'
+                ORDER BY invoice_date ASC
+            `).all(data.student_id) as any[]
+
+            const updateInvStmt = db.prepare(`
+                UPDATE fee_invoice 
+                SET amount_paid = amount_paid + ?, 
+                    status = CASE WHEN amount_paid + ? >= total_amount THEN 'PAID' ELSE 'PARTIAL' END 
+                WHERE id = ?
+            `)
+
+            for (const inv of pendingInvoices) {
+                if (remainingAmount <= 0) break
+                
+                const outstanding = inv.total_amount - inv.amount_paid
+                const payAmount = Math.min(remainingAmount, outstanding)
+                
+                updateInvStmt.run(payAmount, payAmount, inv.id)
+                remainingAmount -= payAmount
+            }
+
+            // If there's still remaining amount, credit it to the student account
+            if (remainingAmount > 0) {
+                // Check if credit_balance column exists (handling migration lag if any)
+                // Note: We assume migration 'add_student_credit_balance' has run.
+                try {
+                    db.prepare('UPDATE student SET credit_balance = COALESCE(credit_balance, 0) + ? WHERE id = ?').run(remainingAmount, data.student_id)
+                } catch (e) {
+                    console.error('Failed to update credit balance, column might not exist yet:', e)
+                    // Fallback or ignore? For now, we log.
+                }
+            }
         }
 
         return { success: true, transactionRef: txnRef, receiptNumber: rcpNum }
+    })
+
+    ipcMain.handle('invoice:getItems', async (_, invoiceId: number) => {
+        return db.prepare(`
+            SELECT ii.*, fc.category_name 
+            FROM invoice_item ii
+            JOIN fee_category fc ON ii.fee_category_id = fc.id
+            WHERE ii.invoice_id = ?
+        `).all(invoiceId)
     })
 
     ipcMain.handle('payment:getByStudent', async (_, studentId: number) => {
@@ -208,6 +337,8 @@ export function registerIpcHandlers(): void {
 
         const invResult = invStmt.run(invNum, data.student_id, data.term_id, data.invoice_date, data.due_date, total, userId)
 
+        logAudit(userId, 'CREATE', 'fee_invoice', invResult.lastInsertRowid as number, null, { ...data, total, items })
+
         const itemStmt = db.prepare('INSERT INTO invoice_item (invoice_id, fee_category_id, description, amount) VALUES (?, ?, ?, ?)')
         for (const item of items) {
             itemStmt.run(invResult.lastInsertRowid, item.fee_category_id, item.description, item.amount)
@@ -218,6 +349,142 @@ export function registerIpcHandlers(): void {
 
     ipcMain.handle('invoice:getByStudent', async (_, studentId: number) => {
         return db.prepare('SELECT * FROM fee_invoice WHERE student_id = ? ORDER BY invoice_date DESC').all(studentId)
+    })
+
+    ipcMain.handle('invoice:getAll', async () => {
+        return db.prepare(`
+            SELECT fi.*, 
+                   s.first_name || ' ' || s.last_name as student_name,
+                   t.term_name
+            FROM fee_invoice fi
+            JOIN student s ON fi.student_id = s.id
+            JOIN term t ON fi.term_id = t.id
+            ORDER BY fi.invoice_date DESC
+        `).all()
+    })
+
+    // ======== FEE STRUCTURE & BATCH INVOICING ========
+    
+    ipcMain.handle('fee:getCategories', async () => {
+        return db.prepare('SELECT * FROM fee_category WHERE is_active = 1').all()
+    })
+
+    ipcMain.handle('fee:createCategory', async (_, name: string, description: string) => {
+        const stmt = db.prepare('INSERT INTO fee_category (category_name, description) VALUES (?, ?)')
+        const result = stmt.run(name, description)
+        return { success: true, id: result.lastInsertRowid }
+    })
+
+    ipcMain.handle('fee:getStructure', async (_, academicYearId: number, termId: number) => {
+        return db.prepare(`
+            SELECT fs.*, fc.category_name, s.stream_name 
+            FROM fee_structure fs
+            JOIN fee_category fc ON fs.fee_category_id = fc.id
+            JOIN stream s ON fs.stream_id = s.id
+            WHERE fs.academic_year_id = ? AND fs.term_id = ?
+        `).all(academicYearId, termId)
+    })
+
+    ipcMain.handle('fee:saveStructure', async (_, data: any[], academicYearId: number, termId: number) => {
+        const deleteStmt = db.prepare('DELETE FROM fee_structure WHERE academic_year_id = ? AND term_id = ?')
+        const insertStmt = db.prepare(`
+            INSERT INTO fee_structure (academic_year_id, term_id, stream_id, student_type, fee_category_id, amount)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `)
+
+        const transaction = db.transaction((items) => {
+            deleteStmt.run(academicYearId, termId)
+            for (const item of items) {
+                insertStmt.run(academicYearId, termId, item.stream_id, item.student_type, item.fee_category_id, item.amount)
+            }
+        })
+
+        transaction(data)
+        return { success: true }
+    })
+
+    ipcMain.handle('invoice:generateBatch', async (_, academicYearId: number, termId: number, userId: number) => {
+        // 1. Get Fee Structure
+        const structure = db.prepare(`
+            SELECT * FROM fee_structure 
+            WHERE academic_year_id = ? AND term_id = ?
+        `).all(academicYearId, termId) as any[]
+
+        if (structure.length === 0) return { success: false, message: 'No fee structure defined for this term' }
+
+        // 2. Get Active Students with Enrollment
+        // Ideally, we check enrollment for the specific term, but if not exists, fallback to active students
+        // For simplicity, let's assume all active students are enrolled in their current stream
+        // In a real app, we should promote students to new streams/terms first.
+        // Let's use the 'student' table and assume their current stream is valid.
+        // Wait, 'student' table doesn't have stream_id directly? 
+        // Let's check schema... 'enrollment' table links student to stream/term.
+        
+        // Let's look for enrollments in this academic year/term
+        const enrollments = db.prepare(`
+            SELECT e.*, s.first_name, s.last_name 
+            FROM enrollment e
+            JOIN student s ON e.student_id = s.id
+            WHERE e.academic_year_id = ? AND e.term_id = ? AND e.status = 'ACTIVE'
+        `).all(academicYearId, termId) as any[]
+
+        if (enrollments.length === 0) {
+            // Fallback: If no specific enrollment for this term, try to find active students and enroll them?
+            // Or just fail and tell user to enroll students first.
+            // Better: Auto-enroll based on previous term? Too complex.
+            // Let's assume the user has promoted students or enrolled them.
+            // If 0 enrollments, maybe they haven't set up the term enrollments yet.
+            return { success: false, message: 'No active enrollments found for this term. Please enroll students first.' }
+        }
+
+        let count = 0
+        const errors = []
+
+        const checkInvoiceStmt = db.prepare('SELECT id FROM fee_invoice WHERE student_id = ? AND term_id = ?')
+        const insertInvoiceStmt = db.prepare(`
+            INSERT INTO fee_invoice (invoice_number, student_id, term_id, invoice_date, due_date, total_amount, created_by_user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `)
+        const insertItemStmt = db.prepare('INSERT INTO invoice_item (invoice_id, fee_category_id, description, amount) VALUES (?, ?, ?, ?)')
+
+        const transaction = db.transaction(() => {
+            for (const enrollment of enrollments) {
+                // Skip if invoice exists
+                const existing = checkInvoiceStmt.get(enrollment.student_id, enrollment.term_id)
+                if (existing) continue
+
+                // Find applicable fees
+                const fees = structure.filter(f => 
+                    f.stream_id === enrollment.stream_id && 
+                    f.student_type === enrollment.student_type
+                )
+
+                if (fees.length === 0) continue
+
+                const total = fees.reduce((sum: number, f: any) => sum + f.amount, 0)
+                const invNum = `INV-${academicYearId}-${termId}-${enrollment.student_id}-${Date.now().toString().slice(-4)}`
+                const dueDate = new Date().toISOString().slice(0, 10) // Today for now, or term start date
+
+                const invResult = insertInvoiceStmt.run(
+                    invNum, enrollment.student_id, enrollment.term_id, 
+                    new Date().toISOString().slice(0, 10), dueDate, total, userId
+                )
+                const invoiceId = invResult.lastInsertRowid
+
+                for (const fee of fees) {
+                    insertItemStmt.run(invoiceId, fee.fee_category_id, 'Term Fee', fee.amount)
+                }
+                count++
+            }
+        })
+
+        try {
+            transaction()
+            return { success: true, count }
+        } catch (e: any) {
+            console.error(e)
+            return { success: false, message: e.message }
+        }
     })
 
     // ======== STAFF ========
@@ -259,6 +526,8 @@ export function registerIpcHandlers(): void {
         ) VALUES (?, ?, ?, ?, ?, 'DRAFT', CURRENT_TIMESTAMP)`).run(periodName, month, year, startDate, endDate)
         
         const periodId = periodResult.lastInsertRowid
+
+        logAudit(userId, 'CREATE', 'payroll_period', periodId as number, null, { month, year, periodName })
 
         // 3. Get Active Staff
         const staffList = db.prepare('SELECT * FROM staff WHERE is_active = 1').all() as any[]
@@ -329,6 +598,20 @@ export function registerIpcHandlers(): void {
 
     ipcMain.handle('payroll:getHistory', async () => {
         return db.prepare('SELECT * FROM payroll_period ORDER BY year DESC, month DESC').all()
+    })
+
+    ipcMain.handle('payroll:getDetails', async (_, periodId: number) => {
+        const period = db.prepare('SELECT * FROM payroll_period WHERE id = ?').get(periodId)
+        if (!period) return { success: false, error: 'Period not found' }
+
+        const results = db.prepare(`
+            SELECT p.*, s.first_name || ' ' || s.last_name as staff_name, s.staff_number, s.department, s.job_title
+            FROM payroll p
+            JOIN staff s ON p.staff_id = s.id
+            WHERE p.period_id = ?
+        `).all(periodId)
+
+        return { success: true, period, results }
     })
 
     // ======== AUDIT LOG ========

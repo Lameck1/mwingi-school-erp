@@ -1,14 +1,40 @@
 import { useEffect, useState } from 'react'
 import { ClipboardList, Filter, Download } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { useToast } from '../../contexts/ToastContext'
 
 export default function Transactions() {
-    const [transactions, _setTransactions] = useState<any[]>([])
+    const [searchParams] = useSearchParams()
+    const { showToast } = useToast()
+    
+    const [transactions, setTransactions] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
-    const [filter, setFilter] = useState({ type: '', startDate: '', endDate: '' })
+    const [filter, setFilter] = useState({ 
+        type: searchParams.get('type') || '', 
+        startDate: '', 
+        endDate: '' 
+    })
 
     useEffect(() => {
-        setLoading(false)
+        loadTransactions()
     }, [])
+
+    const loadTransactions = async () => {
+        setLoading(true)
+        try {
+            const results = await window.electronAPI.getTransactions(filter)
+            setTransactions(results)
+        } catch (error) {
+            console.error('Failed to load transactions:', error)
+            showToast('Failed to load transactions', 'error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleApplyFilter = () => {
+        loadTransactions()
+    }
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', minimumFractionDigits: 0 }).format(amount)
@@ -37,6 +63,8 @@ export default function Transactions() {
                         <option value="EXPENSE">Expenses</option>
                         <option value="SALARY_PAYMENT">Salaries</option>
                         <option value="DONATION">Donations</option>
+                        <option value="GRANT">Grants</option>
+                        <option value="ADJUSTMENT">Other / Loans</option>
                     </select>
                     <input type="date" value={filter.startDate}
                         aria-label="Start date"
@@ -46,7 +74,10 @@ export default function Transactions() {
                         aria-label="End date"
                         onChange={(e) => setFilter(prev => ({ ...prev, endDate: e.target.value }))}
                         className="input w-40" placeholder="To" />
-                    <button className="btn btn-primary flex items-center gap-2">
+                    <button 
+                        onClick={handleApplyFilter}
+                        className="btn btn-primary flex items-center gap-2"
+                    >
                         <Filter className="w-4 h-4" />
                         Apply
                     </button>
@@ -63,34 +94,36 @@ export default function Transactions() {
                         <p className="text-gray-500">Transactions will appear here as you record payments and expenses</p>
                     </div>
                 ) : (
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>Ref</th>
-                                <th>Date</th>
-                                <th>Type</th>
-                                <th>Description</th>
-                                <th>Method</th>
-                                <th>Debit</th>
-                                <th>Credit</th>
-                                <th>Recorded By</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {transactions.map((txn) => (
-                                <tr key={txn.id}>
-                                    <td className="font-mono text-sm">{txn.transaction_ref}</td>
-                                    <td>{new Date(txn.transaction_date).toLocaleDateString()}</td>
-                                    <td>{txn.transaction_type.replace(/_/g, ' ')}</td>
-                                    <td>{txn.description || '-'}</td>
-                                    <td>{txn.payment_method}</td>
-                                    <td className="text-red-600">{txn.debit_credit === 'DEBIT' ? formatCurrency(txn.amount) : '-'}</td>
-                                    <td className="text-green-600">{txn.debit_credit === 'CREDIT' ? formatCurrency(txn.amount) : '-'}</td>
-                                    <td>{txn.recorded_by}</td>
+                    <div className="overflow-x-auto">
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Ref</th>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Description</th>
+                                    <th>Method</th>
+                                    <th>Debit</th>
+                                    <th>Credit</th>
+                                    <th>Recorded By</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {transactions.map((txn) => (
+                                    <tr key={txn.id}>
+                                        <td className="font-mono text-sm">{txn.transaction_ref}</td>
+                                        <td>{new Date(txn.transaction_date).toLocaleDateString()}</td>
+                                        <td>{txn.transaction_type.replace(/_/g, ' ')}</td>
+                                        <td>{txn.description || '-'}</td>
+                                        <td>{txn.payment_method}</td>
+                                        <td className="text-red-600">{txn.debit_credit === 'DEBIT' ? formatCurrency(txn.amount) : '-'}</td>
+                                        <td className="text-green-600">{txn.debit_credit === 'CREDIT' ? formatCurrency(txn.amount) : '-'}</td>
+                                        <td>{txn.recorded_by}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
             </div>
         </div>

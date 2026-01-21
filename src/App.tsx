@@ -8,6 +8,10 @@ import StudentForm from './pages/Students/StudentForm'
 import FeePayment from './pages/Finance/FeePayment'
 import Invoices from './pages/Finance/Invoices'
 import Transactions from './pages/Finance/Transactions'
+import RecordExpense from './pages/Finance/RecordExpense'
+import RecordIncome from './pages/Finance/RecordIncome'
+import FinancialReports from './pages/Finance/FinancialReports'
+import FeeStructure from './pages/Finance/FeeStructure'
 import Staff from './pages/Payroll/Staff'
 import PayrollRun from './pages/Payroll/PayrollRun'
 import Inventory from './pages/Inventory'
@@ -40,6 +44,10 @@ export default function App() {
                                     <Route path="/finance/payments" element={<FeePayment />} />
                                     <Route path="/finance/invoices" element={<Invoices />} />
                                     <Route path="/finance/transactions" element={<Transactions />} />
+                                    <Route path="/finance/expenses/new" element={<RecordExpense />} />
+                                    <Route path="/finance/income/new" element={<RecordIncome />} />
+                                    <Route path="/finance/reports" element={<FinancialReports />} />
+                                    <Route path="/finance/fee-structure" element={<FeeStructure />} />
                                     <Route path="/payroll/staff" element={<Staff />} />
                                     <Route path="/payroll/run" element={<PayrollRun />} />
                                     <Route path="/inventory" element={<Inventory />} />

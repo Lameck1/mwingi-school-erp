@@ -19,12 +19,10 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "baseUrl": ".",
-    "ignoreDeprecations": "6.0",
     "forceConsistentCasingInFileNames": true,
     "paths": {
       "@/*": [
-        "src/*"
+        "./src/*"
       ]
     },
     "types": [
@@ -34,9 +32,7 @@
     ]
   },
   "include": [
-    "src",
-    "electron",
-    "vite.config.ts"
+    "src"
   ],
   "references": [
     {

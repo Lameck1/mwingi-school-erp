@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Search, Plus, Eye, Edit, FileText, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, Plus, Eye, Edit, FileText, ChevronLeft, ChevronRight, LayoutGrid, List as ListIcon, User, CreditCard } from 'lucide-react'
+import { useToast } from '../../contexts/ToastContext'
 
 export default function Students() {
     const navigate = useNavigate()
+    const { showToast } = useToast()
     const [students, setStudents] = useState<any[]>([])
     const [streams, setStreams] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
     const [filters, setFilters] = useState({ streamId: '', isActive: true })
     const [currentPage, setCurrentPage] = useState(1)
+    const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
     const itemsPerPage = 15
 
     useEffect(() => {
@@ -29,6 +32,7 @@ export default function Students() {
             await loadStudents()
         } catch (error) {
             console.error('Failed to load data:', error)
+            showToast('Failed to load data', 'error')
         }
     }
 
@@ -42,6 +46,7 @@ export default function Students() {
             setStudents(data)
         } catch (error) {
             console.error('Failed to load students:', error)
+            showToast('Failed to load students', 'error')
         } finally {
             setLoading(false)
         }
@@ -52,12 +57,9 @@ export default function Students() {
         loadStudents()
     }
 
-    const filteredStudents = students.filter(s =>
-        !search ||
-        s.admission_number.toLowerCase().includes(search.toLowerCase()) ||
-        s.first_name.toLowerCase().includes(search.toLowerCase()) ||
-        s.last_name.toLowerCase().includes(search.toLowerCase())
-    )
+    // Backend handles filtering, but we keep this if needed for client-side refinement
+    // In this case, since backend returns filtered list, this just passes it through if search matches backend query
+    const filteredStudents = students
 
     const totalPages = Math.ceil(filteredStudents.length / itemsPerPage)
     const paginatedStudents = filteredStudents.slice(
@@ -77,10 +79,28 @@ export default function Students() {
                     <h1 className="text-2xl font-bold text-gray-900">Students</h1>
                     <p className="text-gray-500 mt-1">Manage student records and enrollments</p>
                 </div>
-                <Link to="/students/new" className="btn btn-primary flex items-center gap-2">
-                    <Plus className="w-5 h-5" />
-                    <span>Add Student</span>
-                </Link>
+                <div className="flex items-center gap-4">
+                     <div className="flex bg-gray-100 rounded-lg p-1">
+                        <button 
+                            onClick={() => setViewMode('list')} 
+                            className={`p-2 rounded-md transition-all ${viewMode === 'list' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                            title="List View"
+                        >
+                            <ListIcon className="w-5 h-5" />
+                        </button>
+                        <button 
+                            onClick={() => setViewMode('grid')} 
+                            className={`p-2 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                            title="Grid View"
+                        >
+                            <LayoutGrid className="w-5 h-5" />
+                        </button>
+                    </div>
+                    <Link to="/students/new" className="btn btn-primary flex items-center gap-2">
+                        <Plus className="w-5 h-5" />
+                        <span>Add Student</span>
+                    </Link>
+                </div>
             </div>
 
             {/* Filters */}
@@ -95,7 +115,7 @@ export default function Students() {
                                 aria-label="Search students"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                className="input pl-10"
+                                className="input pl-10 w-full"
                             />
                         </div>
                     </form>
@@ -124,33 +144,41 @@ export default function Students() {
                 </div>
             </div>
 
-            {/* Table */}
-            <div className="card overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>Admission No</th>
-                                <th>Student Name</th>
-                                <th>Grade</th>
-                                <th>Type</th>
-                                <th>Guardian Phone</th>
-                                <th>Balance</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading ? (
+            {/* Content */}
+            {loading ? (
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-500">Loading students...</p>
+                </div>
+            ) : paginatedStudents.length === 0 ? (
+                <div className="card text-center py-12">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <User className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Students Found</h3>
+                    <p className="text-gray-500 mb-6">Try adjusting your search or filters</p>
+                    <button onClick={() => { setSearch(''); setFilters({ streamId: '', isActive: true }) }} className="btn btn-outline">
+                        Clear Filters
+                    </button>
+                </div>
+            ) : viewMode === 'list' ? (
+                <div className="card overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="data-table">
+                            <thead>
                                 <tr>
-                                    <td colSpan={8} className="text-center py-8 text-gray-500">Loading...</td>
+                                    <th>Admission No</th>
+                                    <th>Student Name</th>
+                                    <th>Grade</th>
+                                    <th>Type</th>
+                                    <th>Guardian Phone</th>
+                                    <th>Balance</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
                                 </tr>
-                            ) : paginatedStudents.length === 0 ? (
-                                <tr>
-                                    <td colSpan={8} className="text-center py-8 text-gray-500">No students found</td>
-                                </tr>
-                            ) : (
-                                paginatedStudents.map((student) => (
+                            </thead>
+                            <tbody>
+                                {paginatedStudents.map((student) => (
                                     <tr key={student.id}>
                                         <td className="font-medium">{student.admission_number}</td>
                                         <td>{student.first_name} {student.middle_name} {student.last_name}</td>
@@ -164,7 +192,7 @@ export default function Students() {
                                             </span>
                                         </td>
                                         <td>{student.guardian_phone || '-'}</td>
-                                        <td className="font-medium text-orange-600">{formatCurrency(0)}</td>
+                                        <td className="font-medium text-orange-600">{formatCurrency(student.balance || 0)}</td>
                                         <td>
                                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${student.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
                                                 }`}>
@@ -197,40 +225,90 @@ export default function Students() {
                                             </div>
                                         </td>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
-                        <p className="text-sm text-gray-500">
-                            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredStudents.length)} of {filteredStudents.length} students
-                        </p>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                disabled={currentPage === 1}
-                                className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50"
-                                aria-label="Previous page"
-                            >
-                                <ChevronLeft className="w-5 h-5" />
-                            </button>
-                            <span className="text-sm text-gray-600">Page {currentPage} of {totalPages}</span>
-                            <button
-                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                disabled={currentPage === totalPages}
-                                className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50"
-                                aria-label="Next page"
-                            >
-                                <ChevronRight className="w-5 h-5" />
-                            </button>
-                        </div>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
-                )}
-            </div>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {paginatedStudents.map((student) => (
+                        <div key={student.id} className="card hover:shadow-lg transition-shadow">
+                            <div className="flex items-start justify-between mb-4">
+                                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-lg">
+                                    {student.first_name[0]}{student.last_name[0]}
+                                </div>
+                                <div className="flex gap-1">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${student.student_type === 'BOARDER'
+                                        ? 'bg-purple-100 text-purple-700'
+                                        : 'bg-blue-100 text-blue-700'
+                                        }`}>
+                                        {student.student_type === 'BOARDER' ? 'Boarder' : 'Day'}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <h3 className="font-bold text-gray-900 mb-1 truncate">
+                                {student.first_name} {student.middle_name} {student.last_name}
+                            </h3>
+                            <p className="text-sm text-gray-500 mb-4">{student.admission_number}</p>
+                            
+                            <div className="space-y-2 text-sm text-gray-600 mb-4">
+                                <div className="flex justify-between">
+                                    <span>Class:</span>
+                                    <span className="font-medium text-gray-900">{student.stream_name || '-'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span>Balance:</span>
+                                    <span className="font-medium text-orange-600">{formatCurrency(student.balance || 0)}</span>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 pt-4 border-t border-gray-100">
+                                <button
+                                    onClick={() => navigate(`/students/${student.id}`)}
+                                    className="flex-1 btn btn-outline py-2 text-xs flex items-center justify-center gap-1"
+                                >
+                                    <Eye className="w-3 h-3" /> View
+                                </button>
+                                <button
+                                    onClick={() => navigate(`/finance/payments?student=${student.id}`)}
+                                    className="flex-1 btn btn-outline py-2 text-xs flex items-center justify-center gap-1"
+                                >
+                                    <CreditCard className="w-3 h-3" /> Pay
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="mt-6 flex items-center justify-between">
+                    <p className="text-sm text-gray-500">
+                        Page {currentPage} of {totalPages}
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                            title="Previous Page"
+                        >
+                            <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                            title="Next Page"
+                        >
+                            <ChevronRight className="w-5 h-5" />
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

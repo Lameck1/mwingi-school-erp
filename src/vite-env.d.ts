@@ -22,6 +22,13 @@ interface Window {
 
         // Fee Categories
         getFeeCategories: () => Promise<any[]>
+        createFeeCategory: (name: string, description: string) => Promise<any>
+
+        // Fee Structure
+        getFeeStructure: (academicYearId: number, termId: number) => Promise<any[]>
+        saveFeeStructure: (data: any[], academicYearId: number, termId: number) => Promise<any>
+        generateBatchInvoices: (academicYearId: number, termId: number, userId: number) => Promise<any>
+        getInvoices: (filters?: any) => Promise<any[]>
 
         // Students
         getStudents: (filters?: any) => Promise<any[]>
@@ -34,9 +41,17 @@ interface Window {
         recordPayment: (data: any, userId: number) => Promise<{ success: boolean; transactionRef: string; receiptNumber: string }>
         getPaymentsByStudent: (studentId: number) => Promise<any[]>
 
+        // Transactions (General)
+        getTransactionCategories: () => Promise<any[]>
+        createTransactionCategory: (name: string, type: string) => Promise<any>
+        createTransaction: (data: any, userId: number) => Promise<any>
+        getTransactions: (filters?: any) => Promise<any[]>
+        getTransactionSummary: (startDate: string, endDate: string) => Promise<any[]>
+
         // Invoices
         createInvoice: (data: any, items: any[], userId: number) => Promise<{ success: boolean; invoiceNumber: string; id: number }>
         getInvoicesByStudent: (studentId: number) => Promise<any[]>
+        getInvoiceItems: (invoiceId: number) => Promise<any[]>
 
         // Staff
         getStaff: (activeOnly?: boolean) => Promise<any[]>
@@ -45,6 +60,7 @@ interface Window {
         // Payroll
         runPayroll: (month: number, year: number, userId: number) => Promise<{ success: boolean; results?: any[]; error?: string }>
         getPayrollHistory: () => Promise<any[]>
+        getPayrollDetails: (periodId: number) => Promise<any>
 
         // Inventory
         getInventory: () => Promise<any[]>

@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuthStore, useAppStore } from '../stores'
 import {
     LayoutDashboard, Users, Wallet, ClipboardList, Package,
     BarChart3, Settings, LogOut, ChevronDown, Shield, Database,
-    FileText, CreditCard, UserCog, Calculator
+    FileText, CreditCard, UserCog, Calculator,
+    TrendingUp,
+    TrendingDown,
+    TableProperties
 } from 'lucide-react'
 
 const navItems = [
@@ -16,7 +19,11 @@ const navItems = [
         children: [
             { path: '/finance/payments', label: 'Fee Payments', icon: CreditCard },
             { path: '/finance/invoices', label: 'Invoices', icon: FileText },
+            { path: '/finance/fee-structure', label: 'Fee Structure', icon: TableProperties },
+            { path: '/finance/income/new', label: 'Record Income', icon: TrendingUp },
+            { path: '/finance/expenses/new', label: 'Record Expense', icon: TrendingDown },
             { path: '/finance/transactions', label: 'Transactions', icon: ClipboardList },
+            { path: '/finance/reports', label: 'Financial Reports', icon: BarChart3 },
         ],
     },
     {
@@ -41,8 +48,27 @@ const adminItems = [
 export default function Layout({ children }: { children: React.ReactNode }) {
     const navigate = useNavigate()
     const { user, logout } = useAuthStore()
-    const { schoolSettings } = useAppStore()
+    const { schoolSettings, setSchoolSettings, setCurrentAcademicYear, setCurrentTerm } = useAppStore()
     const [expandedMenu, setExpandedMenu] = useState<string | null>(null)
+
+    useEffect(() => {
+        const loadGlobals = async () => {
+            try {
+                const [settings, year, term] = await Promise.all([
+                    window.electronAPI.getSettings(),
+                    window.electronAPI.getCurrentAcademicYear(),
+                    window.electronAPI.getCurrentTerm()
+                ])
+                setSchoolSettings(settings)
+                setCurrentAcademicYear(year)
+                setCurrentTerm(term)
+            } catch (error) {
+                console.error('Failed to load global settings:', error)
+            }
+        }
+
+        loadGlobals()
+    }, [])
 
     const handleLogout = () => {
         logout()

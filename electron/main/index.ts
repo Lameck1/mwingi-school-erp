@@ -3,6 +3,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { initializeDatabase } from './database.js'
 import { registerIpcHandlers } from './ipc-handlers.js'
+import { BackupService } from './backup-service.js'
 
 // ESM __dirname polyfill
 const __filename = fileURLToPath(import.meta.url)
@@ -62,6 +63,9 @@ app.whenReady().then(async () => {
     // Register IPC handlers
     registerIpcHandlers()
 
+    // Initialize Auto Backup Service
+    BackupService.init()
+
     // Create window
     createWindow()
 
@@ -70,20 +74,22 @@ app.whenReady().then(async () => {
             createWindow()
         }
     })
-})
+});
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
         app.quit()
     }
-})
+});
 
 // Handle uncaught exceptions
-global.process.on('uncaughtException', (error: Error) => {
+(process as any).on('uncaughtException', (error: Error) => {
     console.error('Uncaught Exception:', error)
-})
+});
 
 // Handle unhandled promise rejections
-global.process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
+(process as any).on('unhandledRejection', (reason: any, promise: Promise<any>) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason)
-})
+});
+
+

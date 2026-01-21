@@ -23,7 +23,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getStreams: () => ipcRenderer.invoke('stream:getAll'),
 
     // Fee Categories
-    getFeeCategories: () => ipcRenderer.invoke('feeCategory:getAll'),
+    getFeeCategories: () => ipcRenderer.invoke('fee:getCategories'),
+    createFeeCategory: (name: string, description: string) => ipcRenderer.invoke('fee:createCategory', name, description),
+
+    // Fee Structure
+    getFeeStructure: (academicYearId: number, termId: number) => ipcRenderer.invoke('fee:getStructure', academicYearId, termId),
+    saveFeeStructure: (data: any[], academicYearId: number, termId: number) => ipcRenderer.invoke('fee:saveStructure', data, academicYearId, termId),
+    generateBatchInvoices: (academicYearId: number, termId: number, userId: number) => ipcRenderer.invoke('invoice:generateBatch', academicYearId, termId, userId),
+    getInvoices: () => ipcRenderer.invoke('invoice:getAll'),
 
     // Students
     getStudents: (filters?: any) => ipcRenderer.invoke('student:getAll', filters),
@@ -36,9 +43,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     recordPayment: (data: any, userId: number) => ipcRenderer.invoke('payment:record', data, userId),
     getPaymentsByStudent: (studentId: number) => ipcRenderer.invoke('payment:getByStudent', studentId),
 
+    // Transactions (General)
+    getTransactionCategories: () => ipcRenderer.invoke('transaction:getCategories'),
+    createTransactionCategory: (name: string, type: string) => ipcRenderer.invoke('transaction:createCategory', name, type),
+    createTransaction: (data: any, userId: number) => ipcRenderer.invoke('transaction:create', data, userId),
+    getTransactions: (filters?: any) => ipcRenderer.invoke('transaction:getAll', filters),
+    getTransactionSummary: (startDate: string, endDate: string) => ipcRenderer.invoke('transaction:getSummary', startDate, endDate),
+
     // Invoices
     createInvoice: (data: any, items: any[], userId: number) => ipcRenderer.invoke('invoice:create', data, items, userId),
     getInvoicesByStudent: (studentId: number) => ipcRenderer.invoke('invoice:getByStudent', studentId),
+    getInvoiceItems: (invoiceId: number) => ipcRenderer.invoke('invoice:getItems', invoiceId),
 
     // Staff
     getStaff: (activeOnly?: boolean) => ipcRenderer.invoke('staff:getAll', activeOnly),
@@ -47,6 +62,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Payroll
     runPayroll: (month: number, year: number, userId: number) => ipcRenderer.invoke('payroll:run', month, year, userId),
     getPayrollHistory: () => ipcRenderer.invoke('payroll:getHistory'),
+    getPayrollDetails: (periodId: number) => ipcRenderer.invoke('payroll:getDetails', periodId),
 
     // Inventory
     getInventory: () => ipcRenderer.invoke('inventory:getAll'),
@@ -89,6 +105,10 @@ declare global {
             getCurrentTerm: () => Promise<any>
             getStreams: () => Promise<any[]>
             getFeeCategories: () => Promise<any[]>
+            createFeeCategory: (name: string, description: string) => Promise<any>
+            getFeeStructure: (academicYearId: number, termId: number) => Promise<any[]>
+            saveFeeStructure: (data: any[], academicYearId: number, termId: number) => Promise<any>
+            generateBatchInvoices: (academicYearId: number, termId: number, userId: number) => Promise<any>
             getStudents: (filters?: any) => Promise<any[]>
             getStudentById: (id: number) => Promise<any>
             createStudent: (data: any) => Promise<any>
@@ -96,12 +116,20 @@ declare global {
             getStudentBalance: (studentId: number) => Promise<number>
             recordPayment: (data: any, userId: number) => Promise<any>
             getPaymentsByStudent: (studentId: number) => Promise<any[]>
+            getTransactionCategories: () => Promise<any[]>
+            createTransactionCategory: (name: string, type: string) => Promise<any>
+            createTransaction: (data: any, userId: number) => Promise<any>
+            getTransactions: (filters?: any) => Promise<any[]>
+            getTransactionSummary: (startDate: string, endDate: string) => Promise<any[]>
             createInvoice: (data: any, items: any[], userId: number) => Promise<any>
+            getInvoices: () => Promise<any[]>
             getInvoicesByStudent: (studentId: number) => Promise<any[]>
+            getInvoiceItems: (invoiceId: number) => Promise<any[]>
             getStaff: (activeOnly?: boolean) => Promise<any[]>
             createStaff: (data: any) => Promise<any>
             runPayroll: (month: number, year: number, userId: number) => Promise<any>
             getPayrollHistory: () => Promise<any[]>
+            getPayrollDetails: (periodId: number) => Promise<any>
             getInventory: () => Promise<any[]>
             getLowStockItems: () => Promise<any[]>
             getInventoryCategories: () => Promise<any[]>
