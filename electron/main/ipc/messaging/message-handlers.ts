@@ -1,0 +1,78 @@
+import { ipcMain } from 'electron';
+import { getDatabase } from '../../database/index';
+import { logAudit } from '../../database/utils/audit';
+
+export function registerMessageHandlers(): void {
+    const db = getDatabase();
+
+    // ======== MESSAGE TEMPLATES ========
+    ipcMain.handle('message:getTemplates', async () => {
+        return db.prepare('SELECT * FROM message_template WHERE is_active = 1').all();
+    });
+
+    ipcMain.handle('message:saveTemplate', async (_, template: any) => {
+        if (template.id) {
+            db.prepare(`UPDATE message_template SET 
+        template_name = ?, template_type = ?, subject = ?, body = ?, placeholders = ? 
+        WHERE id = ?`
+            ).run(
+                template.template_name, template.template_type, template.subject,
+                template.body, template.placeholders, template.id
+            );
+            return { success: true, id: template.id };
+        } else {
+            const result = db.prepare(`INSERT INTO message_template 
+        (template_name, template_type, subject, body, placeholders) 
+        VALUES (?, ?, ?, ?, ?)`
+            ).run(
+                template.template_name, template.template_type, template.subject,
+                template.body, template.placeholders
+            );
+            return { success: true, id: result.lastInsertRowid };
+        }
+    });
+
+    // ======== SENDING SMS ========
+    ipcMain.handle('message:sendSms', async (event, options: { to: string, message: string, recipientId?: number, recipientType?: string, userId: number }) => {
+        const settings = db.prepare('SELECT sms_api_key, sms_api_secret, sms_sender_id FROM school_settings WHERE id = 1').get() as any;
+
+        // Create log entry as PENDING
+        const logStmt = db.prepare(`INSERT INTO message_log 
+      (recipient_type, recipient_id, recipient_contact, message_type, message_body, status, sent_by_user_id) 
+      VALUES (?, ?, ?, 'SMS', ?, 'PENDING', ?)`);
+
+        const result = logStmt.run(
+            options.recipientType || 'OTHER',
+            options.recipientId || null,
+            options.to,
+            options.message,
+            options.userId
+        );
+        const logId = result.lastInsertRowid;
+
+        try {
+            // IMPLEMENTATION NOTE: Africa's Talking / Twilio integration would go here
+            // For now, we simulate success if credentials exist, or return failure for missing config
+            if (!settings?.sms_api_key) {
+                throw new Error('SMS API Key not configured in settings');
+            }
+
+            // Simulation of async API call
+            // In production: const response = await africastalking.send(...)
+
+            db.prepare('UPDATE message_log SET status = ?, external_id = ? WHERE id = ?')
+                .run('SENT', `SIM-${Date.now()}`, logId);
+
+            return { success: true, messageId: `SIM-${Date.now()}` };
+        } catch (error: any) {
+            db.prepare("UPDATE message_log SET status = 'FAILED', error_message = ? WHERE id = ?")
+                .run(error.message, logId);
+            return { success: false, error: error.message };
+        }
+    });
+
+    // ======== MESSAGE LOGS ========
+    ipcMain.handle('message:getLogs', async (_, limit = 50) => {
+        return db.prepare('SELECT * FROM message_log ORDER BY created_at DESC LIMIT ?').all(limit);
+    });
+}

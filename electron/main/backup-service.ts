@@ -1,7 +1,8 @@
-import { app } from 'electron'
+/* eslint-disable no-console */
+import { app } from './electron-env'
 import path from 'path'
 import fs from 'fs'
-import { backupDatabase } from './database.js'
+import { backupDatabase } from './database/index.js'
 
 export class BackupService {
     private static BACKUP_DIR_NAME = 'backups'
@@ -25,7 +26,7 @@ export class BackupService {
 
     private static async performAutoBackup() {
         const backupDir = this.getBackupDir()
-        
+
         if (!fs.existsSync(backupDir)) {
             fs.mkdirSync(backupDir, { recursive: true })
         }
@@ -36,13 +37,11 @@ export class BackupService {
 
         // Check if backup for today already exists
         if (fs.existsSync(backupPath)) {
-            console.log('Auto backup for today already exists.')
+            // Auto backup for today already exists
             return
         }
 
-        console.log('Starting auto backup...')
         await backupDatabase(backupPath)
-        console.log('Auto backup completed:', backupPath)
 
         // Cleanup old backups
         this.cleanupOldBackups(backupDir)
@@ -59,10 +58,9 @@ export class BackupService {
 
                 const filePath = path.join(backupDir, file)
                 const stats = fs.statSync(filePath)
-                
+
                 if (now - stats.mtimeMs > retentionMs) {
                     fs.unlinkSync(filePath)
-                    console.log('Deleted old backup:', file)
                 }
             })
         } catch (error) {

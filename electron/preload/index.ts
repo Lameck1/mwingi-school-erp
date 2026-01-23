@@ -3,150 +3,97 @@ import { contextBridge, ipcRenderer } from 'electron'
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld('electronAPI', {
-    // Auth
-    login: (username: string, password: string) => ipcRenderer.invoke('auth:login', username, password),
-    changePassword: (userId: number, oldPassword: string, newPassword: string) =>
-        ipcRenderer.invoke('auth:changePassword', userId, oldPassword, newPassword),
+  // Auth
+  login: (username: string, password: string) => ipcRenderer.invoke('auth:login', username, password),
+  changePassword: (userId: number, oldPassword: string, newPassword: string) =>
+    ipcRenderer.invoke('auth:changePassword', userId, oldPassword, newPassword),
 
-    // Settings
-    getSettings: () => ipcRenderer.invoke('settings:get'),
-    updateSettings: (data: any) => ipcRenderer.invoke('settings:update', data),
+  // Settings
+  getSettings: () => ipcRenderer.invoke('settings:get'),
+  updateSettings: (data: unknown) => ipcRenderer.invoke('settings:update', data),
 
-    // Academic Year & Terms
-    getAcademicYears: () => ipcRenderer.invoke('academicYear:getAll'),
-    getCurrentAcademicYear: () => ipcRenderer.invoke('academicYear:getCurrent'),
-    createAcademicYear: (data: any) => ipcRenderer.invoke('academicYear:create', data),
-    getTermsByYear: (yearId: number) => ipcRenderer.invoke('term:getByYear', yearId),
-    getCurrentTerm: () => ipcRenderer.invoke('term:getCurrent'),
+  // Academic
+  getAcademicYears: () => ipcRenderer.invoke('academicYear:getAll'),
+  getCurrentAcademicYear: () => ipcRenderer.invoke('academicYear:getCurrent'),
+  createAcademicYear: (data: unknown) => ipcRenderer.invoke('academicYear:create', data),
+  getTermsByYear: (yearId: number) => ipcRenderer.invoke('term:getByYear', yearId),
+  getCurrentTerm: () => ipcRenderer.invoke('term:getCurrent'),
+  getStreams: () => ipcRenderer.invoke('stream:getAll'),
 
-    // Streams
-    getStreams: () => ipcRenderer.invoke('stream:getAll'),
+  // Finance
+  getFeeCategories: () => ipcRenderer.invoke('fee:getCategories'),
+  createFeeCategory: (name: string, description: string) => ipcRenderer.invoke('fee:createCategory', name, description),
+  getFeeStructure: (yearId: number, termId: number) => ipcRenderer.invoke('fee:getStructure', yearId, termId),
+  saveFeeStructure: (data: unknown, yearId: number, termId: number) => ipcRenderer.invoke('fee:saveStructure', data, yearId, termId),
+  generateBatchInvoices: (yearId: number, termId: number, userId: number) => ipcRenderer.invoke('invoice:generateBatch', yearId, termId, userId),
+  getInvoices: () => ipcRenderer.invoke('invoice:getAll'),
+  getInvoicesByStudent: (studentId: number) => ipcRenderer.invoke('invoice:getByStudent', studentId),
+  getInvoiceItems: (invoiceId: number) => ipcRenderer.invoke('invoice:getItems', invoiceId),
+  recordPayment: (data: unknown, userId: number) => ipcRenderer.invoke('payment:record', data, userId),
+  getPaymentsByStudent: (studentId: number) => ipcRenderer.invoke('payment:getByStudent', studentId),
 
-    // Fee Categories
-    getFeeCategories: () => ipcRenderer.invoke('fee:getCategories'),
-    createFeeCategory: (name: string, description: string) => ipcRenderer.invoke('fee:createCategory', name, description),
+  // Transactions
+  getTransactionCategories: () => ipcRenderer.invoke('transaction:getCategories'),
+  createTransactionCategory: (name: string, type: string) => ipcRenderer.invoke('transaction:createCategory', name, type),
+  createTransaction: (data: unknown, userId: number) => ipcRenderer.invoke('transaction:create', data, userId),
+  getTransactions: (filters?: unknown) => ipcRenderer.invoke('transaction:getAll', filters),
+  getTransactionSummary: (startDate: string, endDate: string) => ipcRenderer.invoke('transaction:getSummary', startDate, endDate),
 
-    // Fee Structure
-    getFeeStructure: (academicYearId: number, termId: number) => ipcRenderer.invoke('fee:getStructure', academicYearId, termId),
-    saveFeeStructure: (data: any[], academicYearId: number, termId: number) => ipcRenderer.invoke('fee:saveStructure', data, academicYearId, termId),
-    generateBatchInvoices: (academicYearId: number, termId: number, userId: number) => ipcRenderer.invoke('invoice:generateBatch', academicYearId, termId, userId),
-    getInvoices: () => ipcRenderer.invoke('invoice:getAll'),
+  // Students
+  getStudents: (filters?: unknown) => ipcRenderer.invoke('student:getAll', filters),
+  getStudentById: (id: number) => ipcRenderer.invoke('student:getById', id),
+  createStudent: (data: unknown) => ipcRenderer.invoke('student:create', data),
+  updateStudent: (id: number, data: unknown) => ipcRenderer.invoke('student:update', id, data),
+  getStudentBalance: (studentId: number) => ipcRenderer.invoke('student:getBalance', studentId),
 
-    // Students
-    getStudents: (filters?: any) => ipcRenderer.invoke('student:getAll', filters),
-    getStudentById: (id: number) => ipcRenderer.invoke('student:getById', id),
-    createStudent: (data: any) => ipcRenderer.invoke('student:create', data),
-    updateStudent: (id: number, data: any) => ipcRenderer.invoke('student:update', id, data),
-    getStudentBalance: (studentId: number) => ipcRenderer.invoke('student:getBalance', studentId),
+  // Staff
+  getStaff: () => ipcRenderer.invoke('staff:getAll'),
+  getStaffById: (id: number) => ipcRenderer.invoke('staff:getById', id),
+  createStaff: (data: unknown) => ipcRenderer.invoke('staff:create', data),
+  updateStaff: (id: number, data: unknown) => ipcRenderer.invoke('staff:update', id, data),
 
-    // Payments
-    recordPayment: (data: any, userId: number) => ipcRenderer.invoke('payment:record', data, userId),
-    getPaymentsByStudent: (studentId: number) => ipcRenderer.invoke('payment:getByStudent', studentId),
+  // Payroll
+  getPayrollHistory: () => ipcRenderer.invoke('payroll:getHistory'),
+  getPayrollDetails: (periodId: number) => ipcRenderer.invoke('payroll:getDetails', periodId),
+  runPayroll: (month: number, year: number, userId: number) => ipcRenderer.invoke('payroll:run', month, year, userId),
 
-    // Transactions (General)
-    getTransactionCategories: () => ipcRenderer.invoke('transaction:getCategories'),
-    createTransactionCategory: (name: string, type: string) => ipcRenderer.invoke('transaction:createCategory', name, type),
-    createTransaction: (data: any, userId: number) => ipcRenderer.invoke('transaction:create', data, userId),
-    getTransactions: (filters?: any) => ipcRenderer.invoke('transaction:getAll', filters),
-    getTransactionSummary: (startDate: string, endDate: string) => ipcRenderer.invoke('transaction:getSummary', startDate, endDate),
+  // Staff Allowances
+  getStaffAllowances: (staffId: number) => ipcRenderer.invoke('staff:getAllowances', staffId),
+  addStaffAllowance: (staffId: number, allowanceName: string, amount: number) => ipcRenderer.invoke('staff:addAllowance', staffId, allowanceName, amount),
+  deleteStaffAllowance: (allowanceId: number) => ipcRenderer.invoke('staff:deleteAllowance', allowanceId),
 
-    // Invoices
-    createInvoice: (data: any, items: any[], userId: number) => ipcRenderer.invoke('invoice:create', data, items, userId),
-    getInvoicesByStudent: (studentId: number) => ipcRenderer.invoke('invoice:getByStudent', studentId),
-    getInvoiceItems: (invoiceId: number) => ipcRenderer.invoke('invoice:getItems', invoiceId),
+  // Inventory
+  getInventory: () => ipcRenderer.invoke('inventory:getAll'),
+  getLowStockItems: () => ipcRenderer.invoke('inventory:getLowStock'),
+  getInventoryCategories: () => ipcRenderer.invoke('inventory:getCategories'),
+  createInventoryItem: (data: unknown) => ipcRenderer.invoke('inventory:createItem', data),
+  recordStockMovement: (data: unknown, userId: number) => ipcRenderer.invoke('inventory:recordMovement', data, userId),
+  getSuppliers: () => ipcRenderer.invoke('inventory:getSuppliers'),
 
-    // Staff
-    getStaff: (activeOnly?: boolean) => ipcRenderer.invoke('staff:getAll', activeOnly),
-    createStaff: (data: any) => ipcRenderer.invoke('staff:create', data),
+  // Reports
+  getFeeCollectionReport: (startDate: string, endDate: string) => ipcRenderer.invoke('report:feeCollection', startDate, endDate),
+  getStudentLedgerReport: (studentId: number) => ipcRenderer.invoke('report:studentLedger', studentId),
+  getDefaulters: (termId?: number) => ipcRenderer.invoke('report:defaulters', termId),
+  getDashboardData: () => ipcRenderer.invoke('report:dashboard'),
+  getFeeCategoryBreakdown: () => ipcRenderer.invoke('report:feeCategoryBreakdown'),
+  getAuditLog: (limit?: number) => ipcRenderer.invoke('audit:getLog', limit),
 
-    // Payroll
-    runPayroll: (month: number, year: number, userId: number) => ipcRenderer.invoke('payroll:run', month, year, userId),
-    getPayrollHistory: () => ipcRenderer.invoke('payroll:getHistory'),
-    getPayrollDetails: (periodId: number) => ipcRenderer.invoke('payroll:getDetails', periodId),
+  // Messaging
+  sendSMS: (options: any) => ipcRenderer.invoke('message:sendSms', options),
+  sendEmail: (options: any) => ipcRenderer.invoke('message:sendEmail', options),
+  getMessageTemplates: () => ipcRenderer.invoke('message:getTemplates'),
+  saveMessageTemplate: (template: any) => ipcRenderer.invoke('message:saveTemplate', template),
+  getMessageLogs: (limit?: number) => ipcRenderer.invoke('message:getLogs', limit),
 
-    // Inventory
-    getInventory: () => ipcRenderer.invoke('inventory:getAll'),
-    getLowStockItems: () => ipcRenderer.invoke('inventory:getLowStock'),
-    getInventoryCategories: () => ipcRenderer.invoke('inventory:getCategories'),
-    createInventoryItem: (data: any) => ipcRenderer.invoke('inventory:createItem', data),
-    updateInventoryItem: (id: number, data: any) => ipcRenderer.invoke('inventory:updateItem', id, data),
-    recordStockMovement: (data: any, userId: number) => ipcRenderer.invoke('inventory:recordMovement', data, userId),
+  // Backup
+  createBackup: () => ipcRenderer.invoke('backup:create'),
+  restoreBackup: (filePath: string) => ipcRenderer.invoke('backup:restore', filePath),
+  getBackupList: () => ipcRenderer.invoke('backup:getList'),
 
-    // Reports
-    getFeeCollectionReport: (startDate: string, endDate: string) =>
-        ipcRenderer.invoke('report:feeCollection', startDate, endDate),
-    getDefaultersReport: (termId?: number) => ipcRenderer.invoke('report:defaulters', termId),
-    getDashboardData: () => ipcRenderer.invoke('report:dashboard'),
-
-    // Backup
-    createBackup: () => ipcRenderer.invoke('backup:create'),
-    restoreBackup: () => ipcRenderer.invoke('backup:restore'),
-
-    // Users
-    getUsers: () => ipcRenderer.invoke('user:getAll'),
-    createUser: (data: any) => ipcRenderer.invoke('user:create', data),
-
-    // Audit
-    getAuditLog: (limit?: number) => ipcRenderer.invoke('audit:getAll', limit),
+  // Users
+  getUsers: () => ipcRenderer.invoke('user:getAll'),
+  createUser: (data: unknown) => ipcRenderer.invoke('user:create', data),
+  updateUser: (id: number, data: unknown) => ipcRenderer.invoke('user:update', id, data),
+  toggleUserStatus: (id: number, isActive: boolean) => ipcRenderer.invoke('user:toggleStatus', id, isActive),
+  resetUserPassword: (id: number, newPassword: string) => ipcRenderer.invoke('user:resetPassword', id, newPassword),
 })
-
-// Type definitions for the renderer process
-declare global {
-    interface Window {
-        electronAPI: {
-            login: (username: string, password: string) => Promise<any>
-            changePassword: (userId: number, oldPassword: string, newPassword: string) => Promise<any>
-            getSettings: () => Promise<any>
-            updateSettings: (data: any) => Promise<any>
-            getAcademicYears: () => Promise<any[]>
-            getCurrentAcademicYear: () => Promise<any>
-            createAcademicYear: (data: any) => Promise<any>
-            getTermsByYear: (yearId: number) => Promise<any[]>
-            getCurrentTerm: () => Promise<any>
-            getStreams: () => Promise<any[]>
-            getFeeCategories: () => Promise<any[]>
-            createFeeCategory: (name: string, description: string) => Promise<any>
-            getFeeStructure: (academicYearId: number, termId: number) => Promise<any[]>
-            saveFeeStructure: (data: any[], academicYearId: number, termId: number) => Promise<any>
-            generateBatchInvoices: (academicYearId: number, termId: number, userId: number) => Promise<any>
-            getStudents: (filters?: any) => Promise<any[]>
-            getStudentById: (id: number) => Promise<any>
-            createStudent: (data: any) => Promise<any>
-            updateStudent: (id: number, data: any) => Promise<any>
-            getStudentBalance: (studentId: number) => Promise<number>
-            recordPayment: (data: any, userId: number) => Promise<any>
-            getPaymentsByStudent: (studentId: number) => Promise<any[]>
-            getTransactionCategories: () => Promise<any[]>
-            createTransactionCategory: (name: string, type: string) => Promise<any>
-            createTransaction: (data: any, userId: number) => Promise<any>
-            getTransactions: (filters?: any) => Promise<any[]>
-            getTransactionSummary: (startDate: string, endDate: string) => Promise<any[]>
-            createInvoice: (data: any, items: any[], userId: number) => Promise<any>
-            getInvoices: () => Promise<any[]>
-            getInvoicesByStudent: (studentId: number) => Promise<any[]>
-            getInvoiceItems: (invoiceId: number) => Promise<any[]>
-            getStaff: (activeOnly?: boolean) => Promise<any[]>
-            createStaff: (data: any) => Promise<any>
-            runPayroll: (month: number, year: number, userId: number) => Promise<any>
-            getPayrollHistory: () => Promise<any[]>
-            getPayrollDetails: (periodId: number) => Promise<any>
-            getInventory: () => Promise<any[]>
-            getLowStockItems: () => Promise<any[]>
-            getInventoryCategories: () => Promise<any[]>
-            createInventoryItem: (data: any) => Promise<any>
-            updateInventoryItem: (id: number, data: any) => Promise<any>
-            recordStockMovement: (data: any, userId: number) => Promise<any>
-            getFeeCollectionReport: (startDate: string, endDate: string) => Promise<any[]>
-            getDefaultersReport: (termId?: number) => Promise<any[]>
-            getDashboardData: () => Promise<any>
-            createBackup: () => Promise<any>
-            restoreBackup: () => Promise<any>
-            getUsers: () => Promise<any[]>
-            createUser: (data: any) => Promise<any>
-            updateUser: (id: number, data: any) => Promise<any>
-            toggleUserStatus: (id: number, isActive: boolean) => Promise<any>
-            resetUserPassword: (id: number, password: string) => Promise<any>
-            getAuditLog: (limit?: number) => Promise<any[]>
-        }
-    }
-}
