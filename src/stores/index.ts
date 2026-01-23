@@ -1,19 +1,14 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-
-interface User {
-    id: number
-    username: string
-    full_name: string
-    email: string
-    role: 'ADMIN' | 'ACCOUNTS_CLERK' | 'AUDITOR'
-}
+import { User } from '../types/electron-api/UserAPI'
+import { SchoolSettings } from '../types/electron-api/SettingsAPI'
+import { AcademicYear, Term } from '../types/electron-api/AcademicAPI'
 
 interface AuthState {
     user: User | null
     isAuthenticated: boolean
-    login: (user: User) => void
-    logout: () => void
+    login(user: User): void
+    logout(): void
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -31,12 +26,12 @@ export const useAuthStore = create<AuthState>()(
 )
 
 interface AppState {
-    currentAcademicYear: any | null
-    currentTerm: any | null
-    schoolSettings: any | null
-    setCurrentAcademicYear: (year: any) => void
-    setCurrentTerm: (term: any) => void
-    setSchoolSettings: (settings: any) => void
+    currentAcademicYear: AcademicYear | null
+    currentTerm: Term | null
+    schoolSettings: SchoolSettings | null
+    setCurrentAcademicYear(year: AcademicYear): void
+    setCurrentTerm(term: Term): void
+    setSchoolSettings(settings: SchoolSettings): void
 }
 
 export const useAppStore = create<AppState>((set) => ({

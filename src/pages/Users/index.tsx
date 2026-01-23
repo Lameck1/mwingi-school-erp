@@ -1,19 +1,20 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Plus, Users, Search, Edit, Lock, Trash, X, Check } from 'lucide-react'
+import type { User, CreateUserData, UpdateUserData } from '../../types/electron-api/UserAPI'
 
 export default function UsersPage() {
-    const [users, setUsers] = useState<any[]>([])
+    const [users, setUsers] = useState<User[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
     
     // Modals state
     const [showUserModal, setShowUserModal] = useState(false)
     const [showPasswordModal, setShowPasswordModal] = useState(false)
-    const [selectedUser, setSelectedUser] = useState<any>(null)
+    const [selectedUser, setSelectedUser] = useState<User | null>(null)
     const [isEditing, setIsEditing] = useState(false)
 
     // Form data
-    const [userData, setUserData] = useState({
+    const [userData, setUserData] = useState<CreateUserData>({
         username: '', full_name: '', email: '', role: 'ACCOUNTS_CLERK', password: ''
     })
     
@@ -35,11 +36,11 @@ export default function UsersPage() {
     const handleSaveUser = async (e: React.FormEvent) => {
         e.preventDefault()
         try {
-            if (isEditing) {
+            if (isEditing && selectedUser) {
                 // For edit, we don't send password unless specifically changing it (which is handled separately)
                 // The API expects just the fields to update
-                const { password, ...updateData } = userData
-                await window.electronAPI.updateUser(selectedUser.id, updateData)
+                const { password, ...updateData } = userData // eslint-disable-line no-unused-vars
+                await window.electronAPI.updateUser(selectedUser.id, updateData as UpdateUserData)
             } else {
                 await window.electronAPI.createUser(userData)
             }
@@ -47,9 +48,9 @@ export default function UsersPage() {
             setShowUserModal(false)
             resetForms()
             loadData()
-        } catch (error: any) {
+        } catch (error) {
             console.error('Failed to save user:', error)
-            alert(error.message || 'Failed to save user')
+            alert(error instanceof Error ? error.message : 'Failed to save user')
         }
     }
 
@@ -60,18 +61,20 @@ export default function UsersPage() {
             return
         }
 
+        if (!selectedUser) return
+        
         try {
             await window.electronAPI.resetUserPassword(selectedUser.id, passwordData.newPassword)
             setShowPasswordModal(false)
             resetForms()
             alert('Password reset successfully')
-        } catch (error: any) {
+        } catch (error) {
             console.error('Failed to reset password:', error)
-            alert(error.message || 'Failed to reset password')
+            alert(error instanceof Error ? error.message : 'Failed to reset password')
         }
     }
 
-    const handleToggleStatus = async (user: any) => {
+    const handleToggleStatus = async (user: User) => {
         if (!confirm(`Are you sure you want to ${user.is_active ? 'deactivate' : 'activate'} this user?`)) return
 
         try {
@@ -88,7 +91,7 @@ export default function UsersPage() {
         setShowUserModal(true)
     }
 
-    const openEditModal = (user: any) => {
+    const openEditModal = (user: User) => {
         setIsEditing(true)
         setSelectedUser(user)
         setUserData({
@@ -101,7 +104,7 @@ export default function UsersPage() {
         setShowUserModal(true)
     }
 
-    const openPasswordModal = (user: any) => {
+    const openPasswordModal = (user: User) => {
         setSelectedUser(user)
         setPasswordData({ newPassword: '', confirmPassword: '' })
         setShowPasswordModal(true)
@@ -245,7 +248,7 @@ export default function UsersPage() {
                             <div>
                                 <label className="label" htmlFor="user-role">Role *</label>
                                 <select id="user-role" required value={userData.role}
-                                    onChange={(e) => setUserData({ ...userData, role: e.target.value })}
+                                    onChange={(e) => setUserData({ ...userData, role: e.target.value as 'ADMIN' | 'ACCOUNTS_CLERK' | 'AUDITOR' })}
                                     className="input">
                                     <option value="ACCOUNTS_CLERK">Accounts Clerk</option>
                                     <option value="ADMIN">Admin</option>

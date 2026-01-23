@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore, useAppStore } from '../stores'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
@@ -22,7 +22,7 @@ export default function Login() {
         try {
             const result = await window.electronAPI.login(username, password)
 
-            if (result.success) {
+            if (result.success && result.user) {
                 login(result.user)
 
                 // Load app data
@@ -40,8 +40,8 @@ export default function Login() {
             } else {
                 setError(result.error || 'Login failed')
             }
-        } catch (err: any) {
-            setError(err.message || 'An error occurred')
+        } catch (err) {
+            setError((err as Error).message || 'An error occurred')
         } finally {
             setLoading(false)
         }

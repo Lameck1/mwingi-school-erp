@@ -18,8 +18,8 @@ export default function Backup() {
             } else {
                 setResult({ type: 'error', message: 'Backup failed' })
             }
-        } catch (error: any) {
-            setResult({ type: 'error', message: error.message })
+        } catch (error) {
+            setResult({ type: 'error', message: error instanceof Error ? error.message : 'Backup failed' })
         } finally { setBacking(false) }
     }
 
@@ -36,8 +36,8 @@ export default function Backup() {
             } else {
                 setResult({ type: 'error', message: 'Restore failed' })
             }
-        } catch (error: any) {
-            setResult({ type: 'error', message: error.message })
+        } catch (error) {
+            setResult({ type: 'error', message: error instanceof Error ? error.message : 'Restore failed' })
         } finally { setRestoring(false) }
     }
 

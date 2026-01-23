@@ -1,18 +1,30 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Save, Plus, Loader2 } from 'lucide-react'
 import { useToast } from '../../contexts/ToastContext'
+import { AcademicYear, Term, Stream } from '../../types/electron-api/AcademicAPI'
+import { FeeCategory, FeeStructureCreateData } from '../../types/electron-api/FinanceAPI'
+
+interface FeeStructureItem {
+    stream_id?: number
+    streamId?: number
+    student_type?: string
+    studentType?: string
+    fee_category_id?: number
+    feeCategoryId?: number
+    amount?: number
+}
 
 export default function FeeStructure() {
     const { showToast } = useToast()
-    
-    const [years, setYears] = useState<any[]>([])
-    const [terms, setTerms] = useState<any[]>([])
-    const [streams, setStreams] = useState<any[]>([])
-    const [categories, setCategories] = useState<any[]>([])
-    
+
+    const [years, setYears] = useState<AcademicYear[]>([])
+    const [terms, setTerms] = useState<Term[]>([])
+    const [streams, setStreams] = useState<Stream[]>([])
+    const [categories, setCategories] = useState<FeeCategory[]>([])
+
     const [selectedYear, setSelectedYear] = useState('')
     const [selectedTerm, setSelectedTerm] = useState('')
-    
+
     const [structure, setStructure] = useState<Record<string, number>>({})
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
@@ -22,17 +34,7 @@ export default function FeeStructure() {
     const [showNewCategory, setShowNewCategory] = useState(false)
     const [newCategoryName, setNewCategoryName] = useState('')
 
-    useEffect(() => {
-        loadInitialData()
-    }, [])
-
-    useEffect(() => {
-        if (selectedYear && selectedTerm) {
-            loadStructure()
-        }
-    }, [selectedYear, selectedTerm])
-
-    const loadInitialData = async () => {
+    const loadInitialData = useCallback(async () => {
         try {
             const [y, s, c] = await Promise.all([
                 window.electronAPI.getAcademicYears(),
@@ -57,25 +59,47 @@ export default function FeeStructure() {
             console.error(error)
             showToast('Failed to load initial data', 'error')
         }
-    }
+    }, [showToast])
 
-    const loadStructure = async () => {
-        setLoading(true)
-        try {
-            const data = await window.electronAPI.getFeeStructure(Number(selectedYear), Number(selectedTerm))
-            const map: Record<string, number> = {}
-            data.forEach((item: any) => {
-                const key = `${item.stream_id}-${item.student_type}-${item.fee_category_id}`
-                map[key] = item.amount
-            })
-            setStructure(map)
-        } catch (error) {
-            console.error(error)
-            showToast('Failed to load fee structure', 'error')
-        } finally {
-            setLoading(false)
+
+
+    useEffect(() => {
+        loadInitialData()
+    }, [loadInitialData])
+
+    useEffect(() => {
+        const loadStructure = async () => {
+            setLoading(true)
+            try {
+                const data = await window.electronAPI.getFeeStructure(Number(selectedYear), Number(selectedTerm))
+                const map: Record<string, number> = {}
+                data.forEach((item: FeeStructureItem) => {
+                    // Handle both FeeStructure and FeeStructureItem formats
+                    const streamId = item.stream_id || item.streamId
+                    const studentType = item.student_type || item.studentType
+                    const categoryId = item.fee_category_id || item.feeCategoryId || item.fee_category_id
+                    const amount = item.amount
+
+                    if (streamId && studentType && categoryId && amount !== undefined) {
+                        const key = `${streamId}-${studentType}-${categoryId}`
+                        map[key] = amount
+                    }
+                })
+                setStructure(map)
+            } catch (error) {
+                console.error(error)
+                showToast('Failed to load fee structure', 'error')
+            } finally {
+                setLoading(false)
+            }
         }
-    }
+
+        if (selectedYear && selectedTerm) {
+            loadStructure()
+        }
+    }, [selectedYear, selectedTerm, showToast])
+
+
 
     const handleAmountChange = (streamId: number, studentType: string, categoryId: number, value: string) => {
         const key = `${streamId}-${studentType}-${categoryId}`
@@ -90,7 +114,7 @@ export default function FeeStructure() {
 
         setSaving(true)
         try {
-            const data = []
+            const data: FeeStructureCreateData[] = []
             for (const [key, amount] of Object.entries(structure)) {
                 if (amount > 0) {
                     const [streamId, studentType, categoryId] = key.split('-')
@@ -98,7 +122,9 @@ export default function FeeStructure() {
                         stream_id: Number(streamId),
                         student_type: studentType,
                         fee_category_id: Number(categoryId),
-                        amount
+                        amount,
+                        academic_year_id: Number(selectedYear),
+                        term_id: Number(selectedTerm)
                     })
                 }
             }
@@ -123,6 +149,7 @@ export default function FeeStructure() {
             setCategories(c)
             showToast('Category created', 'success')
         } catch (error) {
+            console.error(error)
             showToast('Failed to create category', 'error')
         }
     }
@@ -135,19 +162,18 @@ export default function FeeStructure() {
             const userStr = localStorage.getItem('school_erp_user')
             const parsed = userStr ? JSON.parse(userStr) : null
             const userId = (parsed && parsed.id) ? parsed.id : 1
-            console.log('Generating invoices with UserID:', userId)
 
             const result = await window.electronAPI.generateBatchInvoices(Number(selectedYear), Number(selectedTerm), userId)
-            console.log('Generate Result:', result)
-            
+
             if (result.success) {
                 showToast(`Successfully generated ${result.count} invoices`, 'success')
             } else {
-                showToast(result.message || 'Failed to generate invoices', 'error')
+                showToast('Failed to generate invoices', 'error')
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Generation Error:', error)
-            showToast(`Error: ${error.message || 'Unknown error'}`, 'error')
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+            showToast(`Error: ${errorMessage}`, 'error')
         } finally {
             setGenerating(false)
         }
@@ -161,7 +187,7 @@ export default function FeeStructure() {
                     <p className="text-gray-500 mt-1">Manage fee amounts per class and term</p>
                 </div>
                 <div className="flex gap-2">
-                     <button 
+                    <button
                         onClick={handleGenerateInvoices}
                         disabled={generating}
                         className="btn btn-secondary flex items-center gap-2"
@@ -170,8 +196,8 @@ export default function FeeStructure() {
                         {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                         Batch Invoice
                     </button>
-                    <button 
-                        onClick={handleSave} 
+                    <button
+                        onClick={handleSave}
                         disabled={saving}
                         className="btn btn-primary flex items-center gap-2"
                     >
@@ -185,12 +211,12 @@ export default function FeeStructure() {
                 <div className="flex flex-wrap gap-4 items-end">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Academic Year</label>
-                        <select 
-                            value={selectedYear} 
+                        <select
+                            value={selectedYear}
                             onChange={e => {
                                 setSelectedYear(e.target.value)
                                 // Load terms for this year
-                                window.electronAPI.getTermsByYear(Number(e.target.value)).then(setTerms)
+                                window.electronAPI.getTermsByYear(Number(e.target.value)).then(terms => setTerms(terms))
                             }}
                             className="input w-48"
                             aria-label="Academic Year"
@@ -203,8 +229,8 @@ export default function FeeStructure() {
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Term</label>
-                        <select 
-                            value={selectedTerm} 
+                        <select
+                            value={selectedTerm}
                             onChange={e => setSelectedTerm(e.target.value)}
                             className="input w-48"
                             disabled={!selectedYear}
@@ -225,7 +251,7 @@ export default function FeeStructure() {
                 <div className="card overflow-x-auto">
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="font-semibold text-gray-900">Fee Matrix</h3>
-                        <button 
+                        <button
                             onClick={() => setShowNewCategory(true)}
                             className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
                         >
@@ -235,8 +261,8 @@ export default function FeeStructure() {
 
                     {showNewCategory && (
                         <div className="mb-4 flex gap-2 items-center bg-blue-50 p-3 rounded-lg">
-                            <input 
-                                type="text" 
+                            <input
+                                type="text"
                                 value={newCategoryName}
                                 onChange={e => setNewCategoryName(e.target.value)}
                                 placeholder="New Category Name (e.g. Swimming)"
@@ -261,43 +287,41 @@ export default function FeeStructure() {
                             </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                            {streams.map(stream => (
-                                <>
-                                    {['DAY_SCHOLAR', 'BOARDER'].map((type, idx) => (
-                                        <tr key={`${stream.id}-${type}`} className={idx === 0 ? 'bg-white' : 'bg-gray-50/30'}>
-                                            {idx === 0 && (
-                                                <td rowSpan={2} className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-inherit z-10 border-r">
-                                                    {stream.stream_name}
+                            {streams.flatMap(stream =>
+                                ['DAY_SCHOLAR', 'BOARDER'].map((type, idx) => (
+                                    <tr key={`${stream.id}-${type}`} className={idx === 0 ? 'bg-white' : 'bg-gray-50/30'}>
+                                        {idx === 0 && (
+                                            <td rowSpan={2} className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-inherit z-10 border-r">
+                                                {stream.stream_name}
+                                            </td>
+                                        )}
+                                        <td className="px-4 py-2 whitespace-nowrap text-xs text-gray-500 sticky left-[120px] bg-inherit z-10 border-r">
+                                            {type.replace('_', ' ')}
+                                        </td>
+                                        {categories.map(cat => {
+                                            const key = `${stream.id}-${type}-${cat.id}`
+                                            return (
+                                                <td key={cat.id} className="px-2 py-2 whitespace-nowrap">
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={structure[key] || ''}
+                                                        onChange={e => handleAmountChange(stream.id, type, cat.id, e.target.value)}
+                                                        className="w-full text-right border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-1"
+                                                        placeholder="0"
+                                                    />
                                                 </td>
-                                            )}
-                                            <td className="px-4 py-2 whitespace-nowrap text-xs text-gray-500 sticky left-[120px] bg-inherit z-10 border-r">
-                                                {type.replace('_', ' ')}
-                                            </td>
-                                            {categories.map(cat => {
+                                            )
+                                        })}
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm font-bold text-gray-900 text-right bg-gray-50">
+                                            {categories.reduce((sum, cat) => {
                                                 const key = `${stream.id}-${type}-${cat.id}`
-                                                return (
-                                                    <td key={cat.id} className="px-2 py-2 whitespace-nowrap">
-                                                        <input 
-                                                            type="number" 
-                                                            min="0"
-                                                            value={structure[key] || ''}
-                                                            onChange={e => handleAmountChange(stream.id, type, cat.id, e.target.value)}
-                                                            className="w-full text-right border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-1"
-                                                            placeholder="0"
-                                                        />
-                                                    </td>
-                                                )
-                                            })}
-                                            <td className="px-4 py-2 whitespace-nowrap text-sm font-bold text-gray-900 text-right bg-gray-50">
-                                                {categories.reduce((sum, cat) => {
-                                                    const key = `${stream.id}-${type}-${cat.id}`
-                                                    return sum + (structure[key] || 0)
-                                                }, 0).toLocaleString()}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </>
-                            ))}
+                                                return sum + (structure[key] || 0)
+                                            }, 0).toLocaleString()}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>

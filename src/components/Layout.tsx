@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, Outlet } from 'react-router-dom'
 import { useAuthStore, useAppStore } from '../stores'
 import {
     LayoutDashboard, Users, Wallet, ClipboardList, Package,
@@ -7,31 +7,39 @@ import {
     FileText, CreditCard, UserCog, Calculator,
     TrendingUp,
     TrendingDown,
-    TableProperties
+    TableProperties,
+    LucideIcon
 } from 'lucide-react'
 
-const navItems = [
+interface NavItem {
+    path?: string
+    label: string
+    icon: LucideIcon
+    children?: NavItem[]
+}
+
+const navItems: NavItem[] = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/students', label: 'Students', icon: Users },
     {
         label: 'Finance',
         icon: Wallet,
         children: [
-            { path: '/finance/payments', label: 'Fee Payments', icon: CreditCard },
-            { path: '/finance/invoices', label: 'Invoices', icon: FileText },
-            { path: '/finance/fee-structure', label: 'Fee Structure', icon: TableProperties },
-            { path: '/finance/income/new', label: 'Record Income', icon: TrendingUp },
-            { path: '/finance/expenses/new', label: 'Record Expense', icon: TrendingDown },
-            { path: '/finance/transactions', label: 'Transactions', icon: ClipboardList },
-            { path: '/finance/reports', label: 'Financial Reports', icon: BarChart3 },
+            { path: '/fee-payment', label: 'Fee Payments', icon: CreditCard },
+            { path: '/invoices', label: 'Invoices', icon: FileText },
+            { path: '/fee-structure', label: 'Fee Structure', icon: TableProperties },
+            { path: '/record-income', label: 'Record Income', icon: TrendingUp },
+            { path: '/record-expense', label: 'Record Expense', icon: TrendingDown },
+            { path: '/transactions', label: 'Transactions', icon: ClipboardList },
+            { path: '/financial-reports', label: 'Financial Reports', icon: BarChart3 },
         ],
     },
     {
         label: 'Payroll',
         icon: Calculator,
         children: [
-            { path: '/payroll/staff', label: 'Staff', icon: UserCog },
-            { path: '/payroll/run', label: 'Run Payroll', icon: Calculator },
+            { path: '/staff', label: 'Staff', icon: UserCog },
+            { path: '/payroll-run', label: 'Run Payroll', icon: Calculator },
         ],
     },
     { path: '/inventory', label: 'Inventory', icon: Package },
@@ -39,13 +47,13 @@ const navItems = [
     { path: '/settings', label: 'Settings', icon: Settings },
 ]
 
-const adminItems = [
+const adminItems: NavItem[] = [
     { path: '/users', label: 'Users', icon: Users },
     { path: '/audit-log', label: 'Audit Log', icon: Shield },
     { path: '/backup', label: 'Backup', icon: Database },
 ]
 
-export default function Layout({ children }: { children: React.ReactNode }) {
+export default function Layout() {
     const navigate = useNavigate()
     const { user, logout } = useAuthStore()
     const { schoolSettings, setSchoolSettings, setCurrentAcademicYear, setCurrentTerm } = useAppStore()
@@ -68,14 +76,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         }
 
         loadGlobals()
-    }, [])
+    }, [setSchoolSettings, setCurrentAcademicYear, setCurrentTerm])
 
     const handleLogout = () => {
         logout()
         navigate('/login')
     }
 
-    const renderNavItem = (item: any, isChild = false) => {
+    const renderNavItem = (item: NavItem, isChild = false) => {
         if (item.children) {
             const isExpanded = expandedMenu === item.label
             return (
@@ -92,12 +100,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     </button>
                     {isExpanded && (
                         <div className="ml-4 mt-1 space-y-1">
-                            {item.children.map((child: any) => renderNavItem(child, true))}
+                            {item.children.map((child) => renderNavItem(child, true))}
                         </div>
                     )}
                 </div>
             )
         }
+
+        if (!item.path) return null
 
         return (
             <NavLink
@@ -117,55 +127,89 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }
 
     return (
-        <div className="flex h-screen bg-gray-50">
+        <div className="flex h-screen bg-background text-foreground overflow-hidden">
             {/* Sidebar */}
-            <aside className="w-64 bg-sidebar-bg text-white flex flex-col">
-                {/* Logo */}
-                <div className="p-6 border-b border-gray-700">
-                    <h1 className="text-xl font-bold">
-                        {schoolSettings?.school_name || 'School ERP'}
-                    </h1>
-                    <p className="text-xs text-gray-400 mt-1">Management System</p>
+            <aside className="w-64 premium-sidebar flex flex-col z-40">
+                {/* Logo Section */}
+                <div className="p-8 border-b border-border/40">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-indigo-600 flex items-center justify-center shadow-lg shadow-primary/30">
+                            <Shield className="w-6 h-6 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-lg font-bold leading-tight tracking-tight text-white font-heading">
+                                {schoolSettings?.school_name?.split(' ')[0] || 'Mwingi'}
+                                <span className="text-primary block text-xs font-medium tracking-widest uppercase">ERP System</span>
+                            </h1>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Navigation */}
-                <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+                <nav className="flex-1 p-4 mt-2 space-y-1 overflow-y-auto no-scrollbar">
                     {navItems.map((item) => renderNavItem(item))}
 
                     {user?.role === 'ADMIN' && (
-                        <>
-                            <div className="border-t border-gray-700 my-4" />
-                            <p className="px-4 text-xs text-gray-500 uppercase tracking-wide mb-2">Admin</p>
+                        <div className="pt-6">
+                            <p className="px-4 text-[10px] text-foreground/40 uppercase tracking-[0.2em] font-bold mb-3">Administration</p>
                             {adminItems.map((item) => renderNavItem(item))}
-                        </>
+                        </div>
                     )}
                 </nav>
 
-                {/* User Section */}
-                <div className="p-4 border-t border-gray-700">
-                    <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold">
-                            {user?.full_name?.charAt(0) || 'U'}
+                {/* User Profile Section */}
+                <div className="p-6 border-t border-border/40 bg-black/10">
+                    <div className="flex items-center gap-4 mb-6">
+                        <div className="relative">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-secondary to-slate-700 border-2 border-primary/20 flex items-center justify-center text-white font-bold text-sm shadow-inner">
+                                {user?.full_name?.charAt(0) || 'U'}
+                            </div>
+                            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-success rounded-full border-2 border-card"></div>
                         </div>
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{user?.full_name}</p>
-                            <p className="text-xs text-gray-400 capitalize">{user?.role?.toLowerCase().replace('_', ' ')}</p>
+                            <p className="text-sm font-semibold truncate text-white">{user?.full_name}</p>
+                            <p className="text-[10px] text-primary font-bold uppercase tracking-wider">{user?.role?.replace('_', ' ')}</p>
                         </div>
                     </div>
+
                     <button
                         onClick={handleLogout}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-300 hover:bg-sidebar-hover rounded-lg transition-colors"
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-foreground/60 hover:text-destructive hover:bg-destructive/10 rounded-xl transition-all border border-transparent hover:border-destructive/20"
                     >
                         <LogOut className="w-4 h-4" />
-                        <span>Logout</span>
+                        <span>Sign Out</span>
                     </button>
                 </div>
             </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 overflow-auto">
-                {children}
-            </main>
+            {/* Main Content Area */}
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+                {/* Global Header / Search Bar Placeholder */}
+                <header className="premium-header px-8 h-20 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <h2 className="text-sm font-bold text-foreground/40 uppercase tracking-widest">
+                            {window.location.pathname === '/' ? 'Overview' : window.location.pathname.substring(1).replace('-', ' ')}
+                        </h2>
+                    </div>
+
+                    <div className="flex items-center gap-6">
+                        <div className="text-right hidden sm:block">
+                            <p className="text-xs font-bold text-white">{schoolSettings?.school_name}</p>
+                            <p className="text-[10px] text-foreground/40 font-medium">Academic Year 2024</p>
+                        </div>
+                        <div className="w-px h-8 bg-border/60"></div>
+                        <button className="p-2 rounded-lg bg-secondary/50 border border-border/60 text-foreground/60 hover:text-primary transition-colors">
+                            <Settings className="w-5 h-5" />
+                        </button>
+                    </div>
+                </header>
+
+                <main className="flex-1 overflow-auto p-8 no-scrollbar scroll-smooth">
+                    <div className="max-w-7xl mx-auto animate-slide-up">
+                        <Outlet />
+                    </div>
+                </main>
+            </div>
         </div>
     )
 }

@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import { FileText, Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { Invoice, InvoiceItem } from '../../types/electron-api/FinanceAPI'
+import { useToast } from '../../contexts/ToastContext'
 
 export default function Invoices() {
-    const [invoices, setInvoices] = useState<any[]>([])
+    const [invoices, setInvoices] = useState<Invoice[]>([])
     const [loading, setLoading] = useState(true)
-    const [selectedInvoice, setSelectedInvoice] = useState<any>(null)
-    const [invoiceItems, setInvoiceItems] = useState<any[]>([])
+    const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
+    const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([])
     const navigate = useNavigate()
+    const { showToast } = useToast()
 
     useEffect(() => {
         loadInvoices()
@@ -19,12 +22,13 @@ export default function Invoices() {
             setInvoices(data)
         } catch (error) {
             console.error('Failed to load invoices:', error)
+            showToast('Failed to load invoices', 'error')
         } finally {
             setLoading(false)
         }
     }
 
-    const viewInvoice = async (invoice: any) => {
+    const viewInvoice = async (invoice: Invoice) => {
         try {
             const items = await window.electronAPI.getInvoiceItems(invoice.id)
             setInvoiceItems(items)
@@ -35,7 +39,12 @@ export default function Invoices() {
     }
 
     const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', minimumFractionDigits: 0 }).format(amount)
+        const displayAmount = amount / 100
+        return new Intl.NumberFormat('en-KE', {
+            style: 'currency',
+            currency: 'KES',
+            minimumFractionDigits: 0
+        }).format(displayAmount)
     }
 
     return (
@@ -45,7 +54,7 @@ export default function Invoices() {
                     <h1 className="text-2xl font-bold text-gray-900">Invoices</h1>
                     <p className="text-gray-500 mt-1">Manage student fee invoices</p>
                 </div>
-                <button 
+                <button
                     onClick={() => navigate('/finance/fee-structure')}
                     className="btn btn-primary flex items-center gap-2"
                 >
@@ -62,7 +71,7 @@ export default function Invoices() {
                         <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                         <h3 className="text-lg font-medium text-gray-900 mb-2">No Invoices Yet</h3>
                         <p className="text-gray-500 mb-4">Generate invoices for students to track fee balances</p>
-                        <button 
+                        <button
                             onClick={() => navigate('/finance/fee-structure')}
                             className="btn btn-primary"
                         >
@@ -101,7 +110,7 @@ export default function Invoices() {
                                             }`}>{inv.status}</span>
                                     </td>
                                     <td>
-                                        <button 
+                                        <button
                                             onClick={() => viewInvoice(inv)}
                                             className="text-blue-600 text-sm hover:underline"
                                         >
@@ -124,7 +133,7 @@ export default function Invoices() {
                                 <h2 className="text-xl font-bold text-gray-900">Invoice Details</h2>
                                 <p className="text-sm text-gray-500">{selectedInvoice.invoice_number}</p>
                             </div>
-                            <button 
+                            <button
                                 onClick={() => setSelectedInvoice(null)}
                                 className="text-gray-400 hover:text-gray-500 text-2xl"
                                 aria-label="Close"
@@ -132,7 +141,7 @@ export default function Invoices() {
                                 &times;
                             </button>
                         </div>
-                        
+
                         <div className="p-6 space-y-6">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
@@ -195,7 +204,7 @@ export default function Invoices() {
                         </div>
 
                         <div className="p-6 bg-gray-50 border-t border-gray-200 flex justify-end">
-                            <button 
+                            <button
                                 onClick={() => setSelectedInvoice(null)}
                                 className="btn btn-secondary"
                             >

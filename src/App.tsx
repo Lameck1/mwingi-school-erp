@@ -1,3 +1,4 @@
+import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores'
 import Login from './pages/Login'
@@ -21,6 +22,8 @@ import AuditLog from './pages/AuditLog'
 import Backup from './pages/Backup'
 import UsersPage from './pages/Users'
 
+import { ToastProvider } from './contexts/ToastContext'
+
 function PrivateRoute({ children }: { children: React.ReactNode }) {
     const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
     return isAuthenticated ? <>{children}</> : <Navigate to="/login" />
@@ -28,40 +31,37 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
     return (
-        <BrowserRouter>
-            <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route
-                    path="/*"
-                    element={
+        <ToastProvider>
+            <BrowserRouter>
+                <Routes>
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/" element={
                         <PrivateRoute>
-                            <Layout>
-                                <Routes>
-                                    <Route path="/" element={<Dashboard />} />
-                                    <Route path="/students" element={<Students />} />
-                                    <Route path="/students/new" element={<StudentForm />} />
-                                    <Route path="/students/:id" element={<StudentForm />} />
-                                    <Route path="/finance/payments" element={<FeePayment />} />
-                                    <Route path="/finance/invoices" element={<Invoices />} />
-                                    <Route path="/finance/transactions" element={<Transactions />} />
-                                    <Route path="/finance/expenses/new" element={<RecordExpense />} />
-                                    <Route path="/finance/income/new" element={<RecordIncome />} />
-                                    <Route path="/finance/reports" element={<FinancialReports />} />
-                                    <Route path="/finance/fee-structure" element={<FeeStructure />} />
-                                    <Route path="/payroll/staff" element={<Staff />} />
-                                    <Route path="/payroll/run" element={<PayrollRun />} />
-                                    <Route path="/inventory" element={<Inventory />} />
-                                    <Route path="/reports" element={<Reports />} />
-                                    <Route path="/settings" element={<Settings />} />
-                                    <Route path="/audit-log" element={<AuditLog />} />
-                                    <Route path="/users" element={<UsersPage />} />
-                                    <Route path="/backup" element={<Backup />} />
-                                </Routes>
-                            </Layout>
+                            <Layout />
                         </PrivateRoute>
-                    }
-                />
-            </Routes>
-        </BrowserRouter>
+                    }>
+                        <Route index element={<Dashboard />} />
+                        <Route path="students" element={<Students />} />
+                        <Route path="students/new" element={<StudentForm />} />
+                        <Route path="students/:id/edit" element={<StudentForm />} />
+                        <Route path="fee-payment" element={<FeePayment />} />
+                        <Route path="invoices" element={<Invoices />} />
+                        <Route path="transactions" element={<Transactions />} />
+                        <Route path="record-expense" element={<RecordExpense />} />
+                        <Route path="record-income" element={<RecordIncome />} />
+                        <Route path="financial-reports" element={<FinancialReports />} />
+                        <Route path="fee-structure" element={<FeeStructure />} />
+                        <Route path="staff" element={<Staff />} />
+                        <Route path="payroll-run" element={<PayrollRun />} />
+                        <Route path="inventory" element={<Inventory />} />
+                        <Route path="reports" element={<Reports />} />
+                        <Route path="settings" element={<Settings />} />
+                        <Route path="audit-log" element={<AuditLog />} />
+                        <Route path="backup" element={<Backup />} />
+                        <Route path="users" element={<UsersPage />} />
+                    </Route>
+                </Routes>
+            </BrowserRouter>
+        </ToastProvider>
     )
 }

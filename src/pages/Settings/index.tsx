@@ -7,22 +7,26 @@ export default function Settings() {
     const [activeTab, setActiveTab] = useState('school')
     const [saving, setSaving] = useState(false)
     const [formData, setFormData] = useState({
-        school_name: '', school_motto: '', address: '', phone: '', email: '',
-        mpesa_paybill: '', sms_api_key: '', sms_api_secret: '', sms_sender_id: ''
+        school_name: '', school_address: '', school_phone: '', school_email: '', school_website: '',
+        currency: '', timezone: '', date_format: '',
+        sms_api_key: '', sms_api_secret: '', sms_sender_id: '', mpesa_paybill: ''
     })
 
     useEffect(() => {
         if (schoolSettings) {
             setFormData({
                 school_name: schoolSettings.school_name || '',
-                school_motto: schoolSettings.school_motto || '',
-                address: schoolSettings.address || '',
-                phone: schoolSettings.phone || '',
-                email: schoolSettings.email || '',
-                mpesa_paybill: schoolSettings.mpesa_paybill || '',
+                school_address: schoolSettings.school_address || '',
+                school_phone: schoolSettings.school_phone || '',
+                school_email: schoolSettings.school_email || '',
+                school_website: schoolSettings.school_website || '',
+                currency: schoolSettings.currency || '',
+                timezone: schoolSettings.timezone || '',
+                date_format: schoolSettings.date_format || '',
                 sms_api_key: schoolSettings.sms_api_key || '',
                 sms_api_secret: schoolSettings.sms_api_secret || '',
-                sms_sender_id: schoolSettings.sms_sender_id || ''
+                sms_sender_id: schoolSettings.sms_sender_id || '',
+                mpesa_paybill: schoolSettings.mpesa_paybill || ''
             })
         }
     }, [schoolSettings])
@@ -34,8 +38,8 @@ export default function Settings() {
             const updated = await window.electronAPI.getSettings()
             setSchoolSettings(updated)
             alert('Settings saved successfully!')
-        } catch (error: any) {
-            alert(error.message || 'Failed to save settings')
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Failed to save settings')
         } finally { setSaving(false) }
     }
 
@@ -88,26 +92,26 @@ export default function Settings() {
                                 </div>
                                 <div className="md:col-span-2">
                                     <label className="label" htmlFor="school_motto">School Motto</label>
-                                    <input id="school_motto" type="text" value={formData.school_motto}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, school_motto: e.target.value }))}
+                                    <input id="school_motto" type="text" value={formData.school_name}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, school_name: e.target.value }))}
                                         className="input" />
                                 </div>
                                 <div className="md:col-span-2">
                                     <label className="label" htmlFor="address">Address</label>
-                                    <textarea id="address" value={formData.address}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                                    <textarea id="address" value={formData.school_address}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, school_address: e.target.value }))}
                                         className="input" rows={2} />
                                 </div>
                                 <div>
                                     <label className="label" htmlFor="phone">Phone</label>
-                                    <input id="phone" type="tel" value={formData.phone}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                                    <input id="phone" type="tel" value={formData.school_phone}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, school_phone: e.target.value }))}
                                         className="input" />
                                 </div>
                                 <div>
                                     <label className="label" htmlFor="email">Email</label>
-                                    <input id="email" type="email" value={formData.email}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                                    <input id="email" type="email" value={formData.school_email}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, school_email: e.target.value }))}
                                         className="input" />
                                 </div>
                             </div>
@@ -153,6 +157,12 @@ export default function Settings() {
                                     <label className="label" htmlFor="sms_api_key">SMS API Key (Africa's Talking)</label>
                                     <input id="sms_api_key" type="password" value={formData.sms_api_key}
                                         onChange={(e) => setFormData(prev => ({ ...prev, sms_api_key: e.target.value }))}
+                                        className="input" />
+                                </div>
+                                <div>
+                                    <label className="label" htmlFor="sms_api_secret">SMS API Secret / Username</label>
+                                    <input id="sms_api_secret" type="text" value={formData.sms_api_secret}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, sms_api_secret: e.target.value }))}
                                         className="input" />
                                 </div>
                                 <div>
