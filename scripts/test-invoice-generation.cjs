@@ -1,11 +1,16 @@
-
-const db = require('better-sqlite3')('C:/Users/lamec/AppData/Roaming/mwingi-school-erp/data/school_erp.db');
+const { getDatabase } = require('../electron/main/database/index.js');
+const { registerFinanceHandlers } = require('../electron/main/ipc/finance/finance-handlers.ts');
 
 const academicYearId = 1; // 2025
 const termId = 1; // Term 1
-const userId = 1; // Admin
+void registerFinanceHandlers; // Suppress unused variable warning
 
 console.log('--- Testing Batch Invoice Generation Logic ---');
+
+const db = getDatabase();
+// We are not actually running the app, so we don't need to register handlers, 
+// but we might want to ensure the DB is initialized.
+// For this script, we are just using the DB directly.
 
 // 1. Get Fee Structure
 const structure = db.prepare(`

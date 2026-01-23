@@ -1,4 +1,5 @@
 
+ 
 const db = require('better-sqlite3')('C:/Users/lamec/AppData/Roaming/mwingi-school-erp/data/school_erp.db');
 
 try {

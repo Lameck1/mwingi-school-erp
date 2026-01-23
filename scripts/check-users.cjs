@@ -1,8 +1,11 @@
+const Database = require('better-sqlite3');
+const path = require('path');
 
-const db = require('better-sqlite3')('C:/Users/lamec/AppData/Roaming/mwingi-school-erp/data/school_erp.db');
+const dbPath = path.join(__dirname, '../database/school_erp.db');
+const db = new Database(dbPath);
 
 try {
-    const users = db.prepare('SELECT * FROM users').all();
+    const users = db.prepare('SELECT * FROM user').all();
     console.log('Users found:', users.length);
     if (users.length > 0) {
         console.log('Users:', JSON.stringify(users, null, 2));
@@ -11,4 +14,6 @@ try {
     }
 } catch (error) {
     console.error('Database Error:', error.message);
+} finally {
+    db.close();
 }
