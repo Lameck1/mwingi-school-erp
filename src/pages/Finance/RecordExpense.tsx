@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useAuthStore } from '../../stores'
+import { TransactionCategory } from '../../types/electron-api/FinanceAPI'
 import { Plus, Check, Loader2 } from 'lucide-react'
 import { useToast } from '../../contexts/ToastContext'
 
 export default function RecordExpense() {
     const { user } = useAuthStore()
     const { showToast } = useToast()
-    
-    const [categories, setCategories] = useState<any[]>([])
+
+    const [categories, setCategories] = useState<TransactionCategory[]>([])
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [newCategory, setNewCategory] = useState('')
@@ -24,16 +25,25 @@ export default function RecordExpense() {
     })
 
     useEffect(() => {
+        const loadCategories = async () => {
+            try {
+                const allCats = await window.electronAPI.getTransactionCategories()
+                setCategories(allCats.filter((c: TransactionCategory) => c.category_type === 'EXPENSE'))
+            } catch (error) {
+                console.error('Failed to load categories:', error)
+                showToast('Failed to load categories', 'error')
+            }
+        }
         loadCategories()
-    }, [])
+    }, [showToast])
 
     const loadCategories = async () => {
         try {
             const allCats = await window.electronAPI.getTransactionCategories()
-            setCategories(allCats.filter((c: any) => c.category_type === 'EXPENSE'))
+            setCategories(allCats.filter((c: TransactionCategory) => c.category_type === 'EXPENSE'))
         } catch (error) {
             console.error('Failed to load categories:', error)
-            showToast('Failed to load expense categories', 'error')
+            showToast('Failed to load categories', 'error')
         }
     }
 
@@ -64,8 +74,11 @@ export default function RecordExpense() {
         setSaving(true)
         try {
             await window.electronAPI.createTransaction({
-                ...formData,
-                amount: parseFloat(formData.amount)
+                transaction_date: formData.transaction_date,
+                amount: Math.round(parseFloat(formData.amount) * 100),
+                category_id: parseInt(formData.category_id),
+                reference: formData.payment_reference,
+                description: formData.description
             }, user!.id)
 
             showToast('Expense recorded successfully', 'success')
