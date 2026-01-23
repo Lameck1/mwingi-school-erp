@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Shield, Search } from 'lucide-react'
+import { AuditLogEntry } from '../../types/electron-api/AuditAPI'
+import { formatDateTime } from '../../utils/format'
 
 export default function AuditLog() {
-    const [logs, setLogs] = useState<any[]>([])
+    const [logs, setLogs] = useState<AuditLogEntry[]>([])
     const [loading, setLoading] = useState(true)
     const [filter, setFilter] = useState({ action: '', table: '', search: '' })
 
@@ -28,7 +30,7 @@ export default function AuditLog() {
     const filteredLogs = logs.filter(log => {
         const matchAction = !filter.action || log.action_type === filter.action
         const matchTable = !filter.table || log.table_name === filter.table
-        const matchSearch = !filter.search || 
+        const matchSearch = !filter.search ||
             log.user_name?.toLowerCase().includes(filter.search.toLowerCase()) ||
             String(log.record_id).includes(filter.search)
         return matchAction && matchTable && matchSearch
@@ -45,7 +47,7 @@ export default function AuditLog() {
                 <div className="flex flex-wrap items-center gap-4">
                     <div className="relative flex-1 min-w-[200px]">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <input type="text" placeholder="Search by user or record ID..." 
+                        <input type="text" placeholder="Search by user or record ID..."
                             aria-label="Search logs"
                             value={filter.search}
                             onChange={(e) => setFilter(prev => ({ ...prev, search: e.target.value }))}
@@ -100,7 +102,7 @@ export default function AuditLog() {
                                 {filteredLogs.map((log) => (
                                     <tr key={log.id}>
                                         <td className="text-sm text-gray-500">
-                                            {new Date(log.created_at).toLocaleString()}
+                                            {formatDateTime(log.created_at)}
                                         </td>
                                         <td>{log.user_name || 'System'}</td>
                                         <td>

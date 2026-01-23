@@ -1,28 +1,29 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { ClipboardList, Filter, Download } from 'lucide-react'
-import { useSearchParams } from 'react-router-dom'
 import { useToast } from '../../contexts/ToastContext'
+import { Transaction } from '../../types/electron-api/FinanceAPI'
+import { formatCurrency, formatDate } from '../../utils/format'
 
 export default function Transactions() {
-    const [searchParams] = useSearchParams()
     const { showToast } = useToast()
-    
-    const [transactions, setTransactions] = useState<any[]>([])
+
+    const [transactions, setTransactions] = useState<Transaction[]>([])
     const [loading, setLoading] = useState(true)
-    const [filter, setFilter] = useState({ 
-        type: searchParams.get('type') || '', 
-        startDate: '', 
-        endDate: '' 
+    const [filter, setFilter] = useState({
+        category_id: '',
+        transaction_date: '',
+        startDate: '',
+        endDate: ''
     })
+    const [appliedFilter, setAppliedFilter] = useState(filter)
 
-    useEffect(() => {
-        loadTransactions()
-    }, [])
-
-    const loadTransactions = async () => {
+    const loadTransactions = useCallback(async () => {
         setLoading(true)
         try {
-            const results = await window.electronAPI.getTransactions(filter)
+            const filterParams: Partial<Transaction> = {}
+            if (appliedFilter.category_id) filterParams.category_id = parseInt(appliedFilter.category_id)
+            if (appliedFilter.startDate) filterParams.transaction_date = appliedFilter.startDate
+            const results = await window.electronAPI.getTransactions(filterParams)
             setTransactions(results)
         } catch (error) {
             console.error('Failed to load transactions:', error)
@@ -30,15 +31,17 @@ export default function Transactions() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [appliedFilter, showToast])
+
+    useEffect(() => {
+        loadTransactions()
+    }, [loadTransactions])
 
     const handleApplyFilter = () => {
-        loadTransactions()
+        setAppliedFilter(filter)
     }
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', minimumFractionDigits: 0 }).format(amount)
-    }
+
 
     return (
         <div className="p-6">
@@ -55,16 +58,10 @@ export default function Transactions() {
 
             <div className="card mb-6">
                 <div className="flex flex-wrap items-center gap-4">
-                    <select value={filter.type} onChange={(e) => setFilter(prev => ({ ...prev, type: e.target.value }))}
-                        aria-label="Filter by type"
+                    <select value={filter.category_id} onChange={(e) => setFilter(prev => ({ ...prev, category_id: e.target.value }))}
+                        aria-label="Filter by category"
                         className="input w-48">
-                        <option value="">All Types</option>
-                        <option value="FEE_PAYMENT">Fee Payments</option>
-                        <option value="EXPENSE">Expenses</option>
-                        <option value="SALARY_PAYMENT">Salaries</option>
-                        <option value="DONATION">Donations</option>
-                        <option value="GRANT">Grants</option>
-                        <option value="ADJUSTMENT">Other / Loans</option>
+                        <option value="">All Categories</option>
                     </select>
                     <input type="date" value={filter.startDate}
                         aria-label="Start date"
@@ -74,7 +71,7 @@ export default function Transactions() {
                         aria-label="End date"
                         onChange={(e) => setFilter(prev => ({ ...prev, endDate: e.target.value }))}
                         className="input w-40" placeholder="To" />
-                    <button 
+                    <button
                         onClick={handleApplyFilter}
                         className="btn btn-primary flex items-center gap-2"
                     >
@@ -100,25 +97,19 @@ export default function Transactions() {
                                 <tr>
                                     <th>Ref</th>
                                     <th>Date</th>
-                                    <th>Type</th>
                                     <th>Description</th>
-                                    <th>Method</th>
-                                    <th>Debit</th>
-                                    <th>Credit</th>
-                                    <th>Recorded By</th>
+                                    <th>Amount</th>
+                                    <th>Category</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {transactions.map((txn) => (
                                     <tr key={txn.id}>
-                                        <td className="font-mono text-sm">{txn.transaction_ref}</td>
-                                        <td>{new Date(txn.transaction_date).toLocaleDateString()}</td>
-                                        <td>{txn.transaction_type.replace(/_/g, ' ')}</td>
+                                        <td className="font-mono text-sm">{txn.reference}</td>
+                                        <td>{formatDate(txn.transaction_date)}</td>
                                         <td>{txn.description || '-'}</td>
-                                        <td>{txn.payment_method}</td>
-                                        <td className="text-red-600">{txn.debit_credit === 'DEBIT' ? formatCurrency(txn.amount) : '-'}</td>
-                                        <td className="text-green-600">{txn.debit_credit === 'CREDIT' ? formatCurrency(txn.amount) : '-'}</td>
-                                        <td>{txn.recorded_by}</td>
+                                        <td>{formatCurrency(txn.amount)}</td>
+                                        <td>{txn.category_id}</td>
                                     </tr>
                                 ))}
                             </tbody>

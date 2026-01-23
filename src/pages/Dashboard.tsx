@@ -1,22 +1,32 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAppStore } from '../stores'
+import { FeeCollectionItem } from '../types/electron-api/ReportsAPI'
+import { AuditLogEntry } from '../types/electron-api/AuditAPI'
 import {
-    Users, Wallet, TrendingUp, TrendingDown, UserCog,
-    CreditCard, UserPlus, FileText, AlertCircle
+    Users, Wallet, UserCog,
+    CreditCard, UserPlus, FileText, AlertCircle,
+    BarChart3, Shield
 } from 'lucide-react'
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     PieChart, Pie, Cell
 } from 'recharts'
+import { formatCurrency, formatDateTime } from '../utils/format'
 
-const COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed']
+const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#334155', '#ec4899']
 
 export default function Dashboard() {
-    const { schoolSettings, currentTerm, currentAcademicYear } = useAppStore()
-    const [dashboardData, setDashboardData] = useState<any>(null)
-    const [feeCollectionData, setFeeCollectionData] = useState<any[]>([])
-    const [recentActivities, setRecentActivities] = useState<any[]>([])
+    const { currentTerm, currentAcademicYear } = useAppStore()
+    const [dashboardData, setDashboardData] = useState<{
+        totalStudents: number
+        totalStaff: number
+        feeCollected: number
+        outstandingBalance: number
+    } | null>(null)
+    const [feeCollectionData, setFeeCollectionData] = useState<{ month: string; total: number }[]>([])
+    const [feeCategories, setFeeCategories] = useState<{ name: string; value: number }[]>([])
+    const [recentActivities, setRecentActivities] = useState<AuditLogEntry[]>([])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
@@ -25,24 +35,31 @@ export default function Dashboard() {
 
     const loadDashboardData = async () => {
         try {
-            const [data, feeData, logs] = await Promise.all([
+            const [data, feeData, categoryData, logs] = await Promise.all([
                 window.electronAPI.getDashboardData(),
                 window.electronAPI.getFeeCollectionReport(
                     new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
                     new Date().toISOString().slice(0, 10)
                 ),
-                window.electronAPI.getAuditLog(5)
+                window.electronAPI.getFeeCategoryBreakdown(),
+                window.electronAPI.getAuditLog(6)
             ])
-            
+
             setDashboardData(data)
+            setFeeCategories(categoryData)
             setRecentActivities(logs)
 
-            // Group by month
             const monthlyData: Record<string, number> = {}
-            feeData.forEach((item: any) => {
-                const month = new Date(item.date).toLocaleDateString('en-US', { month: 'short' })
-                monthlyData[month] = (monthlyData[month] || 0) + item.total
-            })
+            if (Array.isArray(feeData)) {
+                feeData.forEach((item: FeeCollectionItem) => {
+                    const date = new Date(item.payment_date)
+                    if (isNaN(date.getTime())) return // Skip invalid dates
+
+                    const month = date.toLocaleDateString('en-US', { month: 'short' })
+                    const amount = Number(item.amount) || 0
+                    monthlyData[month] = (monthlyData[month] || 0) + amount
+                })
+            }
 
             setFeeCollectionData(
                 Object.entries(monthlyData).map(([month, total]) => ({ month, total }))
@@ -54,204 +71,224 @@ export default function Dashboard() {
         }
     }
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('en-KE', {
-            style: 'currency',
-            currency: 'KES',
-            minimumFractionDigits: 0,
-        }).format(amount)
-    }
+
 
     const stats = [
         {
-            label: 'Total Students',
-            value: dashboardData?.totalStudents || 0,
+            label: 'Active Students',
+            value: dashboardData?.totalStudents?.toLocaleString() || '0',
             icon: Users,
-            color: 'bg-blue-500',
-            change: '+12',
-            changeType: 'up',
+            color: 'from-blue-500/20 to-indigo-500/20 text-indigo-400',
         },
         {
             label: 'Fees Collected',
             value: formatCurrency(dashboardData?.feeCollected || 0),
             icon: Wallet,
-            color: 'bg-green-500',
-            change: '+8%',
-            changeType: 'up',
+            color: 'from-emerald-500/20 to-teal-500/20 text-emerald-400',
         },
         {
-            label: 'Outstanding Balance',
+            label: 'Outstanding Total',
             value: formatCurrency(dashboardData?.outstandingBalance || 0),
             icon: AlertCircle,
-            color: 'bg-orange-500',
-            change: '-5%',
-            changeType: 'down',
+            color: 'from-amber-500/20 to-orange-500/20 text-amber-400',
         },
         {
-            label: 'Staff Count',
-            value: dashboardData?.totalStaff || 0,
+            label: 'Staff Registry',
+            value: dashboardData?.totalStaff?.toLocaleString() || '0',
             icon: UserCog,
-            color: 'bg-purple-500',
+            color: 'from-slate-500/20 to-slate-700/20 text-slate-300',
         },
     ]
 
     const quickActions = [
-        { label: 'Record Payment', icon: CreditCard, path: '/finance/payments', color: 'bg-green-600' },
-        { label: 'Add Student', icon: UserPlus, path: '/students/new', color: 'bg-blue-600' },
-        { label: 'Generate Report', icon: FileText, path: '/reports', color: 'bg-purple-600' },
-    ]
-
-    const feeCategories = [
-        { name: 'Tuition', value: 60 },
-        { name: 'Boarding', value: 25 },
-        { name: 'Transport', value: 10 },
-        { name: 'Others', value: 5 },
+        { label: 'Payment', icon: CreditCard, path: '/fee-payment', color: 'from-emerald-600 to-teal-700' },
+        { label: 'Student', icon: UserPlus, path: '/students/new', color: 'from-indigo-600 to-blue-700' },
+        { label: 'Reports', icon: FileText, path: '/reports', color: 'from-slate-700 to-slate-800' },
     ]
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-full">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="flex items-center justify-center h-[calc(100vh-200px)]">
+                <div className="relative">
+                    <div className="w-16 h-16 rounded-full border-4 border-primary/20 animate-pulse"></div>
+                    <div className="absolute top-0 w-16 h-16 rounded-full border-4 border-t-primary animate-spin"></div>
+                </div>
             </div>
         )
     }
 
     return (
-        <div className="p-6">
-            {/* Header */}
-            <div className="mb-8">
-                <h1 className="text-2xl font-bold text-gray-900">
-                    {schoolSettings?.school_name || 'Dashboard'}
-                </h1>
-                <p className="text-gray-500 mt-1">
-                    {currentAcademicYear?.year_name} - {currentTerm?.term_name || 'Current Term'}
-                </p>
+        <div className="space-y-10 pb-10">
+            {/* Executive Summary Header */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                    <h1 className="text-4xl font-bold text-white font-heading">Financial Overview</h1>
+                    <p className="text-foreground/50 mt-2 font-medium">
+                        Insights for <span className="text-primary">{currentAcademicYear?.year_name}</span> • {currentTerm?.term_name || 'Academic Period'}
+                    </p>
+                </div>
+                <div className="flex gap-3">
+                    {quickActions.map((action) => (
+                        <Link
+                            key={action.path}
+                            to={action.path}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-br ${action.color} text-white text-xs font-bold uppercase tracking-wider shadow-lg transition-all hover:-translate-y-1 hover:brightness-110 active:scale-95`}
+                        >
+                            <action.icon className="w-4 h-4" />
+                            {action.label}
+                        </Link>
+                    ))}
+                </div>
             </div>
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {/* High-Impact Stat Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {stats.map((stat, index) => (
-                    <div key={index} className="stat-card">
-                        <div className="flex items-start justify-between">
+                    <div key={index} className="stat-card group">
+                        <div className="flex items-start justify-between relative z-10">
                             <div>
                                 <p className="stat-card-label">{stat.label}</p>
-                                <p className="stat-card-value mt-2">{stat.value}</p>
-                                {stat.change && (
-                                    <div className={`flex items-center gap-1 mt-2 text-sm ${stat.changeType === 'up' ? 'text-green-600' : 'text-red-600'
-                                        }`}>
-                                        {stat.changeType === 'up' ? (
-                                            <TrendingUp className="w-4 h-4" />
-                                        ) : (
-                                            <TrendingDown className="w-4 h-4" />
-                                        )}
-                                        <span>{stat.change}</span>
-                                    </div>
-                                )}
+                                <p className="stat-card-value mt-3 group-hover:text-primary transition-colors">{stat.value}</p>
                             </div>
-                            <div className={`${stat.color} p-3 rounded-lg`}>
-                                <stat.icon className="w-6 h-6 text-white" />
+                            <div className={`p-4 rounded-2xl bg-gradient-to-br ${stat.color} border border-white/5`}>
+                                <stat.icon className="w-6 h-6" />
                             </div>
                         </div>
+                        {/* Subtle background decoration */}
+                        <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-all"></div>
                     </div>
                 ))}
             </div>
 
-            {/* Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                {/* Fee Collection Chart */}
-                <div className="card">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Fee Collection Trend</h3>
-                    <div className="h-72">
+            {/* Analytics Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Fee Collection Chart (Span 2) */}
+                <div className="lg:col-span-2 card">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h3 className="text-lg font-bold text-white">Revenue Performance</h3>
+                            <p className="text-xs text-foreground/40 font-medium">6-Month Fee Collection Trend</p>
+                        </div>
+                        <BarChart3 className="w-5 h-5 text-primary/60" />
+                    </div>
+                    <div className="h-[340px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={feeCollectionData}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="month" />
-                                <YAxis tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`} />
-                                <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                                <Bar dataKey="total" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                                <defs>
+                                    <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.8} />
+                                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0.1} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff10" />
+                                <XAxis
+                                    dataKey="month"
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }}
+                                    dy={10}
+                                />
+                                <YAxis
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: '#94a3b8', fontSize: 11 }}
+                                    tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
+                                />
+                                <Tooltip
+                                    cursor={{ fill: '#ffffff05' }}
+                                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)' }}
+                                    itemStyle={{ color: '#6366f1', fontSize: '12px', fontWeight: 'bold' }}
+                                    formatter={(value: number) => [formatCurrency(value), 'Revenue']}
+                                />
+                                <Bar dataKey="total" fill="url(#barGradient)" radius={[6, 6, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
 
-                {/* Fee Categories Chart */}
+                {/* Audit Trail / Activities */}
                 <div className="card">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Fee Categories</h3>
-                    <div className="h-72 flex items-center">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={feeCategories}
-                                    innerRadius={60}
-                                    outerRadius={100}
-                                    paddingAngle={2}
-                                    dataKey="value"
-                                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                                >
-                                    {feeCategories.map((_, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip />
-                            </PieChart>
-                        </ResponsiveContainer>
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h3 className="text-lg font-bold text-white">Audit Trail</h3>
+                            <p className="text-xs text-foreground/40 font-medium">Recent security & system logs</p>
+                        </div>
+                        <Link to="/audit-log" className="p-2 rounded-lg bg-secondary hover:bg-primary/20 text-primary transition-all">
+                            <BarChart3 className="w-4 h-4" />
+                        </Link>
                     </div>
-                </div>
-            </div>
-
-            {/* Bottom Row: Recent Activities & Quick Actions */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Recent Activities */}
-                <div className="card">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold text-gray-900">Recent Activities</h3>
-                        <Link to="/settings" className="text-sm text-blue-600 hover:text-blue-700">View All</Link>
-                    </div>
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                         {recentActivities.length === 0 ? (
-                            <div className="text-center py-8 text-gray-500">
-                                <FileText className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                                <p>No recent activities</p>
+                            <div className="text-center py-12">
+                                <Shield className="w-12 h-12 mx-auto mb-4 text-border" />
+                                <p className="text-sm text-foreground/40">Secure & Silent</p>
                             </div>
                         ) : (
                             recentActivities.map((log) => (
-                                <div key={log.id} className="flex items-start gap-3 pb-3 border-b border-gray-100 last:border-0 last:pb-0">
-                                    <div className="p-2 bg-blue-50 rounded-full shrink-0">
-                                        <FileText className="w-4 h-4 text-blue-600" />
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-900">{log.action}</p>
-                                        <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
-                                            <span className="font-medium text-gray-700">{log.user_name || 'System'}</span>
-                                            <span>•</span>
-                                            <span>{new Date(log.created_at).toLocaleString()}</span>
+                                <div key={log.id} className="relative pl-6 pb-6 last:pb-0 group">
+                                    {/* Timeline line */}
+                                    <div className="absolute left-0 top-0 bottom-0 w-px bg-border group-last:h-2"></div>
+                                    <div className="absolute left-[-4px] top-1.5 w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(99,102,241,0.5)]"></div>
+
+                                    <div className="space-y-1">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-[11px] font-bold uppercase tracking-wider text-white">{log.action_type}</p>
+                                            <span className="text-[9px] font-medium text-foreground/40">{formatDateTime(log.created_at)}</span>
                                         </div>
-                                        {log.details && (
-                                            <p className="text-xs text-gray-600 mt-1 line-clamp-1">{log.details}</p>
-                                        )}
+                                        <p className="text-xs text-foreground/60 leading-relaxed">
+                                            Targeted <span className="text-primary font-medium">{log.table_name}</span> record <span className="text-white font-mono">#{log.record_id}</span>
+                                        </p>
+                                        <p className="text-[10px] text-foreground/40 italic">Agent ID: {log.user_id}</p>
                                     </div>
                                 </div>
                             ))
                         )}
                     </div>
                 </div>
+            </div>
 
-                {/* Quick Actions */}
-                <div className="card h-fit">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {quickActions.map((action) => (
-                            <Link
-                                key={action.path}
-                                to={action.path}
-                                className={`${action.color} text-white px-4 py-4 rounded-lg flex items-center gap-3 hover:opacity-90 transition-opacity shadow-sm`}
-                            >
-                                <div className="p-2 bg-white/20 rounded-lg">
-                                    <action.icon className="w-6 h-6" />
+            {/* Distribution Analysis */}
+            <div className="card">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="max-w-xs">
+                        <h3 className="text-lg font-bold text-white">Revenue Distribution</h3>
+                        <p className="text-xs text-foreground/40 font-medium leading-relaxed mt-2">
+                            A breakdown of the current term's financial allocation across all established fee categories.
+                        </p>
+                        <div className="mt-8 space-y-3">
+                            {feeCategories.slice(0, 4).map((cat, i) => (
+                                <div key={i} className="flex items-center justify-between text-[11px]">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
+                                        <span className="text-foreground/70">{cat.name}</span>
+                                    </div>
+                                    <span className="text-white font-bold">{((cat.value / (dashboardData?.feeCollected || 1)) * 100).toFixed(1)}%</span>
                                 </div>
-                                <span className="font-medium text-lg">{action.label}</span>
-                            </Link>
-                        ))}
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex-1 h-72">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={feeCategories}
+                                    innerRadius={70}
+                                    outerRadius={110}
+                                    paddingAngle={5}
+                                    dataKey="value"
+                                    stroke="none"
+                                >
+                                    {feeCategories.map((_, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip
+                                    contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px', color: '#fff' }}
+                                    formatter={(value: number) => [formatCurrency(value), 'Allocation']}
+                                />
+                            </PieChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
             </div>
