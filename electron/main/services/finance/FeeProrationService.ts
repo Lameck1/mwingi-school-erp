@@ -1,3 +1,4 @@
+import Database from 'better-sqlite3-multiple-ciphers'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 
@@ -44,15 +45,21 @@ export interface InvoiceGenerationResult {
 // ============================================================================
 
 class InvoiceTemplateRepository {
+  private db: Database.Database
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+  }
+
   async getInvoiceTemplate(templateId: number): Promise<any> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`
       SELECT * FROM fee_invoice WHERE id = ?
     `).get(templateId)
   }
 
   async getTermDates(termId: number): Promise<{ term_start: string; term_end: string } | null> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       SELECT term_start, term_end FROM academic_term WHERE id = ?
     `).get(termId) as any
@@ -67,6 +74,12 @@ class InvoiceTemplateRepository {
 }
 
 class ProRatedInvoiceRepository {
+  private db: Database.Database
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+  }
+
   async createProRatedInvoice(data: {
     student_id: number
     amount: number
@@ -77,7 +90,7 @@ class ProRatedInvoiceRepository {
     term_id: number
     class_id: number
   }): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const invoiceNumber = `INV-${Date.now()}`
 
     const result = db.prepare(`
@@ -112,7 +125,7 @@ class ProRatedInvoiceRepository {
     days_in_term: number
     days_enrolled: number
   }): Promise<void> {
-    const db = getDatabase()
+    const db = this.db
     db.prepare(`
       INSERT INTO pro_ration_log (
         invoice_id, student_id, full_amount, pro_rated_amount,
@@ -210,12 +223,17 @@ class TermDateValidator implements ITermDateValidator {
 }
 
 class ProRatedInvoiceGenerator implements IProRatedInvoiceGenerator {
+  private db: Database.Database
+
   constructor(
     private templateRepo: InvoiceTemplateRepository,
     private invoiceRepo: ProRatedInvoiceRepository,
     private calculator: ProRateCalculator,
-    private validator: TermDateValidator
-  ) {}
+    private validator: TermDateValidator,
+    db?: Database.Database
+  ) {
+    this.db = db || getDatabase()
+  }
 
   async generateProRatedInvoice(
     studentId: number,
@@ -223,7 +241,7 @@ class ProRatedInvoiceGenerator implements IProRatedInvoiceGenerator {
     enrollmentDate: string,
     userId: number
   ): Promise<InvoiceGenerationResult> {
-    const db = getDatabase()
+    const db = this.db
 
     try {
       // Get template invoice
@@ -327,22 +345,25 @@ class ProRatedInvoiceGenerator implements IProRatedInvoiceGenerator {
 // ============================================================================
 
 export class FeeProrationService implements IProRateCalculator, ITermDateValidator, IProRatedInvoiceGenerator {
+  private db: Database.Database
   private readonly calculator: ProRateCalculator
   private readonly validator: TermDateValidator
   private readonly invoiceGenerator: ProRatedInvoiceGenerator
 
-  constructor() {
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
     this.calculator = new ProRateCalculator()
     this.validator = new TermDateValidator()
 
-    const templateRepo = new InvoiceTemplateRepository()
-    const invoiceRepo = new ProRatedInvoiceRepository()
+    const templateRepo = new InvoiceTemplateRepository(this.db)
+    const invoiceRepo = new ProRatedInvoiceRepository(this.db)
 
     this.invoiceGenerator = new ProRatedInvoiceGenerator(
       templateRepo,
       invoiceRepo,
       this.calculator,
-      this.validator
+      this.validator,
+      this.db
     )
   }
 

@@ -1,3 +1,4 @@
+import Database from 'better-sqlite3-multiple-ciphers'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 
@@ -97,8 +98,14 @@ export interface Invoice {
 // ============================================================================
 
 class PaymentTransactionRepository {
+  private db: Database.Database
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+  }
+
   async createTransaction(data: PaymentData): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       INSERT INTO ledger_transaction (
         student_id, transaction_type, amount, transaction_date, description,
@@ -123,7 +130,7 @@ class PaymentTransactionRepository {
   }
 
   async createReversal(studentId: number, originalAmount: number, voidReason: string, voidedBy: number): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       INSERT INTO ledger_transaction (
         student_id, transaction_type, amount, transaction_date, description,
@@ -145,12 +152,12 @@ class PaymentTransactionRepository {
   }
 
   async getTransaction(id: number): Promise<PaymentTransaction | null> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`SELECT * FROM ledger_transaction WHERE id = ?`).get(id) as PaymentTransaction | null
   }
 
   async getStudentHistory(studentId: number, limit: number): Promise<PaymentTransaction[]> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`
       SELECT * FROM ledger_transaction
       WHERE student_id = ? AND transaction_type IN ('CREDIT', 'PAYMENT')
@@ -160,18 +167,18 @@ class PaymentTransactionRepository {
   }
 
   async updateStudentBalance(studentId: number, newBalance: number): Promise<void> {
-    const db = getDatabase()
+    const db = this.db
     db.prepare(`UPDATE student SET credit_balance = ? WHERE id = ?`).run(newBalance, studentId)
   }
 
   async getStudentBalance(studentId: number): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`SELECT credit_balance FROM student WHERE id = ?`).get(studentId) as { credit_balance: number } | undefined
     return result?.credit_balance || 0
   }
 
   async getStudentById(studentId: number): Promise<{ id: number; credit_balance: number } | null> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`SELECT id, credit_balance FROM student WHERE id = ?`).get(studentId) as { id: number; credit_balance: number } | null
   }
 }
@@ -181,8 +188,14 @@ class PaymentTransactionRepository {
 // ============================================================================
 
 class VoidAuditRepository {
+  private db: Database.Database
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+  }
+
   async recordVoid(transactionId: number, studentId: number, amount: number, description: string, voidReason: string, voidedBy: number, recoveryMethod?: string): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       INSERT INTO void_audit (
         transaction_id, transaction_type, original_amount, student_id, description,
@@ -205,7 +218,7 @@ class VoidAuditRepository {
   }
 
   async getVoidReport(startDate: string, endDate: string): Promise<VoidedTransaction[]> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`
       SELECT va.*, u.first_name, u.last_name, s.admission_number, s.first_name as student_first_name
       FROM void_audit va
@@ -222,8 +235,14 @@ class VoidAuditRepository {
 // ============================================================================
 
 class InvoiceValidator implements IPaymentValidator {
+  private db: Database.Database
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+  }
+
   async validatePaymentAgainstInvoices(studentId: number, amount: number): Promise<ValidationResult> {
-    const db = getDatabase()
+    const db = this.db
 
     try {
       const invoices = db.prepare(`
@@ -266,7 +285,13 @@ class InvoiceValidator implements IPaymentValidator {
 // ============================================================================
 
 class PaymentProcessor {
-  private transactionRepo = new PaymentTransactionRepository()
+  private db: Database.Database
+  private transactionRepo: PaymentTransactionRepository
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.transactionRepo = new PaymentTransactionRepository(this.db)
+  }
 
   async processPayment(data: PaymentData): Promise<number> {
     const student = await this.transactionRepo.getStudentById(data.student_id)
@@ -298,8 +323,15 @@ class PaymentProcessor {
 // ============================================================================
 
 class VoidProcessor implements IPaymentVoidProcessor {
-  private transactionRepo = new PaymentTransactionRepository()
-  private voidAuditRepo = new VoidAuditRepository()
+  private db: Database.Database
+  private transactionRepo: PaymentTransactionRepository
+  private voidAuditRepo: VoidAuditRepository
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.transactionRepo = new PaymentTransactionRepository(this.db)
+    this.voidAuditRepo = new VoidAuditRepository(this.db)
+  }
 
   async voidPayment(data: VoidPaymentData): Promise<PaymentResult> {
     try {
@@ -358,8 +390,15 @@ class VoidProcessor implements IPaymentVoidProcessor {
 // ============================================================================
 
 class PaymentQueryService implements IPaymentQueryService {
-  private transactionRepo = new PaymentTransactionRepository()
-  private voidAuditRepo = new VoidAuditRepository()
+  private db: Database.Database
+  private transactionRepo: PaymentTransactionRepository
+  private voidAuditRepo: VoidAuditRepository
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.transactionRepo = new PaymentTransactionRepository(this.db)
+    this.voidAuditRepo = new VoidAuditRepository(this.db)
+  }
 
   async getStudentPaymentHistory(studentId: number, limit = 50): Promise<PaymentTransaction[]> {
     return this.transactionRepo.getStudentHistory(studentId, limit)
@@ -370,7 +409,7 @@ class PaymentQueryService implements IPaymentQueryService {
   }
 
   async getPaymentApprovalQueue(role: string): Promise<ApprovalQueueItem[]> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`
       SELECT ar.*, s.first_name as student_first_name, s.last_name as student_last_name
       FROM approval_request ar
@@ -388,16 +427,18 @@ class PaymentQueryService implements IPaymentQueryService {
 // ============================================================================
 
 export class PaymentService implements IPaymentRecorder, IPaymentVoidProcessor, IPaymentValidator, IPaymentQueryService {
+  private db: Database.Database
   private readonly processor: PaymentProcessor
   private readonly voidProcessor: VoidProcessor
   private readonly validator: InvoiceValidator
   private readonly queryService: PaymentQueryService
 
-  constructor() {
-    this.processor = new PaymentProcessor()
-    this.voidProcessor = new VoidProcessor()
-    this.validator = new InvoiceValidator()
-    this.queryService = new PaymentQueryService()
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.processor = new PaymentProcessor(this.db)
+    this.voidProcessor = new VoidProcessor(this.db)
+    this.validator = new InvoiceValidator(this.db)
+    this.queryService = new PaymentQueryService(this.db)
   }
 
   async recordPayment(data: PaymentData): Promise<PaymentResult> {
