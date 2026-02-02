@@ -22,6 +22,7 @@ export interface Student {
   // Calculated fields
   stream_name?: string
   balance?: number
+  credit_balance?: number
 }
 
 export interface StudentFilters {
@@ -36,4 +37,10 @@ export interface StudentAPI {
   createStudent(data: Partial<Student>): Promise<{ success: boolean; id: number }>
   updateStudent(id: number, data: Partial<Student>): Promise<{ success: boolean }>
   getStudentBalance(studentId: number): Promise<number>
+  // Attendance
+  getStudentsForAttendance(streamId: number, yearId: number, termId: number): Promise<Student[]>
+  getAttendanceByDate(streamId: number, date: string, yearId: number, termId: number): Promise<any[]>
+  markAttendance(entries: any[], streamId: number, date: string, yearId: number, termId: number, userId: number): Promise<{ success: boolean; marked: number; errors?: string[] }>
+  // Reports
+  getStudentsForReportCards(streamId: number, yearId: number, termId: number): Promise<any[]>
 }

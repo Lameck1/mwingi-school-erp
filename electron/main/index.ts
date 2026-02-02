@@ -5,7 +5,12 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { initializeDatabase } from './database/index'
 import { registerAllIpcHandlers } from './ipc/index'
+import { registerServices } from './services/base/ServiceContainer'
 import { BackupService } from './backup-service'
+import { WindowStateManager } from './utils/windowState'
+import { createApplicationMenu } from './menu/applicationMenu'
+import { AutoUpdateManager } from './updates/autoUpdater'
+import { reportScheduler } from './services/reports/ReportScheduler'
 
 // ESM __dirname polyfill
 const __filename = fileURLToPath(import.meta.url)
@@ -19,9 +24,14 @@ let mainWindow: BrowserWindowType | null = null
 const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 
 function createWindow() {
+    const windowState = new WindowStateManager('main')
+    const state = windowState.getState()
+
     mainWindow = new BrowserWindow({
-        width: 1400,
-        height: 900,
+        x: state.x,
+        y: state.y,
+        width: state.width,
+        height: state.height,
         minWidth: 1200,
         minHeight: 700,
         icon: path.join(__dirname, '../../resources/icon.ico'),
@@ -34,6 +44,13 @@ function createWindow() {
         show: false,
         titleBarStyle: 'default',
     })
+
+    if (mainWindow) {
+        windowState.manage(mainWindow)
+        createApplicationMenu(mainWindow)
+        // Initialize Auto Updater
+        new AutoUpdateManager(mainWindow)
+    }
 
     // Show window when ready
     mainWindow!.once('ready-to-show', () => {
@@ -71,11 +88,17 @@ app.whenReady().then(async () => {
         return
     }
 
+    // Initialize Services
+    registerServices()
+
     // Register IPC handlers
     registerAllIpcHandlers()
 
     // Initialize Auto Backup Service
     BackupService.init()
+
+    // Initialize Report Scheduler
+    reportScheduler.initialize()
 
     // Create window
     createWindow()

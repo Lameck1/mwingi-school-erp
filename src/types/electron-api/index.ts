@@ -10,6 +10,12 @@ import type { ReportsAPI } from './ReportsAPI'
 import type { BackupAPI } from './BackupAPI'
 import type { UserAPI } from './UserAPI'
 import type { AuditAPI } from './AuditAPI'
+import type { BudgetAPI } from './BudgetAPI'
+import type { MessagingAPI } from './MessagingAPI'
+import type { FixedAssetAPI } from './FixedAssetAPI'
+import type { BankReconciliationAPI } from './BankReconciliationAPI'
+import type { HireAPI } from './HireAPI'
+import type { ExemptionAPI } from './ExemptionAPI'
 
 export * from './AuthAPI'
 export * from './SettingsAPI'
@@ -24,18 +30,35 @@ export * from './BackupAPI'
 export type { User, CreateUserData, UpdateUserData } from './UserAPI'
 export type { AuditLogEntry } from './AuditAPI'
 export type { FeeCollectionItem } from './ReportsAPI'
+export * from './BudgetAPI'
+export * from './MessagingAPI'
+export * from './FixedAssetAPI'
+export * from './BankReconciliationAPI'
+export * from './HireAPI'
+export * from './ExemptionAPI'
 
 // Combined interface for backward compatibility
-export interface ElectronAPI 
-  extends AuthAPI, 
-          SettingsAPI, 
-          AcademicAPI, 
-          FinanceAPI, 
-          StudentAPI, 
-          StaffAPI, 
-          PayrollAPI, 
-          InventoryAPI, 
-          ReportsAPI, 
-          BackupAPI, 
-          UserAPI, 
-          AuditAPI {}
+export interface ElectronAPI
+  extends AuthAPI,
+  SettingsAPI,
+  AcademicAPI,
+  FinanceAPI,
+  StudentAPI,
+  StaffAPI,
+  PayrollAPI,
+  InventoryAPI,
+  ReportsAPI,
+  BackupAPI,
+  UserAPI,
+  AuditAPI,
+  BudgetAPI,
+  MessagingAPI,
+  FixedAssetAPI,
+  BankReconciliationAPI,
+  HireAPI,
+  ExemptionAPI {
+  // Data Import/Export (General)
+  downloadImportTemplate: (entityType: string) => Promise<{ success: boolean; filePath: string }>
+  getImportTemplate: (entityType: string) => Promise<{ columns: { name: string; required: boolean }[] }>
+  importData: (filePath: string, config: any, userId: number) => Promise<{ success: boolean; totalRows: number; imported: number; skipped: number; errors: any[] }>
+}

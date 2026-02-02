@@ -15,22 +15,26 @@
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "electron:build": "npm run build:vite && electron-builder",
     "postinstall": "electron-builder install-app-deps",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "lint": "eslint . --ext .ts,.tsx",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:e2e": "playwright test",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "lint:strict": "eslint . --ext .ts,.tsx --max-warnings=0"
   },
   "dependencies": {
     "@tanstack/react-table": "^8.11.2",
     "bcryptjs": "^2.4.3",
-    "better-sqlite3": "^9.4.3",
+    "better-sqlite3-multiple-ciphers": "^12.6.2",
     "clsx": "^2.1.0",
+    "cmdk": "^1.1.1",
     "date-fns": "^3.2.0",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.7.3",
     "html2canvas": "^1.4.1",
-    "jspdf": "^2.5.1",
+    "jspdf": "^4.0.0",
     "lucide-react": "^0.303.0",
+    "nodemailer": "^6.9.7",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.21.0",
@@ -39,9 +43,13 @@
     "zustand": "^4.4.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.8",
+    "@types/csv-parse": "^1.1.12",
+    "@types/exceljs": "^0.5.3",
     "@types/jest": "^30.0.0",
+    "@types/nodemailer": "^6.4.14",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
     "@typescript-eslint/eslint-plugin": "^8.53.1",
@@ -49,26 +57,31 @@
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.16",
     "concurrently": "^8.2.2",
-    "electron": "^28.1.0",
-    "electron-builder": "^24.9.1",
+    "csv-parse": "^6.1.0",
+    "electron": "^40.1.0",
+    "electron-builder": "^26.6.0",
     "eslint": "^9.39.2",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "exceljs": "^4.4.0",
     "jest": "^30.2.0",
+    "playwright": "^1.58.0",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
     "ts-jest": "^29.4.6",
     "typescript": "^5.3.3",
-    "vite": "^5.0.10",
+    "vite": "^6.4.1",
     "vite-plugin-electron": "^0.29.0",
     "vite-plugin-electron-renderer": "^0.14.6",
+    "vitest": "^4.0.18",
     "wait-on": "^7.2.0"
   },
   "build": {
     "appId": "com.mwingi.school.erp",
     "productName": "Mwingi School ERP",
     "copyright": "Copyright © 2025 Mwingi Adventist School",
+    "cscLink": null,
     "directories": {
       "output": "release"
     },
@@ -77,32 +90,29 @@
       "dist-electron/**/*"
     ],
     "win": {
+      "forceCodeSigning": false,
       "target": [
         {
           "target": "nsis",
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
         }
-      ],
-      "icon": "resources/icon.ico"
+      ]
     },
     "nsis": {
       "oneClick": false,
       "perMachine": true,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "resources/icon.ico",
-      "uninstallerIcon": "resources/icon.ico",
-      "installerHeaderIcon": "resources/icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Mwingi School ERP"
-    },
-    "extraResources": [
-      {
-        "from": "database",
-        "to": "database"
-      }
-    ]
+    }
   }
 }

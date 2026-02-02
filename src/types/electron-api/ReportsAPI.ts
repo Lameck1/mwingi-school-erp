@@ -28,4 +28,8 @@ export interface ReportsAPI {
     outstandingBalance: number
   }>
   getFeeCategoryBreakdown: () => Promise<{ name: string; value: number }[]>
+  getRevenueByCategory: (startDate: string, endDate: string) => Promise<any[]>
+  getExpenseByCategory: (startDate: string, endDate: string) => Promise<any[]>
+  getDailyCollection: (date: string) => Promise<any[]>
+  generateReportCard: (studentId: number, yearId: number, termId: number) => Promise<any>
 }

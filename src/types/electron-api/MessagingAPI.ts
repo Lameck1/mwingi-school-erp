@@ -29,6 +29,7 @@ export interface SMSSendOptions {
     message: string;
     recipientId?: number;
     recipientType?: string;
+    userId?: number;
 }
 
 export interface EmailSendOptions {
@@ -37,6 +38,7 @@ export interface EmailSendOptions {
     body: string;
     recipientId?: number;
     recipientType?: string;
+    userId?: number;
 }
 
 export interface MessagingAPI {

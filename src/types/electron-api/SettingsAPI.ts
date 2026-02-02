@@ -1,6 +1,7 @@
 export interface SchoolSettings {
   id: number
   school_name: string
+  school_motto: string
   school_address: string
   school_phone: string
   school_email: string
@@ -18,6 +19,13 @@ export interface SchoolSettings {
 }
 
 export interface SettingsAPI {
-  getSettings(): Promise<SchoolSettings>
-  updateSettings(data: Partial<SchoolSettings>): Promise<{ success: boolean }>
+  getSettings: () => Promise<any>
+  getSchoolSettings: () => Promise<any>
+  updateSettings: (data: any) => Promise<{ success: boolean }>
+
+  // Secure Config (Phase 3)
+  getSecureConfig(key: string): Promise<string | null>
+  saveSecureConfig(key: string, value: string): Promise<boolean>
+  getAllConfigs(): Promise<Record<string, string>>
+  resetAndSeedDatabase(userId: number): Promise<{ success: boolean; message: string }>
 }

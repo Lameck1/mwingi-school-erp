@@ -6,6 +6,28 @@ export interface FeeCategory {
   updated_at: string
 }
 
+export interface CashFlowStatement {
+  op_inflow: number;
+  op_outflow: number;
+  op_net: number;
+  inv_inflow: number;
+  inv_outflow: number;
+  inv_net: number;
+  fin_inflow: number;
+  fin_outflow: number;
+  fin_net: number;
+  net_change: number;
+  opening_balance: number;
+  closing_balance: number;
+}
+
+export interface FinancialForecast {
+  labels: string[];
+  actual: number[];
+  projected: number[];
+  trend_slope: number;
+}
+
 export interface FeeStructure {
   id: number
   academic_year_id: number
@@ -79,6 +101,14 @@ export interface Transaction {
   updated_at: string
 }
 
+export interface PaymentRecordData {
+  student_id: number
+  amount: number
+  payment_method: string
+  payment_reference?: string
+  transaction_date: string
+}
+
 export interface FinanceAPI {
   // Fee Categories
   getFeeCategories: () => Promise<FeeCategory[]>
@@ -91,8 +121,9 @@ export interface FinanceAPI {
   getInvoices: (_filters?: Partial<Invoice>) => Promise<Invoice[]>
 
   // Payments
-  recordPayment: (_data: Partial<Payment>, _userId: number) => Promise<{ success: boolean; transactionRef: string; receiptNumber: string }>
+  recordPayment: (_data: PaymentRecordData, _userId: number) => Promise<{ success: boolean; transactionRef?: string; receipt_number?: string; errors?: string[] }>
   getPaymentsByStudent: (_studentId: number) => Promise<Payment[]>
+  payWithCredit: (_data: { studentId: number; invoiceId: number; amount: number }, _userId: number) => Promise<{ success: boolean; message?: string }>
 
   // Transactions (General)
   getTransactionCategories: () => Promise<TransactionCategory[]>
@@ -105,4 +136,12 @@ export interface FinanceAPI {
   createInvoice: (_data: Partial<Invoice>, _items: InvoiceItem[], _userId: number) => Promise<{ success: boolean; invoiceNumber: string; id: number }>
   getInvoicesByStudent: (_studentId: number) => Promise<Invoice[]>
   getInvoiceItems: (_invoiceId: number) => Promise<InvoiceItem[]>
+
+  // Cash Flow & Forecasting
+  getCashFlowStatement: (startDate: string, endDate: string) => Promise<CashFlowStatement>
+  getForecast: (months: number) => Promise<FinancialForecast>
+  getForecast: (months: number) => Promise<FinancialForecast>
+
+  // Manual Fixes
+  fixCurrencyData: (_userId: number) => Promise<{ success: boolean; message: string }>
 }

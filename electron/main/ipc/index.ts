@@ -11,6 +11,19 @@ import { registerPayrollHandlers } from './payroll/payroll-handlers'
 import { registerAuditHandlers } from './audit/audit-handlers'
 import { registerBackupHandlers } from './backup/backup-handlers'
 import { registerMessageHandlers } from './messaging/message-handlers'
+import { registerBudgetHandlers } from './finance/budget-handlers'
+import { registerBankReconciliationHandlers } from './finance/bank-handlers'
+import { registerApprovalHandlers } from './workflow/approval-handlers'
+import { registerPromotionHandlers } from './academic/promotion-handlers'
+import { registerAttendanceHandlers } from './academic/attendance-handlers'
+import { registerReportCardHandlers } from './academic/reportcard-handlers'
+import { registerAcademicSystemHandlers } from './academic/academic-system-handlers'
+import { registerNotificationHandlers } from './notifications/notification-handlers'
+import { registerReportSchedulerHandlers } from './reports/scheduler-handlers'
+import { registerDataImportHandlers } from './data/import-handlers'
+import { registerFixedAssetHandlers } from './finance/fixed-asset-handlers'
+import { registerHireHandlers } from './hire/hire-handlers'
+import { registerExemptionHandlers } from './exemption/exemption-handlers'
 
 export function registerAllIpcHandlers(): void {
     registerAuthHandlers()
@@ -26,6 +39,19 @@ export function registerAllIpcHandlers(): void {
     registerAuditHandlers()
     registerBackupHandlers()
     registerMessageHandlers()
+    registerBudgetHandlers()
+    registerBankReconciliationHandlers()
+    registerApprovalHandlers()
+    registerPromotionHandlers()
+    registerAttendanceHandlers()
+    registerAcademicSystemHandlers()
+    registerReportCardHandlers()
+    registerNotificationHandlers()
+    registerReportSchedulerHandlers()
+    registerDataImportHandlers()
+    registerFixedAssetHandlers()
+    registerHireHandlers()
+    registerExemptionHandlers()
 }
 
 
