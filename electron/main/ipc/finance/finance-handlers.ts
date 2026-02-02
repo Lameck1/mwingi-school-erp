@@ -7,6 +7,9 @@ import { PaymentData, PaymentResult, TransactionData, TransactionFilters, Invoic
 import { validateAmount, validateId, validateDate, sanitizeString } from '../../utils/validation'
 import { ExemptionService } from '../../services/finance/ExemptionService'
 import { fixCurrencyScale } from '../../database/migrations/009_fix_currency_scale'
+import { CreditAutoApplicationService } from '../../services/finance/CreditAutoApplicationService'
+import { FeeProrationService } from '../../services/finance/FeeProrationService'
+import { ScholarshipService } from '../../services/finance/ScholarshipService'
 
 export function registerFinanceHandlers(): void {
     const db = getDatabase()
@@ -402,6 +405,158 @@ export function registerFinanceHandlers(): void {
         } catch (error) {
             console.error('Manual currency fix failed:', error)
             return { success: false, message: error instanceof Error ? error.message : 'Unknown error during fix' }
+        }
+    })
+
+    // ======== PHASE 3: CREDIT AUTO-APPLICATION ========
+    const creditService = new CreditAutoApplicationService()
+
+    ipcMain.handle('finance:allocateCredits', async (_event: IpcMainInvokeEvent, studentId: number, userId: number) => {
+        try {
+            return await creditService.allocateCreditsToInvoices(studentId, userId)
+        } catch (error) {
+            return { success: false, message: error instanceof Error ? error.message : 'Unknown error' }
+        }
+    })
+
+    ipcMain.handle('finance:getCreditBalance', async (_event: IpcMainInvokeEvent, studentId: number) => {
+        try {
+            return await creditService.getStudentCreditBalance(studentId)
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to get credit balance')
+        }
+    })
+
+    ipcMain.handle('finance:getCreditTransactions', async (_event: IpcMainInvokeEvent, studentId: number, limit?: number) => {
+        try {
+            return await creditService.getCreditTransactions(studentId, limit)
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to get credit transactions')
+        }
+    })
+
+    ipcMain.handle('finance:addCredit', async (_event: IpcMainInvokeEvent, studentId: number, amount: number, notes: string, userId: number) => {
+        try {
+            return await creditService.addCreditToStudent(studentId, amount, notes, userId)
+        } catch (error) {
+            return { success: false, message: error instanceof Error ? error.message : 'Unknown error' }
+        }
+    })
+
+    // ======== PHASE 3: FEE PRORATION ========
+    const prorationService = new FeeProrationService()
+
+    ipcMain.handle('finance:calculateProRatedFee', async (
+        _event: IpcMainInvokeEvent,
+        fullAmount: number,
+        termStartDate: string,
+        termEndDate: string,
+        enrollmentDate: string
+    ) => {
+        try {
+            return prorationService.calculateProRatedFee(fullAmount, termStartDate, termEndDate, enrollmentDate)
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to calculate pro-rated fee')
+        }
+    })
+
+    ipcMain.handle('finance:validateEnrollmentDate', async (
+        _event: IpcMainInvokeEvent,
+        termStartDate: string,
+        termEndDate: string,
+        enrollmentDate: string
+    ) => {
+        try {
+            return prorationService.validateEnrollmentDate(termStartDate, termEndDate, enrollmentDate)
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to validate enrollment date')
+        }
+    })
+
+    ipcMain.handle('finance:generateProRatedInvoice', async (
+        _event: IpcMainInvokeEvent,
+        studentId: number,
+        templateInvoiceId: number,
+        enrollmentDate: string,
+        userId: number
+    ) => {
+        try {
+            return await prorationService.generateProRatedInvoice(studentId, templateInvoiceId, enrollmentDate, userId)
+        } catch (error) {
+            return { success: false, message: error instanceof Error ? error.message : 'Unknown error' }
+        }
+    })
+
+    ipcMain.handle('finance:getProRationHistory', async (_event: IpcMainInvokeEvent, studentId: number) => {
+        try {
+            return await prorationService.getStudentProRationHistory(studentId)
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to get proration history')
+        }
+    })
+
+    // ======== PHASE 3: SCHOLARSHIPS ========
+    const scholarshipService = new ScholarshipService()
+
+    ipcMain.handle('finance:createScholarship', async (_event: IpcMainInvokeEvent, data: any, userId: number) => {
+        try {
+            return await scholarshipService.createScholarship(data, userId)
+        } catch (error) {
+            return { success: false, message: error instanceof Error ? error.message : 'Unknown error' }
+        }
+    })
+
+    ipcMain.handle('finance:allocateScholarship', async (_event: IpcMainInvokeEvent, allocationData: any, userId: number) => {
+        try {
+            return await scholarshipService.allocateScholarshipToStudent(allocationData, userId)
+        } catch (error) {
+            return { success: false, message: error instanceof Error ? error.message : 'Unknown error' }
+        }
+    })
+
+    ipcMain.handle('finance:validateScholarshipEligibility', async (_event: IpcMainInvokeEvent, studentId: number, scholarshipId: number) => {
+        try {
+            return await scholarshipService.validateScholarshipEligibility(studentId, scholarshipId)
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to validate eligibility')
+        }
+    })
+
+    ipcMain.handle('finance:getActiveScholarships', async (_event: IpcMainInvokeEvent) => {
+        try {
+            return await scholarshipService.getActiveScholarships()
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to get scholarships')
+        }
+    })
+
+    ipcMain.handle('finance:getStudentScholarships', async (_event: IpcMainInvokeEvent, studentId: number) => {
+        try {
+            return await scholarshipService.getStudentScholarships(studentId)
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to get student scholarships')
+        }
+    })
+
+    ipcMain.handle('finance:getScholarshipAllocations', async (_event: IpcMainInvokeEvent, scholarshipId: number) => {
+        try {
+            return await scholarshipService.getScholarshipAllocations(scholarshipId)
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to get allocations')
+        }
+    })
+
+    ipcMain.handle('finance:applyScholarshipToInvoice', async (
+        _event: IpcMainInvokeEvent,
+        studentScholarshipId: number,
+        invoiceId: number,
+        amountToApply: number,
+        userId: number
+    ) => {
+        try {
+            return await scholarshipService.applyScholarshipToInvoice(studentScholarshipId, invoiceId, amountToApply, userId)
+        } catch (error) {
+            return { success: false, message: error instanceof Error ? error.message : 'Unknown error' }
         }
     })
 }

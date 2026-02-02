@@ -1,6 +1,7 @@
 import { IpcMainInvokeEvent } from 'electron'
 import { ipcMain } from '../../electron-env'
 import { getDatabase } from '../../database/index'
+import { NEMISExportService } from '../../services/reports/NEMISExportService'
 
 interface CountResult { count: number }
 interface TotalResult { total: number }
@@ -268,7 +269,59 @@ export function registerReportsHandlers(): void {
             ORDER BY value DESC
         `).all()
     })
+
+    // ======== PHASE 3: NEMIS EXPORT ========
+    const nemisService = new NEMISExportService()
+
+    ipcMain.handle('reports:extractStudentData', async (_event: IpcMainInvokeEvent, filters?: any) => {
+        try {
+            return await nemisService.extractStudentData(filters)
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to extract student data')
+        }
+    })
+
+    ipcMain.handle('reports:extractStaffData', async (_event: IpcMainInvokeEvent) => {
+        try {
+            return await nemisService.extractStaffData()
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to extract staff data')
+        }
+    })
+
+    ipcMain.handle('reports:extractEnrollmentData', async (_event: IpcMainInvokeEvent, academicYear: string) => {
+        try {
+            return await nemisService.extractEnrollmentData(academicYear)
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to extract enrollment data')
+        }
+    })
+
+    ipcMain.handle('reports:createNEMISExport', async (_event: IpcMainInvokeEvent, exportConfig: any, userId: number) => {
+        try {
+            return await nemisService.createExport(exportConfig, userId)
+        } catch (error) {
+            return { success: false, message: error instanceof Error ? error.message : 'Unknown error' }
+        }
+    })
+
+    ipcMain.handle('reports:getNEMISExportHistory', async (_event: IpcMainInvokeEvent, limit?: number) => {
+        try {
+            return await nemisService.getExportHistory(limit)
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to get export history')
+        }
+    })
+
+    ipcMain.handle('reports:validateNEMISStudentData', async (_event: IpcMainInvokeEvent, student: any) => {
+        try {
+            return nemisService.validateStudentData(student)
+        } catch (error) {
+            throw new Error(error instanceof Error ? error.message : 'Failed to validate student data')
+        }
+    })
 }
+
 
 
 

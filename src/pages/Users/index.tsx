@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Plus, Users, Search, Edit, Lock, Trash, X, Check, Loader2, UserCircle2, ShieldCheck, Fingerprint, Save } from 'lucide-react'
+import { Plus, Users, Search, Edit, Lock, Trash, Check, Loader2, UserCircle2, ShieldCheck, Fingerprint, Save } from 'lucide-react'
 import type { User, CreateUserData, UpdateUserData } from '../../types/electron-api/UserAPI'
 import { Modal } from '../../components/ui/Modal'
 import { useToast } from '../../contexts/ToastContext'

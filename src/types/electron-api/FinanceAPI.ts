@@ -140,7 +140,6 @@ export interface FinanceAPI {
   // Cash Flow & Forecasting
   getCashFlowStatement: (startDate: string, endDate: string) => Promise<CashFlowStatement>
   getForecast: (months: number) => Promise<FinancialForecast>
-  getForecast: (months: number) => Promise<FinancialForecast>
 
   // Manual Fixes
   fixCurrencyData: (_userId: number) => Promise<{ success: boolean; message: string }>
