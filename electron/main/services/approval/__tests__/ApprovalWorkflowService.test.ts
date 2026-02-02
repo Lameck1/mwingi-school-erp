@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import Database from 'better-sqlite3-multiple-ciphers'
-import { ApprovalWorkflowService } from '../ApprovalWorkflowService'
+import { ApprovalWorkflowService } from '../../workflow/ApprovalWorkflowService'
 
-vi.mock('../../../database/utils/audit', () => ({
+vi.mock('../../../../database/utils/audit', () => ({
   logAudit: vi.fn()
 }))
 
