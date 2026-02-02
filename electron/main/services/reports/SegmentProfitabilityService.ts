@@ -1,3 +1,4 @@
+import Database from 'better-sqlite3-multiple-ciphers'
 import { getDatabase } from '../../database'
 
 // ============================================================================
@@ -35,8 +36,14 @@ export interface SegmentProfitability {
 // ============================================================================
 
 class ProfitabilityRepository {
+  private db: Database.Database
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+  }
+
   async getTransportRevenue(): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM ledger_transaction
       WHERE description LIKE '%transport%' OR description LIKE '%bus%'
@@ -46,7 +53,7 @@ class ProfitabilityRepository {
   }
 
   async getTransportCosts(): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM expense_transaction
       WHERE expense_type IN ('FUEL', 'VEHICLE_MAINTENANCE', 'VEHICLE_DEPRECIATION', 'DRIVER_SALARY')
@@ -55,7 +62,7 @@ class ProfitabilityRepository {
   }
 
   async getBoardingRevenue(): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM fee_invoice
       WHERE fee_type = 'BOARDING'
@@ -64,7 +71,7 @@ class ProfitabilityRepository {
   }
 
   async getBoardingCosts(): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM expense_transaction
       WHERE expense_type IN ('FOOD', 'BEDDING', 'DORM_MAINTENANCE', 'UTILITIES')
@@ -73,7 +80,7 @@ class ProfitabilityRepository {
   }
 
   async getActivityFeeRevenue(): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM fee_invoice
       WHERE fee_type = 'ACTIVITY'
@@ -82,7 +89,7 @@ class ProfitabilityRepository {
   }
 
   async getActivityFeeExpenses(): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM expense_transaction
       WHERE expense_type = 'ACTIVITY'
@@ -91,7 +98,7 @@ class ProfitabilityRepository {
   }
 
   async getTotalRevenue(): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM fee_invoice
       WHERE status IN ('PAID', 'OUTSTANDING')
@@ -100,7 +107,7 @@ class ProfitabilityRepository {
   }
 
   async getTotalExpenses(): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM expense_transaction
     `).get() as any
@@ -108,7 +115,7 @@ class ProfitabilityRepository {
   }
 
   async getStudentOccupancyRate(): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const currentStudents = db.prepare(`SELECT COUNT(*) as count FROM student WHERE status = 'ACTIVE'`).get() as any
     const totalCapacity = db.prepare(`SELECT SUM(capacity) as total FROM dormitory`).get() as any
     return totalCapacity?.total ? (currentStudents?.count || 0) / totalCapacity.total : 0
@@ -120,7 +127,13 @@ class ProfitabilityRepository {
 // ============================================================================
 
 class TransportProfitabilityCalculator implements ITransportProfitabilityCalculator {
-  private repo = new ProfitabilityRepository()
+  private db: Database.Database
+  private repo: ProfitabilityRepository
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.repo = new ProfitabilityRepository(this.db)
+  }
 
   async calculateTransportProfitability(): Promise<any> {
     const revenue = await this.repo.getTransportRevenue()
@@ -163,7 +176,13 @@ class TransportProfitabilityCalculator implements ITransportProfitabilityCalcula
 // ============================================================================
 
 class BoardingProfitabilityCalculator implements IBoardingProfitabilityCalculator {
-  private repo = new ProfitabilityRepository()
+  private db: Database.Database
+  private repo: ProfitabilityRepository
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.repo = new ProfitabilityRepository(this.db)
+  }
 
   async calculateBoardingProfitability(): Promise<any> {
     const revenue = await this.repo.getBoardingRevenue()
@@ -211,7 +230,13 @@ class BoardingProfitabilityCalculator implements IBoardingProfitabilityCalculato
 // ============================================================================
 
 class ActivityFeeAnalyzer implements IActivityFeeAnalyzer {
-  private repo = new ProfitabilityRepository()
+  private db: Database.Database
+  private repo: ProfitabilityRepository
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.repo = new ProfitabilityRepository(this.db)
+  }
 
   async analyzeActivityFees(): Promise<any> {
     const revenue = await this.repo.getActivityFeeRevenue()
@@ -257,7 +282,13 @@ class ActivityFeeAnalyzer implements IActivityFeeAnalyzer {
 // ============================================================================
 
 class OverallProfitabilityAnalyzer implements IOverallProfitabilityAnalyzer {
-  private repo = new ProfitabilityRepository()
+  private db: Database.Database
+  private repo: ProfitabilityRepository
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.repo = new ProfitabilityRepository(this.db)
+  }
 
   async getOverallProfitabilityBreakdown(): Promise<any> {
     const totalRevenue = await this.repo.getTotalRevenue()
@@ -316,16 +347,18 @@ export class SegmentProfitabilityService
   implements ITransportProfitabilityCalculator, IBoardingProfitabilityCalculator, IActivityFeeAnalyzer
 {
   // Composed services
+  private db: Database.Database
   private readonly transportCalculator: TransportProfitabilityCalculator
   private readonly boardingCalculator: BoardingProfitabilityCalculator
   private readonly activityAnalyzer: ActivityFeeAnalyzer
   private readonly overallAnalyzer: OverallProfitabilityAnalyzer
 
-  constructor() {
-    this.transportCalculator = new TransportProfitabilityCalculator()
-    this.boardingCalculator = new BoardingProfitabilityCalculator()
-    this.activityAnalyzer = new ActivityFeeAnalyzer()
-    this.overallAnalyzer = new OverallProfitabilityAnalyzer()
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.transportCalculator = new TransportProfitabilityCalculator(this.db)
+    this.boardingCalculator = new BoardingProfitabilityCalculator(this.db)
+    this.activityAnalyzer = new ActivityFeeAnalyzer(this.db)
+    this.overallAnalyzer = new OverallProfitabilityAnalyzer(this.db)
   }
 
   /**

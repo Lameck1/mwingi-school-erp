@@ -1,3 +1,4 @@
+import Database from 'better-sqlite3-multiple-ciphers'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 
@@ -106,8 +107,14 @@ export interface NEMISExportRecord {
 // ============================================================================
 
 class NEMISDataRepository {
+  private db: Database.Database
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+  }
+
   async extractStudentData(filters?: NEMISFilters): Promise<NEMISStudent[]> {
-    const db = getDatabase()
+    const db = this.db
     
     let query = `
       SELECT 
@@ -146,7 +153,7 @@ class NEMISDataRepository {
   }
 
   async extractStaffData(): Promise<NEMISStaff[]> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`
       SELECT 
         tsc_number,
@@ -165,7 +172,7 @@ class NEMISDataRepository {
   }
 
   async extractEnrollmentData(academicYear: string): Promise<NEMISEnrollment[]> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`
       SELECT 
         c.class_name,
@@ -184,6 +191,12 @@ class NEMISDataRepository {
 }
 
 class NEMISExportRepository {
+  private db: Database.Database
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+  }
+
   async createExportRecord(data: {
     export_type: NEMISExportType
     format: string
@@ -192,7 +205,7 @@ class NEMISExportRepository {
     exported_by: number
     status: 'COMPLETED' | 'FAILED'
   }): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       INSERT INTO nemis_export (
         export_type, format, record_count, file_path, exported_by, status
@@ -210,7 +223,7 @@ class NEMISExportRepository {
   }
 
   async getExportHistory(limit?: number): Promise<NEMISExportRecord[]> {
-    const db = getDatabase()
+    const db = this.db
     const query = `
       SELECT * FROM nemis_export
       ORDER BY exported_at DESC
@@ -430,14 +443,16 @@ class NEMISExportManager implements INEMISExportManager {
 export class NEMISExportService 
   implements INEMISDataExtractor, INEMISValidator, INEMISFormatter, INEMISExportManager {
   
+  private db: Database.Database
   private readonly extractor: NEMISDataExtractor
   private readonly validator: NEMISValidator
   private readonly formatter: NEMISFormatter
   private readonly exportManager: NEMISExportManager
 
-  constructor() {
-    const dataRepo = new NEMISDataRepository()
-    const exportRepo = new NEMISExportRepository()
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    const dataRepo = new NEMISDataRepository(this.db)
+    const exportRepo = new NEMISExportRepository(this.db)
 
     this.extractor = new NEMISDataExtractor(dataRepo)
     this.validator = new NEMISValidator()

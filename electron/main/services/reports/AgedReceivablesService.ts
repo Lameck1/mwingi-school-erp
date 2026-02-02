@@ -1,3 +1,4 @@
+import Database from 'better-sqlite3-multiple-ciphers'
 import { getDatabase } from '../../database'
 
 // ============================================================================
@@ -45,8 +46,14 @@ export interface AgedReceivablesData {
 // ============================================================================
 
 class AgedReceivablesRepository {
+  private db: Database.Database
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+  }
+
   async getOutstandingInvoices(asOfDate: string): Promise<any[]> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`
       SELECT fi.*, s.first_name, s.last_name, s.admission_number,
              JULIANDAY(?) - JULIANDAY(fi.due_date) as days_overdue
@@ -58,7 +65,7 @@ class AgedReceivablesRepository {
   }
 
   async getStudentLastPaymentDate(studentId: number): Promise<string | null> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       SELECT transaction_date FROM ledger_transaction
       WHERE student_id = ? AND transaction_type IN ('CREDIT', 'PAYMENT')
@@ -68,7 +75,7 @@ class AgedReceivablesRepository {
   }
 
   async recordCollectionAction(action: any): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       INSERT INTO collection_action (student_id, action_type, action_date, notes)
       VALUES (?, ?, ?, ?)
@@ -77,7 +84,7 @@ class AgedReceivablesRepository {
   }
 
   async getCollectionHistory(studentId: number): Promise<any[]> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`
       SELECT * FROM collection_action
       WHERE student_id = ?
@@ -91,7 +98,13 @@ class AgedReceivablesRepository {
 // ============================================================================
 
 class AgingCalculator implements IAgingCalculator {
-  private repo = new AgedReceivablesRepository()
+  private db: Database.Database
+  private repo: AgedReceivablesRepository
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.repo = new AgedReceivablesRepository(this.db)
+  }
 
   async calculateAgedReceivables(asOfDate: string): Promise<AgedReceivableBucket[]> {
     const invoices = await this.repo.getOutstandingInvoices(asOfDate)
@@ -181,7 +194,13 @@ class AgingCalculator implements IAgingCalculator {
 // ============================================================================
 
 class PriorityDeterminer implements IPriorityDeterminer {
-  private repo = new AgedReceivablesRepository()
+  private db: Database.Database
+  private repo: AgedReceivablesRepository
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.repo = new AgedReceivablesRepository(this.db)
+  }
 
   async getHighPriorityCollections(): Promise<any[]> {
     const invoices = await this.repo.getOutstandingInvoices(new Date().toISOString().split('T')[0])
@@ -203,7 +222,13 @@ class PriorityDeterminer implements IPriorityDeterminer {
 // ============================================================================
 
 class CollectionReminderGenerator implements ICollectionReminder {
-  private repo = new AgedReceivablesRepository()
+  private db: Database.Database
+  private repo: AgedReceivablesRepository
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.repo = new AgedReceivablesRepository(this.db)
+  }
 
   async generateCollectionReminders(): Promise<any[]> {
     const invoices = await this.repo.getOutstandingInvoices(new Date().toISOString().split('T')[0])
@@ -254,10 +279,16 @@ class CollectionReminderGenerator implements ICollectionReminder {
 // ============================================================================
 
 class CollectionsAnalyzer implements ICollectionsAnalyzer {
-  private repo = new AgedReceivablesRepository()
+  private db: Database.Database
+  private repo: AgedReceivablesRepository
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.repo = new AgedReceivablesRepository(this.db)
+  }
 
   async getCollectionsEffectivenessReport(): Promise<any> {
-    const db = getDatabase()
+    const db = this.db
 
     // Get all payments in last 3 months
     const paymentMetrics = db.prepare(`
@@ -317,16 +348,18 @@ export class AgedReceivablesService
   implements IAgingCalculator, IPriorityDeterminer, ICollectionReminder, ICollectionsAnalyzer
 {
   // Composed services
+  private db: Database.Database
   private readonly agingCalculator: AgingCalculator
   private readonly priorityDeterminer: PriorityDeterminer
   private readonly reminderGenerator: CollectionReminderGenerator
   private readonly analyzer: CollectionsAnalyzer
 
-  constructor() {
-    this.agingCalculator = new AgingCalculator()
-    this.priorityDeterminer = new PriorityDeterminer()
-    this.reminderGenerator = new CollectionReminderGenerator()
-    this.analyzer = new CollectionsAnalyzer()
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.agingCalculator = new AgingCalculator(this.db)
+    this.priorityDeterminer = new PriorityDeterminer(this.db)
+    this.reminderGenerator = new CollectionReminderGenerator(this.db)
+    this.analyzer = new CollectionsAnalyzer(this.db)
   }
 
   /**

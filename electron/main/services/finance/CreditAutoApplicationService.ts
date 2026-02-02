@@ -1,3 +1,4 @@
+import Database from 'better-sqlite3-multiple-ciphers'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 
@@ -59,8 +60,14 @@ export interface AllocationResult {
 // ============================================================================
 
 class CreditRepository {
+  private db: Database.Database
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+  }
+
   async getStudentCreditBalance(studentId: number): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       SELECT COALESCE(SUM(
         CASE 
@@ -78,7 +85,7 @@ class CreditRepository {
   }
 
   async getCreditTransactions(studentId: number, limit?: number): Promise<CreditTransaction[]> {
-    const db = getDatabase()
+    const db = this.db
     const query = `
       SELECT * FROM credit_transaction
       WHERE student_id = ?
@@ -95,7 +102,7 @@ class CreditRepository {
     reference_invoice_id?: number
     notes: string
   }): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       INSERT INTO credit_transaction (student_id, amount, transaction_type, reference_invoice_id, notes)
       VALUES (?, ?, ?, ?, ?)
@@ -112,8 +119,14 @@ class CreditRepository {
 }
 
 class InvoiceRepository {
+  private db: Database.Database
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+  }
+
   async getOutstandingInvoices(studentId: number): Promise<OutstandingInvoice[]> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`
       SELECT 
         id,
@@ -133,7 +146,7 @@ class InvoiceRepository {
   }
 
   async updateInvoicePayment(invoiceId: number, amountToAdd: number): Promise<void> {
-    const db = getDatabase()
+    const db = this.db
     db.prepare(`
       UPDATE fee_invoice
       SET amount_paid = amount_paid + ?,
@@ -165,14 +178,19 @@ class FIFOAllocationStrategy implements ICreditAllocationStrategy {
 }
 
 class CreditAllocator implements ICreditAllocator {
+  private db: Database.Database
+
   constructor(
     private creditRepo: CreditRepository,
     private invoiceRepo: InvoiceRepository,
-    private allocationStrategy: ICreditAllocationStrategy
-  ) {}
+    private allocationStrategy: ICreditAllocationStrategy,
+    db?: Database.Database
+  ) {
+    this.db = db || getDatabase()
+  }
 
   async allocateCreditsToInvoices(studentId: number, userId: number): Promise<AllocationResult> {
-    const db = getDatabase()
+    const db = this.db
 
     try {
       // Get available credit balance
@@ -292,15 +310,17 @@ class CreditBalanceTracker implements ICreditBalanceTracker {
 // ============================================================================
 
 export class CreditAutoApplicationService implements ICreditAllocator, ICreditBalanceTracker {
+  private db: Database.Database
   private readonly allocator: CreditAllocator
   private readonly balanceTracker: CreditBalanceTracker
 
-  constructor() {
-    const creditRepo = new CreditRepository()
-    const invoiceRepo = new InvoiceRepository()
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    const creditRepo = new CreditRepository(this.db)
+    const invoiceRepo = new InvoiceRepository(this.db)
     const strategy = new FIFOAllocationStrategy()
 
-    this.allocator = new CreditAllocator(creditRepo, invoiceRepo, strategy)
+    this.allocator = new CreditAllocator(creditRepo, invoiceRepo, strategy, this.db)
     this.balanceTracker = new CreditBalanceTracker(creditRepo)
   }
 

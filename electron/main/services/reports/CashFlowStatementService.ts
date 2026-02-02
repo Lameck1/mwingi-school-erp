@@ -1,3 +1,4 @@
+import Database from 'better-sqlite3-multiple-ciphers'
 import { getDatabase } from '../../database'
 
 // ============================================================================
@@ -68,8 +69,14 @@ export interface CashFlowStatement {
 // ============================================================================
 
 class CashFlowRepository {
+  private db: Database.Database
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+  }
+
   async getTransactionsByType(startDate: string, endDate: string, transactionTypes: string[]): Promise<any[]> {
-    const db = getDatabase()
+    const db = this.db
     const placeholders = transactionTypes.map(() => '?').join(',')
     return db.prepare(`
       SELECT * FROM ledger_transaction
@@ -80,7 +87,7 @@ class CashFlowRepository {
   }
 
   async getOpeningBalance(periodStartDate: string): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as balance
       FROM ledger_transaction
@@ -90,7 +97,7 @@ class CashFlowRepository {
   }
 
   async getExpensesByType(startDate: string, endDate: string, expenseTypes: string[]): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const placeholders = expenseTypes.map(() => '?').join(',')
     const result = db.prepare(`
       SELECT SUM(amount) as total
@@ -102,7 +109,7 @@ class CashFlowRepository {
   }
 
   async getPayrollExpenses(startDate: string, endDate: string): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM payroll_transaction
       WHERE transaction_date >= ? AND transaction_date <= ?
@@ -111,7 +118,7 @@ class CashFlowRepository {
   }
 
   async getAssetTransactions(startDate: string, endDate: string): Promise<any[]> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`
       SELECT * FROM asset_transaction
       WHERE transaction_date >= ? AND transaction_date <= ?
@@ -120,7 +127,7 @@ class CashFlowRepository {
   }
 
   async getLoanTransactions(startDate: string, endDate: string): Promise<any[]> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`
       SELECT * FROM loan_transaction
       WHERE transaction_date >= ? AND transaction_date <= ?
@@ -129,7 +136,7 @@ class CashFlowRepository {
   }
 
   async getAverageMonthlyExpenses(): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM expense_transaction
       WHERE transaction_date >= date('now', '-3 months')
@@ -143,7 +150,13 @@ class CashFlowRepository {
 // ============================================================================
 
 class OperatingActivitiesCalculator implements IOperatingActivitiesCalculator {
-  private repo = new CashFlowRepository()
+  private db: Database.Database
+  private repo: CashFlowRepository
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.repo = new CashFlowRepository(this.db)
+  }
 
   async getOperatingActivities(startDate: string, endDate: string): Promise<any> {
     const incomingTransactions = await this.repo.getTransactionsByType(startDate, endDate, ['CREDIT', 'PAYMENT'])
@@ -182,7 +195,13 @@ class OperatingActivitiesCalculator implements IOperatingActivitiesCalculator {
 // ============================================================================
 
 class InvestingActivitiesCalculator implements IInvestingActivitiesCalculator {
-  private repo = new CashFlowRepository()
+  private db: Database.Database
+  private repo: CashFlowRepository
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.repo = new CashFlowRepository(this.db)
+  }
 
   async getInvestingActivities(startDate: string, endDate: string): Promise<any> {
     const assetTransactions = await this.repo.getAssetTransactions(startDate, endDate)
@@ -213,7 +232,13 @@ class InvestingActivitiesCalculator implements IInvestingActivitiesCalculator {
 // ============================================================================
 
 class FinancingActivitiesCalculator implements IFinancingActivitiesCalculator {
-  private repo = new CashFlowRepository()
+  private db: Database.Database
+  private repo: CashFlowRepository
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.repo = new CashFlowRepository(this.db)
+  }
 
   async getFinancingActivities(startDate: string, endDate: string): Promise<any> {
     const loanTransactions = await this.repo.getLoanTransactions(startDate, endDate)
@@ -248,7 +273,13 @@ class FinancingActivitiesCalculator implements IFinancingActivitiesCalculator {
 // ============================================================================
 
 class LiquidityAnalyzer implements ILiquidityAnalyzer {
-  private repo = new CashFlowRepository()
+  private db: Database.Database
+  private repo: CashFlowRepository
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.repo = new CashFlowRepository(this.db)
+  }
 
   async getStatus(closingBalance: number): Promise<'STRONG' | 'ADEQUATE' | 'TIGHT' | 'CRITICAL'> {
     const avgMonthlyExpenses = await this.repo.getAverageMonthlyExpenses()
@@ -321,6 +352,7 @@ class CashFlowForecaster implements ICashFlowForecaster {
 export class CashFlowStatementService
   implements IOperatingActivitiesCalculator, IInvestingActivitiesCalculator, IFinancingActivitiesCalculator {
   // Composed services
+  private db: Database.Database
   private readonly operatingCalculator: OperatingActivitiesCalculator
   private readonly investingCalculator: InvestingActivitiesCalculator
   private readonly financingCalculator: FinancingActivitiesCalculator
@@ -328,13 +360,14 @@ export class CashFlowStatementService
   private readonly forecaster: CashFlowForecaster
   private readonly repository: CashFlowRepository
 
-  constructor() {
-    this.operatingCalculator = new OperatingActivitiesCalculator()
-    this.investingCalculator = new InvestingActivitiesCalculator()
-    this.financingCalculator = new FinancingActivitiesCalculator()
-    this.liquidityAnalyzer = new LiquidityAnalyzer()
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    this.operatingCalculator = new OperatingActivitiesCalculator(this.db)
+    this.investingCalculator = new InvestingActivitiesCalculator(this.db)
+    this.financingCalculator = new FinancingActivitiesCalculator(this.db)
+    this.liquidityAnalyzer = new LiquidityAnalyzer(this.db)
     this.forecaster = new CashFlowForecaster()
-    this.repository = new CashFlowRepository()
+    this.repository = new CashFlowRepository(this.db)
   }
 
   /**
