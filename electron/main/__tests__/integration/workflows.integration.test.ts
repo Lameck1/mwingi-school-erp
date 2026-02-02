@@ -27,6 +27,7 @@ describe('Workflows Integration Tests', () => {
         first_name TEXT NOT NULL,
         last_name TEXT NOT NULL,
         admission_number TEXT UNIQUE NOT NULL
+      ,credit_balance INTEGER DEFAULT 0
       );
 
       CREATE TABLE user (

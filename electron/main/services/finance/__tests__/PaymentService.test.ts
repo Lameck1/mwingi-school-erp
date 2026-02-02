@@ -19,7 +19,8 @@ describe('PaymentService', () => {
           CREATE TABLE student (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             first_name TEXT NOT NULL,
-            last_name TEXT NOT NULL
+            last_name TEXT NOT NULL,
+            credit_balance INTEGER DEFAULT 0
           );
 
           CREATE TABLE transaction_category (
@@ -38,7 +39,8 @@ describe('PaymentService', () => {
             invoice_number TEXT UNIQUE NOT NULL,
             amount INTEGER NOT NULL,
             amount_paid INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'OUTSTANDING'
+            status TEXT DEFAULT 'OUTSTANDING',
+            due_date DATE DEFAULT CURRENT_DATE
           );
 
           CREATE TABLE ledger_transaction (
