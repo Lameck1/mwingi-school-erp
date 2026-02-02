@@ -16,6 +16,7 @@ export function getSchema(): string {
       id INTEGER PRIMARY KEY AUTOINCREMENT, academic_year_id INTEGER NOT NULL,
       term_number INTEGER NOT NULL, term_name TEXT NOT NULL,
       start_date DATE NOT NULL, end_date DATE NOT NULL, is_current BOOLEAN DEFAULT 0,
+      status TEXT DEFAULT 'OPEN' CHECK(status IN ('OPEN', 'CLOSED')),
       FOREIGN KEY (academic_year_id) REFERENCES academic_year(id), UNIQUE(academic_year_id, term_number)
     );
     CREATE TABLE IF NOT EXISTS stream (

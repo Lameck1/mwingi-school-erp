@@ -3,6 +3,14 @@ import * as Database from 'better-sqlite3'
 import { getSchema } from './schema.js'
 import { getSeedData } from './seed-data.js'
 import { getDemoData } from './demo-data.js'
+import { getEnhancedSchema } from './002_enhanced_schema.js'
+import { getAcademicSchema, getAcademicSeedData } from './003_academic_reporting.js'
+import { getReportingSchema } from './004_reporting_infrastructure.js'
+import { getNotificationFixSchema } from './005_notification_fix.js'
+import { getReportFixesSchema } from './006_report_fixes.js'
+import { getAttendanceSchema } from './007_attendance_schema.js'
+import { migrate_008_asset_hire_exemptions } from './008_asset_hire_exemptions.js'
+import { fixCurrencyScale } from './009_fix_currency_scale.js'
 
 export function runMigrations(db: Database.Database): void {
     db.exec(`CREATE TABLE IF NOT EXISTS migrations (
@@ -47,7 +55,26 @@ export function runMigrations(db: Database.Database): void {
                 min_amount = CAST(min_amount * 100 AS INTEGER), 
                 max_amount = CAST(max_amount * 100 AS INTEGER), 
                 fixed_amount = CAST(fixed_amount * 100 AS INTEGER);
-        ` }
+        ` },
+        { name: 'enhanced_schema', sql: getEnhancedSchema() },
+        {
+            name: 'add_system_config', sql: `CREATE TABLE IF NOT EXISTS system_config (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            is_encrypted BOOLEAN DEFAULT 0,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );`
+        },
+        { name: 'academic_reporting_schema', sql: getAcademicSchema() },
+        { name: 'academic_reporting_seed', sql: getAcademicSeedData() },
+        { name: 'reporting_infrastructure', sql: getReportingSchema() },
+        { name: 'notification_category_fix', sql: getNotificationFixSchema() },
+        { name: 'report_fixes_v1', sql: getReportFixesSchema() },
+        { name: 'attendance_schema', sql: getAttendanceSchema() },
+        { name: 'add_term_status_column', sql: "ALTER TABLE term ADD COLUMN status TEXT DEFAULT 'OPEN' CHECK(status IN ('OPEN', 'CLOSED'));" },
+        { name: 'asset_hire_exemptions', fn: migrate_008_asset_hire_exemptions },
+        { name: 'fix_currency_scale_v1', fn: fixCurrencyScale }
     ]
 
     const applied = db.prepare('SELECT name FROM migrations').all() as { name: string }[]
@@ -56,7 +83,12 @@ export function runMigrations(db: Database.Database): void {
     for (const m of migrations) {
         if (!appliedNames.has(m.name)) {
             console.log(`Applying: ${m.name}`)
-            db.exec(m.sql)
+            // Support both SQL-based and function-based migrations
+            if ('fn' in m && typeof m.fn === 'function') {
+                m.fn(db)
+            } else if ('sql' in m && m.sql) {
+                db.exec(m.sql)
+            }
             db.prepare('INSERT INTO migrations (name) VALUES (?)').run(m.name)
         }
     }
