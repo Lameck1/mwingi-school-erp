@@ -1,3 +1,4 @@
+import Database from 'better-sqlite3-multiple-ciphers'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 
@@ -98,8 +99,14 @@ export interface EligibilityResult {
 // ============================================================================
 
 class ScholarshipRepository {
+  private db: Database.Database
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+  }
+
   async createScholarship(data: ScholarshipData): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       INSERT INTO scholarship (
         name, description, scholarship_type, amount, percentage,
@@ -124,14 +131,14 @@ class ScholarshipRepository {
   }
 
   async getScholarship(id: number): Promise<Scholarship | null> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`
       SELECT * FROM scholarship WHERE id = ?
     `).get(id) as Scholarship | null
   }
 
   async getActiveScholarships(): Promise<Scholarship[]> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`
       SELECT * FROM scholarship
       WHERE status = 'ACTIVE'
@@ -142,8 +149,14 @@ class ScholarshipRepository {
 }
 
 class ScholarshipAllocationRepository {
+  private db: Database.Database
+
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+  }
+
   async allocateScholarship(data: AllocationData): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     
     // Get scholarship details for expiry date
     const scholarship = db.prepare(`
@@ -176,7 +189,7 @@ class ScholarshipAllocationRepository {
   }
 
   async getStudentScholarships(studentId: number): Promise<StudentScholarship[]> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`
       SELECT 
         ss.*,
@@ -192,7 +205,7 @@ class ScholarshipAllocationRepository {
   }
 
   async getScholarshipAllocations(scholarshipId: number): Promise<StudentScholarship[]> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`
       SELECT 
         ss.*,
@@ -208,7 +221,7 @@ class ScholarshipAllocationRepository {
   }
 
   async checkExistingAllocation(studentId: number, scholarshipId: number): Promise<boolean> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       SELECT COUNT(*) as count FROM student_scholarship
       WHERE student_id = ? AND scholarship_id = ? AND status = 'ACTIVE'
@@ -388,14 +401,16 @@ class ScholarshipQueryService implements IScholarshipQueryService {
 export class ScholarshipService 
   implements IScholarshipCreator, IScholarshipAllocator, IScholarshipValidator, IScholarshipQueryService {
   
+  private db: Database.Database
   private readonly creator: ScholarshipCreator
   private readonly allocator: ScholarshipAllocator
   private readonly validator: ScholarshipValidator
   private readonly queryService: ScholarshipQueryService
 
-  constructor() {
-    const scholarshipRepo = new ScholarshipRepository()
-    const allocationRepo = new ScholarshipAllocationRepository()
+  constructor(db?: Database.Database) {
+    this.db = db || getDatabase()
+    const scholarshipRepo = new ScholarshipRepository(this.db)
+    const allocationRepo = new ScholarshipAllocationRepository(this.db)
 
     this.creator = new ScholarshipCreator(scholarshipRepo)
     this.allocator = new ScholarshipAllocator(allocationRepo, scholarshipRepo)
@@ -454,7 +469,7 @@ export class ScholarshipService
     amountToApply: number,
     userId: number
   ): Promise<{ success: boolean; message: string }> {
-    const db = getDatabase()
+    const db = this.db
 
     try {
       const transaction = db.transaction(() => {
