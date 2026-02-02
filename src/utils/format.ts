@@ -9,16 +9,16 @@
  */
 /**
  * Format a number as Kenyan Shillings (KES) currency
- * @param amount - The amount to format (in cents)
- * @returns Formatted currency string (e.g., "KES 1,500.00")
+ * @param amount - The amount to format (in whole currency units)
+ * @returns Formatted currency string (e.g., "KES 34,000.00")
  */
 export function formatCurrency(amount: number | null | undefined): string {
     if (amount === null || amount === undefined || isNaN(Number(amount))) {
         return 'KES 0.00'
     }
 
-    // Divide by 100 for display (cent-based math)
-    const displayAmount = Number(amount) / 100
+    // Amount is already in whole currency units (not cents)
+    const displayAmount = Number(amount)
 
     return new Intl.NumberFormat('en-KE', {
         style: 'currency',

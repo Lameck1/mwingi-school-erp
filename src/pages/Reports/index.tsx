@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Download, FileText, Users, AlertCircle, TrendingUp, MessageSquare, Loader2 } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import {
+    Download, FileText, Users, TrendingUp, TrendingDown,
+    Calendar, AlertCircle, MessageSquare, Loader2, Search, Printer
+} from 'lucide-react'
+import { StatCard } from '../../components/patterns/StatCard'
 import { formatCurrency } from '../../utils/format'
+import { InstitutionalHeader } from '../../components/patterns/InstitutionalHeader'
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell } from 'recharts'
+import { exportToPDF, downloadCSV } from '../../utils/exporters'
 
 const COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed']
 
@@ -18,7 +24,6 @@ interface FinancialSummary {
 }
 
 export default function Reports() {
-    const [activeTab, setActiveTab] = useState('fee-collection')
     const [loading, setLoading] = useState(false)
     const [dateRange, setDateRange] = useState({
         start: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
@@ -28,61 +33,74 @@ export default function Reports() {
     const [studentStats, setStudentStats] = useState<StudentStats | null>(null)
     const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null)
     const [feeCollectionData, setFeeCollectionData] = useState<{ month: string; amount: number }[]>([])
-    const [paymentMethodData, setPaymentMethodData] = useState<{ name: string; value: number }[]>([])
+    const [paymentMethodData, setPaymentMethodData] = useState<any[]>([])
     const [defaulters, setDefaulters] = useState<any[]>([])
+    const [dailyCollections, setDailyCollections] = useState<any[]>([])
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10))
     const [sendingBulk, setSendingBulk] = useState(false)
-
-    useEffect(() => {
-        loadReportData()
-    }, [])
+    const [activeTab, setActiveTab] = useState<'fee-collection' | 'defaulters' | 'daily-collection' | 'students' | 'financial'>('fee-collection')
 
     const loadReportData = async () => {
         setLoading(true)
         try {
             // Load student statistics
             const students = await window.electronAPI.getStudents({})
-            const dayScholars = students.filter((s: { student_type: string }) => s.student_type === 'DAY_SCHOLAR').length
-            const boarders = students.filter((s: { student_type: string }) => s.student_type === 'BOARDER').length
+            const currentStudents = Array.isArray(students) ? students : []
+            const dayScholars = currentStudents.filter((s: any) => s.student_type === 'DAY_SCHOLAR').length
+            const boarders = currentStudents.filter((s: any) => s.student_type === 'BOARDER').length
             setStudentStats({
-                totalStudents: students.length,
+                totalStudents: currentStudents.length,
                 dayScholars,
                 boarders
             })
 
             // Load financial summary
             const summary = await window.electronAPI.getTransactionSummary(dateRange.start, dateRange.end)
-            setFinancialSummary(summary)
+            setFinancialSummary(summary || { totalIncome: 0, totalExpense: 0, netBalance: 0 })
 
             // Load fee collection data
             const feeData = await window.electronAPI.getFeeCollectionReport(dateRange.start, dateRange.end)
+            const currentFeeData = Array.isArray(feeData) ? feeData : []
 
             // Group by month
             const monthlyData: Record<string, number> = {}
-            feeData.forEach((item: { payment_date: string; amount: number }) => {
-                const month = new Date(item.payment_date).toLocaleDateString('en-US', { month: 'short' })
+            currentFeeData.forEach((item: any) => {
+                if (!item.transaction_date && !item.payment_date) return
+                const d = new Date(item.transaction_date || item.payment_date)
+                if (isNaN(d.getTime())) return
+                const month = d.toLocaleDateString('en-US', { month: 'short' })
                 monthlyData[month] = (monthlyData[month] || 0) + item.amount
             })
+
             setFeeCollectionData(
-                Object.entries(monthlyData).map(([month, amount]) => ({ month, amount }))
+                Object.entries(monthlyData).length > 0
+                    ? Object.entries(monthlyData).map(([month, amount]) => ({ month, amount }))
+                    : []
             )
 
             // Group by payment method
             const methodData: Record<string, number> = {}
-            feeData.forEach((item: { payment_method: string; amount: number }) => {
+            currentFeeData.forEach((item: any) => {
                 const method = item.payment_method || 'Other'
                 methodData[method] = (methodData[method] || 0) + item.amount
             })
-            const total = Object.values(methodData).reduce((sum, v) => sum + v, 0) || 1
+            const total = Object.values(methodData).reduce((sum, v) => sum + v, 0) || 0
             setPaymentMethodData(
-                Object.entries(methodData).map(([name, value]) => ({
-                    name,
-                    value: Math.round((value / total) * 100)
-                }))
+                total > 0
+                    ? Object.entries(methodData).map(([name, value]) => ({
+                        name,
+                        value: Math.round((value / total) * 100)
+                    }))
+                    : []
             )
 
             // Load defaulters
             const defaulterData = await window.electronAPI.getDefaulters()
-            setDefaulters(defaulterData)
+            setDefaulters(Array.isArray(defaulterData) ? defaulterData : [])
+
+            // Load daily collections
+            const dailyData = await window.electronAPI.getDailyCollection(selectedDate)
+            setDailyCollections(Array.isArray(dailyData) ? dailyData : [])
         } catch (error) {
             console.error('Failed to load report data:', error)
         } finally {
@@ -90,137 +108,484 @@ export default function Reports() {
         }
     }
 
+    useEffect(() => {
+        loadReportData()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dateRange, selectedDate])
+
+    const handleSendReminder = async (student: any) => {
+        if (!student.guardian_phone) {
+            alert('Guardian phone number missing')
+            return
+        }
+
+        try {
+            const message = `Fee Reminder: ${student.first_name} has an outstanding balance of KES ${student.balance}. Please settle at your earliest convenience. Thank you.`
+            const result = await (window.electronAPI as any).sendSMS({
+                to: student.guardian_phone,
+                message,
+                recipientId: student.id,
+                recipientType: 'STUDENT',
+                userId: 1
+            })
+
+            if (result.success) {
+                alert(`Reminder sent to ${student.first_name}'s guardian`)
+            } else {
+                alert('Failed to send: ' + result.error)
+            }
+        } catch (error) {
+            alert('Error sending reminder')
+        }
+    }
+
+    const handleBulkReminders = async () => {
+        if (!confirm(`Send reminders to ${defaulters.length} guardians?`)) return
+
+        setSendingBulk(true)
+        let sentCount = 0
+        let failedCount = 0
+
+        for (const student of defaulters) {
+            if (!student.guardian_phone) {
+                failedCount++
+                continue
+            }
+
+            try {
+                const message = `Fee Reminder: ${student.first_name} has an outstanding balance of KES ${student.balance}. Please settle at your earliest convenience. Thank you.`
+                const result = await (window.electronAPI as any).sendSMS({
+                    to: student.guardian_phone,
+                    message,
+                    recipientId: student.id,
+                    recipientType: 'STUDENT',
+                    userId: 1
+                })
+                if (result.success) sentCount++
+                else failedCount++
+            } catch (error) {
+                failedCount++
+            }
+        }
+
+        setSendingBulk(false)
+        alert(`Finished: ${sentCount} sent, ${failedCount} failed.`)
+    }
+
+    const handleExportPDF = () => {
+        if (activeTab === 'defaulters' && defaulters.length > 0) {
+            exportToPDF({
+                filename: `fee-defaulters-${new Date().toISOString().slice(0, 10)}`,
+                title: 'Fee Defaulters Report',
+                subtitle: `Period: ${dateRange.start} to ${dateRange.end}`,
+                schoolInfo: {
+                    name: 'Mwingi Adventist School',
+                    address: 'P.O. Box 123, Mwingi, Kenya',
+                    phone: '+254 700 000 000'
+                },
+                columns: [
+                    { key: 'admission_number', header: 'Adm No', width: 25 },
+                    { key: 'student_name', header: 'Student Name', width: 45 },
+                    { key: 'stream_name', header: 'Grade', width: 25 },
+                    { key: 'total_amount', header: 'Total Fees', width: 30, align: 'right', format: 'currency' },
+                    { key: 'amount_paid', header: 'Paid', width: 30, align: 'right', format: 'currency' },
+                    { key: 'balance', header: 'Balance', width: 30, align: 'right', format: 'currency' },
+                ],
+                data: defaulters.map(d => ({
+                    ...d,
+                    student_name: `${d.first_name} ${d.last_name}`
+                }))
+            })
+        } else if (activeTab === 'financial' && financialSummary) {
+            exportToPDF({
+                filename: `financial-summary-${new Date().toISOString().slice(0, 10)}`,
+                title: 'Financial Summary Report',
+                subtitle: `Period: ${dateRange.start} to ${dateRange.end}`,
+                schoolInfo: {
+                    name: 'Mwingi Adventist School',
+                    address: 'P.O. Box 123, Mwingi, Kenya',
+                    phone: '+254 700 000 000'
+                },
+                columns: [
+                    { key: 'category', header: 'Category', width: 80 },
+                    { key: 'amount', header: 'Amount', width: 60, align: 'right', format: 'currency' },
+                ],
+                data: [
+                    { category: 'Total Income', amount: financialSummary.totalIncome },
+                    { category: 'Total Expenses', amount: financialSummary.totalExpense },
+                    { category: 'Net Balance', amount: financialSummary.netBalance },
+                ]
+            })
+        } else if (activeTab === 'daily-collection' && dailyCollections.length > 0) {
+            exportToPDF({
+                filename: `daily-collection-${selectedDate}`,
+                title: 'Daily Collection Report',
+                subtitle: `Date: ${selectedDate}`,
+                schoolInfo: {
+                    name: 'Mwingi Adventist School',
+                    address: 'P.O. Box 123, Mwingi, Kenya',
+                    phone: '+254 700 000 000'
+                },
+                columns: [
+                    { key: 'admission_number', header: 'Adm No', width: 25 },
+                    { key: 'student_name', header: 'Student Name', width: 45 },
+                    { key: 'stream_name', header: 'Grade', width: 25 },
+                    { key: 'amount', header: 'Amount', width: 30, align: 'right', format: 'currency' },
+                    { key: 'payment_method', header: 'Method', width: 30 },
+                ],
+                data: dailyCollections.map(d => ({
+                    ...d,
+                    student_name: d.student_name || 'N/A'
+                }))
+            })
+        } else {
+            alert('Please select a report with data to export')
+        }
+    }
+
+    const handleExportCSV = () => {
+        if (activeTab === 'defaulters' && defaulters.length > 0) {
+            downloadCSV({
+                filename: `fee-defaulters-${new Date().toISOString().slice(0, 10)}`,
+                title: 'Fee Defaulters Report',
+                columns: [
+                    { key: 'admission_number', header: 'Admission Number' },
+                    { key: 'student_name', header: 'Student Name' },
+                    { key: 'stream_name', header: 'Grade' },
+                    { key: 'total_amount', header: 'Total Fees', format: 'currency' },
+                    { key: 'amount_paid', header: 'Paid', format: 'currency' },
+                    { key: 'balance', header: 'Balance', format: 'currency' },
+                ],
+                data: defaulters.map(d => ({
+                    ...d,
+                    student_name: `${d.first_name} ${d.last_name}`
+                }))
+            })
+        } else if (activeTab === 'financial' && financialSummary) {
+            downloadCSV({
+                filename: `financial-summary-${new Date().toISOString().slice(0, 10)}`,
+                title: 'Financial Summary Report',
+                columns: [
+                    { key: 'category', header: 'Category' },
+                    { key: 'amount', header: 'Amount', format: 'currency' },
+                ],
+                data: [
+                    { category: 'Total Income', amount: financialSummary.totalIncome },
+                    { category: 'Total Expenses', amount: financialSummary.totalExpense },
+                    { category: 'Net Balance', amount: financialSummary.netBalance },
+                ]
+            })
+        } else if (activeTab === 'daily-collection' && dailyCollections.length > 0) {
+            downloadCSV({
+                filename: `daily-collection-${selectedDate}`,
+                title: 'Daily Collection Report',
+                columns: [
+                    { key: 'date', header: 'Date' },
+                    { key: 'student_name', header: 'Student Name' },
+                    { key: 'payment_method', header: 'Method' },
+                    { key: 'payment_reference', header: 'Reference' },
+                    { key: 'amount', header: 'Amount', format: 'currency' },
+                ],
+                data: dailyCollections
+            })
+        } else {
+            alert('Please select a report with data to export')
+        }
+    }
+
     const tabs = [
         { id: 'fee-collection', label: 'Fee Collection', icon: TrendingUp },
+        { id: 'daily-collection', label: 'Daily Collection', icon: Calendar },
         { id: 'defaulters', label: 'Fee Defaulters', icon: AlertCircle },
-        { id: 'students', label: 'Student Report', icon: Users },
+        { id: 'students', label: 'Student Stats', icon: Users },
         { id: 'financial', label: 'Financial Summary', icon: FileText },
     ]
 
     return (
-        <div className="p-6">
-            <div className="flex items-center justify-between mb-6">
+        <div className="space-y-8 pb-10">
+            <InstitutionalHeader />
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-1">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
-                    <p className="text-gray-500 mt-1">Generate and export school reports</p>
+                    <h1 className="text-3xl font-bold text-foreground font-heading uppercase tracking-tight">Institutional Reports</h1>
+                    <p className="text-foreground/50 mt-1 font-medium italic">Comprehensive academic and fiscal diagnostics</p>
                 </div>
-                <button className="btn btn-secondary flex items-center gap-2">
-                    <Download className="w-5 h-5" />
-                    <span>Export PDF</span>
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={handleExportCSV}
+                        className="btn btn-secondary flex items-center gap-2 px-6"
+                    >
+                        <Download className="w-4 h-4" />
+                        <span className="text-xs font-bold uppercase tracking-widest">CSV</span>
+                    </button>
+                    <button
+                        onClick={handleExportPDF}
+                        className="btn btn-primary flex items-center gap-2 px-6 shadow-xl shadow-primary/20"
+                    >
+                        <Download className="w-4 h-4" />
+                        <span className="text-xs font-bold uppercase tracking-widest">PDF</span>
+                    </button>
+                </div>
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-2 mb-6 border-b border-gray-200">
+            <div className="flex gap-4 border-b border-border/20 overflow-x-auto whitespace-nowrap pb-1">
                 {tabs.map(tab => (
-                    <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                        className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${activeTab === tab.id
-                            ? 'border-blue-600 text-blue-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700'
-                            }`}>
-                        <tab.icon className="w-4 h-4" />
-                        <span>{tab.label}</span>
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as any)}
+                        className={`pb-4 px-2 text-sm font-bold uppercase tracking-widest transition-all relative ${activeTab === tab.id ? 'text-primary' : 'text-foreground/40 hover:text-foreground/60'}`}
+                    >
+                        <div className="flex items-center gap-2">
+                            <tab.icon className="w-4 h-4" />
+                            {tab.label}
+                        </div>
+                        {activeTab === tab.id && <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-full shadow-[0_-4px_10px_rgba(var(--primary-rgb),0.5)]" />}
                     </button>
                 ))}
             </div>
 
-            {/* Date Range Filter */}
-            <div className="card mb-6">
-                <div className="flex items-center gap-4">
-                    <div>
-                        <label className="label" htmlFor="start-date">From</label>
-                        <input id="start-date" type="date" value={dateRange.start}
-                            onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                            className="input" />
+            {/* Date Range & Global Filter */}
+            <div className="premium-card bg-secondary/5 border-secondary/20">
+                <div className="flex flex-col md:flex-row md:items-center gap-6">
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase text-foreground/40 tracking-widest ml-1">Period From</label>
+                            <input
+                                type="date"
+                                value={dateRange.start}
+                                onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                                className="input w-full bg-secondary/30 h-12 text-xs font-bold uppercase tracking-tight"
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-bold uppercase text-foreground/40 tracking-widest ml-1">Period To</label>
+                            <input
+                                type="date"
+                                value={dateRange.end}
+                                onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                                className="input w-full bg-secondary/30 h-12 text-xs font-bold uppercase tracking-tight"
+                            />
+                        </div>
                     </div>
-                    <div>
-                        <label className="label" htmlFor="end-date">To</label>
-                        <input id="end-date" type="date" value={dateRange.end}
-                            onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                            className="input" />
-                    </div>
-                    <button className="btn btn-primary mt-6">Apply</button>
+                    <button
+                        onClick={loadReportData}
+                        disabled={loading}
+                        className="btn btn-primary h-12 px-8 flex items-center gap-2 text-xs font-bold uppercase tracking-widest shadow-xl shadow-primary/10 disabled:opacity-50"
+                    >
+                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                        Refresh Intelligence
+                    </button>
                 </div>
             </div>
 
             {/* Report Content */}
             {activeTab === 'fee-collection' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="card">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Collection</h3>
-                        <div className="h-72">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={feeCollectionData}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="month" />
-                                    <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} />
-                                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                                    <Bar dataKey="amount" fill="#2563eb" radius={[4, 4, 0, 0]} />
-                                </BarChart>
-                            </ResponsiveContainer>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div className="premium-card group overflow-hidden">
+                        <div className="p-6 border-b border-border/40 flex items-center justify-between bg-secondary/5">
+                            <div className="flex items-center gap-3">
+                                <TrendingUp className="w-5 h-5 text-emerald-500 opacity-60" />
+                                <h3 className="text-lg font-bold text-foreground font-heading tracking-tight uppercase">Monthly Liquidity</h3>
+                            </div>
+                        </div>
+                        <div className="p-8">
+                            {feeCollectionData.length > 0 ? (
+                                <div className="h-72">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={feeCollectionData}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                                            <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 'bold' }} />
+                                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 'bold' }} />
+                                            <Tooltip
+                                                contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}
+                                                formatter={(v: number) => formatCurrency(v)}
+                                            />
+                                            <Bar dataKey="amount" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-64 text-foreground/20 border-2 border-dashed border-border/20 rounded-2xl">
+                                    <TrendingUp className="w-12 h-12 mb-4 opacity-10" />
+                                    <p className="text-[10px] font-bold uppercase tracking-widest">No collection metrics available</p>
+                                </div>
+                            )}
                         </div>
                     </div>
-                    <div className="card">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Methods</h3>
-                        <div className="h-72">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie data={paymentMethodData} innerRadius={60} outerRadius={100} dataKey="value"
-                                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                                        {paymentMethodData.map((_, i) => (<Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />))}
-                                    </Pie>
-                                    <Tooltip />
-                                </PieChart>
-                            </ResponsiveContainer>
+
+                    <div className="premium-card group overflow-hidden">
+                        <div className="p-6 border-b border-border/40 flex items-center justify-between bg-secondary/5">
+                            <div className="flex items-center gap-3">
+                                <TrendingDown className="w-5 h-5 text-primary opacity-60" />
+                                <h3 className="text-lg font-bold text-foreground font-heading tracking-tight uppercase">Payment Channels</h3>
+                            </div>
+                        </div>
+                        <div className="p-8">
+                            {paymentMethodData.length > 0 ? (
+                                <div className="h-72">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie
+                                                data={paymentMethodData}
+                                                innerRadius={60}
+                                                outerRadius={100}
+                                                dataKey="value"
+                                                stroke="none"
+                                                paddingAngle={5}
+                                            >
+                                                {paymentMethodData.map((_, i) => (<Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />))}
+                                            </Pie>
+                                            <Tooltip
+                                                contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}
+                                            />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                    <div className="mt-4 flex flex-wrap gap-4 justify-center">
+                                        {paymentMethodData.map((item, index) => (
+                                            <div key={item.name} className="flex items-center gap-2">
+                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                                                <span className="text-[10px] font-bold uppercase text-foreground/60">{item.name} ({item.value}%)</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-64 text-foreground/20 border-2 border-dashed border-border/20 rounded-2xl">
+                                    <Download className="w-12 h-12 mb-4 opacity-10" />
+                                    <p className="text-[10px] font-bold uppercase tracking-widest">No channel metrics available</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'daily-collection' && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="premium-card flex flex-col md:flex-row md:items-center justify-between gap-4 border-primary/20 bg-primary/5">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary shadow-inner">
+                                <Calendar className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-bold uppercase text-foreground/40 tracking-widest">Audit Date</p>
+                                <input
+                                    type="date"
+                                    value={selectedDate}
+                                    onChange={(e) => setSelectedDate(e.target.value)}
+                                    className="bg-transparent border-none p-0 text-xl font-bold text-foreground focus:ring-0 cursor-pointer"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={() => window.print()} className="btn btn-secondary flex items-center gap-2 px-6">
+                                <Printer className="w-4 h-4" />
+                                <span className="text-[10px] font-bold uppercase tracking-widest">Print DCR</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="premium-card overflow-hidden p-0 border-border/20">
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="bg-secondary/5 border-b border-border/20">
+                                        <th className="text-left py-5 px-6 text-[10px] font-bold uppercase text-foreground/40 tracking-widest">Audit Time</th>
+                                        <th className="text-left py-5 px-6 text-[10px] font-bold uppercase text-foreground/40 tracking-widest">Student Information</th>
+                                        <th className="text-left py-5 px-6 text-[10px] font-bold uppercase text-foreground/40 tracking-widest">Channel</th>
+                                        <th className="text-left py-5 px-6 text-[10px] font-bold uppercase text-foreground/40 tracking-widest">Audit Ref</th>
+                                        <th className="text-right py-5 px-6 text-[10px] font-bold uppercase text-foreground/40 tracking-widest">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {dailyCollections.length > 0 ? (
+                                        dailyCollections.map((col, idx) => (
+                                            <tr key={idx} className="border-b border-border/10 hover:bg-secondary/5 transition-colors">
+                                                <td className="py-5 px-6 text-xs font-mono text-foreground/60">08:00 AM+</td>
+                                                <td className="py-5 px-6">
+                                                    <div className="text-sm font-bold text-foreground uppercase tracking-tight">{col.student_name}</div>
+                                                    <div className="text-[10px] font-medium text-foreground/40">Audit Verified</div>
+                                                </td>
+                                                <td className="py-5 px-6">
+                                                    <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 uppercase tracking-tighter">
+                                                        {col.payment_method}
+                                                    </span>
+                                                </td>
+                                                <td className="py-5 px-6 text-xs font-mono text-foreground/40">{col.payment_reference || 'INTERNAL_REF'}</td>
+                                                <td className="py-5 px-6 text-right text-sm font-bold text-primary">{formatCurrency(col.amount)}</td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan={5} className="py-20 text-center">
+                                                <div className="text-foreground/20 italic text-sm font-medium">No institutional collections recorded for the selected audit date.</div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                                {dailyCollections.length > 0 && (
+                                    <tfoot>
+                                        <tr className="bg-primary/5 border-t border-primary/20">
+                                            <td colSpan={4} className="py-5 px-6 text-sm font-bold text-foreground text-right uppercase tracking-[0.2em]">Daily Audit Aggregate:</td>
+                                            <td className="py-5 px-6 text-right text-xl font-bold text-primary">
+                                                {formatCurrency(dailyCollections.reduce((sum, c) => sum + c.amount, 0))}
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                )}
+                            </table>
                         </div>
                     </div>
                 </div>
             )}
 
             {activeTab === 'defaulters' && (
-                <div className="card">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-lg font-semibold text-gray-900">Fee Defaulters List</h3>
+                <div className="premium-card animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                        <div>
+                            <h3 className="text-xl font-bold text-foreground font-heading tracking-tight uppercase">Defaulter Diagnostics</h3>
+                            <p className="text-xs text-foreground/40 font-medium italic mt-1 leading-relaxed">System-identified accounts with outstanding balances exceeding threshold</p>
+                        </div>
                         <button
                             onClick={handleBulkReminders}
                             disabled={sendingBulk || defaulters.length === 0}
-                            className="btn btn-primary flex items-center gap-2"
+                            className="btn btn-primary flex items-center gap-2 px-8 h-12 shadow-2xl shadow-primary/20 disabled:opacity-50"
                         >
-                            {sendingBulk ? <Loader2 className="w-5 h-5 animate-spin" /> : <MessageSquare className="w-5 h-5" />}
-                            <span>{sendingBulk ? 'Sending...' : 'Bulk Send Reminders'}</span>
+                            {sendingBulk ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+                            <span className="text-xs font-bold uppercase tracking-widest">{sendingBulk ? 'Relaying...' : 'Bulk SMS Relay'}</span>
                         </button>
                     </div>
 
                     <div className="overflow-x-auto">
-                        <table className="data-table">
+                        <table className="w-full">
                             <thead>
-                                <tr>
-                                    <th>Admission No</th>
-                                    <th>Student Name</th>
-                                    <th>Grade</th>
-                                    <th>Total Fees</th>
-                                    <th>Paid</th>
-                                    <th>Balance</th>
-                                    <th>Action</th>
+                                <tr className="border-b border-border/20">
+                                    <th className="text-left py-4 px-2 text-[10px] font-bold uppercase text-foreground/40 tracking-widest">Adm No</th>
+                                    <th className="text-left py-4 px-2 text-[10px] font-bold uppercase text-foreground/40 tracking-widest">Student Identity</th>
+                                    <th className="text-left py-4 px-2 text-[10px] font-bold uppercase text-foreground/40 tracking-widest">Level</th>
+                                    <th className="text-right py-4 px-2 text-[10px] font-bold uppercase text-foreground/40 tracking-widest">Billed</th>
+                                    <th className="text-right py-4 px-2 text-[10px] font-bold uppercase text-foreground/40 tracking-widest">Remitted</th>
+                                    <th className="text-right py-4 px-2 text-[10px] font-bold uppercase text-foreground/40 tracking-widest">Outstanding</th>
+                                    <th className="text-center py-4 px-2 text-[10px] font-bold uppercase text-foreground/40 tracking-widest">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {defaulters.length === 0 ? (
-                                    <tr><td colSpan={7} className="text-center py-8 text-gray-500">No defaulters found</td></tr>
+                                    <tr><td colSpan={7} className="text-center py-20 text-foreground/20 italic font-medium">No institutional defaulters detected.</td></tr>
                                 ) : (
                                     defaulters.map((d) => (
-                                        <tr key={d.id}>
-                                            <td className="font-mono">{d.admission_number}</td>
-                                            <td>{d.first_name} {d.last_name}</td>
-                                            <td>{d.stream_name || '-'}</td>
-                                            <td>{formatCurrency(d.total_amount)}</td>
-                                            <td className="text-green-600">{formatCurrency(d.amount_paid)}</td>
-                                            <td className="text-red-600 font-bold">{formatCurrency(d.balance)}</td>
-                                            <td>
+                                        <tr key={d.id} className="border-b border-border/10 hover:bg-secondary/5 transition-colors group">
+                                            <td className="py-4 px-2 font-mono text-xs text-foreground/60">{d.admission_number}</td>
+                                            <td className="py-4 px-2 text-sm font-bold text-foreground uppercase tracking-tight">{d.first_name} {d.last_name}</td>
+                                            <td className="py-4 px-2 text-[10px] font-bold text-foreground/40 uppercase">{d.stream_name || 'UNASSIGNED'}</td>
+                                            <td className="py-4 px-2 text-right text-xs font-medium text-foreground/60">{formatCurrency(d.total_amount)}</td>
+                                            <td className="py-4 px-2 text-right text-xs font-medium text-emerald-500/80">{formatCurrency(d.amount_paid)}</td>
+                                            <td className="py-4 px-2 text-right text-sm font-bold text-rose-500">{formatCurrency(d.balance)}</td>
+                                            <td className="py-4 px-2 text-center">
                                                 <button
                                                     onClick={() => handleSendReminder(d)}
-                                                    className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                                    title="Send Reminder"
+                                                    className="p-2 text-primary hover:bg-primary/10 rounded-xl transition-all shadow-sm"
+                                                    title="Relay SMS Reminder"
                                                 >
                                                     <MessageSquare className="w-4 h-4" />
                                                 </button>
@@ -235,111 +600,50 @@ export default function Reports() {
             )}
 
             {activeTab === 'students' && (
-                <div className="card">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Student Statistics</h3>
-                    {loading ? (
-                        <div className="text-center py-8 text-gray-500">Loading...</div>
-                    ) : (
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                            <div className="p-4 bg-blue-50 rounded-lg text-center">
-                                <p className="text-3xl font-bold text-blue-600">{studentStats?.totalStudents || 0}</p>
-                                <p className="text-sm text-gray-600">Total Students</p>
-                            </div>
-                            <div className="p-4 bg-green-50 rounded-lg text-center">
-                                <p className="text-3xl font-bold text-green-600">{studentStats?.dayScholars || 0}</p>
-                                <p className="text-sm text-gray-600">Day Scholars</p>
-                            </div>
-                            <div className="p-4 bg-purple-50 rounded-lg text-center">
-                                <p className="text-3xl font-bold text-purple-600">{studentStats?.boarders || 0}</p>
-                                <p className="text-sm text-gray-600">Boarders</p>
-                            </div>
-                        </div>
-                    )}
+                <div className="premium-card animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <h3 className="text-xl font-bold text-foreground font-heading tracking-tight uppercase mb-8">Demographic Intelligence</h3>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <StatCard
+                            label="Institutional Population"
+                            value={studentStats?.totalStudents || 0}
+                            icon={Users}
+                            color="from-blue-500/10 to-indigo-500/10 text-blue-500"
+                        />
+                        <StatCard
+                            label="Day Scholars"
+                            value={studentStats?.dayScholars || 0}
+                            icon={TrendingUp}
+                            color="from-emerald-500/10 to-teal-500/10 text-emerald-500"
+                        />
+                        <StatCard
+                            label="Boarding Residents"
+                            value={studentStats?.boarders || 0}
+                            icon={TrendingDown}
+                            color="from-purple-500/10 to-pink-500/10 text-purple-500"
+                        />
+                    </div>
                 </div>
             )}
 
             {activeTab === 'financial' && (
-                <div className="card">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Financial Summary</h3>
-                    {loading ? (
-                        <div className="text-center py-8 text-gray-500">Loading...</div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="p-4 border rounded-lg">
-                                <p className="text-sm text-gray-500">Total Income</p>
-                                <p className="text-2xl font-bold text-green-600">{formatCurrency(financialSummary?.totalIncome || 0)}</p>
-                            </div>
-                            <div className="p-4 border rounded-lg">
-                                <p className="text-sm text-gray-500">Total Expenses</p>
-                                <p className="text-2xl font-bold text-red-600">{formatCurrency(financialSummary?.totalExpense || 0)}</p>
-                            </div>
-                            <div className="p-4 border rounded-lg">
-                                <p className="text-sm text-gray-500">Net Balance</p>
-                                <p className="text-2xl font-bold text-blue-600">{formatCurrency(financialSummary?.netBalance || 0)}</p>
-                            </div>
+                <div className="premium-card animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <h3 className="text-xl font-bold text-foreground font-heading tracking-tight uppercase mb-8">Fiscal Summary Diagnostic</h3>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="p-8 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl shadow-inner group transition-all hover:bg-emerald-500/10">
+                            <p className="text-[10px] font-bold uppercase text-emerald-500/60 tracking-widest mb-2">Aggregate Income</p>
+                            <p className="text-3xl font-bold text-emerald-500 tracking-tight">{formatCurrency(financialSummary?.totalIncome || 0)}</p>
                         </div>
-                    )}
+                        <div className="p-8 bg-rose-500/5 border border-rose-500/10 rounded-2xl shadow-inner group transition-all hover:bg-rose-500/10">
+                            <p className="text-[10px] font-bold uppercase text-rose-500/60 tracking-widest mb-2">Aggregate Expenditure</p>
+                            <p className="text-3xl font-bold text-rose-500 tracking-tight">{formatCurrency(financialSummary?.totalExpense || 0)}</p>
+                        </div>
+                        <div className="p-8 bg-primary/5 border border-primary/10 rounded-2xl shadow-inner group transition-all hover:bg-primary/10">
+                            <p className="text-[10px] font-bold uppercase text-primary/60 tracking-widest mb-2">Net Institutional Liquidity</p>
+                            <p className="text-3xl font-bold text-primary tracking-tight">{formatCurrency(financialSummary?.netBalance || 0)}</p>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
     )
-
-    async function handleSendReminder(student: any) {
-        if (!student.guardian_phone) {
-            alert('Guardian phone number missing')
-            return
-        }
-
-        try {
-            const message = `Fee Reminder: ${student.first_name} has an outstanding balance of KES ${student.balance} for ${student.invoice_number}. Please settle at your earliest convenience. Thank you.`
-            const result = await (window.electronAPI as any).sendSMS({
-                to: student.guardian_phone,
-                message,
-                recipientId: student.id,
-                recipientType: 'STUDENT',
-                userId: 1 // TODO: Get current user ID
-            })
-
-            if (result.success) {
-                alert(`Reminder sent to ${student.first_name}'s guardian`)
-            } else {
-                alert('Failed to send: ' + result.error)
-            }
-        } catch (error) {
-            alert('Error sending reminder')
-        }
-    }
-
-    async function handleBulkReminders() {
-        if (!confirm(`Send reminders to ${defaulters.length} guardians?`)) return
-
-        setSendingBulk(true)
-        let sent = 0
-        let failed = 0
-
-        for (const student of defaulters) {
-            if (!student.guardian_phone) {
-                failed++
-                continue
-            }
-
-            try {
-                const message = `Fee Reminder: ${student.first_name} has an outstanding balance of KES ${student.balance}. Please settle at your earliest convenience. Thank you.`
-                const result = await (window.electronAPI as any).sendSMS({
-                    to: student.guardian_phone,
-                    message,
-                    recipientId: student.id,
-                    recipientType: 'STUDENT',
-                    userId: 1
-                })
-                if (result.success) sent++
-                else failed++
-            } catch (error) {
-                failed++
-            }
-        }
-
-        setSendingBulk(false)
-        alert(`Finished: ${sent} sent, ${failed} failed.`)
-    }
 }

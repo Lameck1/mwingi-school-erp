@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Calculator, Play, Check, Download, AlertCircle, ChevronLeft, Eye, Printer, MessageSquare, Loader2, Calendar } from 'lucide-react'
+import { Calculator, Play, Download, AlertCircle, ChevronLeft, Eye, Printer, MessageSquare, Loader2, Calendar } from 'lucide-react'
 import { useAuthStore, useAppStore } from '../../stores'
 import { PayrollPeriod, PayrollEntry } from '../../types/electron-api/PayrollAPI'
 import { printDocument } from '../../utils/print'
@@ -104,7 +104,7 @@ export default function PayrollRun() {
                             <ChevronLeft className="w-5 h-5" />
                         </button>
                         <div>
-                            <h1 className="text-3xl font-bold text-white font-heading">
+                            <h1 className="text-3xl font-bold text-foreground font-heading">
                                 {selectedPeriod?.period_name || 'Calculation Result'}
                             </h1>
                             <div className="flex items-center gap-3 mt-1">
@@ -137,14 +137,14 @@ export default function PayrollRun() {
 
                 <div className="card animate-slide-up no-scrollbar">
                     <div className="flex items-center justify-between mb-8">
-                        <h3 className="text-lg font-bold text-white">Staff Compensation Summary</h3>
+                        <h3 className="text-lg font-bold text-foreground">Staff Compensation Summary</h3>
                         <div className="text-[10px] text-foreground/40 font-bold uppercase tracking-widest">Showing {payrollData.length} records</div>
                     </div>
 
                     <div className="overflow-x-auto -mx-2">
                         <table className="w-full text-left">
                             <thead>
-                                <tr className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 border-b border-white/5">
+                                <tr className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 border-b border-border/20">
                                     <th className="px-4 py-4">Staff Member</th>
                                     <th className="px-4 py-4 text-right">Basic</th>
                                     <th className="px-4 py-4 text-right">Allowances</th>
@@ -154,21 +154,21 @@ export default function PayrollRun() {
                                     <th className="px-4 py-4 text-right">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-white/5">
+                            <tbody className="divide-y divide-border/20">
                                 {payrollData.map((p: any, i: number) => (
-                                    <tr key={i} className="group hover:bg-white/[0.02] transition-colors">
+                                    <tr key={i} className="group hover:bg-secondary/40 transition-colors">
                                         <td className="px-4 py-5">
-                                            <p className="font-bold text-white group-hover:text-primary transition-colors">{p.staff_name}</p>
+                                            <p className="font-bold text-foreground group-hover:text-primary transition-colors">{p.staff_name}</p>
                                             <p className="text-[10px] text-foreground/40 italic">ID: {p.staff_id}</p>
                                         </td>
                                         <td className="px-4 py-5 text-right text-xs font-medium text-foreground/60">{formatCurrency(p.basic_salary)}</td>
-                                        <td className="px-4 py-5 text-right text-xs font-medium text-emerald-400">+{formatCurrency(p.allowances)}</td>
-                                        <td className="px-4 py-5 text-right text-xs font-bold text-white">{formatCurrency(p.gross_salary)}</td>
-                                        <td className="px-4 py-5 text-right text-xs font-medium text-red-400">
+                                        <td className="px-4 py-5 text-right text-xs font-medium text-emerald-500">+{formatCurrency(p.allowances)}</td>
+                                        <td className="px-4 py-5 text-right text-xs font-bold text-foreground">{formatCurrency(p.gross_salary)}</td>
+                                        <td className="px-4 py-5 text-right text-xs font-medium text-red-500">
                                             -{formatCurrency((p.paye || 0) + (p.nhif || 0) + (p.nssf || 0))}
                                         </td>
                                         <td className="px-4 py-5 text-right">
-                                            <span className="text-sm font-bold text-white bg-primary/10 px-3 py-1 rounded-lg border border-primary/20">
+                                            <span className="text-sm font-bold text-foreground bg-primary/10 px-3 py-1 rounded-lg border border-primary/20">
                                                 {formatCurrency(p.net_salary)}
                                             </span>
                                         </td>
@@ -204,7 +204,7 @@ export default function PayrollRun() {
         <div className="space-y-8 pb-10">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-white font-heading">Payroll Management</h1>
+                    <h1 className="text-3xl font-bold text-foreground font-heading">Payroll Management</h1>
                     <p className="text-foreground/50 mt-1 font-medium italic">Process monthly disbursements and statutory obligations</p>
                 </div>
             </div>
@@ -216,7 +216,7 @@ export default function PayrollRun() {
                         <div className="p-2 rounded-lg bg-primary/10 text-primary">
                             <Calculator className="w-5 h-5" />
                         </div>
-                        <h2 className="text-lg font-bold text-white">Payroll Engine</h2>
+                        <h2 className="text-lg font-bold text-foreground">Payroll Engine</h2>
                     </div>
 
                     <div className="space-y-6">
@@ -226,7 +226,7 @@ export default function PayrollRun() {
                                 <select
                                     value={month}
                                     onChange={(e) => setMonth(Number(e.target.value))}
-                                    className="input bg-secondary/30 border-white/5 py-3"
+                                    className="input bg-secondary/30 border-border/20 py-3"
                                 >
                                     {months.map((m, i) => (<option key={i} value={i + 1}>{m}</option>))}
                                 </select>
@@ -237,7 +237,7 @@ export default function PayrollRun() {
                                     type="number"
                                     value={year}
                                     onChange={(e) => setYear(Number(e.target.value))}
-                                    className="input bg-secondary/30 border-white/5 py-3"
+                                    className="input bg-secondary/30 border-border/20 py-3"
                                     min={2020}
                                     max={2030}
                                 />
@@ -274,26 +274,26 @@ export default function PayrollRun() {
                             <div className="p-2 rounded-lg bg-slate-500/10 text-slate-400">
                                 <Eye className="w-5 h-5" />
                             </div>
-                            <h2 className="text-lg font-bold text-white">Payroll Repository</h2>
+                            <h2 className="text-lg font-bold text-foreground">Payroll Repository</h2>
                         </div>
                         {loadingHistory && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
                     </div>
 
                     {history.length === 0 && !loadingHistory ? (
                         <div className="py-20 text-center">
-                            <Calculator className="w-16 h-16 mx-auto mb-4 text-white/5" />
+                            <Calculator className="w-16 h-16 mx-auto mb-4 text-foreground/10" />
                             <p className="text-foreground/30 font-bold">Repository Empty</p>
                         </div>
                     ) : (
                         <div className="space-y-3 max-h-[500px] overflow-y-auto no-scrollbar pr-1">
                             {history.map((h: PayrollPeriod) => (
-                                <div key={h.id} className="p-4 bg-secondary/20 hover:bg-slate-700/30 border border-white/5 rounded-2xl flex justify-between items-center transition-all group">
+                                <div key={h.id} className="p-4 bg-secondary/20 hover:bg-secondary/40 border border-border/20 rounded-2xl flex justify-between items-center transition-all group">
                                     <div className="flex items-center gap-5">
-                                        <div className="w-12 h-12 rounded-xl bg-primary/5 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all shadow-inner">
+                                        <div className="w-12 h-12 rounded-xl bg-primary/5 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-all shadow-inner">
                                             <Calendar className="w-6 h-6" />
                                         </div>
                                         <div>
-                                            <p className="font-bold text-white text-lg">{h.period_name}</p>
+                                            <p className="font-bold text-foreground text-lg">{h.period_name}</p>
                                             <p className="text-[10px] text-foreground/40 font-bold uppercase tracking-tighter">Created: {new Date(h.created_at).toLocaleDateString()}</p>
                                         </div>
                                     </div>
@@ -329,7 +329,7 @@ export default function PayrollRun() {
 
         try {
             const message = `Salary Notification: Your salary for ${selectedPeriod?.period_name} has been processed. Net Pay: KES ${staff.net_salary}. Thank you.`
-            const result = await (window.electronAPI as any).sendSMS({
+            const result = await window.electronAPI.sendSMS({
                 to: staff.phone,
                 message,
                 recipientId: staff.staff_id,
@@ -362,7 +362,7 @@ export default function PayrollRun() {
 
             try {
                 const message = `Salary Notification: Your salary for ${selectedPeriod?.period_name} has been processed. Net Pay: KES ${staff.net_salary}. Thank you.`
-                const result = await (window.electronAPI as any).sendSMS({
+                const result = await window.electronAPI.sendSMS({
                     to: staff.phone,
                     message,
                     recipientId: (staff as any).staff_id,
@@ -395,7 +395,7 @@ export default function PayrollRun() {
                 allowancesList: [],
                 deductionsList: []
             },
-            schoolSettings
+            schoolSettings: schoolSettings || {} as any
         })
     }
 }

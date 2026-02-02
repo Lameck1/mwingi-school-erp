@@ -115,7 +115,7 @@ export default function Inventory() {
             {/* Page Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-white font-heading">Inventory & Logistics</h1>
+                    <h1 className="text-3xl font-bold text-foreground font-heading">Inventory & Logistics</h1>
                     <p className="text-foreground/50 mt-1 font-medium italic">Manage school assets, supplies, and procurement pipelines</p>
                 </div>
                 <button
@@ -151,7 +151,7 @@ export default function Inventory() {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Locate assets by name or system code..."
-                        className="input pl-11 py-3.5 bg-secondary/30 border-white/5 focus:border-primary/50 transition-all"
+                        className="input pl-11 py-3.5 bg-secondary/30 border-border/20 focus:border-primary/50 transition-all font-medium"
                     />
                 </div>
             </div>
@@ -165,8 +165,8 @@ export default function Inventory() {
                     </div>
                 ) : filteredItems.length === 0 ? (
                     <div className="text-center py-24">
-                        <Package className="w-20 h-20 mx-auto mb-6 text-white/5" />
-                        <h3 className="text-xl font-bold text-white mb-2">Inventory Empty</h3>
+                        <Package className="w-20 h-20 mx-auto mb-6 text-foreground/10" />
+                        <h3 className="text-xl font-bold text-foreground mb-2">Inventory Empty</h3>
                         <p className="text-foreground/30 font-medium">Verify your search criteria or register a new school asset.</p>
                     </div>
                 ) : (
@@ -182,23 +182,23 @@ export default function Inventory() {
                                     <th className="px-4 py-4 text-right">Inventory Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-white/5">
+                            <tbody className="divide-y divide-border/20">
                                 {filteredItems.map((item) => (
-                                    <tr key={item.id} className="group hover:bg-white/[0.02] transition-colors">
+                                    <tr key={item.id} className="group hover:bg-accent/20 transition-colors">
                                         <td className="px-4 py-5">
-                                            <p className="font-bold text-white group-hover:text-primary transition-colors">{item.item_name}</p>
+                                            <p className="font-bold text-foreground group-hover:text-primary transition-colors">{item.item_name}</p>
                                             <p className="text-[10px] font-mono text-foreground/40 uppercase tracking-widest">CODE: {item.item_code}</p>
                                         </td>
                                         <td className="px-4 py-5 font-bold">
-                                            <p className="text-xs text-white">{item.category_name}</p>
+                                            <p className="text-xs text-foreground">{item.category_name}</p>
                                             <p className="text-[10px] text-foreground/40 font-medium uppercase">{item.unit_of_measure}</p>
                                         </td>
-                                        <td className="px-4 py-5 text-right font-bold text-white">
+                                        <td className="px-4 py-5 text-right font-bold text-foreground">
                                             {item.current_stock}
                                             <p className="text-[10px] text-foreground/40 font-medium uppercase tracking-tighter">Threshold: {item.reorder_level}</p>
                                         </td>
                                         <td className="px-4 py-5 text-right">
-                                            <p className="text-xs font-bold text-white">{formatCurrency(item.unit_cost * item.current_stock)}</p>
+                                            <p className="text-xs font-bold text-foreground">{formatCurrency(item.unit_cost * item.current_stock)}</p>
                                             <p className="text-[10px] text-foreground/40 italic">at {formatCurrency(item.unit_cost)}/unit</p>
                                         </td>
                                         <td className="px-4 py-5">
@@ -240,7 +240,7 @@ export default function Inventory() {
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="card w-full max-w-md animate-scale-in">
                         <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-bold text-white">Register Asset</h2>
+                            <h2 className="text-xl font-bold text-foreground">Register Asset</h2>
                             <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-white/5 rounded-xl transition-colors"><X className="w-5 h-5 text-foreground/40" /></button>
                         </div>
                         <form onSubmit={handleAddItem} className="space-y-4">
@@ -248,20 +248,20 @@ export default function Inventory() {
                                 <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Asset Code</label>
                                 <input type="text" required value={newItem.item_code}
                                     onChange={(e) => setNewItem({ ...newItem, item_code: e.target.value })}
-                                    className="input bg-secondary/30 border-white/5" placeholder="e.g. STN-001" />
+                                    className="input bg-secondary/20 border-border/20" placeholder="e.g. STN-001" />
                             </div>
                             <div>
                                 <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Asset Name</label>
                                 <input type="text" required value={newItem.item_name}
                                     onChange={(e) => setNewItem({ ...newItem, item_name: e.target.value })}
-                                    className="input bg-secondary/30 border-white/5" placeholder="e.g. A4 Paper Ream" />
+                                    className="input bg-secondary/20 border-border/20" placeholder="e.g. A4 Paper Ream" />
                             </div>
                             <div>
                                 <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Classification</label>
                                 <select required value={newItem.category_id}
                                     aria-label="Category"
                                     onChange={(e) => setNewItem({ ...newItem, category_id: e.target.value })}
-                                    className="input bg-secondary/30 border-white/5">
+                                    className="input bg-secondary/20 border-border/20">
                                     <option value="">Select Category</option>
                                     {categories.map(c => (
                                         <option key={c.id} value={c.id}>{c.category_name}</option>
@@ -273,23 +273,23 @@ export default function Inventory() {
                                     <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Unit</label>
                                     <input type="text" required value={newItem.unit_of_measure}
                                         onChange={(e) => setNewItem({ ...newItem, unit_of_measure: e.target.value })}
-                                        className="input bg-secondary/30 border-white/5" placeholder="e.g. Box" />
+                                        className="input bg-secondary/20 border-border/20" placeholder="e.g. Box" />
                                 </div>
                                 <div>
                                     <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Threshold</label>
                                     <input type="number" required value={newItem.reorder_level}
                                         onChange={(e) => setNewItem({ ...newItem, reorder_level: Number(e.target.value) })}
-                                        className="input bg-secondary/30 border-white/5" placeholder="10" />
+                                        className="input bg-secondary/20 border-border/20" placeholder="10" />
                                 </div>
                             </div>
                             <div>
                                 <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Unit Cost (KES)</label>
                                 <input type="number" required value={newItem.unit_cost}
                                     onChange={(e) => setNewItem({ ...newItem, unit_cost: Number(e.target.value) })}
-                                    className="input bg-secondary/30 border-white/5" placeholder="0.00" />
+                                    className="input bg-secondary/20 border-border/20" placeholder="0.00" />
                             </div>
                             <div className="flex justify-end gap-3 mt-8">
-                                <button type="button" onClick={() => setShowAddModal(false)} className="btn bg-secondary/50 hover:bg-white/10 text-white border-white/5 px-6">Cancel</button>
+                                <button type="button" onClick={() => setShowAddModal(false)} className="btn bg-secondary/50 hover:bg-secondary text-foreground border-border/40 px-6">Cancel</button>
                                 <button type="submit" className="btn btn-primary px-8 shadow-lg shadow-primary/20">Save Asset</button>
                             </div>
                         </form>
@@ -302,7 +302,7 @@ export default function Inventory() {
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
                     <div className="card w-full max-w-md animate-scale-in">
                         <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-xl font-bold text-white">
+                            <h2 className="text-xl font-bold text-foreground">
                                 {stockAction === 'IN' ? 'Restock' : 'Issue'} Content
                             </h2>
                             <button onClick={() => setShowStockModal(false)} className="p-2 hover:bg-white/5 rounded-xl transition-colors"><X className="w-5 h-5 text-foreground/40" /></button>
@@ -313,7 +313,7 @@ export default function Inventory() {
                                 <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Movement Quantity</label>
                                 <input type="number" required min="1" value={stockMovement.quantity}
                                     onChange={(e) => setStockMovement({ ...stockMovement, quantity: Number(e.target.value) })}
-                                    className="input bg-secondary/30 border-white/5" placeholder="0" />
+                                    className="input bg-secondary/20 border-border/20" placeholder="0" />
                             </div>
                             {stockAction === 'IN' && (
                                 <>
@@ -321,13 +321,13 @@ export default function Inventory() {
                                         <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Inbound Cost (KES)</label>
                                         <input type="number" required min="0" value={stockMovement.unit_cost}
                                             onChange={(e) => setStockMovement({ ...stockMovement, unit_cost: Number(e.target.value) })}
-                                            className="input bg-secondary/30 border-white/5" placeholder="0.00" />
+                                            className="input bg-secondary/20 border-border/20" placeholder="0.00" />
                                     </div>
                                     <div>
                                         <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Vendor / Supplier</label>
                                         <select value={stockMovement.supplier_id}
                                             onChange={(e) => setStockMovement({ ...stockMovement, supplier_id: e.target.value })}
-                                            className="input bg-secondary/30 border-white/5">
+                                            className="input bg-secondary/20 border-border/20">
                                             <option value="">Select Supplier (Optional)</option>
                                             {suppliers.map(s => (
                                                 <option key={s.id} value={s.id}>{s.supplier_name}</option>
@@ -340,16 +340,16 @@ export default function Inventory() {
                                 <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Documentation Reference</label>
                                 <input type="text" value={stockMovement.reference_number}
                                     onChange={(e) => setStockMovement({ ...stockMovement, reference_number: e.target.value })}
-                                    className="input bg-secondary/30 border-white/5" placeholder="e.g. Invoice # / Receipt #" />
+                                    className="input bg-secondary/20 border-border/20" placeholder="e.g. Invoice # / Receipt #" />
                             </div>
                             <div>
                                 <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Justification</label>
                                 <textarea value={stockMovement.description}
                                     onChange={(e) => setStockMovement({ ...stockMovement, description: e.target.value })}
-                                    className="input bg-secondary/30 border-white/5" rows={2} placeholder="Brief reason for movement..." />
+                                    className="input bg-secondary/20 border-border/20" rows={2} placeholder="Brief reason for movement..." />
                             </div>
                             <div className="flex justify-end gap-3 mt-8">
-                                <button type="button" onClick={() => setShowStockModal(false)} className="btn bg-secondary/50 hover:bg-white/10 text-white border-white/5 px-6">Cancel</button>
+                                <button type="button" onClick={() => setShowStockModal(false)} className="btn bg-secondary/50 hover:bg-secondary text-foreground border-border/40 px-6">Cancel</button>
                                 <button type="submit" className={`btn px-8 shadow-lg ${stockAction === 'IN' ? 'btn-primary shadow-primary/20' : 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/20'}`}>
                                     {stockAction === 'IN' ? 'Confirm Restock' : 'Confirm Issuance'}
                                 </button>

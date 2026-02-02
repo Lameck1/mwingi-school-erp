@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Save, Loader2, User, Shield, Phone, Mail, MapPin, Calendar, Heart } from 'lucide-react'
+import { Select } from '../../components/ui/Select'
 import { Stream } from '../../types/electron-api/AcademicAPI'
 
 export default function StudentForm() {
@@ -115,13 +116,13 @@ export default function StudentForm() {
             <div className="flex items-center gap-6">
                 <button
                     onClick={() => navigate('/students')}
-                    className="p-4 bg-secondary/30 hover:bg-secondary/50 text-white rounded-2xl transition-all border border-white/5 shadow-xl"
+                    className="p-4 bg-secondary/50 hover:bg-secondary/80 text-foreground rounded-2xl transition-all border border-border/40 shadow-xl"
                     aria-label="Back to Registry"
                 >
                     <ArrowLeft className="w-5 h-5" />
                 </button>
                 <div>
-                    <h1 className="text-3xl font-bold text-white font-heading">
+                    <h1 className="text-3xl font-bold text-foreground font-heading">
                         {isEdit ? 'Update Student Record' : 'Registry Admission'}
                     </h1>
                     <p className="text-foreground/50 mt-1 font-medium italic">
@@ -142,11 +143,11 @@ export default function StudentForm() {
                 <div className="lg:col-span-2 space-y-8">
                     {/* Basic Identification */}
                     <div className="card animate-slide-up">
-                        <div className="flex items-center gap-3 mb-8 border-b border-white/5 pb-4">
+                        <div className="flex items-center gap-3 mb-8 border-b border-border/20 pb-4">
                             <div className="p-2 bg-primary/10 text-primary rounded-lg">
                                 <User className="w-5 h-5" />
                             </div>
-                            <h2 className="text-lg font-bold text-white">Student Identification</h2>
+                            <h2 className="text-lg font-bold text-foreground">Student Identification</h2>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -154,75 +155,81 @@ export default function StudentForm() {
                                 <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Full Legal Name (Primary)</label>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <input name="first_name" value={formData.first_name} onChange={handleChange} required
-                                        className="input bg-secondary/30 border-white/5" placeholder="First Name" />
+                                        className="input bg-secondary/20 border-border/20" placeholder="First Name" />
                                     <input name="middle_name" value={formData.middle_name} onChange={handleChange}
-                                        className="input bg-secondary/30 border-white/5" placeholder="Middle Name" />
+                                        className="input bg-secondary/20 border-border/20" placeholder="Middle Name" />
                                     <input name="last_name" value={formData.last_name} onChange={handleChange} required
-                                        className="input bg-secondary/30 border-white/5" placeholder="Surname" />
+                                        className="input bg-secondary/20 border-border/20" placeholder="Surname" />
                                 </div>
                             </div>
 
                             <div>
                                 <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Admission Number</label>
                                 <input name="admission_number" value={formData.admission_number} onChange={handleChange} required
-                                    className="input bg-secondary/30 border-white/5 font-mono" placeholder="MAS-2025-XXX" />
+                                    className="input bg-secondary/20 border-border/20 font-mono" placeholder="MAS-2025-XXX" />
                             </div>
 
-                            <div>
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Academic Placement</label>
-                                <select name="stream_id" value={formData.stream_id} onChange={handleChange} required
-                                    className="input bg-secondary/30 border-white/5">
-                                    <option value="">Select Stream</option>
-                                    {streams.map(s => (<option key={s.id} value={s.id}>{s.stream_name}</option>))}
-                                </select>
-                            </div>
+                            <Select
+                                label="Academic Placement"
+                                name="stream_id"
+                                value={formData.stream_id}
+                                onChange={(val) => setFormData(prev => ({ ...prev, stream_id: val }))}
+                                options={[
+                                    { value: '', label: 'Select Stream' },
+                                    ...streams.map(s => ({ value: s.id.toString(), label: s.stream_name }))
+                                ]}
+                            />
+
+                            <Select
+                                label="Gender Identity"
+                                name="gender"
+                                value={formData.gender}
+                                onChange={(val) => setFormData(prev => ({ ...prev, gender: val }))}
+                                options={[
+                                    { value: 'MALE', label: 'Male' },
+                                    { value: 'FEMALE', label: 'Female' }
+                                ]}
+                            />
+
+                            <Select
+                                label="Enrollment Type"
+                                name="student_type"
+                                value={formData.student_type}
+                                onChange={(val) => setFormData(prev => ({ ...prev, student_type: val }))}
+                                options={[
+                                    { value: 'DAY_SCHOLAR', label: 'Day Scholar' },
+                                    { value: 'BOARDER', label: 'Boarder' }
+                                ]}
+                            />
 
                             <div>
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Gender Identity</label>
-                                <select name="gender" value={formData.gender} onChange={handleChange}
-                                    className="input bg-secondary/30 border-white/5">
-                                    <option value="MALE">Male</option>
-                                    <option value="FEMALE">Female</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Enrollment Type</label>
-                                <select name="student_type" value={formData.student_type} onChange={handleChange}
-                                    className="input bg-secondary/30 border-white/5">
-                                    <option value="DAY_SCHOLAR">Day Scholar</option>
-                                    <option value="BOARDER">Boarder</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Date of Birth</label>
+                                <label className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest block mb-2 ml-1">Date of Birth</label>
                                 <input name="date_of_birth" type="date" value={formData.date_of_birth} onChange={handleChange}
-                                    className="input bg-secondary/30 border-white/5" />
+                                    className="input bg-secondary/30 border-border/40 focus:border-primary/50 transition-all font-medium" />
                             </div>
 
                             <div>
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Admission Date</label>
+                                <label className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest block mb-2 ml-1">Admission Date</label>
                                 <input name="admission_date" type="date" value={formData.admission_date} onChange={handleChange} required
-                                    className="input bg-secondary/30 border-white/5" />
+                                    className="input bg-secondary/30 border-border/40 focus:border-primary/50 transition-all font-medium" />
                             </div>
                         </div>
                     </div>
 
                     {/* Guardian Details */}
                     <div className="card animate-slide-up delay-100">
-                        <div className="flex items-center gap-3 mb-8 border-b border-white/5 pb-4">
+                        <div className="flex items-center gap-3 mb-8 border-b border-border/20 pb-4">
                             <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg">
                                 <Heart className="w-5 h-5" />
                             </div>
-                            <h2 className="text-lg font-bold text-white">Guardian/Family Registry</h2>
+                            <h2 className="text-lg font-bold text-foreground">Guardian/Family Registry</h2>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="md:col-span-2">
                                 <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Primary Guardian Name</label>
                                 <input name="guardian_name" value={formData.guardian_name} onChange={handleChange}
-                                    className="input bg-secondary/30 border-white/5" placeholder="Enter full name" />
+                                    className="input bg-secondary/20 border-border/20" placeholder="Enter full name" />
                             </div>
 
                             <div>
@@ -230,7 +237,7 @@ export default function StudentForm() {
                                 <div className="relative">
                                     <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40" />
                                     <input name="guardian_phone" type="tel" value={formData.guardian_phone} onChange={handleChange}
-                                        className="input pl-11 bg-secondary/30 border-white/5" placeholder="e.g. 0712 XXX XXX" />
+                                        className="input pl-11 bg-secondary/20 border-border/20" placeholder="e.g. 0712 XXX XXX" />
                                 </div>
                             </div>
 
@@ -239,16 +246,16 @@ export default function StudentForm() {
                                 <div className="relative">
                                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40" />
                                     <input name="guardian_email" type="email" value={formData.guardian_email} onChange={handleChange}
-                                        className="input pl-11 bg-secondary/30 border-white/5" placeholder="guardian@example.com" />
+                                        className="input pl-11 bg-secondary/20 border-border/20" placeholder="guardian@example.com" />
                                 </div>
                             </div>
 
                             <div className="md:col-span-2">
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Residential Address</label>
+                                <label className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest block mb-2 ml-1">Residential Address</label>
                                 <div className="relative">
                                     <MapPin className="absolute left-4 top-4 w-4 h-4 text-foreground/40" />
                                     <textarea name="address" value={formData.address} onChange={handleChange}
-                                        className="input pl-11 bg-secondary/30 border-white/5 min-h-[100px]" placeholder="Village, Town, Street details..." />
+                                        className="input pl-11 bg-secondary/30 border-border/40 focus:border-primary/50 transition-all min-h-[100px] font-medium" placeholder="Village, Town, Street details..." />
                                 </div>
                             </div>
                         </div>
@@ -260,7 +267,7 @@ export default function StudentForm() {
                     <div className="card animate-slide-up delay-200">
                         <div className="flex items-center gap-3 mb-6">
                             <Shield className="w-5 h-5 text-primary" />
-                            <h2 className="text-lg font-bold text-white">Record Status</h2>
+                            <h2 className="text-lg font-bold text-foreground">Record Status</h2>
                         </div>
 
                         <div className="space-y-4 mb-8">
@@ -286,7 +293,7 @@ export default function StudentForm() {
                             <button
                                 type="button"
                                 onClick={() => navigate('/students')}
-                                className="w-full btn bg-secondary/50 hover:bg-white/10 text-white border-white/5 py-4 text-sm font-bold"
+                                className="w-full btn bg-secondary/50 hover:bg-secondary/70 text-foreground border border-border/40 py-4 text-sm font-bold transition-all duration-300"
                             >
                                 Abandon Changes
                             </button>
@@ -296,13 +303,13 @@ export default function StudentForm() {
                     <div className="card animate-slide-up delay-300">
                         <div className="flex items-center gap-3 mb-6">
                             <Calendar className="w-5 h-5 text-amber-500" />
-                            <h2 className="text-lg font-bold text-white">Administrative Notes</h2>
+                            <h2 className="text-lg font-bold text-foreground">Administrative Notes</h2>
                         </div>
                         <textarea
                             name="notes"
                             value={formData.notes}
                             onChange={handleChange}
-                            className="input bg-secondary/30 border-white/5 min-h-[150px] text-xs"
+                            className="input bg-secondary/20 border-border/20 min-h-[150px] text-xs"
                             placeholder="Clinical history, fee arrangements, or special behavioral notes..."
                         />
                     </div>

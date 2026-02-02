@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from 'react'
-import { Plus, Users, Search, Edit, Lock, Trash, X, Check } from 'lucide-react'
+import { Plus, Users, Search, Edit, Lock, Trash, X, Check, Loader2, UserCircle2, ShieldCheck, Fingerprint, Save } from 'lucide-react'
 import type { User, CreateUserData, UpdateUserData } from '../../types/electron-api/UserAPI'
+import { Modal } from '../../components/ui/Modal'
+import { useToast } from '../../contexts/ToastContext'
 
 export default function UsersPage() {
+    const { showToast } = useToast()
     const [users, setUsers] = useState<User[]>([])
     const [loading, setLoading] = useState(true)
+    const [saving, setSaving] = useState(false)
     const [search, setSearch] = useState('')
-    
+
     // Modals state
     const [showUserModal, setShowUserModal] = useState(false)
     const [showPasswordModal, setShowPasswordModal] = useState(false)
@@ -17,7 +21,7 @@ export default function UsersPage() {
     const [userData, setUserData] = useState<CreateUserData>({
         username: '', full_name: '', email: '', role: 'ACCOUNTS_CLERK', password: ''
     })
-    
+
     const [passwordData, setPasswordData] = useState({
         newPassword: '', confirmPassword: ''
     })
@@ -25,63 +29,74 @@ export default function UsersPage() {
     useEffect(() => { loadData() }, [])
 
     const loadData = async () => {
+        setLoading(true)
         try {
             const usersData = await window.electronAPI.getUsers()
             setUsers(usersData)
         } catch (error) {
             console.error('Failed to load users:', error)
+            showToast('Failed to load system users', 'error')
         } finally { setLoading(false) }
     }
 
     const handleSaveUser = async (e: React.FormEvent) => {
         e.preventDefault()
+        setSaving(true)
         try {
             if (isEditing && selectedUser) {
-                // For edit, we don't send password unless specifically changing it (which is handled separately)
-                // The API expects just the fields to update
                 const { password, ...updateData } = userData // eslint-disable-line no-unused-vars
                 await window.electronAPI.updateUser(selectedUser.id, updateData as UpdateUserData)
+                showToast('User profile updated successfully', 'success')
             } else {
                 await window.electronAPI.createUser(userData)
+                showToast('New user account established', 'success')
             }
-            
+
             setShowUserModal(false)
             resetForms()
             loadData()
         } catch (error) {
             console.error('Failed to save user:', error)
-            alert(error instanceof Error ? error.message : 'Failed to save user')
+            showToast(error instanceof Error ? error.message : 'Critical error saving user', 'error')
+        } finally {
+            setSaving(false)
         }
     }
 
     const handleResetPassword = async (e: React.FormEvent) => {
         e.preventDefault()
         if (passwordData.newPassword !== passwordData.confirmPassword) {
-            alert("Passwords don't match")
+            showToast("Passwords do not match", 'error')
             return
         }
 
         if (!selectedUser) return
-        
+
+        setSaving(true)
         try {
             await window.electronAPI.resetUserPassword(selectedUser.id, passwordData.newPassword)
             setShowPasswordModal(false)
             resetForms()
-            alert('Password reset successfully')
+            showToast('Security credentials updated successfully', 'success')
         } catch (error) {
             console.error('Failed to reset password:', error)
-            alert(error instanceof Error ? error.message : 'Failed to reset password')
+            showToast(error instanceof Error ? error.message : 'Security update failed', 'error')
+        } finally {
+            setSaving(false)
         }
     }
 
     const handleToggleStatus = async (user: User) => {
-        if (!confirm(`Are you sure you want to ${user.is_active ? 'deactivate' : 'activate'} this user?`)) return
+        const action = user.is_active ? 'deactivate' : 'activate'
+        if (!confirm(`Are you sure you want to ${action} user "${user.username}"?`)) return
 
         try {
             await window.electronAPI.toggleUserStatus(user.id, !user.is_active)
+            showToast(`User ${action}d successfully`, 'success')
             loadData()
         } catch (error) {
             console.error('Failed to toggle status:', error)
+            showToast('Status transition failed', 'error')
         }
     }
 
@@ -99,7 +114,7 @@ export default function UsersPage() {
             full_name: user.full_name,
             email: user.email || '',
             role: user.role,
-            password: '' // Password not editable here
+            password: ''
         })
         setShowUserModal(true)
     }
@@ -123,187 +138,211 @@ export default function UsersPage() {
     )
 
     return (
-        <div className="p-6">
-            <div className="flex items-center justify-between mb-6">
+        <div className="space-y-8 pb-10">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-                    <p className="text-gray-500 mt-1">Manage system users and access roles</p>
+                    <h1 className="text-3xl font-bold text-foreground font-heading uppercase tracking-tight">User Management</h1>
+                    <p className="text-foreground/50 mt-1 font-medium italic">Oversee system access, roles, and security credentials</p>
                 </div>
-                <button onClick={openAddModal} className="btn btn-primary flex items-center gap-2">
+                <button
+                    onClick={openAddModal}
+                    className="btn btn-primary flex items-center gap-2 py-3 px-8 text-sm font-bold shadow-xl shadow-primary/20 transition-all hover:-translate-y-1"
+                >
                     <Plus className="w-5 h-5" />
-                    <span>Add User</span>
+                    <span>Establish New User</span>
                 </button>
             </div>
 
-            <div className="card mb-6">
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-                        aria-label="Search users"
-                        placeholder="Search users..." className="input pl-10" />
+            <div className="premium-card animate-slide-up">
+                <div className="relative group">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-foreground/20 group-focus-within:text-primary transition-colors" />
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Filter users by name or identity..."
+                        className="input w-full pl-12 bg-secondary/30 h-14 text-lg font-medium"
+                    />
                 </div>
             </div>
 
-            <div className="card">
-                {loading ? (
-                    <div className="text-center py-8 text-gray-500">Loading...</div>
+            <div className="card overflow-hidden transition-all duration-300">
+                {loading && users.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-24 gap-4">
+                        <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                        <p className="text-xs font-bold uppercase tracking-widest text-foreground/40">Synchronizing Users...</p>
+                    </div>
                 ) : filteredUsers.length === 0 ? (
-                    <div className="text-center py-12">
-                        <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No Users Found</h3>
-                        <p className="text-gray-500 mb-4">Create the first user to get started</p>
-                        <button onClick={openAddModal} className="btn btn-primary">Add User</button>
+                    <div className="text-center py-24 bg-secondary/5 rounded-3xl border border-dashed border-border/40 m-4">
+                        <Users className="w-16 h-16 text-foreground/10 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-foreground/80 font-heading">Void Directory</h3>
+                        <p className="text-foreground/40 font-medium italic mb-6">No matching user entities identified in the system</p>
+                        <button onClick={openAddModal} className="btn btn-secondary border-2 border-dashed px-8">Add First User</button>
                     </div>
                 ) : (
-                    <table className="data-table">
-                        <thead>
-                            <tr>
-                                <th>Username</th>
-                                <th>Full Name</th>
-                                <th>Email</th>
-                                <th>Role</th>
-                                <th>Status</th>
-                                <th>Last Login</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredUsers.map((user) => (
-                                <tr key={user.id}>
-                                    <td className="font-medium">{user.username}</td>
-                                    <td>{user.full_name}</td>
-                                    <td>{user.email || '-'}</td>
-                                    <td>
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                            user.role === 'ADMIN' ? 'bg-purple-100 text-purple-700' :
-                                            user.role === 'AUDITOR' ? 'bg-blue-100 text-blue-700' :
-                                            'bg-gray-100 text-gray-700'
-                                        }`}>
-                                            {user.role}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                            user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                        }`}>
-                                            {user.is_active ? 'Active' : 'Inactive'}
-                                        </span>
-                                    </td>
-                                    <td className="text-sm text-gray-500">
-                                        {user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}
-                                    </td>
-                                    <td>
-                                        <div className="flex gap-2">
-                                            <button onClick={() => openEditModal(user)} 
-                                                title="Edit User"
-                                                className="p-1 text-blue-600 hover:bg-blue-50 rounded">
-                                                <Edit className="w-4 h-4" />
-                                            </button>
-                                            <button onClick={() => openPasswordModal(user)} 
-                                                title="Reset Password"
-                                                className="p-1 text-orange-600 hover:bg-orange-50 rounded">
-                                                <Lock className="w-4 h-4" />
-                                            </button>
-                                            <button onClick={() => handleToggleStatus(user)} 
-                                                title={user.is_active ? "Deactivate" : "Activate"}
-                                                className={`p-1 rounded ${user.is_active ? 'text-red-600 hover:bg-red-50' : 'text-green-600 hover:bg-green-50'}`}>
-                                                {user.is_active ? <Trash className="w-4 h-4" /> : <Check className="w-4 h-4" />}
-                                            </button>
-                                        </div>
-                                    </td>
+                    <div className="overflow-x-auto">
+                        <table className="data-table">
+                            <thead>
+                                <tr className="border-b border-border/40">
+                                    <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Identity</th>
+                                    <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Role Profile</th>
+                                    <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Auth Status</th>
+                                    <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Last Vector</th>
+                                    <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40 text-right px-6">Direct Actions</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="divide-y divide-border/10">
+                                {filteredUsers.map((user) => (
+                                    <tr key={user.id} className="group hover:bg-secondary/20 transition-colors">
+                                        <td className="py-4">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold shadow-inner">
+                                                    {user.full_name.charAt(0)}
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-foreground">{user.full_name}</p>
+                                                    <p className="text-[11px] font-mono text-foreground/40 tracking-tight">{user.username} • {user.email || 'No Email'}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="py-4">
+                                            <span className={`px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-widest flex items-center gap-2 w-fit border ${user.role === 'ADMIN' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' :
+                                                    user.role === 'AUDITOR' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
+                                                        'bg-secondary/50 text-foreground/50 border-border/40'
+                                                }`}>
+                                                {user.role === 'ADMIN' ? <ShieldCheck className="w-3 h-3" /> : <UserCircle2 className="w-3 h-3" />}
+                                                {user.role}
+                                            </span>
+                                        </td>
+                                        <td className="py-4">
+                                            <span className={`px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-widest flex items-center gap-2 w-fit border ${user.is_active ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-sm shadow-emerald-500/10' : 'bg-destructive/10 text-destructive border-destructive/20'
+                                                }`}>
+                                                <div className={`w-1.5 h-1.5 rounded-full ${user.is_active ? 'bg-emerald-500 animate-pulse' : 'bg-destructive'}`} />
+                                                {user.is_active ? 'VERIFIED' : 'SUSPENDED'}
+                                            </span>
+                                        </td>
+                                        <td className="py-4">
+                                            <div className="flex items-center gap-2 text-foreground/40">
+                                                <Fingerprint className="w-3 h-3" />
+                                                <span className="text-[11px] font-medium italic">
+                                                    {user.last_login ? new Date(user.last_login).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'No Activity'}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-6 text-right">
+                                            <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => openEditModal(user)}
+                                                    className="p-2.5 bg-background border border-border/40 hover:border-blue-500/50 hover:text-blue-500 rounded-xl transition-all shadow-sm">
+                                                    <Edit className="w-4 h-4" />
+                                                </button>
+                                                <button onClick={() => openPasswordModal(user)}
+                                                    className="p-2.5 bg-background border border-border/40 hover:border-orange-500/50 hover:text-orange-500 rounded-xl transition-all shadow-sm">
+                                                    <Lock className="w-4 h-4" />
+                                                </button>
+                                                <button onClick={() => handleToggleStatus(user)}
+                                                    className={`p-2.5 bg-background border border-border/40 rounded-xl transition-all shadow-sm ${user.is_active ? 'hover:border-destructive/50 hover:text-destructive' : 'hover:border-emerald-500/50 hover:text-emerald-500'}`}>
+                                                    {user.is_active ? <Trash className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 )}
             </div>
 
-            {/* Add/Edit User Modal */}
-            {showUserModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg w-full max-w-md p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-bold">{isEditing ? 'Edit User' : 'Add New User'}</h2>
-                            <button onClick={() => setShowUserModal(false)} aria-label="Close modal"><X className="w-5 h-5" /></button>
-                        </div>
-                        <form onSubmit={handleSaveUser} className="space-y-4">
-                            <div>
-                                <label className="label" htmlFor="user-fullname">Full Name *</label>
-                                <input id="user-fullname" type="text" required value={userData.full_name}
-                                    onChange={(e) => setUserData({ ...userData, full_name: e.target.value })}
-                                    className="input" />
-                            </div>
-                            <div>
-                                <label className="label" htmlFor="user-username">Username *</label>
-                                <input id="user-username" type="text" required value={userData.username}
-                                    onChange={(e) => setUserData({ ...userData, username: e.target.value })}
-                                    className="input" disabled={isEditing} />
-                            </div>
-                            <div>
-                                <label className="label" htmlFor="user-email">Email</label>
-                                <input id="user-email" type="email" value={userData.email}
-                                    onChange={(e) => setUserData({ ...userData, email: e.target.value })}
-                                    className="input" />
-                            </div>
-                            <div>
-                                <label className="label" htmlFor="user-role">Role *</label>
-                                <select id="user-role" required value={userData.role}
-                                    onChange={(e) => setUserData({ ...userData, role: e.target.value as 'ADMIN' | 'ACCOUNTS_CLERK' | 'AUDITOR' })}
-                                    className="input">
-                                    <option value="ACCOUNTS_CLERK">Accounts Clerk</option>
-                                    <option value="ADMIN">Admin</option>
-                                    <option value="AUDITOR">Auditor</option>
-                                </select>
-                            </div>
-                            {!isEditing && (
-                                <div>
-                                    <label className="label" htmlFor="user-password">Password *</label>
-                                    <input id="user-password" type="password" required value={userData.password}
-                                        onChange={(e) => setUserData({ ...userData, password: e.target.value })}
-                                        className="input" />
-                                </div>
-                            )}
-                            <div className="flex justify-end gap-3 mt-6">
-                                <button type="button" onClick={() => setShowUserModal(false)} className="btn btn-ghost">Cancel</button>
-                                <button type="submit" className="btn btn-primary">Save User</button>
-                            </div>
-                        </form>
+            {/* User Modification Modal */}
+            <Modal
+                isOpen={showUserModal}
+                onClose={() => setShowUserModal(false)}
+                title={isEditing ? 'Sync User Profile' : 'Establish New Access Vector'}
+                size="sm"
+            >
+                <form onSubmit={handleSaveUser} className="space-y-6">
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="user-fullname">Official Full Name</label>
+                        <input id="user-fullname" type="text" required value={userData.full_name}
+                            onChange={(e) => setUserData({ ...userData, full_name: e.target.value })}
+                            className="input w-full bg-secondary/30" placeholder="e.g. John Doe" />
                     </div>
-                </div>
-            )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="user-username">System Handle</label>
+                            <input id="user-username" type="text" required value={userData.username}
+                                onChange={(e) => setUserData({ ...userData, username: e.target.value })}
+                                className="input w-full bg-secondary/30" disabled={isEditing} placeholder="jdoe" />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="user-role">Permission Tier</label>
+                            <select id="user-role" required value={userData.role}
+                                onChange={(e) => setUserData({ ...userData, role: e.target.value as 'ADMIN' | 'ACCOUNTS_CLERK' | 'AUDITOR' })}
+                                className="input w-full bg-secondary/30">
+                                <option value="ACCOUNTS_CLERK">Accounts Clerk</option>
+                                <option value="ADMIN">Administrator</option>
+                                <option value="AUDITOR">System Auditor</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="user-email">Communications Email</label>
+                        <input id="user-email" type="email" value={userData.email}
+                            onChange={(e) => setUserData({ ...userData, email: e.target.value })}
+                            className="input w-full bg-secondary/30" placeholder="j.doe@school.ac.ke" />
+                    </div>
+                    {!isEditing && (
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="user-password">Initial Passkey</label>
+                            <input id="user-password" type="password" required value={userData.password}
+                                onChange={(e) => setUserData({ ...userData, password: e.target.value })}
+                                className="input w-full bg-secondary/30" />
+                        </div>
+                    )}
+                    <div className="flex justify-end gap-3 pt-4 border-t border-border/10">
+                        <button type="button" onClick={() => setShowUserModal(false)} className="btn btn-secondary px-6">Discard</button>
+                        <button type="submit" disabled={saving} className="btn btn-primary px-8 flex items-center gap-2">
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            <span>{isEditing ? 'Push Changes' : 'Establish Access'}</span>
+                        </button>
+                    </div>
+                </form>
+            </Modal>
 
-            {/* Reset Password Modal */}
-            {showPasswordModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg w-full max-w-sm p-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-bold">Reset Password</h2>
-                            <button onClick={() => setShowPasswordModal(false)} aria-label="Close modal"><X className="w-5 h-5" /></button>
-                        </div>
-                        <p className="text-sm text-gray-500 mb-4">
-                            Resetting password for <strong>{selectedUser?.username}</strong>
-                        </p>
-                        <form onSubmit={handleResetPassword} className="space-y-4">
-                            <div>
-                                <label className="label" htmlFor="new-password">New Password *</label>
-                                <input id="new-password" type="password" required value={passwordData.newPassword}
-                                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                                    className="input" />
-                            </div>
-                            <div>
-                                <label className="label" htmlFor="confirm-password">Confirm Password *</label>
-                                <input id="confirm-password" type="password" required value={passwordData.confirmPassword}
-                                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                                    className="input" />
-                            </div>
-                            <div className="flex justify-end gap-3 mt-6">
-                                <button type="button" onClick={() => setShowPasswordModal(false)} className="btn btn-ghost">Cancel</button>
-                                <button type="submit" className="btn btn-primary">Reset Password</button>
-                            </div>
-                        </form>
-                    </div>
+            {/* Credential Reset Modal */}
+            <Modal
+                isOpen={showPasswordModal}
+                onClose={() => setShowPasswordModal(false)}
+                title="Security Protocol Override"
+                size="sm"
+            >
+                <div className="mb-6 p-4 bg-orange-500/5 border border-orange-500/20 rounded-xl">
+                    <p className="text-[11px] font-medium text-orange-500/80 leading-relaxed uppercase tracking-tight">
+                        You are initiating a credential reset for user <strong className="text-orange-500">{selectedUser?.username}</strong>. This will mandate a password update upon next environmental access.
+                    </p>
                 </div>
-            )}
+                <form onSubmit={handleResetPassword} className="space-y-6">
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="new-password">New Secure Passphrase</label>
+                        <input id="new-password" type="password" required value={passwordData.newPassword}
+                            onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                            className="input w-full bg-secondary/30" />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="confirm-password">Re-authenticate Passphrase</label>
+                        <input id="confirm-password" type="password" required value={passwordData.confirmPassword}
+                            onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                            className="input w-full bg-secondary/30" />
+                    </div>
+                    <div className="flex justify-end gap-3 pt-4 border-t border-border/10">
+                        <button type="button" onClick={() => setShowPasswordModal(false)} className="btn btn-secondary px-6">Cancel</button>
+                        <button type="submit" disabled={saving} className="btn btn-primary px-8 flex items-center gap-2 shadow-xl shadow-primary/20">
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+                            <span>Override Credentials</span>
+                        </button>
+                    </div>
+                </form>
+            </Modal>
         </div>
     )
 }

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useAuthStore } from '../../stores'
 import { TransactionCategory } from '../../types/electron-api/FinanceAPI'
-import { Plus, Check, Loader2 } from 'lucide-react'
+import { Plus, Check, Loader2, ArrowLeftCircle, Receipt, Tag, CreditCard, FileText, Calendar } from 'lucide-react'
 import { useToast } from '../../contexts/ToastContext'
 
 export default function RecordExpense() {
@@ -75,7 +75,7 @@ export default function RecordExpense() {
         try {
             await window.electronAPI.createTransaction({
                 transaction_date: formData.transaction_date,
-                amount: Math.round(parseFloat(formData.amount) * 100),
+                amount: Math.round(parseFloat(formData.amount)), // Whole currency units
                 category_id: parseInt(formData.category_id),
                 reference: formData.payment_reference,
                 description: formData.description
@@ -100,19 +100,33 @@ export default function RecordExpense() {
     }
 
     return (
-        <div className="p-6 max-w-4xl mx-auto">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Record Expense</h1>
-                <p className="text-gray-500 mt-1">Record operational expenses and other outgoing payments</p>
+        <div className="space-y-8 pb-10 max-w-5xl mx-auto">
+            <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+                <div>
+                    <h1 className="text-3xl font-bold font-heading uppercase tracking-tight text-destructive/90">Record Expense</h1>
+                    <p className="text-foreground/50 mt-1 font-medium italic">Document operational expenditures and institutional payouts</p>
+                </div>
+                <button
+                    onClick={() => window.history.back()}
+                    className="flex items-center gap-2 text-foreground/40 text-[10px] font-bold uppercase tracking-widest hover:text-foreground transition-all group"
+                >
+                    <ArrowLeftCircle className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                    <span>Return to Finance Hub</span>
+                </button>
             </div>
 
-            <div className="card">
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="card animate-slide-up relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
+                    <Receipt className="w-32 h-32 rotate-12" />
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-8 relative z-10">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         {/* Date */}
-                        <div>
-                            <label htmlFor="transaction_date" className="block text-sm font-medium text-gray-700 mb-1">
-                                Date <span className="text-red-500">*</span>
+                        <div className="space-y-2">
+                            <label htmlFor="transaction_date" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1 flex items-center gap-2">
+                                <Calendar className="w-3 h-3" />
+                                Disbursement Timestamp <span className="text-destructive">*</span>
                             </label>
                             <input
                                 id="transaction_date"
@@ -120,14 +134,15 @@ export default function RecordExpense() {
                                 required
                                 value={formData.transaction_date}
                                 onChange={(e) => setFormData({ ...formData, transaction_date: e.target.value })}
-                                className="input w-full"
+                                className="input w-full bg-secondary/30 h-12 font-bold text-xs uppercase tracking-tight"
                             />
                         </div>
 
                         {/* Amount */}
-                        <div>
-                            <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-1">
-                                Amount (KES) <span className="text-red-500">*</span>
+                        <div className="space-y-2">
+                            <label htmlFor="amount" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1 flex items-center gap-2">
+                                <Tag className="w-3 h-3" />
+                                Expenditure Magnitude (KES) <span className="text-destructive">*</span>
                             </label>
                             <input
                                 id="amount"
@@ -137,23 +152,21 @@ export default function RecordExpense() {
                                 step="0.01"
                                 value={formData.amount}
                                 onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                className="input w-full"
+                                className="input w-full bg-secondary/30 h-12 text-lg font-bold"
                                 placeholder="0.00"
                             />
                         </div>
 
                         {/* Category */}
-                        <div>
-                            <label htmlFor="category_id" className="block text-sm font-medium text-gray-700 mb-1">
-                                Category <span className="text-red-500">*</span>
-                            </label>
+                        <div className="space-y-2">
+                            <label htmlFor="category_id" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Cost Center Vector <span className="text-destructive">*</span></label>
                             <div className="flex gap-2">
                                 <select
                                     id="category_id"
                                     required
                                     value={formData.category_id}
                                     onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                                    className="input w-full"
+                                    className="input w-full bg-secondary/30 h-12 font-bold text-xs uppercase tracking-tight"
                                 >
                                     <option value="">Select Category</option>
                                     {categories.map(cat => (
@@ -163,28 +176,28 @@ export default function RecordExpense() {
                                 <button
                                     type="button"
                                     onClick={() => setShowNewCategoryInput(!showNewCategoryInput)}
-                                    className="btn btn-secondary p-2"
+                                    className="p-3 bg-secondary/50 border border-border/40 hover:bg-destructive/10 hover:border-destructive/40 rounded-xl transition-all"
                                     title="Add New Category"
                                 >
-                                    <Plus className="w-5 h-5" />
+                                    <Plus className="w-5 h-5 text-foreground/60" />
                                 </button>
                             </div>
                             {showNewCategoryInput && (
-                                <div className="mt-2 flex gap-2">
+                                <div className="mt-3 flex gap-2 animate-in slide-in-from-top-2 duration-300">
                                     <input
                                         type="text"
                                         aria-label="New Category Name"
                                         value={newCategory}
                                         onChange={(e) => setNewCategory(e.target.value)}
-                                        className="input flex-1"
-                                        placeholder="New Category Name"
+                                        className="input flex-1 bg-secondary/50 h-12"
+                                        placeholder="New Cost Center Identifier"
                                     />
                                     <button
                                         type="button"
                                         onClick={handleCreateCategory}
                                         disabled={loading || !newCategory}
-                                        className="btn btn-primary px-3"
-                                        title="Save Category"
+                                        className="btn btn-primary px-4 h-12 bg-destructive hover:bg-destructive/80 border-none"
+                                        title="Confirm Vector"
                                     >
                                         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                                     </button>
@@ -193,77 +206,77 @@ export default function RecordExpense() {
                         </div>
 
                         {/* Payment Method */}
-                        <div>
-                            <label htmlFor="payment_method" className="block text-sm font-medium text-gray-700 mb-1">
-                                Payment Method <span className="text-red-500">*</span>
+                        <div className="space-y-2">
+                            <label htmlFor="payment_method" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1 flex items-center gap-2">
+                                <CreditCard className="w-3 h-3" />
+                                Payout Instrument <span className="text-destructive">*</span>
                             </label>
                             <select
                                 id="payment_method"
                                 required
                                 value={formData.payment_method}
                                 onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                                className="input w-full"
+                                className="input w-full bg-secondary/30 h-12 font-bold text-xs uppercase tracking-tight"
                             >
-                                <option value="CASH">Cash</option>
-                                <option value="MPESA">M-Pesa</option>
-                                <option value="BANK_TRANSFER">Bank Transfer</option>
-                                <option value="CHEQUE">Cheque</option>
+                                <option value="CASH">Liquid Cash</option>
+                                <option value="MPESA">M-Pesa Mobile</option>
+                                <option value="BANK_TRANSFER">Direct EFT/Bank</option>
+                                <option value="CHEQUE">Banker's Cheque</option>
                             </select>
                         </div>
 
                         {/* Reference */}
-                        <div>
-                            <label htmlFor="payment_reference" className="block text-sm font-medium text-gray-700 mb-1">
-                                Reference No.
-                            </label>
+                        <div className="space-y-2 lg:col-span-2">
+                            <label htmlFor="payment_reference" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Audit Reference Number</label>
                             <input
                                 id="payment_reference"
                                 type="text"
                                 value={formData.payment_reference}
                                 onChange={(e) => setFormData({ ...formData, payment_reference: e.target.value })}
-                                className="input w-full"
-                                placeholder="e.g. Check No, M-Pesa Code"
+                                className="input w-full bg-secondary/30 h-12 font-mono text-xs tracking-wider"
+                                placeholder="e.g. VOUCHER-99, CHQ-556"
                             />
                         </div>
                     </div>
 
                     {/* Description */}
-                    <div>
-                        <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-                            Description / Payee
+                    <div className="space-y-2">
+                        <label htmlFor="description" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1 flex items-center gap-2">
+                            <FileText className="w-3 h-3" />
+                            Disbursement Narrative
                         </label>
                         <textarea
                             id="description"
                             rows={3}
                             value={formData.description}
                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            className="input w-full"
-                            placeholder="Enter details about this expense..."
+                            className="input w-full bg-secondary/30 p-4 min-h-[100px] leading-relaxed italic"
+                            placeholder="Provide detailed narrative or payee identification for this expenditure entry..."
                         />
                     </div>
 
-                    <div className="flex justify-end gap-3 pt-4 border-t">
+                    <div className="flex justify-end gap-3 pt-8 border-t border-border/10">
                         <button
                             type="button"
                             onClick={() => window.history.back()}
-                            className="btn btn-secondary"
+                            className="btn btn-secondary px-8 py-3 font-bold uppercase tracking-widest text-[10px]"
                         >
-                            Cancel
+                            Discard Draft
                         </button>
                         <button
                             type="submit"
                             disabled={saving}
-                            className="btn btn-primary flex items-center gap-2"
+                            className="btn btn-primary flex items-center gap-3 px-10 py-3 font-bold uppercase tracking-widest text-[10px] shadow-xl shadow-destructive/10 transition-all hover:-translate-y-1 bg-destructive hover:bg-destructive/80 border-none"
                         >
                             {saving ? (
                                 <>
                                     <Loader2 className="w-4 h-4 animate-spin" />
-                                    Saving...
+                                    <span>Syncing Record...</span>
                                 </>
                             ) : (
                                 <>
                                     <Check className="w-4 h-4" />
-                                    Save Expense
+                                    <span>Commit Expenditure Entry</span>
                                 </>
                             )}
                         </button>

@@ -1,15 +1,16 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
-    Search, Plus, Eye, Edit, ChevronLeft, ChevronRight,
-    LayoutGrid, List as ListIcon, User, CreditCard,
-    Printer, Loader2, Wallet, Users
+    Search, Plus, ChevronLeft, ChevronRight, Edit,
+    LayoutGrid, List as ListIcon,
+    Printer, Loader2, Wallet, Users, Upload
 } from 'lucide-react'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore } from '../../stores'
 import { Student } from '../../types/electron-api/StudentAPI'
 import { Stream } from '../../types/electron-api/AcademicAPI'
 import { printDocument } from '../../utils/print'
+import { ImportDialog } from '../../components/ui/ImportDialog'
 
 export default function Students() {
     const navigate = useNavigate()
@@ -20,6 +21,7 @@ export default function Students() {
     const [streams, setStreams] = useState<Stream[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
+    const [showImport, setShowImport] = useState(false)
     const [filters, setFilters] = useState({ streamId: '', isActive: true })
     const [currentPage, setCurrentPage] = useState(1)
     const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
@@ -99,7 +101,7 @@ export default function Students() {
                         ledger: result.ledger,
                         closingBalance: result.closingBalance
                     },
-                    schoolSettings
+                    schoolSettings: (schoolSettings as unknown as Record<string, unknown>) || undefined
                 })
             } else {
                 showToast('Failed to load ledger data', 'error')
@@ -117,20 +119,20 @@ export default function Students() {
             {/* Page Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-white font-heading">Registry & Students</h1>
+                    <h1 className="text-3xl font-bold text-foreground font-heading">Registry & Students</h1>
                     <p className="text-foreground/50 mt-1 font-medium italic">Manage official student records and enrollment pipelines</p>
                 </div>
                 <div className="flex items-center gap-4">
-                    <div className="flex bg-secondary/30 rounded-xl p-1 border border-white/5">
+                    <div className="flex bg-secondary/30 rounded-xl p-1 border border-border/20">
                         <button
                             onClick={() => setViewMode('list')}
-                            className={`p-2.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-primary shadow-lg text-white' : 'text-foreground/40 hover:text-white'}`}
+                            className={`p-2.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-primary shadow-lg text-primary-foreground' : 'text-foreground/40 hover:text-foreground'}`}
                         >
                             <ListIcon className="w-5 h-5" />
                         </button>
                         <button
                             onClick={() => setViewMode('grid')}
-                            className={`p-2.5 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-primary shadow-lg text-white' : 'text-foreground/40 hover:text-white'}`}
+                            className={`p-2.5 rounded-lg transition-all duration-300 ${viewMode === 'grid' ? 'bg-primary shadow-lg text-primary-foreground' : 'text-foreground/40 hover:text-foreground'}`}
                         >
                             <LayoutGrid className="w-5 h-5" />
                         </button>
@@ -145,6 +147,16 @@ export default function Students() {
                 </div>
             </div>
 
+            <div className="flex justify-end px-1">
+                <button
+                    onClick={() => setShowImport(true)}
+                    className="flex items-center gap-2 text-sm font-medium text-primary hover:bg-primary/10 px-3 py-1.5 rounded-lg transition-all duration-300"
+                >
+                    <Upload className="w-4 h-4" />
+                    Import Students via Excel/CSV
+                </button>
+            </div>
+
             {/* Global Search & Filters Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 <div className="lg:col-span-2 relative">
@@ -155,7 +167,7 @@ export default function Students() {
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Quick search by name or admission number..."
-                            className="input pl-11 py-3.5 bg-secondary/30 border-white/5 focus:border-primary/50 transition-all w-full"
+                            className="input pl-11 py-3.5 bg-secondary/30 border-border/20 focus:border-primary/50 transition-all w-full"
                         />
                     </form>
                 </div>
@@ -163,12 +175,12 @@ export default function Students() {
                     <select
                         value={filters.streamId}
                         onChange={(e) => setFilters(prev => ({ ...prev, streamId: e.target.value }))}
-                        className="input py-3.5 bg-secondary/30 border-white/5"
+                        className="input py-3.5 bg-secondary/30 border-border/20 focus:border-primary/50 transition-all font-medium"
                         aria-label="Filter by Stream"
                     >
-                        <option value="">All Learning Streams</option>
+                        <option value="" className="bg-background">All Learning Streams</option>
                         {streams.map((s) => (
-                            <option key={s.id} value={s.id}>{s.stream_name}</option>
+                            <option key={s.id} value={s.id} className="bg-background">{s.stream_name}</option>
                         ))}
                     </select>
                 </div>
@@ -176,11 +188,11 @@ export default function Students() {
                     <select
                         value={filters.isActive ? 'active' : 'inactive'}
                         onChange={(e) => setFilters(prev => ({ ...prev, isActive: e.target.value === 'active' }))}
-                        className="input py-3.5 bg-secondary/30 border-white/5"
+                        className="input py-3.5 bg-secondary/30 border-border/20 focus:border-primary/50 transition-all font-medium"
                         aria-label="Filter by Status"
                     >
-                        <option value="active">Active Enrollment</option>
-                        <option value="inactive">Inactive / Alumni</option>
+                        <option value="active" className="bg-background">Active Enrollment</option>
+                        <option value="inactive" className="bg-background">Inactive / Alumni</option>
                     </select>
                 </div>
             </div>
@@ -193,8 +205,8 @@ export default function Students() {
                 </div>
             ) : filteredStudents.length === 0 ? (
                 <div className="card text-center py-24">
-                    <Users className="w-20 h-20 mx-auto mb-6 text-white/5" />
-                    <h3 className="text-xl font-bold text-white mb-2">No Records Found</h3>
+                    <Users className="w-20 h-20 mx-auto mb-6 text-foreground/5" />
+                    <h3 className="text-xl font-bold text-foreground mb-2">No Records Found</h3>
                     <p className="text-foreground/30 font-medium">Verify your search criteria or add a new student record.</p>
                 </div>
             ) : viewMode === 'list' ? (
@@ -202,7 +214,7 @@ export default function Students() {
                     <div className="overflow-x-auto -mx-2">
                         <table className="w-full text-left">
                             <thead>
-                                <tr className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 border-b border-white/5">
+                                <tr className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 border-b border-border/20">
                                     <th className="px-4 py-4">Student Identity</th>
                                     <th className="px-4 py-4">Academic Placement</th>
                                     <th className="px-4 py-4 text-right">Balance Due</th>
@@ -210,16 +222,16 @@ export default function Students() {
                                     <th className="px-4 py-4 text-right">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-white/5">
+                            <tbody className="divide-y divide-border/20">
                                 {paginatedStudents.map((student) => (
-                                    <tr key={student.id} className="group hover:bg-white/[0.02] transition-colors">
+                                    <tr key={student.id} className="group hover:bg-accent/20 transition-colors">
                                         <td className="px-4 py-5">
                                             <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 rounded-xl bg-slate-700 flex items-center justify-center text-white font-bold text-sm shadow-inner group-hover:bg-primary transition-colors">
+                                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shadow-inner group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
                                                     {student.first_name?.charAt(0)}
                                                 </div>
                                                 <div>
-                                                    <p className="font-bold text-white group-hover:text-primary transition-colors">
+                                                    <p className="font-bold text-foreground group-hover:text-primary transition-colors">
                                                         {student.first_name} {student.last_name}
                                                     </p>
                                                     <p className="text-[10px] font-mono text-foreground/40 uppercase tracking-widest">
@@ -229,11 +241,11 @@ export default function Students() {
                                             </div>
                                         </td>
                                         <td className="px-4 py-5">
-                                            <p className="text-xs font-bold text-white">{student.stream_name || 'Unassigned'}</p>
-                                            <p className="text-[10px] text-foreground/40 font-medium uppercase">{student.student_type}</p>
+                                            <p className="font-bold text-foreground">{student.first_name} {student.last_name}</p>
+                                            <p className="text-[10px] text-foreground/40 font-mono">{student.admission_number}</p>
                                         </td>
                                         <td className="px-4 py-5 text-right">
-                                            <p className={`text-xs font-bold ${(student.balance || 0) > 0 ? 'text-orange-400' : 'text-emerald-400'}`}>
+                                            <p className={`text-xs font-bold ${(student.balance || 0) > 0 ? 'text-amber-600 dark:text-amber-500' : 'text-emerald-500'}`}>
                                                 {formatCurrency(student.balance || 0)}
                                             </p>
                                         </td>
@@ -248,7 +260,7 @@ export default function Students() {
                                         <td className="px-4 py-5">
                                             <div className="flex items-center justify-end gap-2">
                                                 <button
-                                                    onClick={() => navigate(`/finance/payment?student=${student.id}`)}
+                                                    onClick={() => navigate(`/fee-payment?student=${student.id}`)}
                                                     className="p-2 bg-secondary/50 hover:bg-primary/20 text-primary rounded-lg transition-all"
                                                     title="Collect Fees"
                                                 >
@@ -256,7 +268,7 @@ export default function Students() {
                                                 </button>
                                                 <button
                                                     onClick={() => handlePrintStatement(student)}
-                                                    className="p-2 bg-secondary/50 hover:bg-white/10 text-foreground/40 hover:text-white rounded-lg transition-all"
+                                                    className="p-2 bg-secondary/50 hover:bg-accent/20 text-foreground/40 hover:text-foreground rounded-lg transition-all"
                                                     title="Print Statement"
                                                     disabled={printingId === student.id}
                                                 >
@@ -264,7 +276,7 @@ export default function Students() {
                                                 </button>
                                                 <button
                                                     onClick={() => navigate(`/students/${student.id}`)}
-                                                    className="p-2 bg-secondary/50 hover:bg-white/10 text-foreground/40 hover:text-white rounded-lg transition-all"
+                                                    className="p-2 bg-secondary/50 hover:bg-accent/20 text-foreground/40 hover:text-foreground rounded-lg transition-all"
                                                     title="Edit Profile"
                                                 >
                                                     <Edit className="w-4 h-4" />
@@ -282,7 +294,7 @@ export default function Students() {
                     {paginatedStudents.map((student) => (
                         <div key={student.id} className="card group hover:-translate-y-1 transition-all duration-300">
                             <div className="flex items-start justify-between mb-4">
-                                <div className="w-12 h-12 rounded-2xl bg-slate-700 flex items-center justify-center text-white font-bold text-lg shadow-inner group-hover:bg-primary transition-colors">
+                                <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center text-foreground font-bold text-lg shadow-inner group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
                                     {student.first_name[0]}{student.last_name[0]}
                                 </div>
                                 <span className={`text-[9px] font-bold tracking-widest uppercase px-2 py-1 rounded-md border ${student.student_type === 'BOARDER'
@@ -293,15 +305,15 @@ export default function Students() {
                                 </span>
                             </div>
 
-                            <h3 className="font-bold text-white mb-1 truncate group-hover:text-primary transition-colors">
+                            <h3 className="font-bold text-foreground mb-1 truncate group-hover:text-primary transition-colors">
                                 {student.first_name} {student.last_name}
                             </h3>
                             <p className="text-[10px] font-mono text-foreground/40 uppercase tracking-widest mb-4">ADM: {student.admission_number}</p>
 
-                            <div className="space-y-3 pt-4 border-t border-white/5">
+                            <div className="space-y-3 pt-4 border-t border-border/40">
                                 <div className="flex justify-between items-center text-[11px]">
                                     <span className="text-foreground/40 font-bold uppercase tracking-tighter">Placement</span>
-                                    <span className="text-white font-bold">{student.stream_name || '-'}</span>
+                                    <span className="text-foreground font-bold">{student.stream_name || '-'}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-[11px]">
                                     <span className="text-foreground/40 font-bold uppercase tracking-tighter">Outstanding</span>
@@ -314,13 +326,13 @@ export default function Students() {
                             <div className="flex items-center gap-2 mt-6">
                                 <button
                                     onClick={() => navigate(`/students/${student.id}`)}
-                                    className="flex-1 py-2 bg-secondary/50 hover:bg-white/10 text-white text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all"
+                                    className="flex-1 py-2 bg-secondary/50 hover:bg-secondary/80 text-foreground text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all duration-300"
                                 >
                                     Profile
                                 </button>
                                 <button
-                                    onClick={() => navigate(`/finance/payment?student=${student.id}`)}
-                                    className="flex-1 py-2 bg-primary/10 hover:bg-primary text-primary hover:text-white text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all"
+                                    onClick={() => navigate(`/fee-payment?student=${student.id}`)}
+                                    className="flex-1 py-2 bg-primary/10 hover:bg-primary text-primary hover:text-primary-foreground text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all duration-300"
                                 >
                                     Pay
                                 </button>
@@ -332,33 +344,45 @@ export default function Students() {
 
             {/* Pagination */}
             {totalPages > 1 && (
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mt-8 pt-8 border-t border-white/5 px-2">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mt-8 pt-8 border-t border-border/20 px-2">
                     <p className="text-xs font-medium text-foreground/40">
-                        Displaying records <span className="text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-white">{Math.min(currentPage * itemsPerPage, filteredStudents.length)}</span> of <span className="text-white">{filteredStudents.length}</span>
+                        Displaying records <span className="text-foreground">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-foreground">{Math.min(currentPage * itemsPerPage, filteredStudents.length)}</span> of <span className="text-foreground">{filteredStudents.length}</span>
                     </p>
                     <div className="flex items-center gap-2">
                         <button
                             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                             disabled={currentPage === 1}
-                            className="p-3 bg-secondary/50 hover:bg-white/10 text-white rounded-xl disabled:opacity-20 transition-all border border-white/5"
+                            className="p-3 bg-secondary/50 hover:bg-secondary text-foreground rounded-xl disabled:opacity-20 transition-all border border-border/40"
                         >
                             <ChevronLeft className="w-5 h-5" />
                         </button>
                         <div className="flex items-center gap-1 px-4">
-                            <span className="text-sm font-bold text-white">{currentPage}</span>
+                            <span className="text-sm font-bold text-foreground">{currentPage}</span>
                             <span className="text-sm font-bold text-foreground/20">/</span>
                             <span className="text-sm font-bold text-foreground/40">{totalPages}</span>
                         </div>
                         <button
                             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                             disabled={currentPage === totalPages}
-                            className="p-3 bg-secondary/50 hover:bg-white/10 text-white rounded-xl disabled:opacity-20 transition-all border border-white/5"
+                            className="p-3 bg-secondary/50 hover:bg-secondary/80 text-foreground rounded-xl disabled:opacity-20 transition-all border border-border/40 duration-300"
                         >
                             <ChevronRight className="w-5 h-5" />
                         </button>
                     </div>
                 </div>
             )}
+
+            <ImportDialog
+                isOpen={showImport}
+                onClose={() => setShowImport(false)}
+                onSuccess={() => {
+                    setShowImport(false)
+                    showToast('Students imported successfully', 'success')
+                    loadStudents()
+                }}
+                entityType="STUDENT"
+                title="Import Students"
+            />
         </div>
     )
 }

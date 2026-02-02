@@ -10,14 +10,14 @@ import { formatCurrency, formatDate } from '../../utils/format'
 
 interface PaymentSuccess {
     success: boolean
-    transactionRef: string
-    receiptNumber: string
+    transactionRef?: string
+    receipt_number?: string
+    receiptNumber?: string // Alias for compatibility
     amount: number
     payment_method: string
     payment_reference: string
     description: string
     date: string
-    receipt_number?: string // For compatibility if passed from history
 }
 
 export default function FeePayment() {
@@ -42,6 +42,8 @@ export default function FeePayment() {
         transaction_date: new Date().toISOString().slice(0, 10),
         description: '',
     })
+
+    const [useCredit, setUseCredit] = useState(false)
 
     useEffect(() => {
         const studentId = searchParams.get('student')
@@ -89,27 +91,74 @@ export default function FeePayment() {
         setSuccess(null)
 
         try {
-            const amount = Math.round(parseFloat(formData.amount) * 100)
-            const result = await window.electronAPI.recordPayment({
-                ...formData,
-                amount,
-                invoice_id: selectedStudent.id, // Assuming this maps to invoice_id
-                transaction_ref: formData.payment_reference,
-            }, user!.id)
+            const amount = Math.round(parseFloat(formData.amount)) // Whole currency units
 
-            setSuccess({
-                ...result,
-                amount,
-                payment_method: formData.payment_method,
-                payment_reference: formData.payment_reference,
-                description: formData.description,
-                date: formData.transaction_date
-            })
+            if (useCredit) {
+                const invoices = await window.electronAPI.getInvoicesByStudent(selectedStudent.id)
+                const pending = invoices.find(inv => inv.balance > 0)
+
+                if (!pending) {
+                    showToast('No pending invoices to pay', 'error')
+                    setSaving(false)
+                    return
+                }
+
+                if (amount > (selectedStudent.credit_balance || 0)) {
+                    showToast('Insufficient credit balance', 'error')
+                    setSaving(false)
+                    return
+                }
+
+                const result = await window.electronAPI.payWithCredit({
+                    studentId: selectedStudent.id,
+                    invoiceId: pending.id,
+                    amount: parseFloat(formData.amount)
+                }, user!.id)
+
+                if (!result.success) throw new Error(result.message || 'Credit payment failed')
+
+                setSuccess({
+                    success: true,
+                    amount: parseFloat(formData.amount),
+                    payment_method: 'CREDIT',
+                    payment_reference: 'CREDIT_BALANCE',
+                    description: 'Payment via Credit',
+                    date: new Date().toISOString(),
+                    receiptNumber: 'N/A'
+                })
+            } else {
+                const result = await window.electronAPI.recordPayment({
+                    student_id: selectedStudent.id,
+                    amount,
+                    payment_method: formData.payment_method,
+                    payment_reference: formData.payment_reference,
+                    transaction_date: formData.transaction_date,
+                }, user!.id)
+
+                if (!result.success) throw new Error(result.errors ? result.errors[0] : 'Payment failed')
+
+                setSuccess({
+                    ...result,
+                    receiptNumber: result.receipt_number,
+                    amount,
+                    payment_method: formData.payment_method,
+                    payment_reference: formData.payment_reference,
+                    description: formData.description,
+                    date: formData.transaction_date
+                })
+            }
+
+            // Immediately update the displayed balance for better UX
+            const newBalance = Math.max(0, (selectedStudent.balance || 0) - amount)
+
+            setSelectedStudent(prev => prev ? { ...prev, balance: newBalance } : null)
 
             setFormData({
                 amount: '', payment_method: 'CASH', payment_reference: '',
                 transaction_date: new Date().toISOString().slice(0, 10), description: ''
             })
+
+            // Also refresh from server to ensure accuracy
             loadStudent(selectedStudent.id)
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Payment failed'
@@ -133,23 +182,38 @@ export default function FeePayment() {
         const date = 'date' in dataToPrint ? (dataToPrint as PaymentSuccess).date : (dataToPrint as Payment).created_at;
         const ref = 'payment_reference' in dataToPrint ? (dataToPrint as PaymentSuccess).payment_reference : (dataToPrint as Payment).transaction_ref;
 
+        // Convert amount to words
+        const amountToWords = (num: number): string => {
+            const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+                'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
+            const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
+
+            if (num === 0) return 'Zero'
+            if (num < 20) return ones[num]
+            if (num < 100) return tens[Math.floor(num / 10)] + (num % 10 ? ' ' + ones[num % 10] : '')
+            if (num < 1000) return ones[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' and ' + amountToWords(num % 100) : '')
+            if (num < 1000000) return amountToWords(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + amountToWords(num % 1000) : '')
+            return amountToWords(Math.floor(num / 1000000)) + ' Million' + (num % 1000000 ? ' ' + amountToWords(num % 1000000) : '')
+        }
+
         const receipt = {
             receiptNumber: receiptNo,
             date,
             amount: dataToPrint.amount,
-            paymentMethod: dataToPrint.payment_method,
+            paymentMode: dataToPrint.payment_method || 'CASH', // Fixed: use paymentMode (not paymentMethod)
             reference: ref,
             description: 'description' in dataToPrint ? dataToPrint.description : '',
             studentName: `${selectedStudent.first_name} ${selectedStudent.last_name}`,
             admissionNumber: selectedStudent.admission_number,
-            balance: selectedStudent.balance
+            balance: selectedStudent.balance,
+            amountInWords: amountToWords(dataToPrint.amount) + ' Shillings Only' // Added amount in words
         }
 
         printDocument({
             title: `Receipt - ${receipt.receiptNumber}`,
             template: 'receipt',
             data: receipt,
-            schoolSettings
+            schoolSettings: schoolSettings || {} as any
         })
     }
 
@@ -163,7 +227,7 @@ export default function FeePayment() {
         try {
             const message = `Payment Received: ${selectedStudent.first_name} ${selectedStudent.last_name}. Amount: KES ${success.amount}. Receipt: ${success.receiptNumber}. Bal: KES ${selectedStudent.balance}. Thank you.`
 
-            const result = await (window.electronAPI as any).sendSMS({
+            const result = await window.electronAPI.sendSMS({
                 to: selectedStudent.guardian_phone,
                 message,
                 recipientId: selectedStudent.id,
@@ -189,7 +253,7 @@ export default function FeePayment() {
         <div className="space-y-8 pb-10">
             {/* Page Header */}
             <div>
-                <h1 className="text-3xl font-bold text-white font-heading">Fee Collection</h1>
+                <h1 className="text-3xl font-bold text-foreground font-heading">Fee Collection</h1>
                 <p className="text-foreground/50 mt-1 font-medium italic">Record and validate student financial contributions</p>
             </div>
 
@@ -201,7 +265,7 @@ export default function FeePayment() {
                             <div className="p-2 rounded-lg bg-primary/10 text-primary">
                                 <Search className="w-5 h-5" />
                             </div>
-                            <h2 className="text-lg font-bold text-white">Student Locator</h2>
+                            <h2 className="text-lg font-bold text-foreground">Student Locator</h2>
                         </div>
 
                         <div className="relative mb-6">
@@ -212,7 +276,7 @@ export default function FeePayment() {
                                 onChange={(e) => setSearch(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                                 placeholder="Search by name or admission..."
-                                className="input pl-11 py-3 bg-secondary/30"
+                                className="input pl-11 py-3 bg-secondary/30 border-border/20"
                             />
                         </div>
 
@@ -231,11 +295,11 @@ export default function FeePayment() {
                                         className="w-full p-4 text-left bg-secondary/20 hover:bg-primary/10 border border-border/40 rounded-xl transition-all group flex items-center justify-between"
                                     >
                                         <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold text-sm">
+                                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
                                                 {s.first_name?.charAt(0)}
                                             </div>
                                             <div>
-                                                <p className="font-bold text-white group-hover:text-primary transition-colors">{s.first_name} {s.last_name}</p>
+                                                <p className="font-bold text-foreground group-hover:text-primary transition-colors">{s.first_name} {s.last_name}</p>
                                                 <p className="text-[11px] text-foreground/40 font-mono tracking-wider uppercase">{s.admission_number}</p>
                                             </div>
                                         </div>
@@ -259,7 +323,7 @@ export default function FeePayment() {
                                             {selectedStudent.first_name?.charAt(0)}
                                         </div>
                                         <div>
-                                            <h3 className="font-bold text-xl text-white">
+                                            <h3 className="font-bold text-xl text-foreground">
                                                 {selectedStudent.first_name} {selectedStudent.last_name}
                                             </h3>
                                             <p className="text-xs text-primary font-bold uppercase tracking-widest">{selectedStudent.student_type}</p>
@@ -267,13 +331,13 @@ export default function FeePayment() {
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="p-3 bg-black/20 rounded-xl border border-white/5">
+                                        <div className="p-3 bg-secondary/30 rounded-xl border border-border/20">
                                             <p className="text-[10px] text-foreground/40 font-bold uppercase mb-1">Fee Balance</p>
-                                            <p className="text-lg font-bold text-amber-400">{formatCurrency(selectedStudent.balance || 0)}</p>
+                                            <p className="text-lg font-bold text-amber-500">{formatCurrency(selectedStudent.balance || 0)}</p>
                                         </div>
-                                        <div className="p-3 bg-black/20 rounded-xl border border-white/5">
-                                            <p className="text-[10px] text-foreground/40 font-bold uppercase mb-1">Adm No</p>
-                                            <p className="text-lg font-bold text-white">{selectedStudent.admission_number}</p>
+                                        <div className="p-3 bg-secondary/30 rounded-xl border border-border/20">
+                                            <p className="text-[10px] text-foreground/40 font-bold uppercase mb-1">Fee Credit</p>
+                                            <p className="text-lg font-bold text-emerald-500">{formatCurrency(selectedStudent.credit_balance || 0)}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -290,7 +354,7 @@ export default function FeePayment() {
                                 <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
                                     <CreditCard className="w-5 h-5" />
                                 </div>
-                                <h2 className="text-lg font-bold text-white">Transaction Details</h2>
+                                <h2 className="text-lg font-bold text-foreground">Transaction Details</h2>
                             </div>
                             {selectedStudent && <div className="text-[10px] bg-primary/20 text-primary px-3 py-1 rounded-full font-bold uppercase tracking-tighter">SECURE CHANNEL ACTIVE</div>}
                         </div>
@@ -336,7 +400,7 @@ export default function FeePayment() {
                                             type="number"
                                             value={formData.amount}
                                             onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-                                            className="input pl-14 text-xl font-bold bg-secondary/30 border-white/5 focus:border-primary/50"
+                                            className="input pl-14 text-xl font-bold bg-secondary/30 border-border/20 focus:border-primary/50"
                                             required
                                             placeholder="0.00"
                                             min="1"
@@ -351,7 +415,7 @@ export default function FeePayment() {
                                         type="date"
                                         value={formData.transaction_date}
                                         onChange={(e) => setFormData(prev => ({ ...prev, transaction_date: e.target.value }))}
-                                        className="input bg-secondary/30 border-white/5"
+                                        className="input bg-secondary/30 border-border/20"
                                         required
                                         disabled={!selectedStudent}
                                     />
@@ -364,14 +428,25 @@ export default function FeePayment() {
                                     <select
                                         value={formData.payment_method}
                                         onChange={(e) => setFormData(prev => ({ ...prev, payment_method: e.target.value }))}
-                                        className="input bg-secondary/30 border-white/5"
-                                        disabled={!selectedStudent}
+                                        className="input bg-secondary/30 border-border/20"
+                                        disabled={!selectedStudent || useCredit}
                                     >
                                         <option value="CASH">Liquid Cash</option>
                                         <option value="MPESA">M-PESA / Mobile Money</option>
                                         <option value="BANK_TRANSFER">Direct EFT/Transfer</option>
                                         <option value="CHEQUE">Banker's Cheque</option>
                                     </select>
+                                    {(selectedStudent?.credit_balance || 0) > 0 && (
+                                        <label className="flex items-center gap-2 mt-2 text-sm font-medium text-foreground cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={useCredit}
+                                                onChange={e => setUseCredit(e.target.checked)}
+                                                className="checkbox checkbox-primary w-4 h-4 rounded"
+                                            />
+                                            <span>Use Credit ({formatCurrency(selectedStudent?.credit_balance || 0)})</span>
+                                        </label>
+                                    )}
                                 </div>
 
                                 <div className="space-y-2">
@@ -380,7 +455,7 @@ export default function FeePayment() {
                                         type="text"
                                         value={formData.payment_reference}
                                         onChange={(e) => setFormData(prev => ({ ...prev, payment_reference: e.target.value }))}
-                                        className="input bg-secondary/30 border-white/5"
+                                        className="input bg-secondary/30 border-border/20"
                                         disabled={!selectedStudent}
                                         placeholder="e.g., M-PESA Code"
                                     />
@@ -392,7 +467,7 @@ export default function FeePayment() {
                                 <textarea
                                     value={formData.description}
                                     onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                                    className="input bg-secondary/30 border-white/5 min-h-[100px]"
+                                    className="input bg-secondary/30 border-border/20 min-h-[100px]"
                                     rows={3}
                                     disabled={!selectedStudent}
                                     placeholder="Optional notes for this payment..."
@@ -414,19 +489,19 @@ export default function FeePayment() {
                     {payments.length > 0 && (
                         <div className="card animate-slide-up">
                             <div className="flex items-center justify-between mb-8">
-                                <h3 className="text-lg font-bold text-white">Recent Ledger Entries</h3>
+                                <h3 className="text-lg font-bold text-foreground">Recent Ledger Entries</h3>
                                 <div className="text-[10px] text-foreground/40 font-bold uppercase tracking-widest">Showing last {payments.length} items</div>
                             </div>
 
                             <div className="space-y-3">
                                 {payments.map((p) => (
-                                    <div key={p.id} className="p-4 bg-secondary/20 hover:bg-slate-700/30 border border-white/5 rounded-2xl flex justify-between items-center transition-all group">
+                                    <div key={p.id} className="p-4 bg-secondary/20 hover:bg-secondary/40 border border-border/10 rounded-2xl flex justify-between items-center transition-all group">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                                            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
                                                 <Printer className="w-5 h-5 opacity-40 group-hover:opacity-100 transition-opacity" />
                                             </div>
                                             <div>
-                                                <p className="font-bold text-white">{formatCurrency(p.amount)}</p>
+                                                <p className="font-bold text-foreground">{formatCurrency(p.amount)}</p>
                                                 <p className="text-[10px] text-foreground/40 font-bold uppercase tracking-tighter">{p.payment_method} • {p.receipt_number}</p>
                                             </div>
                                         </div>

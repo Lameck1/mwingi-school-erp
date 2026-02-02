@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAppStore } from '../stores'
+import { Tooltip as UITooltip } from '../components/ui/Tooltip'
 import { FeeCollectionItem } from '../types/electron-api/ReportsAPI'
 import { AuditLogEntry } from '../types/electron-api/AuditAPI'
 import {
@@ -122,27 +123,28 @@ export default function Dashboard() {
             {/* Executive Summary Header */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
-                    <h1 className="text-4xl font-bold text-white font-heading">Financial Overview</h1>
+                    <h1 className="text-4xl font-bold text-foreground font-heading">Financial Overview</h1>
                     <p className="text-foreground/50 mt-2 font-medium">
                         Insights for <span className="text-primary">{currentAcademicYear?.year_name}</span> • {currentTerm?.term_name || 'Academic Period'}
                     </p>
                 </div>
                 <div className="flex gap-3">
                     {quickActions.map((action) => (
-                        <Link
-                            key={action.path}
-                            to={action.path}
-                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-br ${action.color} text-white text-xs font-bold uppercase tracking-wider shadow-lg transition-all hover:-translate-y-1 hover:brightness-110 active:scale-95`}
-                        >
-                            <action.icon className="w-4 h-4" />
-                            {action.label}
-                        </Link>
+                        <UITooltip key={action.path} content={`Open ${action.label}`}>
+                            <Link
+                                to={action.path}
+                                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-br ${action.color} text-white text-xs font-bold uppercase tracking-wider shadow-lg transition-all hover:-translate-y-1 hover:brightness-110 active:scale-95`}
+                            >
+                                <action.icon className="w-4 h-4" />
+                                {action.label}
+                            </Link>
+                        </UITooltip>
                     ))}
                 </div>
             </div>
 
             {/* High-Impact Stat Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                 {stats.map((stat, index) => (
                     <div key={index} className="stat-card group">
                         <div className="flex items-start justify-between relative z-10">
@@ -150,7 +152,7 @@ export default function Dashboard() {
                                 <p className="stat-card-label">{stat.label}</p>
                                 <p className="stat-card-value mt-3 group-hover:text-primary transition-colors">{stat.value}</p>
                             </div>
-                            <div className={`p-4 rounded-2xl bg-gradient-to-br ${stat.color} border border-white/5`}>
+                            <div className={`p-4 rounded-2xl bg-gradient-to-br ${stat.color} border border-border/20`}>
                                 <stat.icon className="w-6 h-6" />
                             </div>
                         </div>
@@ -166,7 +168,7 @@ export default function Dashboard() {
                 <div className="lg:col-span-2 card">
                     <div className="flex items-center justify-between mb-8">
                         <div>
-                            <h3 className="text-lg font-bold text-white">Revenue Performance</h3>
+                            <h3 className="text-lg font-bold text-foreground">Revenue Performance</h3>
                             <p className="text-xs text-foreground/40 font-medium">6-Month Fee Collection Trend</p>
                         </div>
                         <BarChart3 className="w-5 h-5 text-primary/60" />
@@ -180,24 +182,31 @@ export default function Dashboard() {
                                         <stop offset="100%" stopColor="#6366f1" stopOpacity={0.1} />
                                     </linearGradient>
                                 </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff10" />
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-border/40" />
                                 <XAxis
                                     dataKey="month"
                                     axisLine={false}
                                     tickLine={false}
-                                    tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }}
+                                    tick={{ fill: 'currentColor', fontSize: 11, fontWeight: 600 }}
+                                    className="text-foreground/40"
                                     dy={10}
                                 />
                                 <YAxis
                                     axisLine={false}
                                     tickLine={false}
-                                    tick={{ fill: '#94a3b8', fontSize: 11 }}
+                                    tick={{ fill: 'currentColor', fontSize: 11 }}
+                                    className="text-foreground/40"
                                     tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
                                 />
                                 <Tooltip
-                                    cursor={{ fill: '#ffffff05' }}
-                                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)' }}
-                                    itemStyle={{ color: '#6366f1', fontSize: '12px', fontWeight: 'bold' }}
+                                    cursor={{ fill: 'currentColor', opacity: 0.05 }}
+                                    contentStyle={{
+                                        backgroundColor: 'var(--card)',
+                                        border: '1px solid var(--border)',
+                                        borderRadius: '12px',
+                                        boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
+                                    }}
+                                    itemStyle={{ color: 'var(--primary)', fontSize: '12px', fontWeight: 'bold' }}
                                     formatter={(value: number) => [formatCurrency(value), 'Revenue']}
                                 />
                                 <Bar dataKey="total" fill="url(#barGradient)" radius={[6, 6, 0, 0]} />
@@ -210,10 +219,10 @@ export default function Dashboard() {
                 <div className="card">
                     <div className="flex items-center justify-between mb-8">
                         <div>
-                            <h3 className="text-lg font-bold text-white">Audit Trail</h3>
+                            <h3 className="text-lg font-bold text-foreground">Audit Trail</h3>
                             <p className="text-xs text-foreground/40 font-medium">Recent security & system logs</p>
                         </div>
-                        <Link to="/audit-log" className="p-2 rounded-lg bg-secondary hover:bg-primary/20 text-primary transition-all">
+                        <Link to="/audit-log" className="p-2 rounded-lg bg-background/50 hover:bg-primary/20 text-primary transition-all">
                             <BarChart3 className="w-4 h-4" />
                         </Link>
                     </div>
@@ -232,11 +241,11 @@ export default function Dashboard() {
 
                                     <div className="space-y-1">
                                         <div className="flex items-center justify-between">
-                                            <p className="text-[11px] font-bold uppercase tracking-wider text-white">{log.action_type}</p>
+                                            <p className="text-[11px] font-bold uppercase tracking-wider text-foreground">{log.action_type}</p>
                                             <span className="text-[9px] font-medium text-foreground/40">{formatDateTime(log.created_at)}</span>
                                         </div>
                                         <p className="text-xs text-foreground/60 leading-relaxed">
-                                            Targeted <span className="text-primary font-medium">{log.table_name}</span> record <span className="text-white font-mono">#{log.record_id}</span>
+                                            Targeted <span className="text-primary font-medium">{log.table_name}</span> record <span className="text-foreground font-mono">#{log.record_id}</span>
                                         </p>
                                         <p className="text-[10px] text-foreground/40 italic">Agent ID: {log.user_id}</p>
                                     </div>
@@ -249,9 +258,9 @@ export default function Dashboard() {
 
             {/* Distribution Analysis */}
             <div className="card">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                     <div className="max-w-xs">
-                        <h3 className="text-lg font-bold text-white">Revenue Distribution</h3>
+                        <h3 className="text-lg font-bold text-foreground">Revenue Distribution</h3>
                         <p className="text-xs text-foreground/40 font-medium leading-relaxed mt-2">
                             A breakdown of the current term's financial allocation across all established fee categories.
                         </p>
@@ -262,7 +271,7 @@ export default function Dashboard() {
                                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
                                         <span className="text-foreground/70">{cat.name}</span>
                                     </div>
-                                    <span className="text-white font-bold">{((cat.value / (dashboardData?.feeCollected || 1)) * 100).toFixed(1)}%</span>
+                                    <span className="text-foreground font-bold">{((cat.value / (dashboardData?.feeCollected || 1)) * 100).toFixed(1)}%</span>
                                 </div>
                             ))}
                         </div>
@@ -284,7 +293,8 @@ export default function Dashboard() {
                                     ))}
                                 </Pie>
                                 <Tooltip
-                                    contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '12px', color: '#fff' }}
+                                    contentStyle={{ backgroundColor: 'var(--popover)', border: '1px solid var(--border)', borderRadius: '12px' }}
+                                    itemStyle={{ color: 'var(--foreground)' }}
                                     formatter={(value: number) => [formatCurrency(value), 'Allocation']}
                                 />
                             </PieChart>

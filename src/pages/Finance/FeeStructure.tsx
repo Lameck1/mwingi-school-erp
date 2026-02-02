@@ -183,8 +183,8 @@ export default function FeeStructure() {
         <div className="p-6">
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Fee Structure</h1>
-                    <p className="text-gray-500 mt-1">Manage fee amounts per class and term</p>
+                    <h1 className="text-3xl font-bold text-foreground font-heading">Fee Structure</h1>
+                    <p className="text-foreground/50 mt-1 font-medium italic">Manage fee amounts per class and term</p>
                 </div>
                 <div className="flex gap-2">
                     <button
@@ -207,38 +207,35 @@ export default function FeeStructure() {
                 </div>
             </div>
 
-            <div className="card mb-6 p-4">
+            <div className="premium-card mb-6 p-4">
                 <div className="flex flex-wrap gap-4 items-end">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Academic Year</label>
+                    <div className="flex-1 min-w-[200px]">
+                        <label className="block text-[10px] font-bold text-foreground/40 uppercase tracking-widest mb-1.5 ml-1">Academic Year</label>
                         <select
                             value={selectedYear}
                             onChange={e => {
                                 setSelectedYear(e.target.value)
-                                // Load terms for this year
                                 window.electronAPI.getTermsByYear(Number(e.target.value)).then(terms => setTerms(terms))
                             }}
-                            className="input w-48"
-                            aria-label="Academic Year"
+                            className="input w-full bg-secondary/30 border-border/20 focus:border-primary/50 transition-all font-medium py-2.5"
                         >
-                            <option value="">Select Year</option>
+                            <option value="" className="bg-background">Select Year</option>
                             {years.map(y => (
-                                <option key={y.id} value={y.id}>{y.year_name}</option>
+                                <option key={y.id} value={y.id} className="bg-background">{y.year_name}</option>
                             ))}
                         </select>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Term</label>
+                    <div className="flex-1 min-w-[200px]">
+                        <label className="block text-[10px] font-bold text-foreground/40 uppercase tracking-widest mb-1.5 ml-1">Term</label>
                         <select
                             value={selectedTerm}
                             onChange={e => setSelectedTerm(e.target.value)}
-                            className="input w-48"
+                            className="input w-full bg-secondary/30 border-border/20 focus:border-primary/50 transition-all font-medium py-2.5"
                             disabled={!selectedYear}
-                            aria-label="Term"
                         >
-                            <option value="">Select Term</option>
+                            <option value="" className="bg-background">Select Term</option>
                             {terms.map(t => (
-                                <option key={t.id} value={t.id}>{t.term_name}</option>
+                                <option key={t.id} value={t.id} className="bg-background">{t.term_name}</option>
                             ))}
                         </select>
                     </div>
@@ -248,82 +245,95 @@ export default function FeeStructure() {
             {loading ? (
                 <div className="text-center py-12">Loading...</div>
             ) : (
-                <div className="card overflow-x-auto">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="font-semibold text-gray-900">Fee Matrix</h3>
+                <div className="premium-card">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-lg font-bold text-foreground">Fee Matrix</h3>
                         <button
                             onClick={() => setShowNewCategory(true)}
-                            className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                            className="text-sm text-primary hover:text-primary p-2 hover:bg-primary/10 rounded-xl transition-all font-bold flex items-center gap-1.5"
                         >
                             <Plus className="w-4 h-4" /> Add Category
                         </button>
                     </div>
 
                     {showNewCategory && (
-                        <div className="mb-4 flex gap-2 items-center bg-blue-50 p-3 rounded-lg">
+                        <div className="mb-6 flex gap-2 items-center bg-primary/5 border border-primary/10 p-4 rounded-xl animate-in slide-in-from-top-2 duration-300">
                             <input
                                 type="text"
                                 value={newCategoryName}
                                 onChange={e => setNewCategoryName(e.target.value)}
                                 placeholder="New Category Name (e.g. Swimming)"
-                                className="input h-9"
+                                className="input flex-1 h-10"
                             />
-                            <button onClick={handleCreateCategory} className="btn btn-primary btn-sm">Add</button>
-                            <button onClick={() => setShowNewCategory(false)} className="text-gray-500 hover:text-gray-700 text-sm">Cancel</button>
+                            <button onClick={handleCreateCategory} className="btn btn-primary h-10 px-4">Add</button>
+                            <button onClick={() => setShowNewCategory(false)} className="btn btn-secondary h-10 px-4">Cancel</button>
                         </div>
                     )}
 
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead>
-                            <tr>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-white z-10">Class / Stream</th>
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-[120px] bg-white z-10">Type</th>
-                                {categories.map(cat => (
-                                    <th key={cat.id} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">
-                                        {cat.category_name}
-                                    </th>
-                                ))}
-                                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {streams.flatMap(stream =>
-                                ['DAY_SCHOLAR', 'BOARDER'].map((type, idx) => (
-                                    <tr key={`${stream.id}-${type}`} className={idx === 0 ? 'bg-white' : 'bg-gray-50/30'}>
-                                        {idx === 0 && (
-                                            <td rowSpan={2} className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-inherit z-10 border-r">
-                                                {stream.stream_name}
-                                            </td>
-                                        )}
-                                        <td className="px-4 py-2 whitespace-nowrap text-xs text-gray-500 sticky left-[120px] bg-inherit z-10 border-r">
-                                            {type.replace('_', ' ')}
-                                        </td>
-                                        {categories.map(cat => {
-                                            const key = `${stream.id}-${type}-${cat.id}`
-                                            return (
-                                                <td key={cat.id} className="px-2 py-2 whitespace-nowrap">
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        value={structure[key] || ''}
-                                                        onChange={e => handleAmountChange(stream.id, type, cat.id, e.target.value)}
-                                                        className="w-full text-right border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm p-1"
-                                                        placeholder="0"
-                                                    />
+                    {/* Scrollable Table Container - max height with hidden scrollbar */}
+                    <div className="overflow-auto no-scrollbar max-h-[60vh] rounded-xl border border-border/20">
+                        <table className="min-w-full divide-y divide-border/20">
+                            <thead className="sticky top-0 z-40">
+                                <tr className="bg-card">
+                                    <th className="px-4 py-4 text-left text-[10px] font-bold text-foreground/40 uppercase tracking-widest sticky left-0 bg-card z-50 min-w-[140px] border-r border-border/20">Class / Stream</th>
+                                    <th className="px-4 py-4 text-left text-[10px] font-bold text-foreground/40 uppercase tracking-widest sticky left-[140px] bg-card z-50 min-w-[100px] border-r border-border/20">Type</th>
+                                    {categories.map(cat => (
+                                        <th key={cat.id} className="px-4 py-4 text-left text-[10px] font-bold text-foreground/40 uppercase tracking-widest min-w-[120px] bg-card">
+                                            {cat.category_name}
+                                        </th>
+                                    ))}
+                                    <th className="px-4 py-4 text-left text-[10px] font-bold text-emerald-500/80 uppercase tracking-widest sticky right-0 bg-card z-50 border-l border-border/20">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border/20">
+                                {streams.flatMap(stream =>
+                                    ['DAY_SCHOLAR', 'BOARDER'].map((type, idx) => (
+                                        <tr key={`${stream.id}-${type}`} className={`${idx === 0 ? 'bg-background' : 'bg-card'} hover:bg-accent/10 transition-colors`}>
+                                            {idx === 0 && (
+                                                <td
+                                                    rowSpan={2}
+                                                    className="px-4 py-3 whitespace-nowrap text-sm font-bold text-foreground sticky left-0 z-30 border-r border-border/20"
+                                                    style={{ backgroundColor: 'hsl(var(--background))' }}
+                                                >
+                                                    {stream.stream_name}
                                                 </td>
-                                            )
-                                        })}
-                                        <td className="px-4 py-2 whitespace-nowrap text-sm font-bold text-gray-900 text-right bg-gray-50">
-                                            {categories.reduce((sum, cat) => {
+                                            )}
+                                            <td
+                                                className="px-4 py-3 whitespace-nowrap text-[10px] font-bold text-foreground/40 uppercase sticky left-[140px] z-30 border-r border-border/20"
+                                                style={{ backgroundColor: idx === 0 ? 'hsl(var(--background))' : 'hsl(var(--card))' }}
+                                            >
+                                                {type.replace('_', ' ')}
+                                            </td>
+                                            {categories.map(cat => {
                                                 const key = `${stream.id}-${type}-${cat.id}`
-                                                return sum + (structure[key] || 0)
-                                            }, 0).toLocaleString()}
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                                                return (
+                                                    <td key={cat.id} className="px-2 py-3 whitespace-nowrap">
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            value={structure[key] || ''}
+                                                            onChange={e => handleAmountChange(stream.id, type, cat.id, e.target.value)}
+                                                            className="w-full text-right bg-secondary/30 border border-border/20 rounded-lg px-2 py-1.5 text-sm font-mono text-foreground focus:ring-2 focus:ring-primary/20 transition-all"
+                                                            placeholder="0"
+                                                        />
+                                                    </td>
+                                                )
+                                            })}
+                                            <td
+                                                className="px-4 py-3 whitespace-nowrap text-sm font-bold text-emerald-400 text-right sticky right-0 z-30 border-l border-border/20"
+                                                style={{ backgroundColor: idx === 0 ? 'hsl(var(--background))' : 'hsl(var(--card))' }}
+                                            >
+                                                {categories.reduce((sum, cat) => {
+                                                    const key = `${stream.id}-${type}-${cat.id}`
+                                                    return sum + (structure[key] || 0)
+                                                }, 0).toLocaleString()}
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
         </div>
