@@ -7,45 +7,48 @@
 
 @layer base {
   :root {
-    /* Premium Slate & Indigo Palette */
     --primary: 231 92% 62%;
-    /* Vibrant Indigo */
     --primary-foreground: 0 0% 100%;
+    --radius: 0.75rem;
+    --success: 142 70% 45%;
+    --warning: 38 92% 50%;
+    --destructive: 0 84% 60%;
+  }
 
-    --secondary: 222 47% 11%;
-    /* Deep Navy */
-    --secondary-foreground: 213 27% 84%;
-
+  .dark {
     --background: 222 47% 6%;
-    /* Absolute Black/Navy for contrast */
     --foreground: 213 27% 90%;
-
     --card: 222 47% 10%;
     --card-foreground: 213 27% 84%;
-
     --popover: 222 47% 8%;
     --popover-foreground: 213 27% 84%;
-
+    --secondary: 222 47% 11%;
+    --secondary-foreground: 213 27% 84%;
     --border: 217 32% 17%;
     --input: 217 32% 17%;
     --ring: 231 92% 62%;
+  }
 
-    --radius: 0.75rem;
-
-    --success: 142 70% 45%;
-    /* Emerald */
-    --warning: 38 92% 50%;
-    /* Amber */
-    --destructive: 0 84% 60%;
-    /* Soft Red */
+  .light {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --secondary: 210 40% 94%;
+    --secondary-foreground: 222 47% 11%;
+    --border: 214 32% 85%;
+    --input: 214 32% 85%;
+    --ring: 231 92% 62%;
   }
 
   * {
-    @apply border-border/10;
+    @apply border-border/30;
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground transition-colors duration-500 ease-in-out;
     font-family: 'Inter', sans-serif;
     -webkit-font-smoothing: antialiased;
     letter-spacing: -0.011em;
@@ -65,7 +68,7 @@
 
   /* Premium Containers */
   .premium-sidebar {
-    @apply bg-card border-r border-border/60 transition-all duration-300;
+    @apply bg-card border-r border-border/60 transition-all duration-150;
   }
 
   .premium-header {
@@ -75,8 +78,7 @@
   /* Glassmorphism Card (Industrial Grade) */
   .card,
   .premium-card {
-    @apply bg-card/40 backdrop-blur-2xl border border-white/5 rounded-2xl transition-all duration-500 p-6 overflow-hidden relative;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37), 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1), inset 0 1px 1px rgba(255, 255, 255, 0.05);
+    @apply bg-card/60 border border-border/40 rounded-xl transition-all duration-300 p-6 relative shadow-sm hover:shadow-md;
   }
 
   .card::before,
@@ -87,9 +89,7 @@
 
   .card:hover,
   .premium-card:hover {
-    @apply border-primary/30;
-    box-shadow: 0 8px 32px 0 rgba(79, 70, 229, 0.15), 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    transform: translateY(-4px) scale(1.01);
+    @apply border-primary/50 bg-card/80;
   }
 
   .card:hover::before,
@@ -99,47 +99,76 @@
 
   /* Sophisticated Button (Apple-like) */
   .btn {
-    @apply inline-flex items-center justify-center rounded-xl px-6 py-2.5 text-sm font-semibold transition-all duration-300 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden;
+    @apply inline-flex items-center justify-center rounded-lg px-6 py-2.5 text-sm font-semibold transition-all duration-150 active:translate-y-px disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden;
   }
 
   .btn-primary {
-    @apply bg-gradient-to-r from-primary to-primary/80 text-primary-foreground shadow-xl shadow-primary/20 hover:shadow-primary/40 hover:-translate-y-0.5;
+    @apply bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm active:shadow-none;
   }
 
   .btn-secondary {
-    @apply bg-white/5 text-foreground border border-white/10 hover:bg-white/10 backdrop-blur-md;
+    @apply bg-secondary/50 text-foreground border border-border/40 hover:bg-secondary/80 backdrop-blur-md transition-all duration-300;
   }
 
   /* Sophisticated Input (Minimalist) */
   .input,
   .form-input {
-    @apply w-full bg-white/5 border-white/10 rounded-xl px-4 py-3 text-sm focus:bg-white/10 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all duration-300 placeholder:text-muted-foreground/30;
+    @apply w-full bg-background border border-border/60 rounded-lg px-4 py-3 text-sm focus:bg-background focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all duration-300 placeholder:text-muted-foreground/30;
   }
 
   /* Data Table (Modern Clean) */
   .data-table,
   .premium-table {
-    @apply w-full text-left border-separate border-spacing-y-2;
+    @apply w-full text-left border-separate border-spacing-0;
+  }
+
+  .data-table thead,
+  .premium-table thead {
+    @apply sticky top-0 z-40;
   }
 
   .data-table th,
   .premium-table th {
-    @apply text-foreground/40 font-bold py-3 px-6 uppercase text-[10px] tracking-[0.2em];
+    @apply text-foreground/40 font-bold py-3 px-6 uppercase text-[10px] tracking-[0.2em] bg-card/95 backdrop-blur-md border-b border-border/40;
   }
 
   .data-table tbody tr,
   .premium-table tbody tr {
-    @apply bg-white/5 backdrop-blur-sm rounded-2xl transition-all duration-300;
+    @apply transition-all duration-150;
   }
 
   .data-table td,
   .premium-table td {
-    @apply py-4 px-6 text-sm border-y border-white/5 first:border-l first:rounded-l-2xl last:border-r last:rounded-r-2xl;
+    @apply py-4 px-6 text-sm border-b border-border/10;
   }
 
   .data-table tbody tr:hover,
   .premium-table tbody tr:hover {
-    @apply bg-white/10 -translate-y-0.5 shadow-lg shadow-black/20;
+    @apply bg-primary/5;
+  }
+
+  /* Sticky Column Support */
+  .sticky-col {
+    @apply sticky z-30;
+  }
+
+  .sticky-col-left {
+    @apply border-r border-border/40;
+    box-shadow: 4px 0 8px -4px rgba(0, 0, 0, 0.1);
+  }
+
+  .sticky-col-right {
+    @apply border-l border-border/40;
+    box-shadow: -4px 0 8px -4px rgba(0, 0, 0, 0.1);
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 
   /* Stat Card Specifics */
@@ -148,7 +177,7 @@
   }
 
   .stat-card-value {
-    @apply text-3xl font-bold tracking-tight text-white;
+    @apply text-xl lg:text-3xl font-bold tracking-tight text-foreground truncate;
   }
 
   .stat-card-label {
@@ -180,11 +209,11 @@
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-background;
+  @apply bg-background/50;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-border/80 rounded-full hover:bg-primary/50 transition-colors;
+  @apply bg-border/40 rounded-full hover:bg-primary/40 transition-colors duration-300;
 }
 
 /* Animations */
@@ -201,7 +230,7 @@
 }
 
 .animate-slide-up {
-  animation: slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: slide-up 0.2s cubic-bezier(0, 0, 0.2, 1) forwards;
 }
 
 /* Media Query Overrides */
