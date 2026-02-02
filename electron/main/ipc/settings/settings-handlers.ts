@@ -1,6 +1,9 @@
 import { ipcMain } from '../../electron-env'
 import type { IpcMainInvokeEvent } from 'electron'
 import { getDatabase } from '../../database/index'
+import { ConfigService } from '../../services/ConfigService'
+import { container } from '../../services/base/ServiceContainer'
+import { SystemMaintenanceService } from '../../services/SystemMaintenanceService'
 
 export function registerSettingsHandlers(): void {
     const db = getDatabase()
@@ -34,6 +37,36 @@ export function registerSettingsHandlers(): void {
             data.sms_api_secret, data.sms_sender_id
         )
         return { success: true }
+    })
+
+
+    // ======== SECURE CONFIG ========
+    ipcMain.handle('settings:getSecure', async (_event: IpcMainInvokeEvent, key: string) => {
+        // Return masked value if encrypted
+        const val = ConfigService.getConfig(key)
+        if (!val) return null
+        // If it looks encrypted/sensitive, maybe we mask it here? 
+        // Logic in Service says getConfig returns decrypted. 
+        // UI should decide to mask or Service getAllConfigs does.
+        // For individual get, we return decrypted so "Test Connection" works.
+        // Wait, for UI display we generally want Masked. 
+        // Let's rely on getAllConfigs for bulk display and getSecure for internal use?
+        // Actually, let's expose getAll for UI.
+        return val
+    })
+
+    ipcMain.handle('settings:saveSecure', async (_event: IpcMainInvokeEvent, key: string, value: string) => {
+        return ConfigService.saveConfig(key, value, true)
+    })
+
+    ipcMain.handle('settings:getAllConfigs', async () => {
+        return ConfigService.getAllConfigs()
+    })
+
+    // ======== SYSTEM MAINTENANCE ========
+    ipcMain.handle('system:resetAndSeed', async (_event: IpcMainInvokeEvent, userId: number) => {
+        const maintenanceService = container.resolve<SystemMaintenanceService>('SystemMaintenanceService')
+        return maintenanceService.resetAndSeed2026(userId)
     })
 }
 

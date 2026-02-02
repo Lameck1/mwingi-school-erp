@@ -90,7 +90,7 @@ export function registerTransactionsHandlers(): void {
             FROM ledger_transaction 
             WHERE is_voided = 0 
             AND transaction_date BETWEEN ? AND ?
-            AND (transaction_type = 'INCOME' OR transaction_type = 'FEE_PAYMENT' OR transaction_type = 'DONATION' OR transaction_type = 'GRANT')
+            AND transaction_type IN ('INCOME', 'FEE_PAYMENT', 'DONATION', 'GRANT')
         `).get(startDate, endDate) as { total: number }
 
         const expense = db.prepare(`
@@ -98,7 +98,7 @@ export function registerTransactionsHandlers(): void {
             FROM ledger_transaction 
             WHERE is_voided = 0 
             AND transaction_date BETWEEN ? AND ?
-            AND (transaction_type = 'EXPENSE' OR transaction_type = 'SALARY_PAYMENT' OR transaction_type = 'REFUND')
+            AND transaction_type IN ('EXPENSE', 'SALARY_PAYMENT', 'REFUND')
         `).get(startDate, endDate) as { total: number }
 
         return {

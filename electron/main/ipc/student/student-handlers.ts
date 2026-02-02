@@ -24,6 +24,7 @@ interface Student {
   stream_name?: string
   current_type?: string
   balance?: number
+  credit_balance?: number
 }
 
 interface StudentFilters {
@@ -56,7 +57,7 @@ export function registerStudentHandlers(): void {
   // ======== STUDENTS ========
   ipcMain.handle('student:getAll', async (_event: IpcMainInvokeEvent, filters?: StudentFilters) => {
     let query = `SELECT s.*, st.stream_name, e.student_type as current_type,
-        (SELECT COALESCE(SUM(total_amount - amount_paid), 0) 
+        (SELECT COALESCE(SUM(total_amount - amount_paid), 0) / 100.0
          FROM fee_invoice 
          WHERE student_id = s.id AND status != 'CANCELLED'
         ) as balance
@@ -85,7 +86,15 @@ export function registerStudentHandlers(): void {
   })
 
   ipcMain.handle('student:getById', async (_event: IpcMainInvokeEvent, id: number) => {
-    return db.prepare('SELECT * FROM student WHERE id = ?').get(id) as Student | undefined
+    const student = db.prepare('SELECT * FROM student WHERE id = ?').get(id) as Student | undefined
+    if (student) {
+      // Convert stored cents to shillings for display
+      return {
+        ...student,
+        credit_balance: (student.credit_balance || 0) / 100
+      }
+    }
+    return undefined
   })
 
   ipcMain.handle('student:create', async (_event: IpcMainInvokeEvent, data: StudentCreateData) => {
@@ -139,7 +148,7 @@ export function registerStudentHandlers(): void {
   ipcMain.handle('student:getBalance', async (_event: IpcMainInvokeEvent, studentId: number) => {
     const invoices = db.prepare(`SELECT COALESCE(SUM(total_amount - amount_paid), 0) as balance 
       FROM fee_invoice WHERE student_id = ? AND status != 'CANCELLED'`).get(studentId) as { balance: number } | undefined
-    return invoices?.balance || 0
+    return (invoices?.balance || 0) / 100
   })
 }
 

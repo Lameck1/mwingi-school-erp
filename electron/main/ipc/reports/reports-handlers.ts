@@ -17,7 +17,9 @@ interface TransactionRow {
 }
 
 export function registerReportsHandlers(): void {
-    const db = getDatabase()
+    const db = new Proxy({} as any, {
+        get: (_target, prop) => (getDatabase() as any)[prop]
+    });
 
     // ======== REPORTS ========
     ipcMain.handle('report:defaulters', async (_event: IpcMainInvokeEvent, termId?: number) => {
@@ -45,15 +47,18 @@ export function registerReportsHandlers(): void {
     })
 
     ipcMain.handle('report:financialSummary', async (_event: IpcMainInvokeEvent, startDate: string, endDate: string) => {
+        // Standardize Income: FEE_PAYMENT + DONATION + GRANT + INCOME
         const income = db.prepare(`
             SELECT SUM(amount) as total FROM ledger_transaction 
-            WHERE transaction_type = 'INCOME' AND is_voided = 0 
+            WHERE (transaction_type IN ('INCOME', 'FEE_PAYMENT', 'DONATION', 'GRANT'))
+            AND is_voided = 0 
             AND transaction_date BETWEEN ? AND ?
         `).get(startDate, endDate) as TotalResult | undefined
 
         const expenses = db.prepare(`
             SELECT SUM(amount) as total FROM ledger_transaction 
-            WHERE transaction_type = 'EXPENSE' AND is_voided = 0 
+            WHERE (transaction_type IN ('EXPENSE', 'SALARY_PAYMENT'))
+            AND is_voided = 0 
             AND transaction_date BETWEEN ? AND ?
         `).get(startDate, endDate) as TotalResult | undefined
 
@@ -64,10 +69,10 @@ export function registerReportsHandlers(): void {
         `).get(startDate, endDate) as TotalResult | undefined
 
         return {
-            income: income?.total || 0,
-            expenses: expenses?.total || 0,
+            totalIncome: income?.total || 0,
+            totalExpense: expenses?.total || 0,
             feePayments: feePayments?.total || 0,
-            netIncome: (income?.total || 0) - (expenses?.total || 0)
+            netBalance: (income?.total || 0) - (expenses?.total || 0)
         }
     })
 
@@ -169,10 +174,18 @@ export function registerReportsHandlers(): void {
     })
 
     ipcMain.handle('report:feeCollection', async (_event: IpcMainInvokeEvent, startDate: string, endDate: string) => {
-        return db.prepare(`SELECT DATE(transaction_date) as date, SUM(amount) as total,
-      payment_method, COUNT(*) as count FROM ledger_transaction
-      WHERE transaction_type = 'FEE_PAYMENT' AND is_voided = 0
-      AND transaction_date BETWEEN ? AND ? GROUP BY DATE(transaction_date), payment_method`).all(startDate, endDate)
+        return db.prepare(`
+            SELECT 
+                DATE(transaction_date) as payment_date, 
+                SUM(amount) as amount,
+                payment_method, 
+                COUNT(*) as count 
+            FROM ledger_transaction
+            WHERE transaction_type = 'FEE_PAYMENT' AND is_voided = 0
+            AND transaction_date BETWEEN ? AND ? 
+            GROUP BY DATE(transaction_date), payment_method
+            ORDER BY DATE(transaction_date) ASC
+        `).all(startDate, endDate)
     })
 
     ipcMain.handle('report:dashboard', async () => {
@@ -191,14 +204,67 @@ export function registerReportsHandlers(): void {
         }
     })
 
+    ipcMain.handle('report:revenueByCategory', async (_event: IpcMainInvokeEvent, startDate: string, endDate: string) => {
+        return db.prepare(`
+            SELECT 
+                tc.category_name as name, 
+                SUM(lt.amount) as value
+            FROM ledger_transaction lt
+            JOIN transaction_category tc ON lt.category_id = tc.id
+            WHERE lt.transaction_type IN ('INCOME', 'FEE_PAYMENT', 'DONATION', 'GRANT')
+            AND lt.is_voided = 0
+            AND lt.transaction_date BETWEEN ? AND ?
+            GROUP BY tc.id, tc.category_name
+            HAVING value > 0
+            ORDER BY value DESC
+        `).all(startDate, endDate)
+    })
+
+    ipcMain.handle('report:expenseByCategory', async (_event: IpcMainInvokeEvent, startDate: string, endDate: string) => {
+        return db.prepare(`
+            SELECT 
+                tc.category_name as name, 
+                SUM(lt.amount) as value
+            FROM ledger_transaction lt
+            JOIN transaction_category tc ON lt.category_id = tc.id
+            WHERE lt.transaction_type IN ('EXPENSE', 'SALARY_PAYMENT', 'REFUND')
+            AND lt.is_voided = 0
+            AND lt.transaction_date BETWEEN ? AND ?
+            GROUP BY tc.id, tc.category_name
+            HAVING value > 0
+            ORDER BY value DESC
+        `).all(startDate, endDate)
+    })
+
+    ipcMain.handle('report:dailyCollection', async (_event: IpcMainInvokeEvent, date: string) => {
+        return db.prepare(`
+            SELECT 
+                lt.transaction_date as date,
+                s.first_name || ' ' || s.last_name as student_name,
+                lt.payment_method,
+                lt.payment_reference,
+                lt.amount,
+                lt.description
+            FROM ledger_transaction lt
+            JOIN student s ON lt.student_id = s.id
+            WHERE lt.transaction_type = 'FEE_PAYMENT'
+            AND lt.is_voided = 0
+            AND lt.transaction_date = ?
+            ORDER BY lt.created_at ASC
+        `).all(date)
+    })
+
     ipcMain.handle('report:feeCategoryBreakdown', async () => {
         return db.prepare(`
-            SELECT fc.category_name as name, COALESCE(SUM(ii.amount), 0) as value
-            FROM fee_category fc
-            LEFT JOIN invoice_item ii ON fc.id = ii.fee_category_id
-            LEFT JOIN fee_invoice fi ON ii.invoice_id = fi.id AND fi.status != 'CANCELLED'
-            WHERE fc.is_active = 1
-            GROUP BY fc.id, fc.category_name
+            SELECT 
+                tc.category_name as name, 
+                SUM(lt.amount) as value
+            FROM ledger_transaction lt
+            JOIN transaction_category tc ON lt.category_id = tc.id
+            WHERE lt.transaction_type = 'FEE_PAYMENT'
+            AND lt.is_voided = 0
+            GROUP BY tc.id, tc.category_name
+            HAVING value > 0
             ORDER BY value DESC
         `).all()
     })

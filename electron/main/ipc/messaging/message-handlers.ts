@@ -3,7 +3,9 @@ import { getDatabase } from '../../database/index';
 import { logAudit } from '../../database/utils/audit';
 
 export function registerMessageHandlers(): void {
-    const db = getDatabase();
+    const db = new Proxy({} as any, {
+        get: (_target, prop) => (getDatabase() as any)[prop]
+    });
 
     // ======== MESSAGE TEMPLATES ========
     ipcMain.handle('message:getTemplates', async () => {

@@ -22,7 +22,12 @@ export function registerPayrollHandlers(): void {
             const existing = db.prepare('SELECT id FROM payroll_period WHERE month = ? AND year = ?').get(month, year) as { id: number } | undefined
             if (existing) return { success: false, error: 'Payroll for this period already exists' }
 
-            // 2. Create Payroll Period
+            // 2. Fetch Active Statutory Rates
+            const rates = db.prepare('SELECT * FROM statutory_rates WHERE is_current = 1').all() as any[]
+            const getRate = (type: string) => rates.find(r => r.rate_type === type)
+            const payeBands = rates.filter(r => r.rate_type === 'PAYE_BAND').sort((a: any, b: any) => a.min_amount - b.min_amount)
+
+            // 3. Create Payroll Period
             const periodName = `${new Date(year, month - 1).toLocaleString('default', { month: 'long' })} ${year}`
             const startDate = `${year}-${String(month).padStart(2, '0')}-01`
             const endDate = new Date(year, month, 0).toISOString().split('T')[0]
@@ -35,75 +40,80 @@ export function registerPayrollHandlers(): void {
 
             logAudit(userId, 'CREATE', 'payroll_period', periodId as number, null, { month, year, periodName })
 
-            // 3. Get Active Staff
+            // 4. Get Active Staff
             const staffList = db.prepare('SELECT * FROM staff WHERE is_active = 1').all() as StaffMember[]
 
-            // 4. Calculate for each staff
             const payrollStmt = db.prepare(`INSERT INTO payroll (
                 period_id, staff_id, basic_salary, gross_salary, total_deductions, net_salary
             ) VALUES (?, ?, ?, ?, ?, ?)`)
+
+            const deductionStmt = db.prepare('INSERT INTO payroll_deduction (payroll_id, deduction_name, amount) VALUES (?, ?, ?)')
+            const allowanceStmt = db.prepare('INSERT INTO payroll_allowance (payroll_id, allowance_name, amount) VALUES (?, ?, ?)')
 
             const results = []
 
             for (const staff of staffList) {
                 const basic = staff.basic_salary || 0
+                const staffAllowances = db.prepare('SELECT * FROM staff_allowance WHERE staff_id = ? AND is_active = 1').all(staff.id) as StaffAllowanceRow[]
+                const totalAllowances = staffAllowances.reduce((sum, a) => sum + a.amount, 0)
+                const gross = basic + totalAllowances
 
-                // Fetch staff allowances from staff_allowance table
-                const staffAllowances = db.prepare(
-                    'SELECT * FROM staff_allowance WHERE staff_id = ? AND is_active = 1'
-                ).all(staff.id) as StaffAllowanceRow[]
-                const allowances = staffAllowances.reduce((sum, a) => sum + a.amount, 0)
+                // --- ROBUST STATUTORY CALCULATIONS ---
 
-                const gross = basic + allowances
+                // 1. NSSF (Tier I + II)
+                const nssfTier1 = getRate('NSSF_TIER_I')?.fixed_amount || 720
+                const nssfTier2 = getRate('NSSF_TIER_II')?.fixed_amount || 1440
+                const nssf = nssfTier1 + (gross > 7000 ? nssfTier2 : 0)
 
-                // Calculation Logic (Simplified Kenya 2024)
-                // NSSF (Tier I + II) - approx 6% capped
-                const nssf = Math.min(gross * 0.06, 2160)
+                // 2. Housing Levy (1.5%)
+                const housingLevyRate = getRate('HOUSING_LEVY')?.rate || 0.015
+                const housingLevy = gross * housingLevyRate
 
-                // NHIF (Using SHIF 2.75% for modern compliance or old bands)
-                let nhif = 150
-                if (gross >= 100000) nhif = 1700
-                else if (gross >= 50000) nhif = 1500
-                else if (gross >= 20000) nhif = 750
-                else nhif = 500
+                // 3. SHIF (2.75%)
+                const shifRate = getRate('SHIF')?.rate || 0.0275
+                const shif = gross * shifRate
 
-                // PAYE
-                const taxable = gross - nssf
-                let tax = 0
-                if (taxable > 24000) {
-                    const band1 = 24000 * 0.1
-                    const remainder = taxable - 24000
-                    if (remainder > 8333) {
-                        const band2 = 8333 * 0.25
-                        const band3 = (remainder - 8333) * 0.3
-                        tax = band1 + band2 + band3
-                    } else {
-                        tax = band1 + (remainder * 0.25)
+                // 4. PAYE Calculation
+                const taxablePay = gross - nssf
+                let paye = 0
+                let remainingTaxable = taxablePay
+
+                for (const band of payeBands) {
+                    const bandRange = (band.max_amount || 99999999) - band.min_amount
+                    const amountInBand = Math.min(remainingTaxable, bandRange)
+                    if (amountInBand > 0) {
+                        paye += amountInBand * band.rate
+                        remainingTaxable -= amountInBand
                     }
-                } else {
-                    tax = taxable * 0.1
                 }
-                const paye = Math.max(0, tax - 2400)
 
-                const totalDeductions = nssf + nhif + paye
+                // Apply Personal Relief
+                const personalRelief = getRate('PERSONAL_RELIEF')?.fixed_amount || 2400
+                paye = Math.max(0, paye - personalRelief)
+
+                const totalDeductions = Math.round(nssf + housingLevy + shif + paye)
                 const net = gross - totalDeductions
 
+                // Save Payroll
                 const payrollResult = payrollStmt.run(periodId, staff.id, basic, gross, totalDeductions, net)
                 const payrollId = payrollResult.lastInsertRowid
 
-                // Store individual allowances in payroll_allowance table
-                const allowanceStmt = db.prepare('INSERT INTO payroll_allowance (payroll_id, allowance_name, amount) VALUES (?, ?, ?)')
+                // Save Deductions Breakdown
+                deductionStmt.run(payrollId, 'NSSF', nssf)
+                deductionStmt.run(payrollId, 'Housing Levy', housingLevy)
+                deductionStmt.run(payrollId, 'SHIF', shif)
+                deductionStmt.run(payrollId, 'PAYE', paye)
+
                 for (const allowance of staffAllowances) {
                     allowanceStmt.run(payrollId, allowance.allowance_name, allowance.amount)
                 }
 
                 results.push({
-                    staff_name: `${staff.first_name} ${staff.middle_name || ''} ${staff.last_name}`.replace(/  +/g, ' ').trim(),
-                    basic_salary: basic,
-                    allowances,
+                    staff_name: `${staff.first_name} ${staff.last_name}`.trim(),
+                    staff_number: staff.staff_number,
                     gross_salary: gross,
-                    paye, nhif, nssf,
-                    other_deductions: 0,
+                    nssf, housing_levy: housingLevy, shif, paye,
+                    total_deductions: totalDeductions,
                     net_salary: net
                 })
             }

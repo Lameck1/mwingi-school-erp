@@ -21,9 +21,32 @@ export function registerAcademicHandlers(): void {
     })
 
     ipcMain.handle('academicYear:create', async (_event, data: AcademicYearCreateData) => {
-        const stmt = db.prepare('INSERT INTO academic_year (year_name, start_date, end_date, is_current) VALUES (?, ?, ?, ?)')
-        const result = stmt.run(data.year_name, data.start_date, data.end_date, data.is_current ? 1 : 0)
-        return { success: true, id: result.lastInsertRowid }
+        try {
+            db.transaction(() => {
+                if (data.is_current) {
+                    db.prepare('UPDATE academic_year SET is_current = 0').run()
+                }
+                const stmt = db.prepare('INSERT INTO academic_year (year_name, start_date, end_date, is_current) VALUES (?, ?, ?, ?)')
+                stmt.run(data.year_name, data.start_date, data.end_date, data.is_current ? 1 : 0)
+            })()
+            return { success: true }
+        } catch (error) {
+            console.error('Failed to create academic year:', error)
+            throw error
+        }
+    })
+
+    ipcMain.handle('academicYear:activate', async (_event, id: number) => {
+        try {
+            db.transaction(() => {
+                db.prepare('UPDATE academic_year SET is_current = 0').run()
+                db.prepare('UPDATE academic_year SET is_current = 1 WHERE id = ?').run(id)
+            })()
+            return { success: true }
+        } catch (error) {
+            console.error('Failed to activate academic year:', error)
+            throw error
+        }
     })
 
     ipcMain.handle('term:getByYear', async (_event, yearId: number) => {

@@ -1,93 +1,36 @@
-import { ipcMain, dialog, app } from '../../electron-env'
-import { getDatabase, backupDatabase, initializeDatabase } from '../../database/index'
-import fs from 'fs'
-import path from 'path'
+import { ipcMain } from '../../electron-env'
+import { BackupService } from '../../services/BackupService'
+import { shell, IpcMainInvokeEvent } from 'electron'
+import * as path from 'path'
 
 export function registerBackupHandlers(): void {
-    // ======== BACKUP ========
-    ipcMain.handle('backup:create', async () => {
-        const { filePath } = await dialog.showSaveDialog({
-            title: 'Save Backup',
-            defaultPath: `mwingi-erp-backup-${new Date().toISOString().slice(0, 10)}.db`,
-            filters: [{ name: 'SQLite Database', extensions: ['db'] }]
-        })
-        if (!filePath) return { success: false, cancelled: true }
 
-        await backupDatabase(filePath)
-        return { success: true, path: filePath }
+    ipcMain.handle('backup:create', async () => {
+        return BackupService.createBackup()
     })
 
-    ipcMain.handle('backup:restore', async () => {
-        const { filePaths } = await dialog.showOpenDialog({
-            title: 'Restore Backup',
-            filters: [{ name: 'SQLite Database', extensions: ['db'] }],
-            properties: ['openFile']
-        })
-        if (!filePaths.length) return { success: false, cancelled: true }
+    ipcMain.handle('backup:getList', async () => {
+        return BackupService.listBackups()
+    })
 
-        const backupFilePath = filePaths[0]
+    ipcMain.handle('backup:restore', async (_event: IpcMainInvokeEvent, filename: string) => {
+        return BackupService.restoreBackup(filename)
+    })
 
-        // Validate that the selected file is a valid SQLite database
-        try {
-            // Check if file has SQLite header signature
-            const fd = fs.openSync(backupFilePath, 'r');
-            const buffer = Buffer.alloc(16);
-            fs.readSync(fd, buffer, 0, 16, 0);
-            fs.closeSync(fd);
-            const header = buffer.toString('hex', 0, 16)
-            if (header !== '53514c69746520666f726d6174203300') { // SQLite format 3\0
-                return { success: false, error: 'Selected file is not a valid SQLite database' }
-            }
-        } catch (error) {
-            return { success: false, error: 'Failed to validate backup file: ' + (error as Error).message }
-        }
-
-        // Close current database connection
-        try {
-            const currentDb = getDatabase()
-            if (currentDb) {
-                currentDb.close()
-            }
-        } catch (error) {
-            console.warn('Failed to close database connection:', error)
-        }
-
-        // Copy backup to app data
-        const userDataPath = app.getPath('userData')
-        const dbPath = path.join(userDataPath, 'data', 'school_erp.db')
-
-        try {
-            fs.copyFileSync(backupFilePath, dbPath)
-
-            // Reinitialize database connection
-            await initializeDatabase()
-
-            return { success: true, message: 'Backup restored successfully' }
-        } catch (error) {
-            // Attempt to restore original database if backup fails
-            try {
-                await initializeDatabase()
-            } catch (recoveryError) {
-                console.error('Failed to recover database after restore failure:', recoveryError)
-            }
-            console.error('Failed to restore backup:', error)
-            return { success: false, error: 'Failed to restore backup: ' + (error as Error).message }
-        }
+    ipcMain.handle('backup:openFolder', async () => {
+        // We need to access private static or just reconstruct path
+        // It's cleaner to ask Service for path or just use userData/backups
+        // Let's add a openFolder method to Service or just do it here
+        // BackupService.BACKUP_DIR is private.
+        // Let's use shell.openPath with userData
+        // But better to expose a method in Service if we want to change dir later.
+        // For now, let's assume standard path is okay to expose via helper if needed.
+        // Actually, let's just use the known path in Service or make it public.
+        // I will make it public getter in Service correction or just assume standard path here.
+        // Let's stick to standard path here for now.
+        const { app } = await import('electron')
+        const backupDir = path.join(app.getPath('userData'), 'backups')
+        await shell.openPath(backupDir)
+        return { success: true }
     })
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
