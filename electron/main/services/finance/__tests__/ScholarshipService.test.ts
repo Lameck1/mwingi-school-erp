@@ -20,14 +20,22 @@ describe('ScholarshipService', () => {
       CREATE TABLE scholarship (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
+        description TEXT,
         scholarship_type TEXT NOT NULL,
+        amount REAL,
+        percentage REAL,
         total_amount REAL NOT NULL,
         allocated_amount REAL DEFAULT 0,
         available_amount REAL,
+        max_beneficiaries INTEGER,
+        eligibility_criteria TEXT,
+        valid_from DATE,
+        valid_to DATE,
         start_date DATE NOT NULL,
         end_date DATE NOT NULL,
+        sponsor_name TEXT,
+        sponsor_contact TEXT,
         status TEXT DEFAULT 'ACTIVE',
-        eligibility_criteria TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 

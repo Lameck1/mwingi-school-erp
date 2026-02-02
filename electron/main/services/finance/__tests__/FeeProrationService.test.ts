@@ -34,11 +34,13 @@ describe('FeeProrationService', () => {
         is_prorated BOOLEAN DEFAULT 0
       );
 
-      CREATE TABLE invoice (
+      CREATE TABLE fee_invoice (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id INTEGER NOT NULL,
         invoice_number TEXT UNIQUE NOT NULL,
         amount REAL NOT NULL,
+        amount_paid REAL DEFAULT 0,
+        status TEXT DEFAULT 'OUTSTANDING',
         is_prorated BOOLEAN DEFAULT 0,
         proration_percentage REAL,
         original_amount REAL,
