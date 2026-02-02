@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+ 
 import { app } from './electron-env'
 import path from 'path'
 import fs from 'fs'
