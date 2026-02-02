@@ -113,6 +113,9 @@ describe('FeeProrationService', () => {
 
       const prorationLog = db.prepare('SELECT * FROM pro_ration_log WHERE student_id = ?').get(1) as any
 
+      // Term: Jan 1 to Mar 31 = 90 days
+      // Enrolled: Jan 15 to Mar 31 = 76 days
+      // Percentage: (76/90) * 100 = 84.44%
       expect(prorationLog).toBeDefined()
       if (prorationLog) {
         expect(prorationLog.days_in_term).toBe(90)
@@ -130,6 +133,7 @@ describe('FeeProrationService', () => {
 
       const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = ?').all(1) as any[]
 
+      // Check that some invoices were created
       expect(invoices.length).toBeGreaterThan(0)
     })
 
@@ -143,6 +147,7 @@ describe('FeeProrationService', () => {
 
       const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = ?').all(1) as any[]
 
+      // Check non-prorated items if any exist
       const nonProratedExists = invoices.some(inv => inv.is_prorated === 0)
       if (nonProratedExists) {
         const nonProrated = invoices.find(inv => inv.is_prorated === 0)
