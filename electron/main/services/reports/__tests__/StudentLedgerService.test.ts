@@ -22,61 +22,93 @@ describe('StudentLedgerService', () => {
         admission_number TEXT UNIQUE NOT NULL
       );
 
-      CREATE TABLE invoice (
+      CREATE TABLE transaction_category (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category_name TEXT NOT NULL
+      );
+
+      CREATE TABLE user (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE
+      );
+
+      CREATE TABLE fee_invoice (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id INTEGER NOT NULL,
         invoice_number TEXT UNIQUE NOT NULL,
-        amount REAL NOT NULL,
-        paid_amount REAL DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        amount INTEGER NOT NULL,
+        amount_paid INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'OUTSTANDING',
+        due_date DATE,
+        invoice_date DATE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (student_id) REFERENCES student(id)
       );
 
-      CREATE TABLE payment (
+      CREATE TABLE ledger_transaction (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        student_id INTEGER NOT NULL,
-        amount REAL NOT NULL,
-        payment_date DATE NOT NULL,
-        status TEXT DEFAULT 'ACTIVE',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        transaction_ref TEXT NOT NULL UNIQUE,
+        transaction_date DATE NOT NULL,
+        transaction_type TEXT NOT NULL CHECK(transaction_type IN ('INCOME', 'FEE_PAYMENT', 'DONATION', 'GRANT', 'EXPENSE', 'SALARY_PAYMENT', 'REFUND', 'OPENING_BALANCE', 'ADJUSTMENT')),
+        category_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+        debit_credit TEXT NOT NULL CHECK(debit_credit IN ('DEBIT', 'CREDIT')),
+        student_id INTEGER,
+        staff_id INTEGER,
+        invoice_id INTEGER,
+        payment_method TEXT CHECK(payment_method IN ('CASH', 'MPESA', 'BANK_TRANSFER', 'CHEQUE')),
+        payment_reference TEXT,
+        description TEXT,
+        term_id INTEGER,
+        recorded_by_user_id INTEGER NOT NULL,
+        is_voided BOOLEAN DEFAULT 0,
+        voided_reason TEXT,
+        voided_by_user_id INTEGER,
+        voided_at DATETIME,
+        deleted_at DATETIME DEFAULT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (category_id) REFERENCES transaction_category(id),
+        FOREIGN KEY (student_id) REFERENCES student(id),
+        FOREIGN KEY (recorded_by_user_id) REFERENCES user(id),
+        FOREIGN KEY (invoice_id) REFERENCES fee_invoice(id)
       );
 
-      CREATE TABLE credit_transaction (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        student_id INTEGER NOT NULL,
-        amount REAL NOT NULL,
-        transaction_type TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
+      -- Insert test data
+      INSERT INTO transaction_category (category_name) VALUES ('FEE_INCOME'), ('REFUND');
+      INSERT INTO user (username) VALUES ('testuser');
 
       -- Insert test student
       INSERT INTO student (first_name, last_name, admission_number)
       VALUES ('John', 'Doe', 'STU-001');
 
-      -- Insert historical transactions (for opening balance)
-      INSERT INTO invoice (student_id, invoice_number, amount, paid_amount, created_at)
+      -- Insert historical invoices (for opening balance)
+      INSERT INTO fee_invoice (student_id, invoice_number, amount, amount_paid, status, invoice_date, created_at)
       VALUES 
-        (1, 'INV-2025-001', 100000, 60000, '2025-11-15 10:00:00'),
-        (1, 'INV-2025-002', 50000, 50000, '2025-12-01 10:00:00');
+        (1, 'INV-2025-001', 100000, 60000, 'PARTIAL', '2025-11-15', '2025-11-15 10:00:00'),
+        (1, 'INV-2025-002', 50000, 50000, 'PAID', '2025-12-01', '2025-12-01 10:00:00');
 
-      INSERT INTO payment (student_id, amount, payment_date, status, created_at)
+      -- Insert historical transactions
+      INSERT INTO ledger_transaction (transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit, student_id, invoice_id, description, recorded_by_user_id, is_voided, created_at)
       VALUES 
-        (1, 60000, '2025-11-20', 'ACTIVE', '2025-11-20 14:00:00'),
-        (1, 50000, '2025-12-05', 'ACTIVE', '2025-12-05 14:00:00');
+        ('TRX-2025-001', '2025-11-15', 'INCOME', 1, 100000, 'DEBIT', 1, 1, 'Invoice INV-2025-001', 1, 0, '2025-11-15 10:00:00'),
+        ('PAY-2025-001', '2025-11-20', 'FEE_PAYMENT', 1, 60000, 'CREDIT', 1, 1, 'Payment for INV-2025-001', 1, 0, '2025-11-20 14:00:00'),
+        ('TRX-2025-002', '2025-12-01', 'INCOME', 1, 50000, 'DEBIT', 1, 2, 'Invoice INV-2025-002', 1, 0, '2025-12-01 10:00:00'),
+        ('PAY-2025-002', '2025-12-05', 'FEE_PAYMENT', 1, 50000, 'CREDIT', 1, 2, 'Payment for INV-2025-002', 1, 0, '2025-12-05 14:00:00');
+
+      -- Insert current period invoices
+      INSERT INTO fee_invoice (student_id, invoice_number, amount, amount_paid, status, invoice_date, created_at)
+      VALUES 
+        (1, 'INV-2026-001', 75000, 0, 'OUTSTANDING', '2026-01-05', '2026-01-05 10:00:00'),
+        (1, 'INV-2026-002', 30000, 20000, 'PARTIAL', '2026-01-15', '2026-01-15 10:00:00');
 
       -- Insert current period transactions
-      INSERT INTO invoice (student_id, invoice_number, amount, paid_amount, created_at)
+      INSERT INTO ledger_transaction (transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit, student_id, invoice_id, description, recorded_by_user_id, is_voided, created_at)
       VALUES 
-        (1, 'INV-2026-001', 75000, 0, '2026-01-05 10:00:00'),
-        (1, 'INV-2026-002', 30000, 20000, '2026-01-15 10:00:00');
-
-      INSERT INTO payment (student_id, amount, payment_date, status, created_at)
-      VALUES 
-        (1, 50000, '2026-01-10', 'ACTIVE', '2026-01-10 14:00:00'),
-        (1, 20000, '2026-01-20', 'ACTIVE', '2026-01-20 14:00:00');
-
-      INSERT INTO credit_transaction (student_id, amount, transaction_type, created_at)
-      VALUES 
-        (1, 5000, 'CREDIT', '2026-01-25 10:00:00');
+        ('TRX-2026-001', '2026-01-05', 'INCOME', 1, 75000, 'DEBIT', 1, 3, 'Invoice INV-2026-001', 1, 0, '2026-01-05 10:00:00'),
+        ('PAY-2026-001', '2026-01-10', 'FEE_PAYMENT', 1, 50000, 'CREDIT', 1, 3, 'Payment for INV-2026-001', 1, 0, '2026-01-10 14:00:00'),
+        ('TRX-2026-002', '2026-01-15', 'INCOME', 1, 30000, 'DEBIT', 1, 4, 'Invoice INV-2026-002', 1, 0, '2026-01-15 10:00:00'),
+        ('PAY-2026-002', '2026-01-20', 'FEE_PAYMENT', 1, 20000, 'CREDIT', 1, 4, 'Payment for INV-2026-002', 1, 0, '2026-01-20 14:00:00'),
+        ('ADJ-2026-001', '2026-01-25', 'ADJUSTMENT', 1, 5000, 'CREDIT', 1, NULL, 'Credit adjustment', 1, 0, '2026-01-25 10:00:00');
     `)
 
     service = new StudentLedgerService(db)
@@ -120,7 +152,7 @@ describe('StudentLedgerService', () => {
         const prev = new Date(result.transactions[i - 1].date)
         const curr = new Date(result.transactions[i].date)
         expect(curr >= prev).toBe(true)
-      })
+      }
     })
 
     it('should calculate running balance correctly', () => {
