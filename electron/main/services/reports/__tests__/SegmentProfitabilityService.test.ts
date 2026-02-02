@@ -15,7 +15,8 @@ describe('SegmentProfitabilityService', () => {
         first_name TEXT NOT NULL,
         last_name TEXT NOT NULL,
         uses_transport BOOLEAN DEFAULT 0,
-        uses_boarding BOOLEAN DEFAULT 0
+        uses_boarding BOOLEAN DEFAULT 0,
+        status TEXT DEFAULT 'ACTIVE'
       );
 
       CREATE TABLE invoice (

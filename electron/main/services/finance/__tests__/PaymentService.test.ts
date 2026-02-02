@@ -2,14 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { PaymentService } from '../PaymentService'
 import { getDatabase } from '../../../database'
 
-// Mock the database
-vi.mock('../../../database', () => ({
-    getDatabase: vi.fn()
-}))
-
 // Mock audit log
 vi.mock('../../../database/utils/audit', () => ({
-    logAudit: vi.fn()
+  logAudit: vi.fn()
 }))
 
 describe('PaymentService', () => {

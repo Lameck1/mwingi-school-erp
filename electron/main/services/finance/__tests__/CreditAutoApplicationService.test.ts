@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import Database from 'better-sqlite3-multiple-ciphers'
 import { CreditAutoApplicationService } from '../CreditAutoApplicationService'
-
+// Mock audit utilities
+vi.mock('../../../database/utils/audit', () => ({
+  logAudit: vi.fn()
+}))
 describe('CreditAutoApplicationService', () => {
   let db: Database.Database
   let service: CreditAutoApplicationService

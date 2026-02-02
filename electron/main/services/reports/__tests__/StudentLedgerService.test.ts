@@ -1,6 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import Database from 'better-sqlite3-multiple-ciphers'
 import { StudentLedgerService } from '../StudentLedgerService'
+
+// Mock audit utilities
+vi.mock('../../../database/utils/audit', () => ({
+  logAudit: vi.fn()
+}))
 
 describe('StudentLedgerService', () => {
   let db: Database.Database

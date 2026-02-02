@@ -351,7 +351,7 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
    */
   async addCreditToStudent(studentId: number, amount: number, notes: string, userId: number): Promise<{ success: boolean; message: string; credit_id: number }> {
     try {
-      const creditRepo = new CreditRepository()
+      const creditRepo = new CreditRepository(this.db)
       const creditId = await creditRepo.recordCreditTransaction({
         student_id: studentId,
         amount,
