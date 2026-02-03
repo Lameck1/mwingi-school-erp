@@ -119,7 +119,7 @@ export class DoubleEntryJournalService {
         if (!account) {
           return {
             success: false,
-            message: `Invalid GL account code: ${line.gl_account_code}`
+            message: `Invalid GL account code: ${line.gl_account_code}. Check Chart of Accounts or verify account is active.`
           };
         }
       }
@@ -337,6 +337,9 @@ export class DoubleEntryJournalService {
         (new Date().getTime() - new Date(originalEntry[0].entry_date).getTime()) / (1000 * 60 * 60 * 24)
       );
 
+      // Calculate total amount from line items
+      const totalAmount = originalEntry.reduce((sum, line) => sum + (line.debit_amount || 0), 0);
+
       const needsApproval = this.db.prepare(`
         SELECT id FROM approval_rule
         WHERE transaction_type = 'VOID'
@@ -345,7 +348,7 @@ export class DoubleEntryJournalService {
             (min_amount IS NOT NULL AND ? >= min_amount)
             OR (days_since_transaction IS NOT NULL AND ? >= days_since_transaction)
           )
-      `).get(originalEntry[0].amount || 0, daysOld);
+      `).get(totalAmount, daysOld);
 
       if (needsApproval) {
         // Create approval request

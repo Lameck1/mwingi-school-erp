@@ -170,7 +170,7 @@ export class OpeningBalanceService {
           `).get(balance.gl_account_code);
 
           if (!account) {
-            throw new Error(`Invalid GL account code: ${balance.gl_account_code}`);
+            throw new Error(`Invalid GL account code: ${balance.gl_account_code}. Verify the account exists in Chart of Accounts and is active.`);
           }
 
           // Insert opening balance record
