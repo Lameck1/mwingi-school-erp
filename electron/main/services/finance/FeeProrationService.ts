@@ -434,11 +434,12 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
       const prorationType = (daysEnrolled / daysInTerm) * 100
       const proratedAmount = template.amount * (daysEnrolled / daysInTerm)
 
-      // Create invoice
+      // Create invoice with unique invoice number
+      const invoiceNumber = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       const invoiceResult = db.prepare(`
-        INSERT INTO fee_invoice (student_id, grade, amount, original_amount, is_prorated, description, created_at)
+        INSERT INTO fee_invoice (student_id, invoice_number, amount, original_amount, is_prorated, proration_percentage, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(data.studentId, data.grade, proratedAmount, template.amount, 1, `Pro-rated ${data.grade} fees`, new Date().toISOString())
+      `).run(data.studentId, invoiceNumber, proratedAmount, template.amount, 1, prorationType, new Date().toISOString())
 
       const invoiceId = invoiceResult.lastInsertRowid
 
@@ -539,8 +540,7 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
     let query = `
       SELECT 
         pl.*,
-        fi.invoice_number,
-        fi.description
+        fi.invoice_number
       FROM pro_ration_log pl
       LEFT JOIN fee_invoice fi ON pl.invoice_id = fi.id
       WHERE pl.student_id = ?
