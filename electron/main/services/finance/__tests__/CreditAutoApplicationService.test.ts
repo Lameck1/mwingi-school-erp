@@ -157,7 +157,7 @@ describe('CreditAutoApplicationService', () => {
     })
 
     it('should return 0 for student with no credits', () => {
-      db.exec('INSERT INTO student (first_name, last_name, admission_number) VALUES ("New", "Student", "STU-002")')
+      db.exec('INSERT INTO student (first_name, last_name, admission_number) VALUES (\'New\', \'Student\', \'STU-002\')')
 
       const balance = service.getCreditBalance(2)
 
@@ -216,7 +216,7 @@ describe('CreditAutoApplicationService', () => {
     })
 
     it('should return empty for student with no credits', () => {
-      db.exec('INSERT INTO student (first_name, last_name, admission_number) VALUES ("New", "Student", "STU-003")')
+      db.exec('INSERT INTO student (first_name, last_name, admission_number) VALUES (\'New\', \'Student\', \'STU-003\')')
 
       const transactions = service.getCreditTransactions(3)
 

@@ -377,4 +377,165 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
       throw new Error(`Failed to add credit: ${(error as Error).message}`)
     }
   }
+
+  /**
+   * Auto-apply credits (synchronous wrapper for allocateCreditsToInvoices)
+   */
+  autoApplyCredits(studentId: number, userId?: number): any {
+    try {
+      const creditRepo = new CreditRepository(this.db)
+      const invoiceRepo = new InvoiceRepository(this.db)
+
+      // Get student's credit balance
+      const creditResult = this.db.prepare(
+        'SELECT amount FROM credit_transaction WHERE student_id = ? ORDER BY created_at DESC LIMIT 1'
+      ).get(studentId) as any
+
+      const creditBalance = creditResult?.amount || 0
+
+      if (creditBalance === 0) {
+        return { success: true, message: 'No credits to apply', credits_applied: 0 }
+      }
+
+      // Get outstanding invoices sorted by priority (due date, oldest first)
+      const invoices = this.db.prepare(`
+        SELECT id, amount_due, amount_paid, due_date 
+        FROM fee_invoice 
+        WHERE student_id = ? AND (amount_paid < amount_due OR status = 'OUTSTANDING')
+        ORDER BY due_date ASC, id ASC
+      `).all(studentId) as any[]
+
+      let remainingCredit = creditBalance
+      let applicationsCount = 0
+
+      for (const invoice of invoices) {
+        if (remainingCredit === 0) break
+
+        const amountDue = invoice.amount_due - invoice.amount_paid
+        const applicationAmount = Math.min(remainingCredit, amountDue)
+
+        this.db.prepare(
+          'UPDATE fee_invoice SET amount_paid = amount_paid + ? WHERE id = ?'
+        ).run(applicationAmount, invoice.id)
+
+        remainingCredit -= applicationAmount
+        applicationsCount++
+
+        // Log the credit application
+        logAudit(
+          userId || 0,
+          'CREDIT_APPLY',
+          'fee_invoice',
+          invoice.id,
+          null,
+          { student_id: studentId, amount_applied: applicationAmount }
+        )
+      }
+
+      return {
+        success: true,
+        message: `Credits applied to ${applicationsCount} invoice(s)`,
+        credits_applied: creditBalance - remainingCredit,
+        remaining_credit: remainingCredit,
+        invoices_affected: applicationsCount
+      }
+    } catch (error) {
+      return { success: false, message: `Failed to apply credits: ${(error as Error).message}` }
+    }
+  }
+
+  /**
+   * Add a manual credit
+   */
+  addCredit(studentId: number, amount: number, notes?: string, userId?: number): any {
+    if (amount < 0) {
+      return { success: false, message: 'Credit amount must be positive' }
+    }
+
+    try {
+      const creditRepo = new CreditRepository(this.db)
+      const creditId = this.db.prepare(
+        'INSERT INTO credit_transaction (student_id, amount, transaction_type, notes, created_at) VALUES (?, ?, ?, ?, ?)'
+      ).run(studentId, amount, 'MANUAL_CREDIT', notes || '', new Date().toISOString()).lastInsertRowid
+
+      logAudit(
+        userId || 0,
+        'CREDIT_ADD',
+        'credit_transaction',
+        Number(creditId),
+        null,
+        { student_id: studentId, amount, notes }
+      )
+
+      return {
+        success: true,
+        message: `Credit of ${amount.toFixed(2)} KES added successfully`,
+        credit_id: Number(creditId)
+      }
+    } catch (error) {
+      return { success: false, message: `Failed to add credit: ${(error as Error).message}` }
+    }
+  }
+
+  /**
+   * Reverse a credit transaction
+   */
+  reverseCredit(creditId: number, reason?: string, userId?: number): any {
+    try {
+      const credit = this.db.prepare('SELECT * FROM credit_transaction WHERE id = ?').get(creditId) as any
+
+      if (!credit) {
+        return { success: false, message: 'Credit transaction not found' }
+      }
+
+      this.db.prepare(
+        'UPDATE credit_transaction SET amount = 0, notes = ? WHERE id = ?'
+      ).run(`Reversed - ${reason || 'No reason provided'}`, creditId)
+
+      logAudit(
+        userId || 0,
+        'CREDIT_REVERSE',
+        'credit_transaction',
+        creditId,
+        credit,
+        { reason }
+      )
+
+      return {
+        success: true,
+        message: `Credit transaction reversed`,
+        credit_id: creditId
+      }
+    } catch (error) {
+      return { success: false, message: `Failed to reverse credit: ${(error as Error).message}` }
+    }
+  }
+
+  /**
+   * Get credit balance (synchronous)
+   */
+  getCreditBalance(studentId: number): number {
+    const result = this.db.prepare(
+      'SELECT SUM(amount) as total FROM credit_transaction WHERE student_id = ?'
+    ).get(studentId) as any
+    
+    return result?.total || 0
+  }
+
+  /**
+   * Get credit transactions synchronously
+   */
+  getCreditTransactions(studentId: number): any[] {    return this.db.prepare(
+      'SELECT * FROM credit_transaction WHERE student_id = ? ORDER BY created_at DESC'
+    ).all(studentId) as any[]
+  }
+
+  /**
+   * Retrieve credit transactions history
+   */
+  getTransactions(studentId: number): any[] {
+    return this.db.prepare(
+      'SELECT * FROM credit_transaction WHERE student_id = ? ORDER BY created_at DESC'
+    ).all(studentId) as any[]
+  }
 }
