@@ -502,8 +502,8 @@ export class ScholarshipService
       : undefined
 
     const allocations = await this.queryService.getScholarshipAllocations(scholarshipId)
-    const totalAmount = scholarship?.total_amount || 0
-    const allocated = scholarship?.allocated_amount || 0
+    const totalAmount = scholarship?.amount || 0
+    const allocated = scholarship?.total_allocated || 0
     const utilization = totalAmount > 0 ? (allocated / totalAmount) * 100 : 0
 
     return {

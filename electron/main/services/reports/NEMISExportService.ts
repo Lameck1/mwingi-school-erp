@@ -112,12 +112,14 @@ class NEMISDataRepository {
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
   }
-
   async extractStudentData(filters?: NEMISFilters): Promise<NEMISStudent[]> {
     const db = this.db
     
     let query = `
       SELECT 
+        s.id,
+        s.first_name,
+        s.last_name,
         s.nemis_upi,
         s.full_name,
         s.date_of_birth,
@@ -152,6 +154,59 @@ class NEMISDataRepository {
     return db.prepare(query).all(...params) as NEMISStudent[]
   }
 
+  async extractSchoolData(): Promise<any> {
+    const db = this.db
+    return db.prepare(`
+      SELECT 
+        id,
+        name,
+        code,
+        county,
+        subcounty,
+        nemis_code
+      FROM school
+      LIMIT 1
+    `).get() as any
+  }
+
+  async extractFinancialData(): Promise<any> {
+    const db = this.db
+    return db.prepare(`
+      SELECT 
+        COUNT(DISTINCT f.id) as total_invoices,
+        SUM(f.amount_due) as total_fees,
+        SUM(f.amount_paid) as total_paid,
+        SUM(f.amount_due - COALESCE(f.amount_paid, 0)) as total_outstanding
+      FROM fee_invoice f
+    `).get() as any
+  }
+
+  async generateNEMISReport(startDate?: string, endDate?: string): Promise<any> {
+    const db = this.db
+    
+    const studentCount = db.prepare(`
+      SELECT COUNT(*) as count FROM student WHERE status = 'ACTIVE'
+    `).get() as any
+    
+    const enrollmentData = db.prepare(`
+      SELECT COUNT(*) as count FROM enrollment
+    `).get() as any
+    
+    const financialData = await this.extractFinancialData()
+    const schoolData = await this.extractSchoolData()
+    
+    return {
+      timestamp: new Date().toISOString(),
+      school: schoolData,
+      student_count: studentCount?.count || 0,
+      enrollment_count: enrollmentData?.count || 0,
+      financial_summary: financialData,
+      period_start: startDate,
+      period_end: endDate,
+      generated_by: 'NEMIS_EXPORT_SERVICE'
+    }
+  }
+
   async extractStaffData(): Promise<NEMISStaff[]> {
     const db = this.db
     return db.prepare(`
@@ -171,22 +226,27 @@ class NEMISDataRepository {
     `).all() as NEMISStaff[]
   }
 
-  async extractEnrollmentData(academicYear: string): Promise<NEMISEnrollment[]> {
+  async extractEnrollmentData(academicYear?: string): Promise<NEMISEnrollment[]> {
     const db = this.db
     return db.prepare(`
       SELECT 
+        e.id as enrollment_id,
+        e.student_id,
+        e.academic_term_id,
+        s.full_name as student_name,
         c.class_name,
         c.grade_level,
-        SUM(CASE WHEN s.gender = 'M' THEN 1 ELSE 0 END) as boys_count,
-        SUM(CASE WHEN s.gender = 'F' THEN 1 ELSE 0 END) as girls_count,
-        COUNT(*) as total_count,
-        ? as academic_year
-      FROM student s
-      LEFT JOIN class c ON s.class_id = c.id
+        c.stream,
+        at.term_name,
+        at.academic_year,
+        e.enrollment_date
+      FROM enrollment e
+      JOIN student s ON e.student_id = s.id
+      JOIN class c ON s.class_id = c.id
+      JOIN academic_term at ON e.academic_term_id = at.id
       WHERE s.status = 'ACTIVE'
-      GROUP BY c.class_name, c.grade_level
-      ORDER BY c.grade_level, c.class_name
-    `).all(academicYear) as NEMISEnrollment[]
+      ORDER BY at.academic_year DESC, c.grade_level, c.class_name, s.full_name
+    `).all() as NEMISEnrollment[]
   }
 }
 
@@ -246,6 +306,18 @@ class NEMISDataExtractor implements INEMISDataExtractor {
 
   async extractStaffData(): Promise<NEMISStaff[]> {
     return this.dataRepo.extractStaffData()
+  }
+
+  async extractSchoolData(): Promise<any> {
+    return this.dataRepo.extractSchoolData()
+  }
+
+  async extractFinancialData(): Promise<any> {
+    return this.dataRepo.extractFinancialData()
+  }
+
+  async generateNEMISReport(startDate?: string, endDate?: string): Promise<any> {
+    return this.dataRepo.generateNEMISReport(startDate, endDate)
   }
 
   async extractEnrollmentData(academicYear: string): Promise<NEMISEnrollment[]> {
@@ -320,7 +392,7 @@ class NEMISFormatter implements INEMISFormatter {
       export_type: exportType,
       export_date: new Date().toISOString(),
       record_count: data.length,
-      data: data
+      data
     }, null, 2)
   }
 }
@@ -376,7 +448,6 @@ class NEMISExportManager implements INEMISExportManager {
             return {
               success: false,
               message: 'Data validation failed',
-              record_count: data.length
             }
           }
         }
@@ -480,6 +551,27 @@ export class NEMISExportService
   }
 
   /**
+   * Extract school information for NEMIS export
+   */
+  async extractSchoolData(): Promise<any> {
+    return this.extractor.extractSchoolData()
+  }
+
+  /**
+   * Extract financial data for NEMIS export
+   */
+  async extractFinancialData(): Promise<any> {
+    return this.extractor.extractFinancialData()
+  }
+
+  /**
+   * Generate NEMIS report
+   */
+  async generateNEMISReport(startDate?: string, endDate?: string): Promise<any> {
+    return this.extractor.generateNEMISReport(startDate, endDate)
+  }
+
+  /**
    * Extract enrollment statistics for NEMIS export
    */
   async extractEnrollmentData(academicYear: string): Promise<NEMISEnrollment[]> {
@@ -491,6 +583,41 @@ export class NEMISExportService
    */
   validateStudentData(student: NEMISStudent): ValidationResult {
     return this.validator.validateStudentData(student)
+  }
+
+  /**
+   * Validate NEMIS export format
+   */
+  async validateNEMISFormat(data: any): Promise<ValidationResult> {
+    if (!data) {
+      return {
+        valid: false,
+        message: 'Export data is required',
+        errors: ['Export data is required']
+      }
+    }
+
+    const errors: string[] = []
+
+    // Validate required fields
+    if (!data.students || data.students.length === 0) {
+      errors.push('Students data is required')
+    }
+    if (!data.school) {
+      errors.push('School data is required')
+    }
+    if (!data.enrollments) {
+      errors.push('Enrollment data is required')
+    }
+    if (!data.financial) {
+      errors.push('Financial data is required')
+    }
+
+    return {
+      valid: errors.length === 0,
+      message: errors.length === 0 ? 'Valid' : errors.join(', '),
+      errors
+    }
   }
 
   /**

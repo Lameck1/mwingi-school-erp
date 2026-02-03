@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 /**
  * E2E tests verify complete user workflows from UI to database
@@ -274,7 +274,7 @@ test.describe('Scholarship Management Flow', () => {
     await page.click('text=Scholarships')
     
     // Click allocate on first scholarship
-    await page.click('button:has-text("Allocate")').first()
+    await page.locator('button:has-text("Allocate")').first().click()
     
     await page.fill('input[name="studentId"]', '1')
     await page.fill('input[name="amount"]', '50000')

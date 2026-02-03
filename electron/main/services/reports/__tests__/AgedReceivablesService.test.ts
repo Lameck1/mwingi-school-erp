@@ -76,15 +76,15 @@ describe('AgedReceivablesService', () => {
   })
 
   describe('getAgedReceivables', () => {
-    it('should categorize receivables by aging buckets', () => {
-      const result = service.getAgedReceivables('2026-02-02')
+    it('should categorize receivables by aging buckets', async () => {
+      const result = await service.getAgedReceivables('2026-02-02')
 
       expect(result).toBeDefined()
       expect(Array.isArray(result) || typeof result === 'object').toBe(true)
     })
 
-    it('should calculate aging information', () => {
-      const result = service.getAgedReceivables('2026-02-02')
+    it('should calculate aging information', async () => {
+      const result = await service.getAgedReceivables('2026-02-02')
 
       expect(result).toBeDefined()
     })

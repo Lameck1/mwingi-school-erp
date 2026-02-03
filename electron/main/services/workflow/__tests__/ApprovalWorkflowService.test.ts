@@ -253,7 +253,7 @@ describe('ApprovalWorkflowService', () => {
         entityType: 'fee_invoice',
         entityId: 1,
         amount: 20000,
-        description: description,
+        description,
         requestedBy: 1
       })
 
@@ -297,7 +297,7 @@ describe('ApprovalWorkflowService', () => {
       })
 
       const result = await service.processApproval({
-        requestId: req.requestId,
+        requestId: req.requestId!,
         level: 1,
         decision: 'APPROVED',
         approverId: 1,
@@ -319,7 +319,7 @@ describe('ApprovalWorkflowService', () => {
       })
 
       const result = await service.processApproval({
-        requestId: req.requestId,
+        requestId: req.requestId!,
         level: 1,
         decision: 'APPROVED',
         approverId: 1,
@@ -340,7 +340,7 @@ describe('ApprovalWorkflowService', () => {
       })
 
       const result = await service.processApproval({
-        requestId: req.requestId,
+        requestId: req.requestId!,
         level: 1,
         decision: 'APPROVED',
         approverId: 2,
@@ -361,7 +361,7 @@ describe('ApprovalWorkflowService', () => {
       })
 
       const result = await service.processApproval({
-        requestId: req.requestId,
+        requestId: req.requestId!,
         level: 1,
         decision: 'APPROVED',
         approverId: 1,
@@ -394,7 +394,7 @@ describe('ApprovalWorkflowService', () => {
       })
 
       const result = await service.processApproval({
-        requestId: req.requestId,
+        requestId: req.requestId!,
         level: 99,
         decision: 'APPROVED',
         approverId: 1,
@@ -417,7 +417,7 @@ describe('ApprovalWorkflowService', () => {
       })
 
       const result = await service.processApproval({
-        requestId: req.requestId,
+        requestId: req.requestId!,
         level: 1,
         decision: 'REJECTED',
         approverId: 1,
@@ -439,7 +439,7 @@ describe('ApprovalWorkflowService', () => {
       })
 
       const result = await service.processApproval({
-        requestId: req.requestId,
+        requestId: req.requestId!,
         level: 1,
         decision: 'REJECTED',
         approverId: 1,
@@ -460,7 +460,7 @@ describe('ApprovalWorkflowService', () => {
       })
 
       const result = await service.processApproval({
-        requestId: req.requestId,
+        requestId: req.requestId!,
         level: 1,
         decision: 'REJECTED',
         approverId: 2,
@@ -481,7 +481,7 @@ describe('ApprovalWorkflowService', () => {
       })
 
       const result = await service.processApproval({
-        requestId: req.requestId,
+        requestId: req.requestId!,
         level: 1,
         decision: 'REJECTED',
         approverId: 1,
@@ -503,7 +503,7 @@ describe('ApprovalWorkflowService', () => {
         requestedBy: 1
       })
 
-      const result = await service.getApprovalHistory(req.requestId)
+      const result = await service.getApprovalHistory(req.requestId!)
 
       expect(result).toBeDefined()
       expect(result).toHaveProperty('request')
@@ -520,7 +520,7 @@ describe('ApprovalWorkflowService', () => {
         requestedBy: 1
       })
 
-      const result = await service.getApprovalHistory(req.requestId)
+      const result = await service.getApprovalHistory(req.requestId!)
 
       expect(result.request).toBeDefined()
     })
@@ -535,7 +535,7 @@ describe('ApprovalWorkflowService', () => {
         requestedBy: 1
       })
 
-      const result = await service.getApprovalHistory(req.requestId)
+      const result = await service.getApprovalHistory(req.requestId!)
 
       expect(Array.isArray(result.levels)).toBe(true)
     })
@@ -556,7 +556,7 @@ describe('ApprovalWorkflowService', () => {
         requestedBy: 1
       })
 
-      const result = await service.getApprovalHistory(req.requestId)
+      const result = await service.getApprovalHistory(req.requestId!)
 
       expect(result.request.request_type).toBe('EXPENSE')
       expect(result.request.amount).toBe(20000)
@@ -614,7 +614,7 @@ describe('ApprovalWorkflowService', () => {
       })
 
       await service.processApproval({
-        requestId: req.requestId,
+        requestId: req.requestId!,
         level: 1,
         decision: 'APPROVED',
         approverId: 1,
@@ -707,7 +707,7 @@ describe('ApprovalWorkflowService', () => {
         requestedBy: 1
       })
 
-      const history = await service.getApprovalHistory(req.requestId)
+      const history = await service.getApprovalHistory(req.requestId!)
 
       expect(history.request.amount).toBe(30000)
       expect(history.request.request_type).toBe('PAYMENT')

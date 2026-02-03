@@ -1,6 +1,7 @@
 # REMEDIATION IMPLEMENTATION INTEGRATION GUIDE
 
 ## Overview
+
 This document outlines how to integrate the newly implemented remediation services with the existing system and what needs to be completed in Phases 3-4.
 
 ---
@@ -8,6 +9,7 @@ This document outlines how to integrate the newly implemented remediation servic
 ## PHASE 1 & 2 INTEGRATION CHECKLIST
 
 ### ✅ Database Migrations
+
 Run the new migration file before deploying services:
 
 ```typescript
@@ -24,6 +26,7 @@ import { up as migration011 } from './migrations/011_reporting_infrastructure'
 ```
 
 ### ✅ Service Registration
+
 Create service initialization module:
 
 ```typescript
@@ -47,6 +50,7 @@ export function initializeRemediationServices() {
 ```
 
 ### ✅ IPC Handler Registration
+
 Create handlers to expose services to UI:
 
 ```typescript
@@ -88,6 +92,7 @@ export function registerApprovalHandlers() {
 ```
 
 Similarly create handlers for:
+
 - Period locking (`period-handlers.ts`)
 - Payment service (`enhanced-payment-handlers.ts`)
 - Reporting services (`enhanced-reports-handlers.ts`)
@@ -101,11 +106,13 @@ Similarly create handlers for:
 **Purpose:** Automatically apply credit balances when generating invoices
 
 **Implementation File:**
+
 ```typescript
 // electron/main/services/finance/CreditAutoApplicationService.ts
 ```
 
 **Key Methods:**
+
 - `calculateAvailableCredit(studentId)` - Get credit balance
 - `applyCredit(studentId, invoiceId)` - Auto-apply during invoice generation
 - `reverseCredit(studentId, invoiceId)` - Reverse if needed
@@ -113,12 +120,14 @@ Similarly create handlers for:
 
 **Integration Point:**
 When creating invoices, call:
+
 ```typescript
 const creditService = new CreditAutoApplicationService()
 await creditService.applyCredit(studentId, newInvoiceId)
 ```
 
 **Database Table Needed:**
+
 ```sql
 CREATE TABLE credit_application (
   id INTEGER PRIMARY KEY,
@@ -137,17 +146,20 @@ CREATE TABLE credit_application (
 **Purpose:** Calculate correct fees when students enroll mid-term
 
 **Implementation File:**
+
 ```typescript
 // electron/main/services/finance/FeeProrationService.ts
 ```
 
 **Key Methods:**
+
 - `calculateProrationPercentage(enrollmentDate, termEndDate)` - Weeks-based calc
 - `prorateInvoice(studentId, termId, enrollmentDate)` - Generate prorated invoice
 - `approveProration(proratedInvoiceId)` - Require approval
 - `getProrationAuditTrail(studentId)` - Track all prorations
 
 **Business Logic:**
+
 ```
 Weeks Attended / Total Weeks × Full Fee = Prorated Fee
 
@@ -159,6 +171,7 @@ Example:
 ```
 
 **Database Table Needed:**
+
 ```sql
 CREATE TABLE fee_proration (
   id INTEGER PRIMARY KEY,
@@ -187,11 +200,13 @@ CREATE TABLE fee_proration (
 **Purpose:** Track scholarship allocations and ensure proper fund management
 
 **Implementation File:**
+
 ```typescript
 // electron/main/services/finance/ScholarshipService.ts
 ```
 
 **Key Methods:**
+
 - `createScholarship(data)` - Register new scholarship program
 - `allocateScholarshipToStudent(studentId, scholarshipId, amount)` - Assign
 - `disburseBursary(studentId, scholarshipId, amount)` - Pay out funds
@@ -199,6 +214,7 @@ CREATE TABLE fee_proration (
 - `generateSponsorReport(sponsorId)` - Report to donors
 
 **Database Tables Needed:**
+
 ```sql
 CREATE TABLE scholarship (
   id INTEGER PRIMARY KEY,
@@ -243,11 +259,13 @@ CREATE TABLE scholarship_disbursement (
 **Purpose:** Generate MOE NEMIS compliance reports
 
 **Implementation File:**
+
 ```typescript
 // electron/main/services/reports/NEMISExportService.ts
 ```
 
 **Key Methods:**
+
 - `exportEnrollment()` - Student enrollment data
 - `exportAttendance()` - Attendance records
 - `exportExamResults()` - KCPE/KCSE results
@@ -255,6 +273,7 @@ CREATE TABLE scholarship_disbursement (
 - `exportInfrastructure()` - School facilities
 
 **NEMIS Reporting Requirements:**
+
 - Student enrollment by form level
 - Staff positions and qualifications
 - Infrastructure inventory
@@ -263,6 +282,7 @@ CREATE TABLE scholarship_disbursement (
 
 **Database Integration:**
 Will use existing tables, new export table for audit:
+
 ```sql
 CREATE TABLE nemis_export (
   id INTEGER PRIMARY KEY,
@@ -290,6 +310,7 @@ CREATE TABLE nemis_export (
 **Purpose:** Safely apply all migrations in sequence
 
 **Key Features:**
+
 - Automatic migration detection
 - Transaction-based execution
 - Rollback capability
@@ -306,6 +327,7 @@ await runner.rollback()      // Reverts last migration
 **Location:** `electron/main/__tests__/integration/`
 
 **Test Categories:**
+
 1. **Approval Workflow Tests**
    - Single-level approval
    - Dual-level approval
@@ -339,6 +361,7 @@ await runner.rollback()      // Reverts last migration
 ### 4.3 Deployment Procedures
 
 **Pre-Deployment:**
+
 1. Backup current database
 2. Verify migration compatibility
 3. Run full test suite
@@ -346,6 +369,7 @@ await runner.rollback()      // Reverts last migration
 5. User acceptance testing (UAT)
 
 **Deployment:**
+
 1. Stop application
 2. Run migrations
 3. Verify database integrity
@@ -353,6 +377,7 @@ await runner.rollback()      // Reverts last migration
 5. Run smoke tests
 
 **Post-Deployment:**
+
 1. Monitor error logs
 2. Verify all workflows functioning
 3. User training follow-up
@@ -362,7 +387,7 @@ await runner.rollback()      // Reverts last migration
 
 ## FRONTEND INTEGRATION REQUIREMENTS
 
-### New UI Pages Needed:
+### New UI Pages Needed
 
 1. **Approval Workflow Management**
    - Pending approvals queue
@@ -389,6 +414,7 @@ await runner.rollback()      // Reverts last migration
 ### API Contracts
 
 All new services expose:
+
 - Success/failure boolean
 - Detailed error messages
 - Audit-logged operations
@@ -400,27 +426,31 @@ All new services expose:
 
 Before production deployment, verify:
 
-### Phase 1 Controls:
+### Phase 1 Controls
+
 - [ ] Payments >100K require approval
 - [ ] Payments >500K require dual approval
 - [ ] Period lock prevents backdated transactions
 - [ ] Voided transactions in separate audit table
 - [ ] All approvals logged with timestamps
 
-### Phase 2 Reporting:
+### Phase 2 Reporting
+
 - [ ] Cash flow statement shows real numbers
 - [ ] Aged receivables correctly bucketed (0-30, 31-60, etc.)
 - [ ] Student ledger shows correct opening balance
 - [ ] Transport profitability calculated
 - [ ] Boarding profitability calculated
 
-### Phase 3 Domain Model:
+### Phase 3 Domain Model
+
 - [ ] Credits auto-apply to invoices
 - [ ] Mid-term proration calculated correctly
 - [ ] Scholarships tracked and disbursed
 - [ ] NEMIS export generates valid files
 
-### Phase 4 Deployment:
+### Phase 4 Deployment
+
 - [ ] Migrations run idempotently
 - [ ] All tests pass
 - [ ] Database integrity verified
@@ -431,6 +461,7 @@ Before production deployment, verify:
 ## TROUBLESHOOTING GUIDE
 
 ### Database Migration Issues
+
 ```typescript
 // Check migration status
 const status = await runner.getMigrationStatus()
@@ -444,12 +475,14 @@ await runner.runMigrations()
 ```
 
 ### Service Integration Errors
+
 - Verify all IPC handlers registered
 - Check service instantiation
 - Verify database tables exist
 - Check audit logging functional
 
 ### Reporting Data Issues
+
 - Verify transaction types match service expectations
 - Check date ranges in queries
 - Validate student/invoice links
@@ -464,9 +497,11 @@ If critical issue found post-deployment:
 1. **Stop Application**
 2. **Restore Database Backup**
 3. **Rollback Migrations**
+
    ```typescript
    await runner.rollback() // Goes back one migration
    ```
+
 4. **Deploy Previous App Version**
 5. **Verify System Operational**
 6. **Document Issue for Fix**

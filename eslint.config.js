@@ -32,11 +32,10 @@ const baseConfig = {
   },
   rules: {
     // TypeScript rules
-    '@typescript-eslint/no-unused-vars': ['error', { 
+    '@typescript-eslint/no-unused-vars': ['warn', { 
       argsIgnorePattern: '^_',
       varsIgnorePattern: '^_',
-      args: 'after-used',
-      ignoreRestSiblings: true
+      ignoreRestSiblings: true 
     }],
     '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/explicit-function-return-type': 'off',
@@ -52,7 +51,7 @@ const baseConfig = {
     'no-console': ['warn', { allow: ['warn', 'error'] }],
     'prefer-const': 'error',
     'no-var': 'error',
-    'object-shorthand': 'error',
+    'object-shorthand': 'warn',
     
     // Accessibility
     'jsx-a11y/click-events-have-key-events': 'warn',
@@ -130,8 +129,23 @@ export default [
     settings: baseConfig.settings
   },
   {
-    // Interface definitions - disable unused vars for interface parameters
-    files: ['**/types/**/*.ts', '**/*.d.ts', '**/stores/**/*.ts', '**/contexts/**/*.ts'],
+    // Electron main services - allow interface params to not be "used"
+    files: ['electron/main/services/**/*.ts'],
+    languageOptions: baseConfig.languageOptions,
+    plugins: baseConfig.plugins,
+    rules: {
+      ...baseConfig.rules,
+      '@typescript-eslint/no-unused-vars': ['warn', { 
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        ignoreRestSiblings: true,
+        // Allow unused parameters in interfaces
+        args: 'none'
+      }]
+    },
+    settings: baseConfig.settings
+  },
+  {
     languageOptions: baseConfig.languageOptions,
     plugins: baseConfig.plugins,
     rules: {

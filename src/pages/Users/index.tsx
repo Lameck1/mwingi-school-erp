@@ -26,8 +26,6 @@ export default function UsersPage() {
         newPassword: '', confirmPassword: ''
     })
 
-    useEffect(() => { loadData() }, [])
-
     const loadData = async () => {
         setLoading(true)
         try {
@@ -39,12 +37,14 @@ export default function UsersPage() {
         } finally { setLoading(false) }
     }
 
+    useEffect(() => { loadData() }, [])
+
     const handleSaveUser = async (e: React.FormEvent) => {
         e.preventDefault()
         setSaving(true)
         try {
             if (isEditing && selectedUser) {
-                const { password, ...updateData } = userData // eslint-disable-line no-unused-vars
+                const { password, ...updateData } = userData  
                 await window.electronAPI.updateUser(selectedUser.id, updateData as UpdateUserData)
                 showToast('User profile updated successfully', 'success')
             } else {
@@ -232,14 +232,17 @@ export default function UsersPage() {
                                         <td className="py-4 px-6 text-right">
                                             <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <button onClick={() => openEditModal(user)}
+                                                    aria-label="Edit user"
                                                     className="p-2.5 bg-background border border-border/40 hover:border-blue-500/50 hover:text-blue-500 rounded-xl transition-all shadow-sm">
                                                     <Edit className="w-4 h-4" />
                                                 </button>
                                                 <button onClick={() => openPasswordModal(user)}
+                                                    aria-label="Reset user password"
                                                     className="p-2.5 bg-background border border-border/40 hover:border-orange-500/50 hover:text-orange-500 rounded-xl transition-all shadow-sm">
                                                     <Lock className="w-4 h-4" />
                                                 </button>
                                                 <button onClick={() => handleToggleStatus(user)}
+                                                    aria-label={user.is_active ? 'Deactivate user' : 'Activate user'}
                                                     className={`p-2.5 bg-background border border-border/40 rounded-xl transition-all shadow-sm ${user.is_active ? 'hover:border-destructive/50 hover:text-destructive' : 'hover:border-emerald-500/50 hover:text-emerald-500'}`}>
                                                     {user.is_active ? <Trash className="w-4 h-4" /> : <Check className="w-4 h-4" />}
                                                 </button>

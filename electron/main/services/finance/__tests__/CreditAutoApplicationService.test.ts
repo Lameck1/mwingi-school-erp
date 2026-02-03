@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import Database from 'better-sqlite3-multiple-ciphers'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CreditAutoApplicationService } from '../CreditAutoApplicationService'
 
 // Mock audit utilities
@@ -172,23 +172,23 @@ describe('CreditAutoApplicationService', () => {
 
   describe('addCredit', () => {
     it('should add manual credit', () => {
-      const result = service.addCredit({
-        studentId: 1,
-        amount: 50000,
-        source: 'MANUAL_ADJUSTMENT',
-        userId: 10
-      })
+      const result = service.addCredit(
+        1,  // studentId
+        50000,  // amount
+        'MANUAL_ADJUSTMENT',  // notes
+        10  // userId
+      )
 
       expect(result).toBeDefined()
     })
 
     it('should reject negative credit', () => {
-      const result = service.addCredit({
-        studentId: 1,
-        amount: -10000,
-        source: 'MANUAL_ADJUSTMENT',
-        userId: 10
-      })
+      const result = service.addCredit(
+        1,  // studentId
+        -10000,  // amount
+        'MANUAL_ADJUSTMENT',  // notes
+        10  // userId
+      )
 
       expect(result).toBeDefined()
     })
@@ -196,12 +196,12 @@ describe('CreditAutoApplicationService', () => {
     it('should create new credit transaction', () => {
       const beforeCount = db.prepare('SELECT COUNT(*) as count FROM credit_transaction').get() as any
       
-      service.addCredit({
-        studentId: 1,
-        amount: 25000,
-        source: 'REFUND',
-        userId: 10
-      })
+      service.addCredit(
+        1,  // studentId
+        25000,  // amount
+        'REFUND',  // notes
+        10  // userId
+      )
 
       const afterCount = db.prepare('SELECT COUNT(*) as count FROM credit_transaction').get() as any
       expect(afterCount.count).toBeGreaterThanOrEqual(beforeCount.count)
@@ -209,16 +209,16 @@ describe('CreditAutoApplicationService', () => {
   })
 
   describe('getCreditTransactions', () => {
-    it('should retrieve credit transactions', () => {
-      const transactions = service.getCreditTransactions(1)
+    it('should retrieve credit transactions', async () => {
+      const transactions = await service.getCreditTransactions(1)
 
       expect(Array.isArray(transactions) || transactions === undefined).toBe(true)
     })
 
-    it('should return empty for student with no credits', () => {
+    it('should return empty for student with no credits', async () => {
       db.exec('INSERT INTO student (first_name, last_name, admission_number) VALUES (\'New\', \'Student\', \'STU-003\')')
 
-      const transactions = service.getCreditTransactions(3)
+      const transactions = await service.getCreditTransactions(3)
 
       expect(transactions === undefined || Array.isArray(transactions)).toBe(true)
     })
@@ -226,21 +226,21 @@ describe('CreditAutoApplicationService', () => {
 
   describe('reverseCredit', () => {
     it('should reverse credit', () => {
-      const result = service.reverseCredit({
-        creditId: 1,
-        reason: 'Error correction',
-        userId: 10
-      })
+      const result = service.reverseCredit(
+        1,  // creditId
+        'Error correction',  // reason
+        10  // userId
+      )
 
       expect(result).toBeDefined()
     })
 
     it('should validate credit existence', () => {
-      const result = service.reverseCredit({
-        creditId: 999,
-        reason: 'Error correction',
-        userId: 10
-      })
+      const result = service.reverseCredit(
+        999,  // creditId
+        'Error correction',  // reason
+        10  // userId
+      )
 
       expect(result).toBeDefined()
     })

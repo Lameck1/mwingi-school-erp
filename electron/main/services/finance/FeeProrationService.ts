@@ -476,12 +476,12 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
     }
   }
 
-  generateProRatedInvoice(
+  async generateProRatedInvoice(
     studentIdOrData: number | any,
     templateInvoiceId?: number,
     enrollmentDate?: string,
     userId?: number
-  ): Promise<InvoiceGenerationResult> | InvoiceGenerationResult {
+  ): Promise<InvoiceGenerationResult> {
     // Handle both API styles
     if (typeof studentIdOrData === 'object') {
       // New style: { studentId, enrollmentDate, grade, userId }

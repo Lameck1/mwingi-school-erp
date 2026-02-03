@@ -453,7 +453,7 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
     }
 
     try {
-      const creditRepo = new CreditRepository(this.db)
+      const _creditRepo = new CreditRepository(this.db)
       const creditId = this.db.prepare(
         'INSERT INTO credit_transaction (student_id, amount, transaction_type, notes, created_at) VALUES (?, ?, ?, ?, ?)'
       ).run(studentId, amount, 'MANUAL_CREDIT', notes || '', new Date().toISOString()).lastInsertRowid
@@ -525,11 +525,6 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
   /**
    * Get credit transactions synchronously
    */
-  getCreditTransactions(studentId: number): any[] {    return this.db.prepare(
-      'SELECT * FROM credit_transaction WHERE student_id = ? ORDER BY created_at DESC'
-    ).all(studentId) as any[]
-  }
-
   /**
    * Retrieve credit transactions history
    */

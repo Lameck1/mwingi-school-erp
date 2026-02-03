@@ -1,4 +1,5 @@
 # EXECUTIVE SUMMARY: MWINGI SCHOOL ERP AUDIT
+
 ## Non-Technical Overview for School Leadership
 
 **Prepared For:** Board of Directors, Principal, Chief Accountant  
@@ -16,6 +17,7 @@
 ### Risk Level: **HIGH** 🔴
 
 Deploying the system in its current state exposes the school to:
+
 - Financial misreporting
 - Fraud risk
 - Audit failures
@@ -63,6 +65,7 @@ Deploying the system in its current state exposes the school to:
 Any clerk can process a payment of **any amount** without supervisor approval.
 
 **Real-World Risk:**
+
 ```
 Scenario: Clerk processes 5 million KES "payment" to fictitious vendor
 Current System: Transaction succeeds, no alerts
@@ -70,6 +73,7 @@ Result: Money stolen, no approval trail for auditors
 ```
 
 **What's Needed:**
+
 - Payments >100,000 KES require supervisor approval
 - Payments >500,000 KES require dual authorization (Principal + Accountant)
 - All refunds require approval
@@ -85,6 +89,7 @@ Result: Money stolen, no approval trail for auditors
 The "Cash Flow Statement" button exists but shows **incorrect/empty data**.
 
 **Real-World Risk:**
+
 ```
 Board Meeting: "According to cash flow, we have 2M KES available"
 Reality: Report is non-functional. Actual available cash: 200K KES
@@ -93,6 +98,7 @@ Result: Bounced checks, unpaid salaries
 ```
 
 **What's Needed:**
+
 - Rebuild cash flow calculations from scratch
 - Separate operating/investing/financing activities
 - Match bank account balances
@@ -108,6 +114,7 @@ Result: Bounced checks, unpaid salaries
 After "closing the books" for December, transactions can still be backdated to December.
 
 **Real-World Risk:**
+
 ```
 January 15: Financial statements approved by Board
 January 20: Clerk backdates 200K expense to December
@@ -116,6 +123,7 @@ Impact: Audit failure, loss of trust
 ```
 
 **What's Needed:**
+
 - Lock ALL transaction types when period closed
 - Only Principal can unlock (with audit trail)
 - Prevent any backdating
@@ -131,6 +139,7 @@ Impact: Audit failure, loss of trust
 Cannot verify that system balance matches bank statement.
 
 **Real-World Risk:**
+
 ```
 6 months pass without reconciliation
 System shows: 3M KES in bank
@@ -140,6 +149,7 @@ Result: All checks bounce
 ```
 
 **What's Needed:**
+
 - Build UI to upload bank statements
 - Auto-match transactions
 - Flag discrepancies
@@ -156,6 +166,7 @@ Result: All checks bounce
 When a transaction is "voided" (cancelled), it disappears from all reports.
 
 **Real-World Risk:**
+
 ```
 Parent pays 25K cash, receives receipt
 Clerk voids payment next day, pockets cash
@@ -165,6 +176,7 @@ Result: Theft + no way to prove parent paid
 ```
 
 **What's Needed:**
+
 - "Voided Transactions Report"
 - Show who voided, when, and why
 - Alert on suspicious patterns (same clerk voiding multiple times)
@@ -176,30 +188,35 @@ Result: Theft + no way to prove parent paid
 
 ## 📈 WHAT MANAGEMENT CANNOT CURRENTLY KNOW
 
-### Questions the System CANNOT Answer:
+### Questions the System CANNOT Answer
 
 ❌ **"Is the school bus profitable or losing money?"**
+
 - System tracks total transport income and expenses
 - Cannot separate Bus A (city route) from Bus B (rural route)
 - Cannot tell which routes subsidize which
 - **Impact:** May add unprofitable bus routes
 
 ❌ **"Do boarding fees cover boarding costs?"**
+
 - System collects boarding fees
 - Cannot separate boarding expenses (food, utilities, matron salary) from teaching expenses
 - **Impact:** May underprice boarding, losing money unknowingly
 
 ❌ **"Which parents are 90+ days overdue on fees?"**
+
 - System shows total defaulters
 - Cannot separate recent (30 days) from chronic (90+ days)
 - **Impact:** Wastes time chasing small recent debts while large old debts remain uncollected
 
 ❌ **"How much cash will we have next month?"**
+
 - Cash flow statement broken
 - Cannot forecast based on enrollment, payroll, expenses
 - **Impact:** May run out of cash unexpectedly
 
 ❌ **"Is Transport Department within budget?"**
+
 - Budget system exists but no variance reporting
 - Cannot see "budgeted 500K, spent 700K"
 - **Impact:** Overspending goes unnoticed until year-end
@@ -208,7 +225,7 @@ Result: Theft + no way to prove parent paid
 
 ## 💰 FINANCIAL IMPACT SUMMARY
 
-### Revenue at Risk:
+### Revenue at Risk
 
 | Risk Area | Potential Annual Impact |
 |-----------|------------------------|
@@ -218,7 +235,7 @@ Result: Theft + no way to prove parent paid
 | Poor debt collection (no aging report) | 500K-1M KES uncollectible |
 | **TOTAL EXPOSURE** | **2.8M - 3.8M KES/year** |
 
-### Operational Impact:
+### Operational Impact
 
 | Issue | Consequence |
 |-------|------------|
@@ -276,6 +293,7 @@ Result: Theft + no way to prove parent paid
 ### External Audit Readiness: **FAIL** ❌
 
 **Issues That Will Fail Audit:**
+
 1. Incomplete audit trail (voided transactions not visible)
 2. Weak internal controls (no approval workflow)
 3. Period lock bypassable (books can be changed after closing)
@@ -285,10 +303,12 @@ Result: Theft + no way to prove parent paid
 ### Statutory Compliance (KRA/NSSF): **PARTIAL** ⚠️
 
 **What Works:**
+
 - ✅ Payroll calculations correct
 - ✅ PAYE/NSSF/SHIF deductions accurate
 
 **What's Missing:**
+
 - ❌ Cannot export P9 forms for KRA
 - ❌ Cannot export NSSF remittance files
 - ❌ No TSC teacher salary reconciliation
@@ -297,7 +317,7 @@ Result: Theft + no way to prove parent paid
 
 ## 💡 MANAGEMENT RECOMMENDATIONS
 
-### For the Board:
+### For the Board
 
 1. **DO NOT approve production deployment** until Phase 1 fixes completed
 2. **Allocate 1.2M - 1.5M KES** for full remediation (Phases 1-3)
@@ -305,14 +325,14 @@ Result: Theft + no way to prove parent paid
 4. **Plan 1-month parallel run** (old system + new system simultaneously)
 5. **Budget for ongoing maintenance** (150K KES/month)
 
-### For the Principal:
+### For the Principal
 
 1. **Review approval workflow thresholds** - what amounts need Principal authorization?
 2. **Define financial close process** - who locks periods, when, and how?
 3. **Establish bank reconciliation schedule** - monthly, by whom?
 4. **Approve user access levels** - who can do what in the system?
 
-### For the Chief Accountant:
+### For the Chief Accountant
 
 1. **Participate in Phase 1 testing** - verify approval workflows work correctly
 2. **Define chart of accounts** - how to categorize income/expenses
@@ -323,7 +343,7 @@ Result: Theft + no way to prove parent paid
 
 ## ⏱️ TIMELINE TO PRODUCTION
 
-### Realistic Deployment Schedule:
+### Realistic Deployment Schedule
 
 ```
 Week 1-2:  Phase 1 Critical Fixes
@@ -336,7 +356,7 @@ Week 10+:  Hypercare Support
 EARLIEST GO-LIVE: 10 weeks (2.5 months)
 ```
 
-### Fast-Track Option (High Risk):
+### Fast-Track Option (High Risk)
 
 ```
 Week 1-2:  Phase 1 Critical Fixes ONLY
@@ -351,9 +371,10 @@ RECOMMENDATION: Not advised for financial system
 
 ## 🎯 SUCCESS METRICS
 
-### How to Know System is Ready:
+### How to Know System is Ready
 
 **Before Go-Live Checklist:**
+
 - [ ] External auditor reviews and approves system
 - [ ] School accountant completes 1-month test run successfully
 - [ ] All Phase 1 critical fixes verified
@@ -362,6 +383,7 @@ RECOMMENDATION: Not advised for financial system
 - [ ] Board formally approves deployment
 
 **After Go-Live (First 3 Months):**
+
 - Monthly financial close completed on time
 - Bank reconciliation matches system balance
 - No audit trail gaps discovered
@@ -373,7 +395,7 @@ RECOMMENDATION: Not advised for financial system
 
 ## 📞 NEXT STEPS
 
-### Immediate Actions:
+### Immediate Actions
 
 1. **Board Decision:** Approve remediation budget and timeline
 2. **Vendor Engagement:** Contract developer for Phase 1 fixes
@@ -381,7 +403,7 @@ RECOMMENDATION: Not advised for financial system
 4. **Risk Assessment:** Decide if current system stays in parallel
 5. **Communication Plan:** Inform parents of fee payment changes
 
-### Questions for Board Consideration:
+### Questions for Board Consideration
 
 1. What is our risk tolerance for financial system deployment?
 2. What budget can we allocate for system fixes?
@@ -393,13 +415,14 @@ RECOMMENDATION: Not advised for financial system
 
 ## 📝 CONCLUSION
 
-The Mwingi School ERP has **solid technical foundations** but **critical gaps in financial controls and reporting**. 
+The Mwingi School ERP has **solid technical foundations** but **critical gaps in financial controls and reporting**.
 
 **The system is 60% production-ready.**
 
 With **4-6 weeks of focused development** and a **budget of 1.2M - 1.5M KES**, it can become a robust, audit-compliant school management system that serves Mwingi Adventist School for many years.
 
 **Without these fixes, deploying the system risks:**
+
 - Financial misstatements
 - Fraud
 - Audit failures  

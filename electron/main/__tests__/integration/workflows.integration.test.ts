@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import Database from 'better-sqlite3-multiple-ciphers'
-import { ApprovalWorkflowService } from '../../services/workflow/ApprovalWorkflowService'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PaymentService } from '../../services/finance/PaymentService'
+import { ApprovalWorkflowService } from '../../services/workflow/ApprovalWorkflowService'
 
 // Mock audit utilities
 vi.mock('../../database/utils/audit', () => ({
@@ -232,7 +232,9 @@ describe('Workflows Integration Tests', () => {
         student_id: 1,
         amount: 25000,
         payment_date: '2026-01-20',
-        payment_method: 'MPESA'
+        payment_method: 'MPESA',
+        reference: 'TEST001',
+        recorded_by: 1
       })
 
       expect(result).toBeDefined()
@@ -243,7 +245,9 @@ describe('Workflows Integration Tests', () => {
         student_id: 1,
         amount: 50000,
         payment_date: '2026-01-20',
-        payment_method: 'BANK'
+        payment_method: 'MPESA',
+        reference: 'TEST002',
+        recorded_by: 1
       })
 
       const payments = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').all(1) as any[]
@@ -255,14 +259,18 @@ describe('Workflows Integration Tests', () => {
         student_id: 1,
         amount: 25000,
         payment_date: '2026-01-15',
-        payment_method: 'CASH'
+        payment_method: 'CASH',
+        reference: 'TEST003',
+        recorded_by: 1
       })
 
       const result2 = await paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
         payment_date: '2026-01-20',
-        payment_method: 'CASH'
+        payment_method: 'CASH',
+        reference: 'TEST004',
+        recorded_by: 1
       })
 
       expect(result1).toBeDefined()
@@ -274,7 +282,9 @@ describe('Workflows Integration Tests', () => {
         student_id: 1,
         amount: 50000,
         payment_date: '2026-01-20',
-        payment_method: 'MPESA'
+        payment_method: 'MPESA',
+        reference: 'TEST005',
+        recorded_by: 1
       })
 
       const invoice = db.prepare('SELECT * FROM fee_invoice WHERE id = ?').get(1) as any
@@ -286,14 +296,18 @@ describe('Workflows Integration Tests', () => {
         student_id: 1,
         amount: 25000,
         payment_date: '2026-01-15',
-        payment_method: 'MPESA'
+        payment_method: 'MPESA',
+        reference: 'TEST006',
+        recorded_by: 1
       })
 
       await paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
         payment_date: '2026-01-20',
-        payment_method: 'BANK'
+        payment_method: 'BANK',
+        reference: 'TEST007',
+        recorded_by: 1
       })
 
       const payments = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction WHERE student_id = ?').get(1) as any
@@ -305,14 +319,18 @@ describe('Workflows Integration Tests', () => {
         student_id: 1,
         amount: 25000,
         payment_date: '2026-01-15',
-        payment_method: 'MPESA'
+        payment_method: 'MPESA',
+        reference: 'TEST008',
+        recorded_by: 1
       })
 
       await paymentService.recordPayment({
         student_id: 2,
         amount: 30000,
         payment_date: '2026-01-20',
-        payment_method: 'BANK'
+        payment_method: 'BANK',
+        reference: 'TEST009',
+        recorded_by: 1
       })
 
       const payment1 = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').get(1) as any
@@ -347,7 +365,8 @@ describe('Workflows Integration Tests', () => {
         requested_by: 1
       })
 
-      const result = await approvalService.approveRequest(req.requestId, 1, 'Approved', 2)
+      expect(req.requestId!).toBeDefined()
+      const result = await approvalService.approveRequest(req.requestId!, 1, 'Approved', 2)
 
       expect(result.success).toBe(true)
     })
@@ -375,7 +394,8 @@ describe('Workflows Integration Tests', () => {
         requested_by: 1
       })
 
-      const history = await approvalService.getRequestHistory(req.requestId)
+      expect(req.requestId!).toBeDefined()
+      const history = await approvalService.getRequestHistory(req.requestId!)
 
       expect(history).toBeDefined()
       expect(history).toHaveProperty('request')
@@ -407,7 +427,7 @@ describe('Workflows Integration Tests', () => {
         requested_by: 1
       })
 
-      const result = await approvalService.rejectRequest(req.requestId, 1, 'Insufficient budget', 2)
+      const result = await approvalService.rejectRequest(req.requestId!, 1, 'Insufficient budget', 2)
 
       expect(result.success).toBe(true)
     })
@@ -428,7 +448,7 @@ describe('Workflows Integration Tests', () => {
       expect(approval.success).toBe(true)
 
       // Approve request
-      const approved = await approvalService.approveRequest(approval.requestId, 1, 'Approved', 2)
+      const approved = await approvalService.approveRequest(approval.requestId!, 1, 'Approved', 2)
       expect(approved.success).toBe(true)
 
       // Record payment
@@ -436,7 +456,9 @@ describe('Workflows Integration Tests', () => {
         student_id: 1,
         amount: 25000,
         payment_date: '2026-01-20',
-        payment_method: 'MPESA'
+        payment_method: 'MPESA',
+        reference: 'TEST010',
+        recorded_by: 1
       })
 
       expect(payment).toBeDefined()
@@ -467,22 +489,26 @@ describe('Workflows Integration Tests', () => {
       expect(req2.success).toBe(true)
 
       // Approve both
-      await approvalService.approveRequest(req1.requestId, 1, 'Approved', 2)
-      await approvalService.approveRequest(req2.requestId, 1, 'Approved', 2)
+      await approvalService.approveRequest(req1.requestId!, 1, 'Approved', 2)
+      await approvalService.approveRequest(req2.requestId!, 1, 'Approved', 2)
 
       // Record payments
       await paymentService.recordPayment({
         student_id: 1,
         amount: 30000,
         payment_date: '2026-01-20',
-        payment_method: 'BANK'
+        payment_method: 'BANK',
+        reference: 'TEST011',
+        recorded_by: 1
       })
 
       await paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
         payment_date: '2026-01-20',
-        payment_method: 'BANK'
+        payment_method: 'BANK',
+        reference: 'TEST012',
+        recorded_by: 1
       })
 
       const payments = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction').get() as any
@@ -499,7 +525,7 @@ describe('Workflows Integration Tests', () => {
         requested_by: 1
       })
 
-      const rejected = await approvalService.rejectRequest(req.requestId, 1, 'Not approved', 2)
+      const rejected = await approvalService.rejectRequest(req.requestId!, 1, 'Not approved', 2)
 
       expect(rejected.success).toBe(true)
 
@@ -518,17 +544,19 @@ describe('Workflows Integration Tests', () => {
         requested_by: 1
       })
 
-      await approvalService.approveRequest(req.requestId, 1, 'Approved', 2)
+      await approvalService.approveRequest(req.requestId!, 1, 'Approved', 2)
 
       await paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
         payment_date: '2026-01-20',
-        payment_method: 'MPESA'
+        payment_method: 'MPESA',
+        reference: 'TEST013',
+        recorded_by: 1
       })
 
       // Verify request was recorded
-      const request = db.prepare('SELECT * FROM approval_request WHERE id = ?').get(req.requestId) as any
+      const request = db.prepare('SELECT * FROM approval_request WHERE id = ?').get(req.requestId!) as any
       expect(request).toBeDefined()
     })
 
@@ -566,17 +594,19 @@ describe('Workflows Integration Tests', () => {
         requested_by: 1
       })
 
-      await approvalService.approveRequest(req.requestId, 1, 'Approved', 2)
+      await approvalService.approveRequest(req.requestId!, 1, 'Approved', 2)
 
       await paymentService.recordPayment({
         student_id: 1,
         amount: 50000,
         payment_date: '2026-01-20',
-        payment_method: 'MPESA'
+        payment_method: 'MPESA',
+        reference: 'TEST014',
+        recorded_by: 1
       })
 
       // Verify both records exist and are consistent
-      const approval = db.prepare('SELECT * FROM approval_request WHERE id = ?').get(req.requestId) as any
+      const approval = db.prepare('SELECT * FROM approval_request WHERE id = ?').get(req.requestId!) as any
       const payment = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').get(1) as any
 
       expect(approval.amount).toBe(50000)
@@ -594,9 +624,9 @@ describe('Workflows Integration Tests', () => {
       })
 
       // Move from PENDING to APPROVED
-      await approvalService.approveRequest(req.requestId, 1, 'Approved', 2)
+      await approvalService.approveRequest(req.requestId!, 1, 'Approved', 2)
 
-      const history = await approvalService.getRequestHistory(req.requestId)
+      const history = await approvalService.getRequestHistory(req.requestId!)
       expect(history.request).toBeDefined()
     })
 
@@ -689,3 +719,4 @@ describe('Workflows Integration Tests', () => {
     })
   })
 })
+

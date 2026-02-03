@@ -19,6 +19,7 @@ describe('NEMISExportService', () => {
         id TEXT PRIMARY KEY,
         class_name TEXT NOT NULL,
         stream TEXT,
+        grade_level TEXT,
         class_teacher_id TEXT,
         created_at TEXT
       )
@@ -119,6 +120,7 @@ describe('NEMISExportService', () => {
         id TEXT PRIMARY KEY,
         term_name TEXT NOT NULL,
         year INTEGER,
+        academic_year TEXT,
         start_date TEXT,
         end_date TEXT,
         school_id TEXT,
@@ -133,6 +135,7 @@ describe('NEMISExportService', () => {
         academic_term_id TEXT NOT NULL,
         stream TEXT,
         class_name TEXT,
+        enrollment_date TEXT,
         FOREIGN KEY (student_id) REFERENCES student(id),
         FOREIGN KEY (academic_term_id) REFERENCES academic_term(id)
       )
@@ -172,9 +175,9 @@ describe('NEMISExportService', () => {
     classInsert.run('class-1', 'Form 4A', 'Stream A', new Date().toISOString())
     classInsert.run('class-2', 'Form 4B', 'Stream B', new Date().toISOString())
 
-    const termInsert = db.prepare('INSERT INTO academic_term (id, term_name, year, start_date, end_date, school_id) VALUES (?, ?, ?, ?, ?, ?)')
-    termInsert.run('term-1', 'Term 1', 2025, '2025-01-01', '2025-03-31', 'school-1')
-    termInsert.run('term-2', 'Term 2', 2025, '2025-04-01', '2025-06-30', 'school-1')
+    const termInsert = db.prepare('INSERT INTO academic_term (id, term_name, year, academic_year, start_date, end_date, school_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    termInsert.run('term-1', 'Term 1', 2025, '2024-2025', '2025-01-01', '2025-03-31', 'school-1')
+    termInsert.run('term-2', 'Term 2', 2025, '2024-2025', '2025-04-01', '2025-06-30', 'school-1')
 
     const userInsert = db.prepare('INSERT INTO user (id, username, email, role, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)')
     userInsert.run('user-1', 'admin1', 'admin@school.com', 'admin', 'hash1', new Date().toISOString())
@@ -220,12 +223,12 @@ describe('NEMISExportService', () => {
     transactionInsert.run('trans-10', 'student-2', 'bursary', 15000, 'Bursary award', '2025-02-20', 'credit', new Date().toISOString())
 
     // Insert enrollments
-    const enrollmentInsert = db.prepare('INSERT INTO enrollment (id, student_id, academic_term_id, stream, class_name) VALUES (?, ?, ?, ?, ?)')
-    enrollmentInsert.run('enroll-1', 'student-1', 'term-1', 'A', 'Form 2A')
-    enrollmentInsert.run('enroll-2', 'student-1', 'term-2', 'A', 'Form 2A')
-    enrollmentInsert.run('enroll-3', 'student-2', 'term-1', 'B', 'Form 2B')
-    enrollmentInsert.run('enroll-4', 'student-2', 'term-2', 'B', 'Form 2B')
-    enrollmentInsert.run('enroll-5', 'student-3', 'term-1', 'A', 'Form 2A')
+    const enrollmentInsert = db.prepare('INSERT INTO enrollment (id, student_id, academic_term_id, stream, class_name, enrollment_date) VALUES (?, ?, ?, ?, ?, ?)')
+    enrollmentInsert.run('enroll-1', 'student-1', 'term-1', 'A', 'Form 2A', '2025-01-01')
+    enrollmentInsert.run('enroll-2', 'student-1', 'term-2', 'A', 'Form 2A', '2025-04-01')
+    enrollmentInsert.run('enroll-3', 'student-2', 'term-1', 'B', 'Form 2B', '2025-01-01')
+    enrollmentInsert.run('enroll-4', 'student-2', 'term-2', 'B', 'Form 2B', '2025-04-01')
+    enrollmentInsert.run('enroll-5', 'student-3', 'term-1', 'A', 'Form 2A', '2025-01-01')
 
     // Insert 15 marks
     const marksInsert = db.prepare('INSERT INTO marks (id, student_id, academic_term_id, subject, marks_obtained, total_marks) VALUES (?, ?, ?, ?, ?, ?)')
@@ -332,39 +335,39 @@ describe('NEMISExportService', () => {
 
   // extractEnrollmentData tests (6 tests)
   it('should extract enrollment data successfully', async () => {
-    const result = await service.extractEnrollmentData()
+    const result = await service.extractEnrollmentData('2025')
     expect(result).toBeDefined()
     expect(Array.isArray(result)).toBe(true)
   })
 
   it('should extract all enrollments', async () => {
-    const result = await service.extractEnrollmentData()
+    const result = await service.extractEnrollmentData('2025')
     expect(Array.isArray(result)).toBe(true)
   })
 
   it('should include student enrollment details', async () => {
-    const result = await service.extractEnrollmentData()
+    const result = await service.extractEnrollmentData('2025')
     if (result.length > 0) {
       expect(result[0]).toHaveProperty('student_id')
     }
   })
 
   it('should include academic term in enrollment data', async () => {
-    const result = await service.extractEnrollmentData()
+    const result = await service.extractEnrollmentData('2025')
     if (result.length > 0) {
       expect(result[0]).toHaveProperty('academic_term_id')
     }
   })
 
   it('should include class information', async () => {
-    const result = await service.extractEnrollmentData()
+    const result = await service.extractEnrollmentData('2025')
     if (result.length > 0) {
       expect(result[0]).toHaveProperty('class_name')
     }
   })
 
   it('should include stream information', async () => {
-    const result = await service.extractEnrollmentData()
+    const result = await service.extractEnrollmentData('2025')
     if (result.length > 0) {
       expect(result[0]).toHaveProperty('stream')
     }
@@ -401,7 +404,7 @@ describe('NEMISExportService', () => {
     const data = {
       students: await service.extractStudentData(),
       school: await service.extractSchoolData(),
-      enrollments: await service.extractEnrollmentData()
+      enrollments: await service.extractEnrollmentData('2025')
     }
     const result = await service.validateNEMISFormat(data)
     expect(result).toBeDefined()
@@ -411,7 +414,7 @@ describe('NEMISExportService', () => {
     const data = {
       students: await service.extractStudentData(),
       school: await service.extractSchoolData(),
-      enrollments: await service.extractEnrollmentData()
+      enrollments: await service.extractEnrollmentData('2025')
     }
     const result = await service.validateNEMISFormat(data)
     expect(result).toBeDefined()
@@ -431,7 +434,7 @@ describe('NEMISExportService', () => {
     const data = {
       students: await service.extractStudentData(),
       school: await service.extractSchoolData(),
-      enrollments: await service.extractEnrollmentData()
+      enrollments: await service.extractEnrollmentData('2025')
     }
     const result = await service.validateNEMISFormat(data)
     expect(result).toBeDefined()
@@ -473,3 +476,4 @@ describe('NEMISExportService', () => {
     expect(report).toBeDefined()
   })
 })
+
