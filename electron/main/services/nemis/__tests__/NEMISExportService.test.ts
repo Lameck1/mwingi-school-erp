@@ -15,18 +15,51 @@ describe('NEMISExportService', () => {
     
     // Create all required tables
     db.exec(`
+      CREATE TABLE class (
+        id TEXT PRIMARY KEY,
+        class_name TEXT NOT NULL,
+        stream TEXT,
+        class_teacher_id TEXT,
+        created_at TEXT
+      )
+    `)
+
+    db.exec(`
+      CREATE TABLE guardian (
+        id TEXT PRIMARY KEY,
+        student_id TEXT NOT NULL,
+        full_name TEXT NOT NULL,
+        relationship TEXT,
+        phone_primary TEXT,
+        phone_secondary TEXT,
+        email TEXT,
+        created_at TEXT,
+        FOREIGN KEY (student_id) REFERENCES student(id)
+      )
+    `)
+
+    db.exec(`
       CREATE TABLE student (
         id TEXT PRIMARY KEY,
         first_name TEXT NOT NULL,
         last_name TEXT NOT NULL,
+        full_name TEXT NOT NULL,
         date_of_birth TEXT,
         gender TEXT,
         admission_number TEXT,
         national_id_number TEXT,
+        nemis_upi TEXT,
         county TEXT,
-        subcounty TEXT,
+        sub_county TEXT,
         ward TEXT,
-        school_id TEXT
+        special_needs TEXT DEFAULT 'No',
+        class_id TEXT,
+        guardian_id TEXT,
+        status TEXT DEFAULT 'ACTIVE',
+        school_id TEXT,
+        created_at TEXT,
+        FOREIGN KEY (class_id) REFERENCES class(id),
+        FOREIGN KEY (guardian_id) REFERENCES guardian(id)
       )
     `)
 
@@ -55,18 +88,6 @@ describe('NEMISExportService', () => {
         transaction_date TEXT,
         debit_credit TEXT,
         created_at TEXT,
-        FOREIGN KEY (student_id) REFERENCES student(id)
-      )
-    `)
-
-    db.exec(`
-      CREATE TABLE guardian (
-        id TEXT PRIMARY KEY,
-        student_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        relationship TEXT,
-        phone_number TEXT,
-        email TEXT,
         FOREIGN KEY (student_id) REFERENCES student(id)
       )
     `)
@@ -130,9 +151,26 @@ describe('NEMISExportService', () => {
       )
     `)
 
+    db.exec(`
+      CREATE TABLE nemis_export (
+        id TEXT PRIMARY KEY,
+        export_type TEXT NOT NULL,
+        format TEXT NOT NULL,
+        record_count INTEGER DEFAULT 0,
+        user_id TEXT NOT NULL,
+        export_date TEXT DEFAULT CURRENT_TIMESTAMP,
+        data TEXT,
+        FOREIGN KEY (user_id) REFERENCES user(id)
+      )
+    `)
+
     // Insert test data
     const schoolInsert = db.prepare('INSERT INTO school (id, name, code, county, subcounty, nemis_code) VALUES (?, ?, ?, ?, ?, ?)')
     schoolInsert.run('school-1', 'Mwingi Adventist School', 'MAS-001', 'Kitui', 'Mwingi', 'NEMIS-12345')
+
+    const classInsert = db.prepare('INSERT INTO class (id, class_name, stream, created_at) VALUES (?, ?, ?, ?)')
+    classInsert.run('class-1', 'Form 4A', 'Stream A', new Date().toISOString())
+    classInsert.run('class-2', 'Form 4B', 'Stream B', new Date().toISOString())
 
     const termInsert = db.prepare('INSERT INTO academic_term (id, term_name, year, start_date, end_date, school_id) VALUES (?, ?, ?, ?, ?, ?)')
     termInsert.run('term-1', 'Term 1', 2025, '2025-01-01', '2025-03-31', 'school-1')
@@ -142,17 +180,23 @@ describe('NEMISExportService', () => {
     userInsert.run('user-1', 'admin1', 'admin@school.com', 'admin', 'hash1', new Date().toISOString())
     userInsert.run('user-2', 'teacher1', 'teacher@school.com', 'teacher', 'hash2', new Date().toISOString())
 
-    // Insert 3 students
-    const studentInsert = db.prepare('INSERT INTO student (id, first_name, last_name, date_of_birth, gender, admission_number, national_id_number, county, subcounty, ward, school_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    studentInsert.run('student-1', 'John', 'Doe', '2010-05-15', 'M', 'ADM001', 'NID001', 'Kitui', 'Mwingi', 'Ward1', 'school-1')
-    studentInsert.run('student-2', 'Jane', 'Smith', '2010-08-22', 'F', 'ADM002', 'NID002', 'Kitui', 'Mwingi', 'Ward1', 'school-1')
-    studentInsert.run('student-3', 'James', 'Johnson', '2010-12-10', 'M', 'ADM003', 'NID003', 'Kitui', 'Mwingi', 'Ward2', 'school-1')
+    // Insert 3 students FIRST (before guardians reference them)
+    const studentInsert = db.prepare('INSERT INTO student (id, first_name, last_name, full_name, date_of_birth, gender, admission_number, national_id_number, nemis_upi, county, sub_county, ward, special_needs, class_id, guardian_id, status, school_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    studentInsert.run('student-1', 'John', 'Doe', 'John Doe', '2010-05-15', 'M', 'ADM001', 'NID001', 'NEMIS-UPI-001', 'Kitui', 'Mwingi', 'Ward1', 'No', 'class-1', null, 'ACTIVE', 'school-1', new Date().toISOString())
+    studentInsert.run('student-2', 'Jane', 'Smith', 'Jane Smith', '2010-08-22', 'F', 'ADM002', 'NID002', 'NEMIS-UPI-002', 'Kitui', 'Mwingi', 'Ward1', 'No', 'class-1', null, 'ACTIVE', 'school-1', new Date().toISOString())
+    studentInsert.run('student-3', 'James', 'Johnson', 'James Johnson', '2010-12-10', 'M', 'ADM003', 'NID003', 'NEMIS-UPI-003', 'Kitui', 'Mwingi', 'Ward2', 'No', 'class-2', null, 'ACTIVE', 'school-1', new Date().toISOString())
 
-    // Insert guardians
-    const guardianInsert = db.prepare('INSERT INTO guardian (id, student_id, name, relationship, phone_number, email) VALUES (?, ?, ?, ?, ?, ?)')
-    guardianInsert.run('guardian-1', 'student-1', 'Mr. Doe', 'Father', '0712345678', 'doe@email.com')
-    guardianInsert.run('guardian-2', 'student-2', 'Mrs. Smith', 'Mother', '0787654321', 'smith@email.com')
-    guardianInsert.run('guardian-3', 'student-3', 'Mr. Johnson', 'Father', '0723456789', 'johnson@email.com')
+    // Then insert guardians
+    const guardianInsert = db.prepare('INSERT INTO guardian (id, student_id, full_name, relationship, phone_primary, email, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    guardianInsert.run('guardian-1', 'student-1', 'John Senior', 'Father', '0720123456', 'john@email.com', new Date().toISOString())
+    guardianInsert.run('guardian-2', 'student-2', 'Jane Senior', 'Mother', '0720234567', 'jane@email.com', new Date().toISOString())
+    guardianInsert.run('guardian-3', 'student-3', 'James Senior', 'Father', '0720345678', 'james@email.com', new Date().toISOString())
+
+    // Update students with guardian_id
+    const updateStudentGuardian = db.prepare('UPDATE student SET guardian_id = ? WHERE id = ?')
+    updateStudentGuardian.run('guardian-1', 'student-1')
+    updateStudentGuardian.run('guardian-2', 'student-2')
+    updateStudentGuardian.run('guardian-3', 'student-3')
 
     // Insert 5 invoices
     const invoiceInsert = db.prepare('INSERT INTO fee_invoice (id, student_id, academic_term_id, amount_due, amount_paid, due_date, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
