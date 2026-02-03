@@ -135,7 +135,9 @@ describe('AgedReceivablesService', () => {
         ORDER BY due_date ASC
       `).all() as any[]
       
-      expect(invoices[0].due_date).toBeLessThanOrEqual(invoices[invoices.length - 1].due_date)
+      const firstDue = new Date(invoices[0].due_date).getTime()
+      const lastDue = new Date(invoices[invoices.length - 1].due_date).getTime()
+      expect(firstDue).toBeLessThanOrEqual(lastDue)
     })
 
     it('should include old invoices first', () => {

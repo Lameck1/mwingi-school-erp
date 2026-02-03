@@ -91,7 +91,7 @@ class StudentLedgerRepository {
   }
 
   async getInvoicesForPeriod(studentId: number, startDate: string, endDate: string): Promise<any[]> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`
       SELECT * FROM fee_invoice
       WHERE student_id = ? AND invoice_date >= ? AND invoice_date <= ?
@@ -100,12 +100,12 @@ class StudentLedgerRepository {
   }
 
   async getStudent(studentId: number): Promise<any> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`SELECT * FROM student WHERE id = ?`).get(studentId)
   }
 
   async recordOpeningBalance(studentId: number, periodStart: string, openingBalance: number): Promise<number> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       INSERT INTO student_opening_balance (student_id, period_start, opening_balance, recorded_at)
       VALUES (?, ?, ?, ?)
@@ -114,7 +114,7 @@ class StudentLedgerRepository {
   }
 
   async getRecordedOpeningBalance(studentId: number, periodStart: string): Promise<number | null> {
-    const db = getDatabase()
+    const db = this.db
     const result = db.prepare(`
       SELECT opening_balance FROM student_opening_balance
       WHERE student_id = ? AND period_start = ?
@@ -164,12 +164,13 @@ class OpeningBalanceCalculator implements IOpeningBalanceCalculator {
 class LedgerGenerator implements ILedgerGenerator {
   private db: Database.Database
   private repo: StudentLedgerRepository
+  private balanceCalc: OpeningBalanceCalculator
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
     this.repo = new StudentLedgerRepository(this.db)
+    this.balanceCalc = new OpeningBalanceCalculator(this.db)
   }
-  private balanceCalc = new OpeningBalanceCalculator()
 
   async generateStudentLedger(studentId: number, startDate: string, endDate: string): Promise<LedgerEntry[]> {
     const transactions = await this.repo.getTransactionsByPeriod(studentId, startDate, endDate)
@@ -229,12 +230,13 @@ class LedgerGenerator implements ILedgerGenerator {
 class LedgerReconciler implements ILedgerReconciler {
   private db: Database.Database
   private repo: StudentLedgerRepository
+  private ledgerGen: LedgerGenerator
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
     this.repo = new StudentLedgerRepository(this.db)
+    this.ledgerGen = new LedgerGenerator(this.db)
   }
-  private ledgerGen = new LedgerGenerator()
 
   async reconcileStudentLedger(studentId: number, periodStart: string, periodEnd: string): Promise<ReconciliationResult> {
     // Get ledger balance
@@ -278,12 +280,13 @@ class LedgerReconciler implements ILedgerReconciler {
 class LedgerValidator implements ILedgerValidator {
   private db: Database.Database
   private repo: StudentLedgerRepository
+  private balanceCalc: OpeningBalanceCalculator
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
     this.repo = new StudentLedgerRepository(this.db)
+    this.balanceCalc = new OpeningBalanceCalculator(this.db)
   }
-  private balanceCalc = new OpeningBalanceCalculator()
 
   async verifyOpeningBalance(studentId: number, periodStart: string): Promise<VerificationResult> {
     // Calculate opening balance

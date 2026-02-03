@@ -369,7 +369,10 @@ export class AgedReceivablesService
     const date = asOfDate || new Date().toISOString().split('T')[0]
     return this.agingCalculator.calculateAgedReceivables(date)
   }
-
+  // Legacy alias for tests
+  async getAgedReceivables(asOfDate?: string): Promise<AgedReceivableBucket[]> {
+    return this.generateAgedReceivablesReport(asOfDate)
+  }
   /**
    * Get high priority collections (>90 days OR >100K KES)
    */

@@ -79,6 +79,16 @@ describe('ApprovalWorkflowService', () => {
         is_active BOOLEAN DEFAULT 1
       );
 
+      CREATE TABLE audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        action_type TEXT NOT NULL,
+        table_name TEXT NOT NULL,
+        record_id INTEGER,
+        new_values TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- Insert test data
       INSERT INTO user (username, email, role) VALUES 
         ('bursar', 'bursar@school.com', 'BURSAR'),
@@ -109,12 +119,12 @@ describe('ApprovalWorkflowService', () => {
   describe('createApprovalRequest', () => {
     it('should create approval request successfully', async () => {
       const result = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 30000,
         description: 'Payment for tuition',
-        requested_by: 1
+        requestedBy: 1
       })
 
       expect(result).toBeDefined()
@@ -123,12 +133,12 @@ describe('ApprovalWorkflowService', () => {
 
     it('should assign level 1 for small amounts', async () => {
       const result = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 30000,
         description: 'Small payment',
-        requested_by: 1
+        requestedBy: 1
       })
 
       expect(result.success).toBe(true)
@@ -136,12 +146,12 @@ describe('ApprovalWorkflowService', () => {
 
     it('should assign level 2 for large amounts', async () => {
       const result = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 2,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 2,
         amount: 100000,
         description: 'Large payment',
-        requested_by: 1
+        requestedBy: 1
       })
 
       expect(result.success).toBe(true)
@@ -149,12 +159,12 @@ describe('ApprovalWorkflowService', () => {
 
     it('should handle expense requests', async () => {
       const result = await service.createApprovalRequest({
-        request_type: 'EXPENSE',
-        entity_type: 'supplies',
-        entity_id: 1,
+        requestType: 'EXPENSE',
+        entityType: 'supplies',
+        entityId: 1,
         amount: 15000,
         description: 'Office supplies',
-        requested_by: 1
+        requestedBy: 1
       })
 
       expect(result.success).toBe(true)
@@ -162,12 +172,12 @@ describe('ApprovalWorkflowService', () => {
 
     it('should return request ID', async () => {
       const result = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 25000,
         description: 'Test payment',
-        requested_by: 1
+        requestedBy: 1
       })
 
       expect(result).toHaveProperty('requestId')
@@ -176,12 +186,12 @@ describe('ApprovalWorkflowService', () => {
 
     it('should track requester', async () => {
       const result = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 20000,
         description: 'Test',
-        requested_by: 1
+        requestedBy: 1
       })
 
       expect(result.success).toBe(true)
@@ -189,12 +199,12 @@ describe('ApprovalWorkflowService', () => {
 
     it('should set initial status to PENDING', async () => {
       const result = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 25000,
         description: 'Test',
-        requested_by: 1
+        requestedBy: 1
       })
 
       expect(result.success).toBe(true)
@@ -202,12 +212,12 @@ describe('ApprovalWorkflowService', () => {
 
     it('should create approval levels', async () => {
       const result = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 30000,
         description: 'Test',
-        requested_by: 1
+        requestedBy: 1
       })
 
       expect(result.success).toBe(true)
@@ -215,21 +225,21 @@ describe('ApprovalWorkflowService', () => {
 
     it('should handle multiple requests', async () => {
       const r1 = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 25000,
         description: 'Request 1',
-        requested_by: 1
+        requestedBy: 1
       })
 
       const r2 = await service.createApprovalRequest({
-        request_type: 'EXPENSE',
-        entity_type: 'supplies',
-        entity_id: 2,
+        requestType: 'EXPENSE',
+        entityType: 'supplies',
+        entityId: 2,
         amount: 15000,
         description: 'Request 2',
-        requested_by: 1
+        requestedBy: 1
       })
 
       expect(r1.success).toBe(true)
@@ -239,12 +249,12 @@ describe('ApprovalWorkflowService', () => {
     it('should preserve description', async () => {
       const description = 'Special payment for scholarship'
       const result = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 20000,
         description: description,
-        requested_by: 1
+        requestedBy: 1
       })
 
       expect(result.success).toBe(true)
@@ -253,20 +263,20 @@ describe('ApprovalWorkflowService', () => {
     it('should handle concurrent requests', async () => {
       const [r1, r2] = await Promise.all([
         service.createApprovalRequest({
-          request_type: 'PAYMENT',
-          entity_type: 'fee_invoice',
-          entity_id: 1,
+          requestType: 'PAYMENT',
+          entityType: 'fee_invoice',
+          entityId: 1,
           amount: 25000,
           description: 'Concurrent 1',
-          requested_by: 1
+          requestedBy: 1
         }),
         service.createApprovalRequest({
-          request_type: 'PAYMENT',
-          entity_type: 'fee_invoice',
-          entity_id: 2,
+          requestType: 'PAYMENT',
+          entityType: 'fee_invoice',
+          entityId: 2,
           amount: 35000,
           description: 'Concurrent 2',
-          requested_by: 1
+          requestedBy: 1
         })
       ])
 
@@ -278,15 +288,21 @@ describe('ApprovalWorkflowService', () => {
   describe('approveRequest', () => {
     it('should approve level 1 request', async () => {
       const req = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 30000,
         description: 'Test approval',
-        requested_by: 1
+        requestedBy: 1
       })
 
-      const result = await service.approveRequest(req.requestId, 1, 'Approved', 1)
+      const result = await service.processApproval({
+        requestId: req.requestId,
+        level: 1,
+        decision: 'APPROVED',
+        approverId: 1,
+        comments: 'Approved'
+      })
 
       expect(result).toBeDefined()
       expect(result).toHaveProperty('success')
@@ -294,66 +310,96 @@ describe('ApprovalWorkflowService', () => {
 
     it('should handle comments', async () => {
       const req = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 25000,
         description: 'Test',
-        requested_by: 1
+        requestedBy: 1
       })
 
-      const result = await service.approveRequest(req.requestId, 1, 'Looks good', 1)
+      const result = await service.processApproval({
+        requestId: req.requestId,
+        level: 1,
+        decision: 'APPROVED',
+        approverId: 1,
+        comments: 'Looks good'
+      })
 
       expect(result.success).toBe(true)
     })
 
     it('should track approver', async () => {
       const req = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 20000,
         description: 'Test',
-        requested_by: 1
+        requestedBy: 1
       })
 
-      const result = await service.approveRequest(req.requestId, 1, 'Approved', 2)
+      const result = await service.processApproval({
+        requestId: req.requestId,
+        level: 1,
+        decision: 'APPROVED',
+        approverId: 2,
+        comments: 'Approved'
+      })
 
       expect(result.success).toBe(true)
     })
 
     it('should update approval status', async () => {
       const req = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 25000,
         description: 'Test',
-        requested_by: 1
+        requestedBy: 1
       })
 
-      const result = await service.approveRequest(req.requestId, 1, 'Approved', 1)
+      const result = await service.processApproval({
+        requestId: req.requestId,
+        level: 1,
+        decision: 'APPROVED',
+        approverId: 1,
+        comments: 'Approved'
+      })
 
       expect(result.success).toBe(true)
     })
 
     it('should handle non-existent request', async () => {
-      const result = await service.approveRequest(9999, 1, 'Approved', 1)
+      const result = await service.processApproval({
+        requestId: 9999,
+        level: 1,
+        decision: 'APPROVED',
+        approverId: 1,
+        comments: 'Approved'
+      })
 
       expect(result).toBeDefined()
     })
 
     it('should handle out-of-range level', async () => {
       const req = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 25000,
         description: 'Test',
-        requested_by: 1
+        requestedBy: 1
       })
 
-      const result = await service.approveRequest(req.requestId, 99, 'Approved', 1)
+      const result = await service.processApproval({
+        requestId: req.requestId,
+        level: 99,
+        decision: 'APPROVED',
+        approverId: 1,
+        comments: 'Approved'
+      })
 
       expect(result).toBeDefined()
     })
@@ -362,15 +408,21 @@ describe('ApprovalWorkflowService', () => {
   describe('rejectRequest', () => {
     it('should reject request', async () => {
       const req = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 30000,
         description: 'Test rejection',
-        requested_by: 1
+        requestedBy: 1
       })
 
-      const result = await service.rejectRequest(req.requestId, 1, 'Insufficient funds', 1)
+      const result = await service.processApproval({
+        requestId: req.requestId,
+        level: 1,
+        decision: 'REJECTED',
+        approverId: 1,
+        comments: 'Insufficient funds'
+      })
 
       expect(result).toBeDefined()
       expect(result).toHaveProperty('success')
@@ -378,45 +430,63 @@ describe('ApprovalWorkflowService', () => {
 
     it('should include rejection reason', async () => {
       const req = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 25000,
         description: 'Test',
-        requested_by: 1
+        requestedBy: 1
       })
 
-      const result = await service.rejectRequest(req.requestId, 1, 'Budget exceeded', 1)
+      const result = await service.processApproval({
+        requestId: req.requestId,
+        level: 1,
+        decision: 'REJECTED',
+        approverId: 1,
+        comments: 'Budget exceeded'
+      })
 
       expect(result.success).toBe(true)
     })
 
     it('should track rejector', async () => {
       const req = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 20000,
         description: 'Test',
-        requested_by: 1
+        requestedBy: 1
       })
 
-      const result = await service.rejectRequest(req.requestId, 1, 'Rejected', 2)
+      const result = await service.processApproval({
+        requestId: req.requestId,
+        level: 1,
+        decision: 'REJECTED',
+        approverId: 2,
+        comments: 'Rejected'
+      })
 
       expect(result.success).toBe(true)
     })
 
     it('should update request status', async () => {
       const req = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 25000,
         description: 'Test',
-        requested_by: 1
+        requestedBy: 1
       })
 
-      const result = await service.rejectRequest(req.requestId, 1, 'Not approved', 1)
+      const result = await service.processApproval({
+        requestId: req.requestId,
+        level: 1,
+        decision: 'REJECTED',
+        approverId: 1,
+        comments: 'Not approved'
+      })
 
       expect(result.success).toBe(true)
     })
@@ -425,15 +495,15 @@ describe('ApprovalWorkflowService', () => {
   describe('getRequestHistory', () => {
     it('should retrieve approval history', async () => {
       const req = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 30000,
         description: 'History test',
-        requested_by: 1
+        requestedBy: 1
       })
 
-      const result = await service.getRequestHistory(req.requestId)
+      const result = await service.getApprovalHistory(req.requestId)
 
       expect(result).toBeDefined()
       expect(result).toHaveProperty('request')
@@ -442,51 +512,51 @@ describe('ApprovalWorkflowService', () => {
 
     it('should include request details', async () => {
       const req = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 25000,
         description: 'Test',
-        requested_by: 1
+        requestedBy: 1
       })
 
-      const result = await service.getRequestHistory(req.requestId)
+      const result = await service.getApprovalHistory(req.requestId)
 
       expect(result.request).toBeDefined()
     })
 
     it('should include approval levels', async () => {
       const req = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 30000,
         description: 'Test',
-        requested_by: 1
+        requestedBy: 1
       })
 
-      const result = await service.getRequestHistory(req.requestId)
+      const result = await service.getApprovalHistory(req.requestId)
 
       expect(Array.isArray(result.levels)).toBe(true)
     })
 
     it('should handle non-existent request', async () => {
-      const result = await service.getRequestHistory(9999)
+      const result = await service.getApprovalHistory(9999)
 
       expect(result).toBeDefined()
     })
 
     it('should preserve request properties', async () => {
       const req = await service.createApprovalRequest({
-        request_type: 'EXPENSE',
-        entity_type: 'supplies',
-        entity_id: 5,
+        requestType: 'EXPENSE',
+        entityType: 'supplies',
+        entityId: 5,
         amount: 20000,
         description: 'Special order',
-        requested_by: 1
+        requestedBy: 1
       })
 
-      const result = await service.getRequestHistory(req.requestId)
+      const result = await service.getApprovalHistory(req.requestId)
 
       expect(result.request.request_type).toBe('EXPENSE')
       expect(result.request.amount).toBe(20000)
@@ -496,62 +566,68 @@ describe('ApprovalWorkflowService', () => {
   describe('getPendingRequests', () => {
     it('should retrieve pending requests', async () => {
       await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 30000,
         description: 'Pending test',
-        requested_by: 1
+        requestedBy: 1
       })
 
-      const result = await service.getPendingRequests()
+      const result = await service.getApprovalQueue(1)
 
       expect(Array.isArray(result)).toBe(true)
     })
 
     it('should include multiple pending requests', async () => {
       await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 25000,
         description: 'Request 1',
-        requested_by: 1
+        requestedBy: 1
       })
 
       await service.createApprovalRequest({
-        request_type: 'EXPENSE',
-        entity_type: 'supplies',
-        entity_id: 2,
+        requestType: 'EXPENSE',
+        entityType: 'supplies',
+        entityId: 2,
         amount: 15000,
         description: 'Request 2',
-        requested_by: 1
+        requestedBy: 1
       })
 
-      const result = await service.getPendingRequests()
+      const result = await service.getApprovalQueue(1)
 
       expect(result.length).toBeGreaterThanOrEqual(2)
     })
 
     it('should exclude completed requests', async () => {
       const req = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 30000,
         description: 'Test',
-        requested_by: 1
+        requestedBy: 1
       })
 
-      await service.approveRequest(req.requestId, 1, 'Approved', 1)
+      await service.processApproval({
+        requestId: req.requestId,
+        level: 1,
+        decision: 'APPROVED',
+        approverId: 1,
+        comments: 'Approved'
+      })
 
-      const result = await service.getPendingRequests()
+      const result = await service.getApprovalQueue(1)
 
       expect(Array.isArray(result)).toBe(true)
     })
 
     it('should return empty for no pending requests', async () => {
-      const result = await service.getPendingRequests()
+      const result = await service.getApprovalQueue(1)
 
       expect(Array.isArray(result)).toBe(true)
     })
@@ -560,12 +636,12 @@ describe('ApprovalWorkflowService', () => {
   describe('edge cases', () => {
     it('should handle zero amounts', async () => {
       const result = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 0,
         description: 'Zero amount',
-        requested_by: 1
+        requestedBy: 1
       })
 
       expect(result).toBeDefined()
@@ -573,12 +649,12 @@ describe('ApprovalWorkflowService', () => {
 
     it('should handle large amounts', async () => {
       const result = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 2,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 2,
         amount: 999999999,
         description: 'Large amount',
-        requested_by: 1
+        requestedBy: 1
       })
 
       expect(result.success).toBe(true)
@@ -586,12 +662,12 @@ describe('ApprovalWorkflowService', () => {
 
     it('should handle special characters in description', async () => {
       const result = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 25000,
         description: 'Payment for "Special" tuition & fees',
-        requested_by: 1
+        requestedBy: 1
       })
 
       expect(result.success).toBe(true)
@@ -600,20 +676,20 @@ describe('ApprovalWorkflowService', () => {
     it('should handle concurrent workflow operations', async () => {
       const [r1, r2] = await Promise.all([
         service.createApprovalRequest({
-          request_type: 'PAYMENT',
-          entity_type: 'fee_invoice',
-          entity_id: 1,
+          requestType: 'PAYMENT',
+          entityType: 'fee_invoice',
+          entityId: 1,
           amount: 25000,
           description: 'Concurrent 1',
-          requested_by: 1
+          requestedBy: 1
         }),
         service.createApprovalRequest({
-          request_type: 'EXPENSE',
-          entity_type: 'supplies',
-          entity_id: 2,
+          requestType: 'EXPENSE',
+          entityType: 'supplies',
+          entityId: 2,
           amount: 15000,
           description: 'Concurrent 2',
-          requested_by: 1
+          requestedBy: 1
         })
       ])
 
@@ -623,15 +699,15 @@ describe('ApprovalWorkflowService', () => {
 
     it('should maintain data consistency', async () => {
       const req = await service.createApprovalRequest({
-        request_type: 'PAYMENT',
-        entity_type: 'fee_invoice',
-        entity_id: 1,
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
         amount: 30000,
         description: 'Consistency test',
-        requested_by: 1
+        requestedBy: 1
       })
 
-      const history = await service.getRequestHistory(req.requestId)
+      const history = await service.getApprovalHistory(req.requestId)
 
       expect(history.request.amount).toBe(30000)
       expect(history.request.request_type).toBe('PAYMENT')

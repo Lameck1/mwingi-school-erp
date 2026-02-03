@@ -373,15 +373,17 @@ export class CashFlowStatementService
   /**
    * Generate complete cash flow statement for a period
    */
-  async generateCashFlowStatement(startDate: string, endDate: string): Promise<CashFlowStatement> {
+  async generateCashFlowStatement(startDate?: string, endDate?: string): Promise<CashFlowStatement> {
     try {
+      const period = this.resolvePeriod(startDate, endDate)
+
       // Get opening balance
-      const openingCashBalance = await this.repository.getOpeningBalance(startDate)
+      const openingCashBalance = await this.repository.getOpeningBalance(period.startDate)
 
       // Get all activity categories (delegates to specialized calculators)
-      const operatingActivities = await this.getOperatingActivities(startDate, endDate)
-      const investingActivities = await this.getInvestingActivities(startDate, endDate)
-      const financingActivities = await this.getFinancingActivities(startDate, endDate)
+      const operatingActivities = await this.getOperatingActivities(period.startDate, period.endDate)
+      const investingActivities = await this.getInvestingActivities(period.startDate, period.endDate)
+      const financingActivities = await this.getFinancingActivities(period.startDate, period.endDate)
 
       // Calculate net changes
       const netOperatingCash = operatingActivities.net_operating_cash_flow
@@ -395,15 +397,15 @@ export class CashFlowStatementService
       const liquidityStatus = this.liquidityAnalyzer.assessLiquidityStatus(closingCashBalance)
 
       // Generate forecasts (simplified for phase 2)
-      const transactions = await this.repository.getTransactionsByType(startDate, endDate, ['CREDIT', 'PAYMENT'])
+      const transactions = await this.repository.getTransactionsByType(period.startDate, period.endDate, ['CREDIT', 'PAYMENT'])
       const forecasts = await this.forecaster.generateCashForecasts(transactions, 60)
 
       const cashForecast30 = forecasts.find(f => f.forecast_date === new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])?.projected_balance || closingCashBalance
       const cashForecast60 = forecasts.find(f => f.forecast_date === new Date(new Date().getTime() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])?.projected_balance || closingCashBalance
 
       return {
-        period_start: startDate,
-        period_end: endDate,
+        period_start: period.startDate,
+        period_end: period.endDate,
         operating_activities: operatingActivities,
         investing_activities: investingActivities,
         financing_activities: financingActivities,
@@ -416,6 +418,104 @@ export class CashFlowStatementService
       }
     } catch (error) {
       throw new Error(`Failed to generate cash flow statement: ${(error as Error).message}`)
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // Backward-compatible helpers for accounting module tests
+  // --------------------------------------------------------------------------
+
+  async getCashFlowStatement(termId: string): Promise<CashFlowStatement> {
+    const term = this.db
+      .prepare('SELECT start_date, end_date FROM academic_term WHERE id = ?')
+      .get(termId) as { start_date: string; end_date: string } | undefined
+
+    if (!term) {
+      return this.buildEmptyStatement('', '')
+    }
+
+    return this.generateCashFlowStatement(term.start_date, term.end_date)
+  }
+
+  async analyzeCashFlowByTerm(termId: string): Promise<CashFlowStatement> {
+    return this.getCashFlowStatement(termId)
+  }
+
+  async calculateCashPosition(): Promise<{
+    opening_balance: number
+    total_inflows: number
+    total_outflows: number
+    closing_balance: number
+  }> {
+    const statement = await this.generateCashFlowStatement()
+    const totalInflows =
+      statement.operating_activities.fee_collections +
+      statement.operating_activities.donation_collections +
+      statement.operating_activities.other_income +
+      statement.investing_activities.asset_sales +
+      statement.financing_activities.loans_received +
+      statement.financing_activities.grant_received
+    const totalOutflows =
+      statement.operating_activities.salary_payments +
+      statement.operating_activities.supplier_payments +
+      statement.operating_activities.utilities +
+      statement.operating_activities.other_expenses +
+      statement.investing_activities.asset_purchases +
+      statement.financing_activities.loan_repayments
+
+    return {
+      opening_balance: statement.opening_cash_balance,
+      total_inflows: totalInflows,
+      total_outflows: totalOutflows,
+      closing_balance: statement.closing_cash_balance
+    }
+  }
+
+  private resolvePeriod(startDate?: string, endDate?: string): { startDate: string; endDate: string } {
+    if (startDate && endDate) {
+      return { startDate, endDate }
+    }
+
+    const now = new Date()
+    const start = new Date(now.getFullYear(), now.getMonth(), 1)
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    return {
+      startDate: start.toISOString().split('T')[0],
+      endDate: end.toISOString().split('T')[0]
+    }
+  }
+
+  private buildEmptyStatement(startDate: string, endDate: string): CashFlowStatement {
+    return {
+      period_start: startDate,
+      period_end: endDate,
+      operating_activities: {
+        fee_collections: 0,
+        donation_collections: 0,
+        other_income: 0,
+        salary_payments: 0,
+        supplier_payments: 0,
+        utilities: 0,
+        other_expenses: 0,
+        net_operating_cash_flow: 0
+      },
+      investing_activities: {
+        asset_purchases: 0,
+        asset_sales: 0,
+        net_investing_cash_flow: 0
+      },
+      financing_activities: {
+        loans_received: 0,
+        loan_repayments: 0,
+        grant_received: 0,
+        net_financing_cash_flow: 0
+      },
+      opening_cash_balance: 0,
+      net_cash_change: 0,
+      closing_cash_balance: 0,
+      cash_forecast_30_days: 0,
+      cash_forecast_60_days: 0,
+      liquidity_status: 'ADEQUATE'
     }
   }
 

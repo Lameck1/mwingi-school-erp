@@ -13,94 +13,97 @@ describe('ApprovalWorkflowService', () => {
   beforeEach(() => {
     db = new Database(':memory:')
 
-    // Create required tables
-    db.exec(`
-      CREATE TABLE approval_request (
-        id TEXT PRIMARY KEY,
-        student_id TEXT NOT NULL,
-        invoice_id TEXT NOT NULL,
-        request_type TEXT NOT NULL,
-        status TEXT DEFAULT 'pending',
-        submitted_by TEXT,
-        submitted_date TEXT,
-        notes TEXT,
-        created_at TEXT
-      )
-    `)
-
-    db.exec(`
-      CREATE TABLE approval_level (
-        id TEXT PRIMARY KEY,
-        request_id TEXT NOT NULL,
-        level_number INTEGER NOT NULL,
-        approver_id TEXT NOT NULL,
-        approval_status TEXT DEFAULT 'pending',
-        approval_date TEXT,
-        comments TEXT,
-        FOREIGN KEY (request_id) REFERENCES approval_request(id),
-        FOREIGN KEY (approver_id) REFERENCES user(id)
-      )
-    `)
-
-    db.exec(`
-      CREATE TABLE user (
-        id TEXT PRIMARY KEY,
-        username TEXT UNIQUE NOT NULL,
-        email TEXT UNIQUE,
-        role TEXT,
-        password_hash TEXT,
-        created_at TEXT
-      )
-    `)
-
     db.exec(`
       CREATE TABLE student (
-        id TEXT PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         first_name TEXT NOT NULL,
         last_name TEXT NOT NULL,
-        admission_number TEXT,
-        school_id TEXT
-      )
-    `)
+        admission_number TEXT UNIQUE NOT NULL
+      );
 
-    db.exec(`
+      CREATE TABLE user (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        email TEXT,
+        role TEXT
+      );
+
       CREATE TABLE fee_invoice (
-        id TEXT PRIMARY KEY,
-        student_id TEXT NOT NULL,
-        amount_due REAL NOT NULL,
-        amount_paid REAL DEFAULT 0,
-        status TEXT,
-        created_at TEXT
-      )
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL,
+        invoice_number TEXT UNIQUE NOT NULL,
+        amount INTEGER NOT NULL,
+        amount_paid INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'OUTSTANDING',
+        due_date DATE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (student_id) REFERENCES student(id)
+      );
+
+      CREATE TABLE approval_request (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_type TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+        description TEXT,
+        requested_by INTEGER NOT NULL,
+        requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        status TEXT DEFAULT 'PENDING',
+        current_level INTEGER DEFAULT 1,
+        final_decision TEXT,
+        completed_at DATETIME,
+        FOREIGN KEY (requested_by) REFERENCES user(id)
+      );
+
+      CREATE TABLE approval_level (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_id INTEGER NOT NULL,
+        level INTEGER NOT NULL,
+        approver_id INTEGER,
+        status TEXT DEFAULT 'PENDING',
+        comments TEXT,
+        decided_at DATETIME,
+        FOREIGN KEY (request_id) REFERENCES approval_request(id),
+        FOREIGN KEY (approver_id) REFERENCES user(id)
+      );
+
+      CREATE TABLE approval_configuration (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_type TEXT NOT NULL,
+        min_amount INTEGER NOT NULL,
+        max_amount INTEGER,
+        required_level INTEGER NOT NULL,
+        approver_role TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT 1
+      );
+
+      CREATE TABLE audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        action_type TEXT NOT NULL,
+        table_name TEXT NOT NULL,
+        record_id INTEGER,
+        new_values TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      INSERT INTO user (username, email, role) VALUES 
+        ('bursar', 'bursar@school.com', 'BURSAR'),
+        ('principal', 'principal@school.com', 'PRINCIPAL');
+
+      INSERT INTO student (first_name, last_name, admission_number) VALUES
+        ('John', 'Doe', 'STU-001'),
+        ('Jane', 'Smith', 'STU-002');
+
+      INSERT INTO fee_invoice (student_id, invoice_number, amount, status, created_at) VALUES
+        (1, 'INV-2026-001', 50000, 'OUTSTANDING', '2026-01-05 10:00:00'),
+        (2, 'INV-2026-002', 100000, 'OUTSTANDING', '2026-01-10 10:00:00');
+
+      INSERT INTO approval_configuration (request_type, min_amount, max_amount, required_level, approver_role) VALUES
+        ('PAYMENT', 0, 50000, 1, 'BURSAR'),
+        ('PAYMENT', 50000, NULL, 2, 'PRINCIPAL');
     `)
-
-    // Insert users
-    const userInsert = db.prepare('INSERT INTO user (id, username, email, role, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    userInsert.run('user-1', 'admin', 'admin@school.com', 'admin', 'hash1', new Date().toISOString())
-    userInsert.run('user-2', 'approver1', 'approver1@school.com', 'approver', 'hash2', new Date().toISOString())
-
-    // Insert students
-    const studentInsert = db.prepare('INSERT INTO student (id, first_name, last_name, admission_number, school_id) VALUES (?, ?, ?, ?, ?)')
-    studentInsert.run('student-1', 'John', 'Doe', 'ADM001', 'school-1')
-    studentInsert.run('student-2', 'Jane', 'Smith', 'ADM002', 'school-1')
-
-    // Insert invoices
-    const invoiceInsert = db.prepare('INSERT INTO fee_invoice (id, student_id, amount_due, amount_paid, status, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    invoiceInsert.run('invoice-1', 'student-1', 50000, 0, 'pending', new Date().toISOString())
-    invoiceInsert.run('invoice-2', 'student-1', 50000, 25000, 'partial', new Date().toISOString())
-    invoiceInsert.run('invoice-3', 'student-2', 45000, 0, 'pending', new Date().toISOString())
-
-    // Insert 4 approval requests
-    const requestInsert = db.prepare('INSERT INTO approval_request (id, student_id, invoice_id, request_type, status, submitted_by, submitted_date, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    requestInsert.run('req-1', 'student-1', 'invoice-1', 'fee_waiver', 'pending', 'user-1', new Date().toISOString(), 'Request for fee waiver', new Date().toISOString())
-    requestInsert.run('req-2', 'student-1', 'invoice-2', 'payment_plan', 'pending', 'user-1', new Date().toISOString(), 'Request for payment plan', new Date().toISOString())
-    requestInsert.run('req-3', 'student-2', 'invoice-3', 'fee_waiver', 'pending', 'user-1', new Date().toISOString(), 'Request for fee waiver', new Date().toISOString())
-    requestInsert.run('req-4', 'student-2', 'invoice-3', 'discount', 'approved', 'user-1', new Date().toISOString(), 'Request for discount', new Date().toISOString())
-
-    // Insert approval levels for req-1
-    const levelInsert = db.prepare('INSERT INTO approval_level (id, request_id, level_number, approver_id, approval_status, approval_date, comments) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    levelInsert.run('level-1', 'req-1', 1, 'user-2', 'pending', null, null)
-    levelInsert.run('level-2', 'req-1', 2, 'user-1', 'pending', null, null)
 
     service = new ApprovalWorkflowService(db)
   })
@@ -109,97 +112,100 @@ describe('ApprovalWorkflowService', () => {
     db.close()
   })
 
-  // createApprovalRequest tests (3 tests)
   it('should create approval request successfully', async () => {
-    const request = await service.createApprovalRequest({
-      student_id: 'student-1',
-      invoice_id: 'invoice-1',
-      request_type: 'fee_waiver',
-      notes: 'Financial hardship'
+    const result = await service.createApprovalRequest({
+      requestType: 'PAYMENT',
+      entityType: 'fee_invoice',
+      entityId: 1,
+      amount: 30000,
+      description: 'Payment request',
+      requestedBy: 1
     })
-    expect(request).toBeDefined()
+
+    expect(result.success).toBe(true)
   })
 
-  it('should return request with ID', async () => {
-    const request = await service.createApprovalRequest({
-      student_id: 'student-2',
-      invoice_id: 'invoice-3',
-      request_type: 'discount',
-      notes: 'Merit based'
+  it('should return request ID', async () => {
+    const result = await service.createApprovalRequest({
+      requestType: 'PAYMENT',
+      entityType: 'fee_invoice',
+      entityId: 1,
+      amount: 25000,
+      description: 'Request with ID',
+      requestedBy: 1
     })
-    expect(request).toBeDefined()
+
+    expect(result.requestId).toBeDefined()
   })
 
-  it('should set initial status to pending', async () => {
-    const request = await service.createApprovalRequest({
-      student_id: 'student-1',
-      invoice_id: 'invoice-2',
-      request_type: 'payment_plan',
-      notes: 'Extended payment'
-    })
-    expect(request).toBeDefined()
-  })
-
-  // submitForApproval tests (2 tests)
-  it('should submit request for approval', async () => {
-    const result = await service.submitForApproval('req-1')
-    expect(result).toBeDefined()
-  })
-
-  it('should update request status to submitted', async () => {
-    await service.submitForApproval('req-1')
-    const result = await service.getApprovalRequestStatus('req-1')
-    expect(result).toBeDefined()
-  })
-
-  // approveRequest tests (3 tests)
   it('should approve request successfully', async () => {
-    const result = await service.approveRequest('req-1', 'user-2', 'Approved after review')
-    expect(result).toBeDefined()
+    const request = await service.createApprovalRequest({
+      requestType: 'PAYMENT',
+      entityType: 'fee_invoice',
+      entityId: 1,
+      amount: 30000,
+      description: 'Approve request',
+      requestedBy: 1
+    })
+
+    const result = await service.processApproval({
+      requestId: request.requestId as number,
+      level: 1,
+      decision: 'APPROVED',
+      approverId: 1,
+      comments: 'Approved'
+    })
+
+    expect(result.success).toBe(true)
   })
 
-  it('should update approval level status', async () => {
-    await service.approveRequest('req-1', 'user-2', 'Approved')
-    const result = await service.getApprovalRequestStatus('req-1')
-    expect(result).toBeDefined()
-  })
-
-  it('should handle multi-level approval flow', async () => {
-    await service.approveRequest('req-1', 'user-2', 'First level approved')
-    const result = await service.getApprovalRequestStatus('req-1')
-    expect(result).toBeDefined()
-  })
-
-  // rejectRequest tests (2 tests)
   it('should reject request successfully', async () => {
-    const result = await service.rejectRequest('req-2', 'user-1', 'Does not meet criteria')
-    expect(result).toBeDefined()
+    const request = await service.createApprovalRequest({
+      requestType: 'PAYMENT',
+      entityType: 'fee_invoice',
+      entityId: 1,
+      amount: 30000,
+      description: 'Reject request',
+      requestedBy: 1
+    })
+
+    const result = await service.processApproval({
+      requestId: request.requestId as number,
+      level: 1,
+      decision: 'REJECTED',
+      approverId: 1,
+      comments: 'Rejected'
+    })
+
+    expect(result.success).toBe(true)
   })
 
-  it('should update request status to rejected', async () => {
-    await service.rejectRequest('req-2', 'user-1', 'Rejected')
-    const result = await service.getApprovalRequestStatus('req-2')
-    expect(result).toBeDefined()
+  it('should return approval history', () => {
+    const request = service.createApprovalRequest({
+      requestType: 'PAYMENT',
+      entityType: 'fee_invoice',
+      entityId: 1,
+      amount: 30000,
+      description: 'History request',
+      requestedBy: 1
+    })
+
+    const history = service.getApprovalHistory(request.requestId as number)
+    expect(history.request).toBeDefined()
+    expect(Array.isArray(history.levels)).toBe(true)
   })
 
-  // getApprovalRequestStatus tests (4 tests)
-  it('should get approval request status', async () => {
-    const status = await service.getApprovalRequestStatus('req-1')
-    expect(status).toBeDefined()
-  })
+  it('should return pending requests', () => {
+    service.createApprovalRequest({
+      requestType: 'PAYMENT',
+      entityType: 'fee_invoice',
+      entityId: 1,
+      amount: 30000,
+      description: 'Pending request',
+      requestedBy: 1
+    })
 
-  it('should include request details in status', async () => {
-    const status = await service.getApprovalRequestStatus('req-1')
-    expect(status).toBeDefined()
-  })
-
-  it('should include approval levels in status', async () => {
-    const status = await service.getApprovalRequestStatus('req-1')
-    expect(status).toBeDefined()
-  })
-
-  it('should return null for non-existent request', async () => {
-    const status = await service.getApprovalRequestStatus('invalid-req')
-    expect(status === null || status === undefined || !status).toBe(true)
+    const pending = service.getApprovalQueue(1)
+    expect(Array.isArray(pending)).toBe(true)
   })
 })

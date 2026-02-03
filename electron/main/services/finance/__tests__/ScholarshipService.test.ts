@@ -19,6 +19,7 @@ describe('ScholarshipService', () => {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         first_name TEXT NOT NULL,
         last_name TEXT NOT NULL,
+        full_name TEXT,
         admission_number TEXT UNIQUE NOT NULL
       );
 
@@ -32,12 +33,14 @@ describe('ScholarshipService', () => {
         total_amount REAL NOT NULL,
         allocated_amount REAL DEFAULT 0,
         available_amount REAL,
-        max_beneficiaries INTEGER,
+        current_beneficiaries INTEGER DEFAULT 0,
+        total_allocated REAL DEFAULT 0,
+        max_beneficiaries INTEGER DEFAULT 9999,
         eligibility_criteria TEXT,
         valid_from DATE,
         valid_to DATE,
-        start_date DATE NOT NULL,
-        end_date DATE NOT NULL,
+        start_date DATE,
+        end_date DATE,
         sponsor_name TEXT,
         sponsor_contact TEXT,
         status TEXT DEFAULT 'ACTIVE',
@@ -49,7 +52,11 @@ describe('ScholarshipService', () => {
         student_id INTEGER NOT NULL,
         scholarship_id INTEGER NOT NULL,
         amount_allocated REAL NOT NULL,
-        allocation_date DATE NOT NULL,
+        amount_utilized REAL DEFAULT 0,
+        allocation_date DATE,
+        effective_date DATE,
+        expiry_date DATE,
+        allocation_notes TEXT,
         status TEXT DEFAULT 'ACTIVE',
         notes TEXT,
         FOREIGN KEY (student_id) REFERENCES student(id),
@@ -79,8 +86,8 @@ describe('ScholarshipService', () => {
   })
 
   describe('createScholarship', () => {
-    it('should create new scholarship', () => {
-      const result = service.createScholarship({
+    it('should create new scholarship', async () => {
+      const result = await service.createScholarship({
         name: 'Academic Excellence 2026',
         type: 'MERIT',
         totalAmount: 600000,
@@ -93,8 +100,8 @@ describe('ScholarshipService', () => {
       expect(result).toBeDefined()
     })
 
-    it('should validate positive amount', () => {
-      const result = service.createScholarship({
+    it('should validate positive amount', async () => {
+      const result = await service.createScholarship({
         name: 'Test Scholarship',
         type: 'MERIT',
         totalAmount: -10000,
@@ -106,8 +113,8 @@ describe('ScholarshipService', () => {
       expect(result).toBeDefined()
     })
 
-    it('should validate date range', () => {
-      const result = service.createScholarship({
+    it('should validate date range', async () => {
+      const result = await service.createScholarship({
         name: 'Test Scholarship',
         type: 'MERIT',
         totalAmount: 100000,
@@ -119,8 +126,8 @@ describe('ScholarshipService', () => {
       expect(result).toBeDefined()
     })
 
-    it('should create scholarship in database', () => {
-      service.createScholarship({
+    it('should create scholarship in database', async () => {
+      await service.createScholarship({
         name: 'New Test Scholarship',
         type: 'MERIT',
         totalAmount: 200000,
@@ -135,8 +142,8 @@ describe('ScholarshipService', () => {
   })
 
   describe('allocateScholarship', () => {
-    it('should allocate scholarship to student', () => {
-      const result = service.allocateScholarship({
+    it('should allocate scholarship to student', async () => {
+      const result = await service.allocateScholarship({
         studentId: 1,
         scholarshipId: 1,
         amount: 50000,
@@ -148,8 +155,8 @@ describe('ScholarshipService', () => {
       expect(result).toBeDefined()
     })
 
-    it('should update scholarship available amount', () => {
-      service.allocateScholarship({
+    it('should update scholarship available amount', async () => {
+      await service.allocateScholarship({
         studentId: 1,
         scholarshipId: 1,
         amount: 50000,
@@ -161,8 +168,8 @@ describe('ScholarshipService', () => {
       expect(scholarship.allocated_amount).toBeGreaterThanOrEqual(50000)
     })
 
-    it('should prevent allocation exceeding available amount', () => {
-      const result = service.allocateScholarship({
+    it('should prevent allocation exceeding available amount', async () => {
+      const result = await service.allocateScholarship({
         studentId: 1,
         scholarshipId: 1,
         amount: 600000,
@@ -173,8 +180,8 @@ describe('ScholarshipService', () => {
       expect(result).toBeDefined()
     })
 
-    it('should prevent allocation to expired scholarship', () => {
-      const result = service.allocateScholarship({
+    it('should prevent allocation to expired scholarship', async () => {
+      const result = await service.allocateScholarship({
         studentId: 1,
         scholarshipId: 4,
         amount: 10000,
@@ -185,8 +192,8 @@ describe('ScholarshipService', () => {
       expect(result).toBeDefined()
     })
 
-    it('should prevent allocation to fully utilized scholarship', () => {
-      const result = service.allocateScholarship({
+    it('should prevent allocation to fully utilized scholarship', async () => {
+      const result = await service.allocateScholarship({
         studentId: 1,
         scholarshipId: 3,
         amount: 10000,
@@ -197,8 +204,8 @@ describe('ScholarshipService', () => {
       expect(result).toBeDefined()
     })
 
-    it('should validate positive allocation amount', () => {
-      const result = service.allocateScholarship({
+    it('should validate positive allocation amount', async () => {
+      const result = await service.allocateScholarship({
         studentId: 1,
         scholarshipId: 1,
         amount: -10000,
@@ -209,8 +216,8 @@ describe('ScholarshipService', () => {
       expect(result).toBeDefined()
     })
 
-    it('should create allocation in database', () => {
-      service.allocateScholarship({
+    it('should create allocation in database', async () => {
+      await service.allocateScholarship({
         studentId: 1,
         scholarshipId: 1,
         amount: 50000,
@@ -224,8 +231,8 @@ describe('ScholarshipService', () => {
   })
 
   describe('getScholarshipUtilization', () => {
-    beforeEach(() => {
-      service.allocateScholarship({
+    beforeEach(async () => {
+      await service.allocateScholarship({
         studentId: 1,
         scholarshipId: 1,
         amount: 100000,
@@ -233,7 +240,7 @@ describe('ScholarshipService', () => {
         userId: 10
       })
 
-      service.allocateScholarship({
+      await service.allocateScholarship({
         studentId: 2,
         scholarshipId: 1,
         amount: 150000,
@@ -266,8 +273,8 @@ describe('ScholarshipService', () => {
       }
     })
 
-    it('should show 0% for unused scholarship', () => {
-      service.createScholarship({
+    it('should show 0% for unused scholarship', async () => {
+      await service.createScholarship({
         name: 'Unused Scholarship',
         type: 'MERIT',
         totalAmount: 100000,
@@ -282,8 +289,8 @@ describe('ScholarshipService', () => {
   })
 
   describe('getStudentScholarships', () => {
-    beforeEach(() => {
-      service.allocateScholarship({
+    beforeEach(async () => {
+      await service.allocateScholarship({
         studentId: 1,
         scholarshipId: 1,
         amount: 100000,
@@ -291,7 +298,7 @@ describe('ScholarshipService', () => {
         userId: 10
       })
 
-      service.allocateScholarship({
+      await service.allocateScholarship({
         studentId: 1,
         scholarshipId: 2,
         amount: 50000,
@@ -300,8 +307,8 @@ describe('ScholarshipService', () => {
       })
     })
 
-    it('should return all scholarships for student', () => {
-      const scholarships = service.getStudentScholarships(1)
+    it('should return all scholarships for student', async () => {
+      const scholarships = await service.getStudentScholarships(1)
 
       expect(scholarships).toBeDefined()
     })
@@ -319,7 +326,7 @@ describe('ScholarshipService', () => {
     })
 
     it('should return empty for student with no scholarships', () => {
-      db.exec('INSERT INTO student (first_name, last_name, admission_number) VALUES ("New", "Student", "STU-003")')
+      db.exec("INSERT INTO student (first_name, last_name, admission_number) VALUES ('New', 'Student', 'STU-003')")
 
       const allocations = db.prepare('SELECT * FROM student_scholarship WHERE student_id = 3').all() as any[]
       expect(allocations).toHaveLength(0)
@@ -327,46 +334,46 @@ describe('ScholarshipService', () => {
   })
 
   describe('validateScholarshipEligibility', () => {
-    it('should validate active scholarship', () => {
-      const result = service.validateScholarshipEligibility(1, 1)
+    it('should validate active scholarship', async () => {
+      const result = await service.validateScholarshipEligibility(1, 1)
 
       expect(result).toBeDefined()
     })
 
-    it('should detect insufficient funds', () => {
-      const result = service.validateScholarshipEligibility(1, 3)
+    it('should detect insufficient funds', async () => {
+      const result = await service.validateScholarshipEligibility(1, 3)
 
       expect(result).toBeDefined()
     })
 
-    it('should detect expired scholarship', () => {
-      const result = service.validateScholarshipEligibility(1, 4)
+    it('should detect expired scholarship', async () => {
+      const result = await service.validateScholarshipEligibility(1, 4)
 
       expect(result).toBeDefined()
     })
 
-    it('should detect non-existent scholarship', () => {
-      const result = service.validateScholarshipEligibility(1, 999)
+    it('should detect non-existent scholarship', async () => {
+      const result = await service.validateScholarshipEligibility(1, 999)
 
       expect(result).toBeDefined()
     })
 
-    it('should detect non-existent student', () => {
-      const result = service.validateScholarshipEligibility(999, 1)
+    it('should detect non-existent student', async () => {
+      const result = await service.validateScholarshipEligibility(999, 1)
 
       expect(result).toBeDefined()
     })
   })
 
   describe('getAvailableScholarships', () => {
-    it('should return active scholarships with funds', () => {
-      const scholarships = service.getAvailableScholarships()
+    it('should return active scholarships with funds', async () => {
+      const scholarships = await service.getAvailableScholarships()
 
       expect(scholarships).toBeDefined()
     })
 
-    it('should filter by scholarship type', () => {
-      const meritScholarships = service.getAvailableScholarships('MERIT')
+    it('should filter by scholarship type', async () => {
+      const meritScholarships = await service.getAvailableScholarships('MERIT')
 
       expect(meritScholarships).toBeDefined()
     })
@@ -385,8 +392,8 @@ describe('ScholarshipService', () => {
   describe('revokeScholarship', () => {
     let allocationId: number
 
-    beforeEach(() => {
-      const result = service.allocateScholarship({
+    beforeEach(async () => {
+      const result = await service.allocateScholarship({
         studentId: 1,
         scholarshipId: 1,
         amount: 50000,
@@ -396,8 +403,8 @@ describe('ScholarshipService', () => {
       allocationId = result.allocationId!
     })
 
-    it('should revoke scholarship allocation', () => {
-      const result = service.revokeScholarship({
+    it('should revoke scholarship allocation', async () => {
+      const result = await service.revokeScholarship({
         allocationId,
         reason: 'Student withdrew',
         userId: 10
@@ -406,10 +413,10 @@ describe('ScholarshipService', () => {
       expect(result).toBeDefined()
     })
 
-    it('should restore scholarship available amount', () => {
+    it('should restore scholarship available amount', async () => {
       const beforeRevoke = db.prepare('SELECT * FROM scholarship WHERE id = 1').get() as any
 
-      service.revokeScholarship({
+      await service.revokeScholarship({
         allocationId,
         reason: 'Student withdrew',
         userId: 10
@@ -419,8 +426,8 @@ describe('ScholarshipService', () => {
       expect(afterRevoke.available_amount).toBeGreaterThanOrEqual(beforeRevoke.available_amount)
     })
 
-    it('should require revocation reason', () => {
-      const result = service.revokeScholarship({
+    it('should require revocation reason', async () => {
+      const result = await service.revokeScholarship({
         allocationId,
         reason: '',
         userId: 10
@@ -429,14 +436,14 @@ describe('ScholarshipService', () => {
       expect(result).toBeDefined()
     })
 
-    it('should prevent revoking already revoked allocation', () => {
-      service.revokeScholarship({
+    it('should prevent revoking already revoked allocation', async () => {
+      await service.revokeScholarship({
         allocationId,
         reason: 'First revocation',
         userId: 10
       })
 
-      const result = service.revokeScholarship({
+      const result = await service.revokeScholarship({
         allocationId,
         reason: 'Second revocation',
         userId: 10
@@ -445,8 +452,8 @@ describe('ScholarshipService', () => {
       expect(result).toBeDefined()
     })
 
-    it('should update allocation status', () => {
-      service.revokeScholarship({
+    it('should update allocation status', async () => {
+      await service.revokeScholarship({
         allocationId,
         reason: 'Test revocation',
         userId: 10

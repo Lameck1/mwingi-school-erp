@@ -62,6 +62,33 @@ describe('CashFlowStatementService', () => {
         FOREIGN KEY (recorded_by_user_id) REFERENCES user(id)
       );
 
+      CREATE TABLE expense_transaction (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        expense_type TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        transaction_date DATE NOT NULL
+      );
+
+      CREATE TABLE payroll_transaction (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        amount INTEGER NOT NULL,
+        transaction_date DATE NOT NULL
+      );
+
+      CREATE TABLE asset_transaction (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        transaction_type TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        transaction_date DATE NOT NULL
+      );
+
+      CREATE TABLE loan_transaction (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        transaction_type TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        transaction_date DATE NOT NULL
+      );
+
       -- Insert test data
       INSERT INTO user (username) VALUES ('testuser');
       INSERT INTO transaction_category (category_name) VALUES ('INCOME'), ('EXPENSE');

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import Database from 'better-sqlite3-multiple-ciphers'
 import { StudentLedgerService } from '../../reports/StudentLedgerService'
 
-vi.mock('../../../../database/utils/audit', () => ({
+vi.mock('../../../database/utils/audit', () => ({
   logAudit: vi.fn()
 }))
 
@@ -32,6 +32,8 @@ describe('StudentLedgerService', () => {
         amount_due REAL NOT NULL,
         amount_paid REAL DEFAULT 0,
         status TEXT,
+        invoice_date TEXT,
+        due_date TEXT,
         created_at TEXT
       )
     `)
@@ -43,8 +45,10 @@ describe('StudentLedgerService', () => {
         transaction_type TEXT NOT NULL,
         amount REAL NOT NULL,
         description TEXT,
+        reference TEXT,
         transaction_date TEXT,
         debit_credit TEXT,
+        is_voided BOOLEAN DEFAULT 0,
         created_at TEXT
       )
     `)
@@ -75,6 +79,16 @@ describe('StudentLedgerService', () => {
         year INTEGER,
         start_date TEXT,
         end_date TEXT
+      )
+    `)
+
+    db.exec(`
+      CREATE TABLE student_opening_balance (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id TEXT NOT NULL,
+        period_start TEXT NOT NULL,
+        opening_balance REAL NOT NULL,
+        recorded_at TEXT NOT NULL
       )
     `)
 

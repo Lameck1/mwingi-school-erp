@@ -110,15 +110,19 @@ class ScholarshipRepository {
     const result = db.prepare(`
       INSERT INTO scholarship (
         name, description, scholarship_type, amount, percentage,
+        total_amount, allocated_amount, available_amount,
         max_beneficiaries, eligibility_criteria, valid_from, valid_to,
         sponsor_name, sponsor_contact, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')
     `).run(
       data.name,
       data.description,
       data.scholarship_type,
       data.amount,
       data.percentage || null,
+      data.amount,
+      0,
+      data.amount,
       data.max_beneficiaries,
       data.eligibility_criteria,
       data.valid_from,
@@ -181,9 +185,11 @@ class ScholarshipAllocationRepository {
     db.prepare(`
       UPDATE scholarship
       SET current_beneficiaries = current_beneficiaries + 1,
-          total_allocated = total_allocated + ?
+          total_allocated = total_allocated + ?,
+          allocated_amount = allocated_amount + ?,
+          available_amount = available_amount - ?
       WHERE id = ?
-    `).run(data.amount_allocated, data.scholarship_id)
+    `).run(data.amount_allocated, data.amount_allocated, data.amount_allocated, data.scholarship_id)
 
     return result.lastInsertRowid as number
   }
@@ -282,8 +288,6 @@ class ScholarshipAllocator implements IScholarshipAllocator {
   ) {}
 
   async allocateScholarshipToStudent(allocationData: AllocationData, userId: number): Promise<AllocationResult> {
-    const db = getDatabase()
-
     try {
       // Check if scholarship exists and is active
       const scholarship = await this.scholarshipRepo.getScholarship(allocationData.scholarship_id)
@@ -421,15 +425,43 @@ export class ScholarshipService
   /**
    * Create new scholarship program
    */
-  async createScholarship(data: ScholarshipData, userId: number): Promise<ScholarshipResult> {
-    return this.creator.createScholarship(data, userId)
+  async createScholarship(data: ScholarshipData | Record<string, unknown>, userId?: number): Promise<ScholarshipResult> {
+    const normalized = this.normalizeScholarshipData(data)
+    const resolvedUserId = userId ?? this.extractLegacyUserId(data)
+    if (resolvedUserId === undefined) {
+      return {
+        success: false,
+        message: 'User ID is required to create scholarship'
+      }
+    }
+
+    return this.creator.createScholarship(normalized, resolvedUserId)
   }
 
   /**
    * Allocate scholarship to student
    */
-  async allocateScholarshipToStudent(allocationData: AllocationData, userId: number): Promise<AllocationResult> {
-    return this.allocator.allocateScholarshipToStudent(allocationData, userId)
+  async allocateScholarshipToStudent(allocationData: AllocationData | Record<string, unknown>, userId?: number): Promise<AllocationResult> {
+    const normalized = this.normalizeAllocationData(allocationData)
+    const resolvedUserId = userId ?? this.extractLegacyUserId(allocationData)
+
+    if (resolvedUserId === undefined) {
+      return {
+        success: false,
+        message: 'User ID is required to allocate scholarship'
+      }
+    }
+
+    return this.allocator.allocateScholarshipToStudent(normalized, resolvedUserId)
+  }
+
+  // Legacy alias used by older tests
+  async allocateScholarship(allocationData: AllocationData | Record<string, unknown>): Promise<AllocationResult & { allocationId?: number }> {
+    const result = await this.allocateScholarshipToStudent(allocationData)
+    return {
+      ...result,
+      allocationId: result.allocation_id
+    }
   }
 
   /**
@@ -458,6 +490,155 @@ export class ScholarshipService
    */
   async getScholarshipAllocations(scholarshipId: number): Promise<StudentScholarship[]> {
     return this.queryService.getScholarshipAllocations(scholarshipId)
+  }
+
+  async getScholarshipUtilization(scholarshipId: number): Promise<{
+    scholarship: Scholarship | null
+    allocations: StudentScholarship[]
+    utilization_percentage: number
+  }> {
+    const scholarship = (await this.queryService.getScholarshipAllocations(scholarshipId))
+      ? this.db.prepare('SELECT * FROM scholarship WHERE id = ?').get(scholarshipId) as Scholarship | undefined
+      : undefined
+
+    const allocations = await this.queryService.getScholarshipAllocations(scholarshipId)
+    const totalAmount = scholarship?.total_amount || 0
+    const allocated = scholarship?.allocated_amount || 0
+    const utilization = totalAmount > 0 ? (allocated / totalAmount) * 100 : 0
+
+    return {
+      scholarship: scholarship || null,
+      allocations,
+      utilization_percentage: utilization
+    }
+  }
+
+  async getAvailableScholarships(type?: ScholarshipData['scholarship_type']): Promise<Scholarship[]> {
+    const baseQuery = `
+      SELECT * FROM scholarship
+      WHERE status = 'ACTIVE'
+        AND (available_amount IS NULL OR available_amount > 0)
+    `
+
+    if (type) {
+      return this.db.prepare(`${baseQuery} AND scholarship_type = ?`).all(type) as Scholarship[]
+    }
+
+    return this.db.prepare(baseQuery).all() as Scholarship[]
+  }
+
+  async revokeScholarship(params: { allocationId?: number; allocation_id?: number; reason?: string; userId?: number; user_id?: number }): Promise<{
+    success: boolean
+    message: string
+  }> {
+    const allocationId = params.allocationId ?? params.allocation_id
+    const reason = params.reason || ''
+
+    if (!allocationId) {
+      return { success: false, message: 'Allocation ID is required' }
+    }
+
+    if (!reason) {
+      return { success: false, message: 'Revocation reason is required' }
+    }
+
+    const allocation = this.db
+      .prepare('SELECT * FROM student_scholarship WHERE id = ?')
+      .get(allocationId) as StudentScholarship | undefined
+
+    if (!allocation) {
+      return { success: false, message: 'Allocation not found' }
+    }
+
+    if (allocation.status === 'REVOKED') {
+      return { success: false, message: 'Allocation already revoked' }
+    }
+
+    this.db
+      .prepare(`UPDATE student_scholarship SET status = 'REVOKED', notes = ? WHERE id = ?`)
+      .run(reason, allocationId)
+
+    this.db
+      .prepare(`
+        UPDATE scholarship
+        SET allocated_amount = allocated_amount - ?,
+            available_amount = available_amount + ?
+        WHERE id = ?
+      `)
+      .run(allocation.amount_allocated, allocation.amount_allocated, allocation.scholarship_id)
+
+    return { success: true, message: 'Scholarship allocation revoked' }
+  }
+
+  private normalizeScholarshipData(data: ScholarshipData | Record<string, unknown>): ScholarshipData {
+    const legacy = data as Record<string, unknown>
+
+    return {
+      name: (legacy.name as string) || '',
+      description: (legacy.description as string) || '',
+      scholarship_type:
+        (legacy.scholarship_type as ScholarshipData['scholarship_type']) ||
+        (legacy.type as ScholarshipData['scholarship_type']) ||
+        'MERIT',
+      amount:
+        (legacy.amount as number) ??
+        (legacy.totalAmount as number) ??
+        (legacy.total_amount as number) ??
+        0,
+      percentage: (legacy.percentage as number) || undefined,
+      max_beneficiaries:
+        (legacy.max_beneficiaries as number) ??
+        (legacy.maxBeneficiaries as number) ??
+        9999,
+      eligibility_criteria:
+        (legacy.eligibility_criteria as string) ||
+        (legacy.eligibilityCriteria as string) ||
+        '',
+      valid_from:
+        (legacy.valid_from as string) ||
+        (legacy.startDate as string) ||
+        (legacy.validFrom as string) ||
+        new Date().toISOString().split('T')[0],
+      valid_to:
+        (legacy.valid_to as string) ||
+        (legacy.endDate as string) ||
+        (legacy.validTo as string) ||
+        new Date().toISOString().split('T')[0],
+      sponsor_name: (legacy.sponsor_name as string) || undefined,
+      sponsor_contact: (legacy.sponsor_contact as string) || undefined
+    }
+  }
+
+  private normalizeAllocationData(allocationData: AllocationData | Record<string, unknown>): AllocationData {
+    const legacy = allocationData as Record<string, unknown>
+
+    return {
+      scholarship_id:
+        (legacy.scholarship_id as number) ??
+        (legacy.scholarshipId as number) ??
+        0,
+      student_id:
+        (legacy.student_id as number) ??
+        (legacy.studentId as number) ??
+        0,
+      amount_allocated:
+        (legacy.amount_allocated as number) ??
+        (legacy.amount as number) ??
+        0,
+      allocation_notes:
+        (legacy.allocation_notes as string) ||
+        (legacy.notes as string) ||
+        '',
+      effective_date:
+        (legacy.effective_date as string) ||
+        (legacy.allocationDate as string) ||
+        new Date().toISOString().split('T')[0]
+    }
+  }
+
+  private extractLegacyUserId(data: Record<string, unknown> | ScholarshipData | AllocationData): number | undefined {
+    const legacy = data as Record<string, unknown>
+    return (legacy.userId as number) ?? (legacy.user_id as number)
   }
 
   /**

@@ -12,8 +12,7 @@ describe('StudentLedgerService', () => {
   let service: StudentLedgerService
 
   beforeEach(() => {
-    try {
-      db = new Database(':memory:')
+    db = new Database(':memory:')
     
     db.exec(`
       CREATE TABLE student (
@@ -72,6 +71,15 @@ describe('StudentLedgerService', () => {
         FOREIGN KEY (student_id) REFERENCES student(id),
         FOREIGN KEY (recorded_by_user_id) REFERENCES user(id),
         FOREIGN KEY (invoice_id) REFERENCES fee_invoice(id)
+      );
+
+      CREATE TABLE student_opening_balance (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL,
+        period_start TEXT NOT NULL,
+        opening_balance REAL NOT NULL,
+        recorded_at TEXT NOT NULL,
+        FOREIGN KEY (student_id) REFERENCES student(id)
       );
 
       -- Insert test data
@@ -281,8 +289,8 @@ describe('StudentLedgerService', () => {
 
         INSERT INTO ledger_transaction (transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit, student_id, invoice_id, description, recorded_by_user_id, created_at)
         VALUES 
-          ('TRX-2026-999', '2026-01-28', 'INCOME', 1, 10000, 'DEBIT', 1, 6, 'Invoice', 1, '2026-01-28 10:00:00'),
-          ('PAY-2026-999', '2026-01-29', 'FEE_PAYMENT', 1, 15000, 'CREDIT', 1, 6, 'Over payment', 1, '2026-01-29 10:00:00');
+          ('TRX-2026-999', '2026-01-28', 'INCOME', 1, 10000, 'DEBIT', 1, 5, 'Invoice', 1, '2026-01-28 10:00:00'),
+          ('PAY-2026-999', '2026-01-29', 'FEE_PAYMENT', 1, 15000, 'CREDIT', 1, 5, 'Over payment', 1, '2026-01-29 10:00:00');
       `)
 
       const result = await service.generateStudentLedger(1, '2026-01-01', '2026-01-31')

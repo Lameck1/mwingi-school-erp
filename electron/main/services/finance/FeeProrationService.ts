@@ -393,20 +393,109 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
   /**
    * Generate pro-rated invoice for mid-term enrollment
    */
-  async generateProRatedInvoice(
-    studentId: number,
-    templateInvoiceId: number,
-    enrollmentDate: string,
-    userId: number
-  ): Promise<InvoiceGenerationResult> {
-    return this.invoiceGenerator.generateProRatedInvoice(studentId, templateInvoiceId, enrollmentDate, userId)
+  // Synchronous wrapper for test compatibility
+  generateProRatedInvoiceSync(data: any): any {
+    const db = this.db
+    
+    try {
+      // Find invoice template for the grade
+      const template = db.prepare(`
+        SELECT * FROM invoice_template WHERE grade = ? LIMIT 1
+      `).get(data.grade) as any
+
+      if (!template) {
+        return {
+          success: false,
+          message: 'No invoice template found for grade: ' + data.grade
+        }
+      }
+
+      // Get term dates
+      const term = db.prepare(`
+        SELECT * FROM academic_term WHERE is_current = 1
+      `).get() as any
+
+      if (!term) {
+        return {
+          success: false,
+          message: 'No current term found'
+        }
+      }
+
+      const termStartDate = term.start_date
+      const termEndDate = term.end_date
+      const enrollment = new Date(data.enrollmentDate)
+      const termStart = new Date(termStartDate)
+      const termEnd = new Date(termEndDate)
+
+      // Calculate days
+      const daysInTerm = Math.ceil((termEnd.getTime() - termStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      const daysEnrolled = Math.ceil((termEnd.getTime() - enrollment.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      const prorationType = (daysEnrolled / daysInTerm) * 100
+      const proratedAmount = template.amount * (daysEnrolled / daysInTerm)
+
+      // Create invoice
+      const invoiceResult = db.prepare(`
+        INSERT INTO fee_invoice (student_id, grade, amount, original_amount, is_prorated, description, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(data.studentId, data.grade, proratedAmount, template.amount, 1, `Pro-rated ${data.grade} fees`, new Date().toISOString())
+
+      const invoiceId = invoiceResult.lastInsertRowid
+
+      // Record proration log
+      db.prepare(`
+        INSERT INTO pro_ration_log (student_id, invoice_id, enrollment_date, term_start_date, term_end_date, days_in_term, days_enrolled, proration_percentage, original_amount, prorated_amount, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(data.studentId, invoiceId, data.enrollmentDate, termStartDate, termEndDate, daysInTerm, daysEnrolled, prorationType, template.amount, proratedAmount, new Date().toISOString())
+
+      logAudit(
+        data.userId,
+        'CREATE_PRORATED_INVOICE',
+        'fee_invoice',
+        Number(invoiceId),
+        null,
+        {
+          student_id: data.studentId,
+          original_amount: template.amount,
+          prorated_amount: proratedAmount,
+          proration_percentage: prorationType
+        }
+      )
+
+      return {
+        success: true,
+        message: `Pro-rated invoice created: ${proratedAmount.toFixed(2)} KES (${prorationType.toFixed(1)}% of full fee)`,
+        invoice_id: Number(invoiceId)
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: `Failed to generate pro-rated invoice: ${(error as Error).message}`
+      }
+    }
+  }
+
+  generateProRatedInvoice(
+    studentIdOrData: number | any,
+    templateInvoiceId?: number,
+    enrollmentDate?: string,
+    userId?: number
+  ): Promise<InvoiceGenerationResult> | InvoiceGenerationResult {
+    // Handle both API styles
+    if (typeof studentIdOrData === 'object') {
+      // New style: { studentId, enrollmentDate, grade, userId }
+      return this.generateProRatedInvoiceSync(studentIdOrData)
+    } else {
+      // Old style: (studentId, templateInvoiceId, enrollmentDate, userId)
+      return this.invoiceGenerator.generateProRatedInvoice(studentIdOrData, templateInvoiceId!, enrollmentDate!, userId!)
+    }
   }
 
   /**
    * Get proration history for a student
    */
   async getStudentProRationHistory(studentId: number): Promise<any[]> {
-    const db = getDatabase()
+    const db = this.db
     return db.prepare(`
       SELECT 
         pl.*,
@@ -417,5 +506,76 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
       WHERE pl.student_id = ?
       ORDER BY pl.created_at DESC
     `).all(studentId) as any[]
+  }
+
+  /**
+   * Get proration details for a student
+   */
+  getProrationDetails(studentId: number): any {
+    const db = this.db
+    const result = db.prepare(`
+      SELECT 
+        fi.*,
+        pl.original_amount,
+        pl.prorated_amount,
+        pl.proration_percentage as discount_percentage,
+        pl.days_in_term,
+        pl.days_enrolled,
+        pl.enrollment_date
+      FROM fee_invoice fi
+      LEFT JOIN pro_ration_log pl ON pl.invoice_id = fi.id
+      WHERE fi.student_id = ? AND fi.is_prorated = 1
+      ORDER BY fi.created_at DESC
+    `).all(studentId)
+    
+    return result
+  }
+
+  /**
+   * Get proration history (alias for getStudentProRationHistory)
+   */
+  getProrationHistory(studentId: number, startDate?: string, endDate?: string): any {
+    const db = this.db
+    let query = `
+      SELECT 
+        pl.*,
+        fi.invoice_number,
+        fi.description
+      FROM pro_ration_log pl
+      LEFT JOIN fee_invoice fi ON pl.invoice_id = fi.id
+      WHERE pl.student_id = ?
+    `
+    
+    const params: any[] = [studentId]
+    
+    if (startDate && endDate) {
+      query += ` AND pl.created_at BETWEEN ? AND ?`
+      params.push(startDate, endDate)
+    }
+    
+    query += ` ORDER BY pl.created_at DESC`
+    
+    return db.prepare(query).all(...params)
+  }
+
+  /**
+   * Calculate proration percentage based on enrollment date
+   */
+  calculateProrationPercentage(enrollmentDate: string, termStartDate: string, termEndDate: string): number {
+    const termStart = new Date(termStartDate)
+    const termEnd = new Date(termEndDate)
+    const enrollment = new Date(enrollmentDate)
+
+    // Calculate days in term
+    const daysInTerm = Math.ceil((termEnd.getTime() - termStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
+
+    // Calculate days enrolled
+    const daysEnrolled = Math.ceil((termEnd.getTime() - enrollment.getTime()) / (1000 * 60 * 60 * 24)) + 1
+
+    // Calculate percentage
+    const percentage = (daysEnrolled / daysInTerm) * 100
+
+    // Round to 2 decimal places
+    return Math.round(percentage * 100) / 100
   }
 }

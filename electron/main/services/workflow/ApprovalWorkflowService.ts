@@ -60,12 +60,16 @@ export class ApprovalWorkflowService {
    * Create an approval request
    */
   createApprovalRequest(params: {
-    requestType: string
-    entityType: string
-    entityId: number
+    requestType?: string
+    request_type?: string
+    entityType?: string
+    entity_type?: string
+    entityId?: number
+    entity_id?: number
     amount: number
     description: string
-    requestedBy: number
+    requestedBy?: number
+    requested_by?: number
   }): {
     success: boolean
     message: string
@@ -73,7 +77,18 @@ export class ApprovalWorkflowService {
     requiredLevel?: number
   } {
     try {
-      const { requestType, entityType, entityId, amount, description, requestedBy } = params
+      const requestType = params.requestType ?? params.request_type
+      const entityType = params.entityType ?? params.entity_type
+      const entityId = params.entityId ?? params.entity_id
+      const requestedBy = params.requestedBy ?? params.requested_by
+      const { amount, description } = params
+
+      if (!requestType || !entityType || entityId === undefined || requestedBy === undefined) {
+        return {
+          success: false,
+          message: 'Missing required approval request fields'
+        }
+      }
 
       // Get all applicable approval configurations for this request type
       const configs = this.db
@@ -356,5 +371,43 @@ export class ApprovalWorkflowService {
     } catch (error) {
       throw new Error(`Failed to get approval history: ${error instanceof Error ? error.message : String(error)}`)
     }
+  }
+
+  // --------------------------------------------------------------------------
+  // Backward-compatible wrappers for legacy test usage
+  // --------------------------------------------------------------------------
+
+  approveRequest(requestId: number, level: number, comments: string, approverId: number): {
+    success: boolean
+    message: string
+  } {
+    return this.processApproval({
+      requestId,
+      level,
+      decision: 'APPROVED',
+      approverId,
+      comments
+    })
+  }
+
+  rejectRequest(requestId: number, level: number, comments: string, approverId: number): {
+    success: boolean
+    message: string
+  } {
+    return this.processApproval({
+      requestId,
+      level,
+      decision: 'REJECTED',
+      approverId,
+      comments
+    })
+  }
+
+  getRequestHistory(requestId: number): ApprovalHistoryResult {
+    return this.getApprovalHistory(requestId)
+  }
+
+  getPendingRequests(level = 1, requestType?: string): ApprovalRequest[] {
+    return this.getApprovalQueue(level, requestType)
   }
 }

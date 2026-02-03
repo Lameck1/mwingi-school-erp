@@ -36,7 +36,43 @@ describe('CashFlowStatementService', () => {
         description TEXT,
         transaction_date TEXT,
         debit_credit TEXT,
+        is_voided BOOLEAN DEFAULT 0,
         created_at TEXT
+      )
+    `)
+
+    db.exec(`
+      CREATE TABLE expense_transaction (
+        id TEXT PRIMARY KEY,
+        expense_type TEXT NOT NULL,
+        amount REAL NOT NULL,
+        transaction_date TEXT NOT NULL
+      )
+    `)
+
+    db.exec(`
+      CREATE TABLE payroll_transaction (
+        id TEXT PRIMARY KEY,
+        amount REAL NOT NULL,
+        transaction_date TEXT NOT NULL
+      )
+    `)
+
+    db.exec(`
+      CREATE TABLE asset_transaction (
+        id TEXT PRIMARY KEY,
+        transaction_type TEXT NOT NULL,
+        amount REAL NOT NULL,
+        transaction_date TEXT NOT NULL
+      )
+    `)
+
+    db.exec(`
+      CREATE TABLE loan_transaction (
+        id TEXT PRIMARY KEY,
+        transaction_type TEXT NOT NULL,
+        amount REAL NOT NULL,
+        transaction_date TEXT NOT NULL
       )
     `)
 

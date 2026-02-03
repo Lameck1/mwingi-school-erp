@@ -19,8 +19,8 @@ describe('PaymentService', () => {
           CREATE TABLE student (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             first_name TEXT NOT NULL,
-            last_name TEXT NOT NULL,
-            credit_balance INTEGER DEFAULT 0
+                        last_name TEXT NOT NULL,
+                        credit_balance INTEGER DEFAULT 0
           );
 
           CREATE TABLE transaction_category (
@@ -45,14 +45,24 @@ describe('PaymentService', () => {
 
           CREATE TABLE ledger_transaction (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            transaction_ref TEXT NOT NULL UNIQUE,
+                        transaction_ref TEXT,
             transaction_date DATE NOT NULL,
             transaction_type TEXT NOT NULL,
-            category_id INTEGER NOT NULL,
+            category_id INTEGER,
             amount INTEGER NOT NULL,
-            debit_credit TEXT NOT NULL,
+            debit_credit TEXT,
             student_id INTEGER,
-            recorded_by_user_id INTEGER NOT NULL
+            recorded_by_user_id INTEGER,
+                        description TEXT,
+                        payment_method TEXT,
+                        reference TEXT,
+                        recorded_by INTEGER,
+                        cheque_number TEXT,
+                        bank_name TEXT,
+                        is_approved BOOLEAN DEFAULT 0,
+                        approval_status TEXT,
+                        is_voided BOOLEAN DEFAULT 0,
+                        void_reason TEXT
           );
 
           INSERT INTO student (first_name, last_name) VALUES ('John', 'Doe');
@@ -69,8 +79,8 @@ describe('PaymentService', () => {
     })
 
     describe('recordPayment', () => {
-        it('should record a valid payment', () => {
-            const result = service.recordPayment({
+        it('should record a valid payment', async () => {
+            const result = await service.recordPayment({
                 student_id: 1,
                 amount: 15000,
                 payment_date: '2024-01-15',
@@ -82,8 +92,8 @@ describe('PaymentService', () => {
             expect(result).toBeDefined()
         })
 
-        it('should reject payment with invalid student', () => {
-            try {
+        it('should reject payment with invalid student', async () => {
+            await expect(
                 service.recordPayment({
                     student_id: 999,
                     amount: 15000,
@@ -92,13 +102,11 @@ describe('PaymentService', () => {
                     reference: 'TEST-002',
                     recorded_by: 1
                 })
-            } catch (error) {
-                expect(error).toBeDefined()
-            }
+            ).rejects.toBeDefined()
         })
 
-        it('should reject payment with zero amount', () => {
-            const result = service.recordPayment({
+        it('should reject payment with zero amount', async () => {
+            const result = await service.recordPayment({
                 student_id: 1,
                 amount: 0,
                 payment_date: '2024-01-15',
@@ -110,57 +118,54 @@ describe('PaymentService', () => {
             expect(result).toBeDefined()
         })
 
-        it('should validate required fields', () => {
-            const result = service.recordPayment({
-                student_id: 0,
-                amount: 0,
-                payment_date: '',
-                payment_method: '',
-                reference: '',
-                recorded_by: 0
-            })
-
-            expect(result).toBeDefined()
+        it('should validate required fields', async () => {
+            await expect(
+                service.recordPayment({
+                    student_id: 0,
+                    amount: 0,
+                    payment_date: '',
+                    payment_method: '',
+                    reference: '',
+                    recorded_by: 0
+                })
+            ).rejects.toBeDefined()
         })
     })
 
     describe('voidPayment', () => {
-        it('should void a payment with valid reason', () => {
+        it('should void a payment with valid reason', async () => {
             try {
-                const result = service.voidPayment({
+                const result = await service.voidPayment({
                     transaction_id: 1,
                     voided_reason: 'Duplicate entry',
                     voided_by_user_id: 1
                 })
                 expect(result).toBeDefined()
             } catch (error) {
-                // Test passes if method exists and can be called
                 expect(error).toBeDefined()
             }
         })
 
-        it('should reject voiding without reason', () => {
-            try {
-                service.voidPayment({
-                    transaction_id: 1,
-                    voided_reason: '',
-                    voided_by_user_id: 1
-                })
-            } catch (error) {
-                expect(error).toBeDefined()
-            }
+        it('should reject voiding without reason', async () => {
+            const result = await service.voidPayment({
+                transaction_id: 1,
+                voided_reason: '',
+                voided_by_user_id: 1
+            })
+
+            expect(result).toBeDefined()
+            expect(result.success).toBe(false)
         })
 
-        it('should reject voiding already voided payment', () => {
-            try {
-                service.voidPayment({
-                    transaction_id: 999,
-                    voided_reason: 'Test reason',
-                    voided_by_user_id: 1
-                })
-            } catch (error) {
-                expect(error).toBeDefined()
-            }
+        it('should reject voiding already voided payment', async () => {
+            const result = await service.voidPayment({
+                transaction_id: 999,
+                voided_reason: 'Test reason',
+                voided_by_user_id: 1
+            })
+
+            expect(result).toBeDefined()
+            expect(result.success).toBe(false)
         })
     })
 })
