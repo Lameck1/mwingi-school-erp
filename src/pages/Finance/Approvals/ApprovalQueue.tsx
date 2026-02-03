@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 
 interface ApprovalRequest {
@@ -129,6 +129,7 @@ export default function ApprovalQueuePage() {
             value={filter}
             onChange={(e) => setFilter(e.target.value as 'PENDING' | 'ALL')}
             className="px-3 py-2 border border-gray-300 rounded-md"
+            aria-label="Filter approval requests"
           >
             <option value="PENDING">Pending Only</option>
             <option value="ALL">All Requests</option>

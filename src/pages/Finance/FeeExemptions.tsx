@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useAuthStore } from '../../stores'
 import { FeeExemption, ExemptionStats } from '../../types/electron-api/ExemptionAPI'
 import { AcademicYear, Term } from '../../types/electron-api/AcademicAPI'
@@ -215,6 +215,7 @@ export default function FeeExemptions() {
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
                     className="px-4 py-2 border rounded-lg"
+                    aria-label="Filter by status"
                 >
                     <option value="">All Status</option>
                     <option value="ACTIVE">Active</option>
@@ -344,6 +345,7 @@ export default function FeeExemptions() {
                                         onChange={(e) => handleYearChange(parseInt(e.target.value))}
                                         className="w-full border rounded-lg p-2"
                                         required
+                                        aria-label="Academic year"
                                     >
                                         <option value="">Select Year</option>
                                         {academicYears.map(y => (
@@ -357,6 +359,7 @@ export default function FeeExemptions() {
                                         value={formData.term_id}
                                         onChange={(e) => setFormData({ ...formData, term_id: parseInt(e.target.value) })}
                                         className="w-full border rounded-lg p-2"
+                                        aria-label="Term"
                                     >
                                         <option value="">All Terms</option>
                                         {terms.map(t => (
@@ -373,6 +376,7 @@ export default function FeeExemptions() {
                                         value={formData.fee_category_id}
                                         onChange={(e) => setFormData({ ...formData, fee_category_id: parseInt(e.target.value) })}
                                         className="w-full border rounded-lg p-2"
+                                        aria-label="Fee category"
                                     >
                                         <option value="">All Categories</option>
                                         {feeCategories.map(c => (
@@ -402,6 +406,7 @@ export default function FeeExemptions() {
                                     onChange={(e) => setFormData({ ...formData, exemption_reason: e.target.value })}
                                     className="w-full border rounded-lg p-2"
                                     required
+                                    aria-label="Exemption reason"
                                 >
                                     <option value="">Select Reason</option>
                                     <option value="Scholarship">Scholarship</option>

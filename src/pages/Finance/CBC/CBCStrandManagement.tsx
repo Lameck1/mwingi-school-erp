@@ -19,9 +19,8 @@ interface StrandProfitability {
 }
 
 const CBCStrandManagement: React.FC = () => {
-  const [strands, setStrands] = useState<CBCStrand[]>([]);
+  const [, setStrands] = useState<CBCStrand[]>([]);
   const [profitability, setProfitability] = useState<StrandProfitability[]>([]);
-  const [selectedStrand, setSelectedStrand] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [fiscalYear, setFiscalYear] = useState(new Date().getFullYear());
   const [term, setTerm] = useState(1);
@@ -93,6 +92,7 @@ const CBCStrandManagement: React.FC = () => {
               value={fiscalYear}
               onChange={(e) => setFiscalYear(parseInt(e.target.value))}
               className="border rounded px-3 py-2"
+              aria-label="Fiscal year"
             >
               <option value={2024}>2024</option>
               <option value={2025}>2025</option>
@@ -105,6 +105,7 @@ const CBCStrandManagement: React.FC = () => {
               value={term}
               onChange={(e) => setTerm(parseInt(e.target.value))}
               className="border rounded px-3 py-2"
+              aria-label="Term"
             >
               <option value={1}>Term 1</option>
               <option value={2}>Term 2</option>

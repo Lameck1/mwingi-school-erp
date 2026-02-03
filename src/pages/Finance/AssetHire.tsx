@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useAuthStore } from '../../stores'
 import { HireBooking, HireAsset, HireClient, HireStats } from '../../types/electron-api/HireAPI'
 import { printDocument } from '../../utils/print'
@@ -305,6 +305,7 @@ export default function AssetHire() {
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
                         className="px-4 py-2 border rounded-lg"
+                        aria-label="Filter by status"
                     >
                         <option value="">All Status</option>
                         <option value="PENDING">Pending</option>
@@ -448,6 +449,7 @@ export default function AssetHire() {
                                         onChange={(e) => setBookingForm({ ...bookingForm, asset_id: parseInt(e.target.value) })}
                                         className="w-full border rounded-lg p-2"
                                         required
+                                        aria-label="Select asset"
                                     >
                                         <option value="">Select Asset</option>
                                         {assets.map(a => (
@@ -462,6 +464,7 @@ export default function AssetHire() {
                                         onChange={(e) => setBookingForm({ ...bookingForm, client_id: parseInt(e.target.value) })}
                                         className="w-full border rounded-lg p-2"
                                         required
+                                        aria-label="Select client"
                                     >
                                         <option value="">Select Client</option>
                                         {clients.map(c => (
@@ -478,6 +481,7 @@ export default function AssetHire() {
                                         value={bookingForm.hire_date}
                                         onChange={(e) => setBookingForm({ ...bookingForm, hire_date: e.target.value })}
                                         className="w-full border rounded-lg p-2"
+                                        aria-label="Hire date"
                                         required
                                     />
                                 </div>
@@ -488,6 +492,7 @@ export default function AssetHire() {
                                         value={bookingForm.return_date}
                                         onChange={(e) => setBookingForm({ ...bookingForm, return_date: e.target.value })}
                                         className="w-full border rounded-lg p-2"
+                                        aria-label="Return date"
                                     />
                                 </div>
                             </div>
@@ -510,6 +515,7 @@ export default function AssetHire() {
                                         onChange={(e) => setBookingForm({ ...bookingForm, distance_km: e.target.value })}
                                         className="w-full border rounded-lg p-2"
                                         placeholder="e.g., 200"
+                                        aria-label="Distance in kilometers"
                                     />
                                 </div>
                                 <div>
@@ -520,6 +526,7 @@ export default function AssetHire() {
                                         onChange={(e) => setBookingForm({ ...bookingForm, total_amount: e.target.value })}
                                         className="w-full border rounded-lg p-2"
                                         required
+                                        aria-label="Total amount in KES"
                                     />
                                 </div>
                             </div>
@@ -531,6 +538,7 @@ export default function AssetHire() {
                                     className="w-full border rounded-lg p-2"
                                     rows={2}
                                     placeholder="e.g., Church trip"
+                                    aria-label="Booking purpose"
                                 />
                             </div>
                             <div className="flex justify-end gap-2">
@@ -567,6 +575,7 @@ export default function AssetHire() {
                                     onChange={(e) => setClientForm({ ...clientForm, client_name: e.target.value })}
                                     className="w-full border rounded-lg p-2"
                                     required
+                                    aria-label="Client name"
                                 />
                             </div>
                             <div>
@@ -576,6 +585,7 @@ export default function AssetHire() {
                                     value={clientForm.organization}
                                     onChange={(e) => setClientForm({ ...clientForm, organization: e.target.value })}
                                     className="w-full border rounded-lg p-2"
+                                    aria-label="Organization name"
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
@@ -586,6 +596,7 @@ export default function AssetHire() {
                                         value={clientForm.contact_phone}
                                         onChange={(e) => setClientForm({ ...clientForm, contact_phone: e.target.value })}
                                         className="w-full border rounded-lg p-2"
+                                        aria-label="Contact phone"
                                     />
                                 </div>
                                 <div>
@@ -595,6 +606,7 @@ export default function AssetHire() {
                                         value={clientForm.contact_email}
                                         onChange={(e) => setClientForm({ ...clientForm, contact_email: e.target.value })}
                                         className="w-full border rounded-lg p-2"
+                                        aria-label="Contact email"
                                     />
                                 </div>
                             </div>
@@ -636,6 +648,7 @@ export default function AssetHire() {
                                     className="w-full border rounded-lg p-2"
                                     max={selectedBooking.balance}
                                     required
+                                    aria-label="Payment amount in KES"
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
@@ -645,6 +658,7 @@ export default function AssetHire() {
                                         value={paymentForm.payment_method}
                                         onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value })}
                                         className="w-full border rounded-lg p-2"
+                                        aria-label="Payment method"
                                     >
                                         <option value="CASH">Cash</option>
                                         <option value="MPESA">M-Pesa</option>
@@ -659,6 +673,7 @@ export default function AssetHire() {
                                         value={paymentForm.payment_date}
                                         onChange={(e) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })}
                                         className="w-full border rounded-lg p-2"
+                                        aria-label="Payment date"
                                     />
                                 </div>
                             </div>

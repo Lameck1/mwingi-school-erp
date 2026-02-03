@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 
 interface AccountBalance {
@@ -75,6 +75,7 @@ export default function BalanceSheetPage() {
             value={asOfDate}
             onChange={(e) => setAsOfDate(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-md"
+            aria-label="As of date"
           />
           <button
             onClick={loadBalanceSheet}

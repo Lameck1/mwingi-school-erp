@@ -1,3 +1,4 @@
+import React from 'react'
 import { LucideIcon } from 'lucide-react'
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'error' | 'info' | 'outline'

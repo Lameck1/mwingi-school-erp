@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
     ArrowLeft, Plus, Trash2, Save, AlertCircle,
@@ -206,6 +206,7 @@ export default function CreateBudget() {
                                             value={item.category_id}
                                             onChange={(e) => updateLineItem(index, 'category_id', Number(e.target.value))}
                                             className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                            aria-label="Budget category"
                                         >
                                             <option value={0}>Select category...</option>
                                             <optgroup label="Income">
@@ -255,6 +256,7 @@ export default function CreateBudget() {
                                     onClick={() => removeLineItem(index)}
                                     disabled={lineItems.length === 1}
                                     className="p-2 text-foreground/40 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                    aria-label="Remove line item"
                                 >
                                     <Trash2 className="w-4 h-4" />
                                 </button>

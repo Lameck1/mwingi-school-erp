@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
     Plus, Search, Filter
 } from 'lucide-react'
@@ -106,7 +106,7 @@ export default function AssetRegister() {
                         className="input pl-11 bg-secondary/30"
                     />
                 </div>
-                <button className="btn btn-secondary px-4">
+                <button className="btn btn-secondary px-4" aria-label="Filter assets">
                     <Filter className="w-4 h-4" />
                 </button>
             </div>
@@ -169,6 +169,7 @@ export default function AssetRegister() {
                             onChange={(e) => setCreateForm(prev => ({ ...prev, asset_name: e.target.value }))}
                             className="input"
                             required
+                            aria-label="Asset name"
                         />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -179,6 +180,7 @@ export default function AssetRegister() {
                                 onChange={(e) => setCreateForm(prev => ({ ...prev, category_id: Number(e.target.value) }))}
                                 className="input"
                                 required
+                                aria-label="Asset category"
                             >
                                 <option value={0}>Select Category</option>
                                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -193,6 +195,7 @@ export default function AssetRegister() {
                                 className="input"
                                 required
                                 min="0"
+                                aria-label="Acquisition cost"
                             />
                         </div>
                     </div>
@@ -205,6 +208,7 @@ export default function AssetRegister() {
                                 onChange={(e) => setCreateForm(prev => ({ ...prev, acquisition_date: e.target.value }))}
                                 className="input"
                                 required
+                                aria-label="Date acquired"
                             />
                         </div>
                         <div className="space-y-2">
@@ -225,6 +229,7 @@ export default function AssetRegister() {
                             value={createForm.serial_number || ''}
                             onChange={(e) => setCreateForm(prev => ({ ...prev, serial_number: e.target.value }))}
                             className="input"
+                            aria-label="Serial number"
                         />
                     </div>
 

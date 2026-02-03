@@ -7,7 +7,7 @@ export interface TaxCalculationResult {
 }
 
 export interface TaxStrategy {
-  calculate(grossSalary: number): TaxCalculationResult // eslint-disable-line no-unused-vars
+  calculate(grossSalary: number): TaxCalculationResult
 }
 
 export class TaxCalculator {

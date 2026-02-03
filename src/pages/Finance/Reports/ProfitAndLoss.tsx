@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 
 interface CategoryBalance {
@@ -85,6 +85,7 @@ export default function ProfitAndLossPage() {
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-md"
+            aria-label="Start date"
           />
           <span className="text-gray-500">to</span>
           <input
@@ -92,6 +93,7 @@ export default function ProfitAndLossPage() {
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
             className="px-3 py-2 border border-gray-300 rounded-md"
+            aria-label="End date"
           />
           <button
             onClick={loadProfitAndLoss}

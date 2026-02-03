@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
     Save, Loader2, Search, AlertCircle, TrendingUp
 } from 'lucide-react'

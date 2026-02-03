@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import React, { useState, useRef } from 'react'
 import {
     Upload, Download, AlertTriangle,
     FileSpreadsheet, Loader2, X
@@ -117,6 +117,7 @@ export function ImportDialog({
                                 accept=".csv,.xlsx,.xls"
                                 className="hidden"
                                 onChange={handleFileSelect}
+                                aria-label="Upload CSV or Excel file"
                             />
                         </div>
 
@@ -150,7 +151,7 @@ export function ImportDialog({
                                     <p className="text-xs text-foreground/50">{(file.size / 1024).toFixed(1)} KB</p>
                                 </div>
                             </div>
-                            <button onClick={reset} className="p-1 hover:bg-white/10 rounded-full text-foreground/50">
+                            <button onClick={reset} className="p-1 hover:bg-white/10 rounded-full text-foreground/50" aria-label="Remove file">
                                 <X className="w-4 h-4" />
                             </button>
                         </div>

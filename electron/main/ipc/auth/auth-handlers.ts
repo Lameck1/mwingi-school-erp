@@ -54,7 +54,7 @@ export function registerAuthHandlers(): void {
             db.prepare('UPDATE user SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(user.id)
             logAudit(user.id, 'LOGIN', 'user', user.id, null, { action: 'Login' })
 
-            const { password_hash, ...userData } = user // eslint-disable-line no-unused-vars
+            const { password_hash, ...userData } = user
             return { success: true, user: userData }
         } catch (err) {
             console.error('Bcrypt comparison error:', err)

@@ -22,7 +22,7 @@ export class WindowStateManager {
     private state: WindowState
     private window: BrowserWindow | null = null
     private stateFilePath: string
-    private saveTimeout: NodeJS.Timeout | null = null
+    private saveTimeout: ReturnType<typeof setTimeout> | null = null
 
     constructor(windowName: string = 'main') {
         this.stateFilePath = path.join(app.getPath('userData'), `window-state-${windowName}.json`)

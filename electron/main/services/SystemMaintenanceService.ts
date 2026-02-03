@@ -281,7 +281,9 @@ export class SystemMaintenanceService {
         } catch (error) {
             console.error('Data reset failed:', error)
             // Ensure FKs are back on even on error
-            try { db.pragma('foreign_keys = ON') } catch (e) { }
+            try { db.pragma('foreign_keys = ON') } catch (e) { 
+                // Ignore pragma errors during error handling
+            }
             return { success: false, message: error instanceof Error ? error.message : 'Reset failed' }
         }
     }

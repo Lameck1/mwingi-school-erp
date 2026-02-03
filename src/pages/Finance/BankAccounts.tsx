@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Plus, Building2, CreditCard, TrendingUp } from 'lucide-react'
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'

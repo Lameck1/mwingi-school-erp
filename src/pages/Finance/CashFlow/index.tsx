@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
     TrendingUp, DollarSign, Activity,
     Download
@@ -119,6 +119,7 @@ export default function CashFlow() {
                         value={dateRange.start}
                         onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
                         className="bg-secondary/30 border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground focus:ring-2 focus:ring-primary/20 transition-all"
+                        aria-label="Start date"
                     />
                     <span className="text-foreground/40">to</span>
                     <input
@@ -126,6 +127,7 @@ export default function CashFlow() {
                         value={dateRange.end}
                         onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
                         className="bg-secondary/30 border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground focus:ring-2 focus:ring-primary/20 transition-all"
+                        aria-label="End date"
                     />
                 </div>
             </div>

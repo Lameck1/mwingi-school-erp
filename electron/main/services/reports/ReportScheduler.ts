@@ -30,7 +30,7 @@ export class ReportScheduler {
         }
         return this._notificationService
     }
-    private checkInterval: NodeJS.Timeout | null = null
+    private checkInterval: ReturnType<typeof setInterval> | null = null
     private isRunning = false
 
     /**
