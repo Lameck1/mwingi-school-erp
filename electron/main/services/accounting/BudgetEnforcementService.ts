@@ -1,0 +1,415 @@
+import { getDatabase } from '../../database/index';
+import { logAudit } from '../../database/utils/audit';
+
+/**
+ * BudgetEnforcementService
+ * 
+ * Enforces budget limits and provides budget tracking functionality.
+ * Prevents overspending and alerts managers when budgets are exceeded.
+ * 
+ * Key Functions:
+ * 1. Validate transactions against budget limits
+ * 2. Track budget utilization by GL account
+ * 3. Generate budget variance reports
+ * 4. Alert on budget overruns
+ * 5. Support departmental budget allocations
+ */
+
+export interface BudgetAllocation {
+  id?: number;
+  gl_account_code: string;
+  account_name?: string;
+  department?: string;
+  fiscal_year: number;
+  allocated_amount: number;
+  spent_amount?: number;
+  remaining_amount?: number;
+  utilization_percentage?: number;
+  is_active: boolean;
+}
+
+export interface BudgetValidationResult {
+  is_allowed: boolean;
+  message: string;
+  budget_status?: {
+    allocated: number;
+    spent: number;
+    remaining: number;
+    utilization_percentage: number;
+    after_transaction: {
+      spent: number;
+      remaining: number;
+      utilization_percentage: number;
+    };
+  };
+}
+
+export interface BudgetVarianceReport {
+  fiscal_year: number;
+  report_date: string;
+  items: Array<{
+    gl_account_code: string;
+    account_name: string;
+    department: string | null;
+    allocated: number;
+    spent: number;
+    remaining: number;
+    variance: number;
+    variance_percentage: number;
+    status: 'UNDER_BUDGET' | 'ON_BUDGET' | 'OVER_BUDGET';
+  }>;
+  summary: {
+    total_allocated: number;
+    total_spent: number;
+    total_remaining: number;
+    overall_utilization_percentage: number;
+  };
+}
+
+export class BudgetEnforcementService {
+  private db = getDatabase();
+
+  /**
+   * Create or update budget allocation
+   */
+  async setBudgetAllocation(
+    glAccountCode: string,
+    fiscalYear: number,
+    allocatedAmount: number,
+    department: string | null,
+    userId: number
+  ): Promise<{ success: boolean; message: string; allocationId?: number }> {
+    try {
+      // Check if allocation already exists
+      const existing = this.db.prepare(`
+        SELECT id FROM budget_allocation
+        WHERE gl_account_code = ? AND fiscal_year = ? AND department = ?
+      `).get(glAccountCode, fiscalYear, department) as { id: number } | undefined;
+
+      if (existing) {
+        // Update existing
+        this.db.prepare(`
+          UPDATE budget_allocation
+          SET allocated_amount = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(allocatedAmount, existing.id);
+
+        logAudit(userId, 'UPDATE', 'budget_allocation', existing.id, null, {
+          allocated_amount: allocatedAmount,
+        });
+
+        return {
+          success: true,
+          message: 'Budget allocation updated successfully.',
+          allocationId: existing.id,
+        };
+      } else {
+        // Create new
+        const result = this.db.prepare(`
+          INSERT INTO budget_allocation (
+            gl_account_code, fiscal_year, allocated_amount, department, is_active
+          ) VALUES (?, ?, ?, ?, 1)
+        `).run(glAccountCode, fiscalYear, allocatedAmount, department);
+
+        const allocationId = result.lastInsertRowid as number;
+
+        logAudit(userId, 'CREATE', 'budget_allocation', allocationId, null, {
+          gl_account_code: glAccountCode,
+          fiscal_year: fiscalYear,
+          allocated_amount: allocatedAmount,
+          department,
+        });
+
+        return {
+          success: true,
+          message: 'Budget allocation created successfully.',
+          allocationId,
+        };
+      }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: `Failed to set budget allocation: ${error.message}`,
+      };
+    }
+  }
+
+  /**
+   * Validate if a transaction is within budget
+   */
+  async validateTransaction(
+    glAccountCode: string,
+    amount: number,
+    fiscalYear: number,
+    department: string | null = null
+  ): Promise<BudgetValidationResult> {
+    try {
+      // Get budget allocation
+      const allocation = this.db.prepare(`
+        SELECT ba.id, ba.gl_account_code, ba.allocated_amount, ga.account_name,
+               ba.department
+        FROM budget_allocation ba
+        JOIN gl_account ga ON ga.account_code = ba.gl_account_code
+        WHERE ba.gl_account_code = ?
+          AND ba.fiscal_year = ?
+          AND (ba.department = ? OR (ba.department IS NULL AND ? IS NULL))
+          AND ba.is_active = 1
+      `).get(glAccountCode, fiscalYear, department, department) as {
+        id: number;
+        gl_account_code: string;
+        allocated_amount: number;
+        account_name: string;
+        department: string | null;
+      } | undefined;
+
+      // If no budget allocation, allow transaction (no budget set)
+      if (!allocation) {
+        return {
+          is_allowed: true,
+          message: 'No budget allocation found. Transaction allowed.',
+        };
+      }
+
+      // Calculate current spending
+      const spent = this.calculateSpentAmount(glAccountCode, fiscalYear, department);
+      const remaining = allocation.allocated_amount - spent;
+      const utilizationPercentage = (spent / allocation.allocated_amount) * 100;
+
+      // Calculate what would happen after transaction
+      const afterSpent = spent + amount;
+      const afterRemaining = allocation.allocated_amount - afterSpent;
+      const afterUtilization = (afterSpent / allocation.allocated_amount) * 100;
+
+      const budget_status = {
+        allocated: allocation.allocated_amount / 100,
+        spent: spent / 100,
+        remaining: remaining / 100,
+        utilization_percentage: utilizationPercentage,
+        after_transaction: {
+          spent: afterSpent / 100,
+          remaining: afterRemaining / 100,
+          utilization_percentage: afterUtilization,
+        },
+      };
+
+      // Check if transaction exceeds budget
+      if (afterSpent > allocation.allocated_amount) {
+        const overrun = afterSpent - allocation.allocated_amount;
+        return {
+          is_allowed: false,
+          message: `Transaction would exceed budget by Kes ${(overrun / 100).toFixed(2)}. Budget: Kes ${(allocation.allocated_amount / 100).toFixed(2)}, Spent: Kes ${(spent / 100).toFixed(2)}, Requested: Kes ${(amount / 100).toFixed(2)}.`,
+          budget_status,
+        };
+      }
+
+      // Warn if exceeding 90% utilization
+      if (afterUtilization >= 90 && utilizationPercentage < 90) {
+        return {
+          is_allowed: true,
+          message: `Warning: Transaction will push budget utilization to ${afterUtilization.toFixed(1)}%. Consider requesting additional budget allocation.`,
+          budget_status,
+        };
+      }
+
+      // Warn if exceeding 80% utilization
+      if (afterUtilization >= 80 && utilizationPercentage < 80) {
+        return {
+          is_allowed: true,
+          message: `Notice: Transaction will push budget utilization to ${afterUtilization.toFixed(1)}%. Budget is ${(100 - afterUtilization).toFixed(1)}% remaining.`,
+          budget_status,
+        };
+      }
+
+      return {
+        is_allowed: true,
+        message: 'Transaction is within budget.',
+        budget_status,
+      };
+    } catch (error: any) {
+      // On error, allow transaction but log the issue
+      console.error('Budget validation error:', error);
+      return {
+        is_allowed: true,
+        message: `Budget validation failed: ${error.message}. Transaction allowed.`,
+      };
+    }
+  }
+
+  /**
+   * Calculate spent amount for a budget allocation
+   */
+  private calculateSpentAmount(
+    glAccountCode: string,
+    fiscalYear: number,
+    department: string | null
+  ): number {
+    // Get fiscal year start/end dates
+    const fiscalYearStart = `${fiscalYear}-01-01`;
+    const fiscalYearEnd = `${fiscalYear}-12-31`;
+
+    // Sum debit amounts for expense accounts (spending)
+    const result = this.db.prepare(`
+      SELECT COALESCE(SUM(jel.debit_amount), 0) as spent
+      FROM journal_entry_line jel
+      JOIN journal_entry je ON je.id = jel.journal_entry_id
+      WHERE jel.gl_account_code = ?
+        AND je.entry_date BETWEEN ? AND ?
+        AND je.status = 'POSTED'
+        AND (jel.department = ? OR (jel.department IS NULL AND ? IS NULL))
+    `).get(glAccountCode, fiscalYearStart, fiscalYearEnd, department, department) as {
+      spent: number;
+    } | undefined;
+
+    return result?.spent || 0;
+  }
+
+  /**
+   * Get all budget allocations for a fiscal year
+   */
+  async getBudgetAllocations(fiscalYear: number): Promise<BudgetAllocation[]> {
+    try {
+      const allocations = this.db.prepare(`
+        SELECT ba.id, ba.gl_account_code, ga.account_name, ba.department,
+               ba.fiscal_year, ba.allocated_amount, ba.is_active
+        FROM budget_allocation ba
+        JOIN gl_account ga ON ga.account_code = ba.gl_account_code
+        WHERE ba.fiscal_year = ?
+        ORDER BY ba.gl_account_code, ba.department
+      `).all(fiscalYear) as Array<{
+        id: number;
+        gl_account_code: string;
+        account_name: string;
+        department: string | null;
+        fiscal_year: number;
+        allocated_amount: number;
+        is_active: number;
+      }>;
+
+      return allocations.map(a => {
+        const spent = this.calculateSpentAmount(a.gl_account_code, a.fiscal_year, a.department);
+        const remaining = a.allocated_amount - spent;
+        const utilization = (spent / a.allocated_amount) * 100;
+
+        return {
+          id: a.id,
+          gl_account_code: a.gl_account_code,
+          account_name: a.account_name,
+          department: a.department || undefined,
+          fiscal_year: a.fiscal_year,
+          allocated_amount: a.allocated_amount / 100,
+          spent_amount: spent / 100,
+          remaining_amount: remaining / 100,
+          utilization_percentage: utilization,
+          is_active: a.is_active === 1,
+        };
+      });
+    } catch (error: any) {
+      console.error('Failed to fetch budget allocations:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Generate budget variance report
+   */
+  async generateBudgetVarianceReport(fiscalYear: number): Promise<BudgetVarianceReport> {
+    const allocations = await this.getBudgetAllocations(fiscalYear);
+
+    const items = allocations.map(a => {
+      const variance = (a.allocated_amount * 100) - (a.spent_amount || 0) * 100;
+      const variancePercentage = ((a.spent_amount || 0) / a.allocated_amount) * 100 - 100;
+
+      let status: 'UNDER_BUDGET' | 'ON_BUDGET' | 'OVER_BUDGET';
+      if ((a.spent_amount || 0) > a.allocated_amount) {
+        status = 'OVER_BUDGET';
+      } else if ((a.utilization_percentage || 0) >= 95) {
+        status = 'ON_BUDGET';
+      } else {
+        status = 'UNDER_BUDGET';
+      }
+
+      return {
+        gl_account_code: a.gl_account_code,
+        account_name: a.account_name || '',
+        department: a.department || null,
+        allocated: a.allocated_amount,
+        spent: a.spent_amount || 0,
+        remaining: a.remaining_amount || 0,
+        variance: variance / 100,
+        variance_percentage: variancePercentage,
+        status,
+      };
+    });
+
+    const summary = {
+      total_allocated: items.reduce((sum, i) => sum + i.allocated, 0),
+      total_spent: items.reduce((sum, i) => sum + i.spent, 0),
+      total_remaining: items.reduce((sum, i) => sum + i.remaining, 0),
+      overall_utilization_percentage: 0,
+    };
+
+    summary.overall_utilization_percentage = 
+      (summary.total_spent / summary.total_allocated) * 100;
+
+    return {
+      fiscal_year: fiscalYear,
+      report_date: new Date().toISOString(),
+      items,
+      summary,
+    };
+  }
+
+  /**
+   * Get budget alerts (accounts near or over budget)
+   */
+  async getBudgetAlerts(fiscalYear: number, thresholdPercentage: number = 80): Promise<Array<{
+    gl_account_code: string;
+    account_name: string;
+    department: string | null;
+    allocated: number;
+    spent: number;
+    utilization_percentage: number;
+    alert_type: 'WARNING' | 'CRITICAL' | 'EXCEEDED';
+  }>> {
+    const allocations = await this.getBudgetAllocations(fiscalYear);
+
+    return allocations
+      .filter(a => (a.utilization_percentage || 0) >= thresholdPercentage)
+      .map(a => {
+        let alert_type: 'WARNING' | 'CRITICAL' | 'EXCEEDED';
+        if ((a.utilization_percentage || 0) >= 100) {
+          alert_type = 'EXCEEDED';
+        } else if ((a.utilization_percentage || 0) >= 90) {
+          alert_type = 'CRITICAL';
+        } else {
+          alert_type = 'WARNING';
+        }
+
+        return {
+          gl_account_code: a.gl_account_code,
+          account_name: a.account_name || '',
+          department: a.department || null,
+          allocated: a.allocated_amount,
+          spent: a.spent_amount || 0,
+          utilization_percentage: a.utilization_percentage || 0,
+          alert_type,
+        };
+      })
+      .sort((a, b) => b.utilization_percentage - a.utilization_percentage);
+  }
+
+  /**
+   * Deactivate budget allocation
+   */
+  async deactivateBudgetAllocation(allocationId: number, userId: number): Promise<void> {
+    this.db.prepare(`
+      UPDATE budget_allocation
+      SET is_active = 0, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(allocationId);
+
+    logAudit(userId, 'UPDATE', 'budget_allocation', allocationId, null, {
+      is_active: false,
+    });
+  }
+}
