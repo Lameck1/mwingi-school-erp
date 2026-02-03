@@ -11,6 +11,7 @@ import { getReportFixesSchema } from './006_report_fixes.js'
 import { getAttendanceSchema } from './007_attendance_schema.js'
 import { migrate_008_asset_hire_exemptions } from './008_asset_hire_exemptions.js'
 import { fixCurrencyScale } from './009_fix_currency_scale.js'
+import { up as chartOfAccountsUp } from './011_chart_of_accounts.js'
 
 export function runMigrations(db: Database.Database): void {
     db.exec(`CREATE TABLE IF NOT EXISTS migrations (
@@ -74,7 +75,8 @@ export function runMigrations(db: Database.Database): void {
         { name: 'attendance_schema', sql: getAttendanceSchema() },
         { name: 'add_term_status_column', sql: "ALTER TABLE term ADD COLUMN status TEXT DEFAULT 'OPEN' CHECK(status IN ('OPEN', 'CLOSED'));" },
         { name: 'asset_hire_exemptions', fn: migrate_008_asset_hire_exemptions },
-        { name: 'fix_currency_scale_v1', fn: fixCurrencyScale }
+        { name: 'fix_currency_scale_v1', fn: fixCurrencyScale },
+        { name: 'chart_of_accounts_v1', fn: chartOfAccountsUp }
     ]
 
     const applied = db.prepare('SELECT name FROM migrations').all() as { name: string }[]
