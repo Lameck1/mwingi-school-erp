@@ -6,6 +6,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+electron*.log
+build_error.log
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
@@ -110,16 +112,54 @@ dist
 # electron-builder
 dist-electron/
 release/
+*.blockmap
+
+# Electron build outputs
+out/
+app/
+app-builds/
+
+# Database files (should not be committed with real data)
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Backup files
+*.bak
+*.backup
+*.tmp
+*~
+
+# Test artifacts and output files
+test_output.txt
+test_run.txt
+coverage/
+*.lcov
+.nyc_output/
+test-results/
+playwright-report/
+junit.xml
 
 # Mac OS
 .DS_Store
 
 # Windows
 Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
 
 # Editor directories and files
 .idea
-.vscode
+# .vscode - commit workspace settings for team consistency
+# Only ignore personal/local VS Code files
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
 *.suo
 *.ntvs*
 *.njsproj

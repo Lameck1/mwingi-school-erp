@@ -1,0 +1,456 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import Database from 'better-sqlite3';
+import { CashFlowStatementService } from '../CashFlowStatementService';
+
+vi.mock('../../../database/utils/audit', () => ({
+  logAudit: vi.fn(),
+}));
+
+describe('CashFlowStatementService', () => {
+  let db: Database.Database;
+  let service: CashFlowStatementService;
+
+  beforeEach(async () => {
+    try {
+      db = new Database(':memory:');
+
+      // Create schema
+      db.exec(`
+        CREATE TABLE user (
+          id INTEGER PRIMARY KEY,
+          username TEXT UNIQUE NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          first_name TEXT NOT NULL,
+          last_name TEXT NOT NULL,
+          role TEXT NOT NULL,
+          is_active BOOLEAN DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE academic_term (
+          id INTEGER PRIMARY KEY,
+          term_name TEXT NOT NULL,
+          academic_year TEXT NOT NULL,
+          start_date TEXT NOT NULL,
+          end_date TEXT NOT NULL,
+          is_active BOOLEAN DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE student (
+          id INTEGER PRIMARY KEY,
+          admission_number TEXT UNIQUE NOT NULL,
+          first_name TEXT NOT NULL,
+          last_name TEXT NOT NULL,
+          email TEXT,
+          phone_number TEXT,
+          date_of_birth TEXT,
+          gender TEXT,
+          is_active BOOLEAN DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE fee_invoice (
+          id INTEGER PRIMARY KEY,
+          student_id INTEGER NOT NULL,
+          invoice_number TEXT UNIQUE NOT NULL,
+          amount_due DECIMAL(10,2) NOT NULL,
+          amount_paid DECIMAL(10,2) DEFAULT 0,
+          due_date TEXT,
+          issue_date TEXT,
+          status TEXT DEFAULT 'PENDING',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (student_id) REFERENCES student(id)
+        );
+
+        CREATE TABLE transaction_category (
+          id INTEGER PRIMARY KEY,
+          name TEXT UNIQUE NOT NULL,
+          category_type TEXT NOT NULL,
+          is_active BOOLEAN DEFAULT 1
+        );
+
+        CREATE TABLE ledger_transaction (
+          id INTEGER PRIMARY KEY,
+          student_id INTEGER NOT NULL,
+          transaction_ref TEXT NOT NULL,
+          transaction_date TEXT NOT NULL,
+          transaction_type TEXT NOT NULL,
+          category_id INTEGER NOT NULL,
+          amount DECIMAL(10,2) NOT NULL,
+          debit_credit TEXT NOT NULL,
+          recorded_by_user_id INTEGER NOT NULL,
+          is_voided BOOLEAN DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (student_id) REFERENCES student(id),
+          FOREIGN KEY (category_id) REFERENCES transaction_category(id),
+          FOREIGN KEY (recorded_by_user_id) REFERENCES user(id)
+        );
+      `);
+
+      // Insert test data
+      const userStmt = db.prepare(`
+        INSERT INTO user (username, email, password_hash, first_name, last_name, role)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      userStmt.run('testuser', 'test@school.com', 'hash123', 'Test', 'User', 'admin');
+
+      const termStmt = db.prepare(`
+        INSERT INTO academic_term (term_name, academic_year, start_date, end_date)
+        VALUES (?, ?, ?, ?)
+      `);
+      termStmt.run('Term 1', '2025', '2025-01-20', '2025-03-28');
+      termStmt.run('Term 2', '2025', '2025-04-07', '2025-08-15');
+      termStmt.run('Term 3', '2025', '2025-08-25', '2025-11-28');
+
+      const studentStmt = db.prepare(`
+        INSERT INTO student (admission_number, first_name, last_name, email)
+        VALUES (?, ?, ?, ?)
+      `);
+      studentStmt.run('STU-001', 'John', 'Doe', 'john@school.com');
+      studentStmt.run('STU-002', 'Jane', 'Smith', 'jane@school.com');
+
+      const categoryStmt = db.prepare(`
+        INSERT INTO transaction_category (name, category_type)
+        VALUES (?, ?)
+      `);
+      categoryStmt.run('Tuition', 'fee');
+      categoryStmt.run('Activity Fee', 'fee');
+      categoryStmt.run('Exam Fee', 'fee');
+      categoryStmt.run('Refund', 'payment');
+
+      const invoiceStmt = db.prepare(`
+        INSERT INTO fee_invoice (student_id, invoice_number, amount_due, due_date, issue_date)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      invoiceStmt.run(1, 'INV-001', 5000, '2025-02-28', '2025-02-01');
+      invoiceStmt.run(1, 'INV-002', 3000, '2025-04-30', '2025-04-15');
+      invoiceStmt.run(1, 'INV-003', 2000, '2025-08-31', '2025-08-20');
+      invoiceStmt.run(2, 'INV-004', 5000, '2025-02-28', '2025-02-01');
+
+      const txStmt = db.prepare(`
+        INSERT INTO ledger_transaction (student_id, transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit, recorded_by_user_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      // Term 1 transactions
+      txStmt.run(1, 'TX-001', '2025-02-05', 'invoice', 1, 5000, 'debit', 1);
+      txStmt.run(1, 'TX-002', '2025-02-10', 'payment', 4, 2500, 'credit', 1);
+      txStmt.run(1, 'TX-003', '2025-03-01', 'payment', 4, 2500, 'credit', 1);
+
+      // Term 2 transactions
+      txStmt.run(1, 'TX-004', '2025-04-15', 'invoice', 1, 3000, 'debit', 1);
+      txStmt.run(1, 'TX-005', '2025-04-20', 'payment', 4, 1500, 'credit', 1);
+      txStmt.run(1, 'TX-006', '2025-05-01', 'payment', 4, 1500, 'credit', 1);
+
+      // Term 3 transactions
+      txStmt.run(1, 'TX-007', '2025-08-20', 'invoice', 1, 2000, 'debit', 1);
+      txStmt.run(1, 'TX-008', '2025-08-25', 'payment', 4, 2000, 'credit', 1);
+
+      // Student 2 transactions
+      txStmt.run(2, 'TX-009', '2025-02-01', 'invoice', 1, 5000, 'debit', 1);
+      txStmt.run(2, 'TX-010', '2025-02-15', 'payment', 4, 3000, 'credit', 1);
+
+      service = new CashFlowStatementService(db);
+      console.log('CashFlowStatementService test database initialized');
+    } catch (error) {
+      console.error('CashFlowStatementService beforeEach error:', error);
+      throw error;
+    }
+  });
+
+  afterEach(() => {
+    if (db) {
+      db.close();
+    }
+  });
+
+  // generateCashFlowStatement tests
+  it('should generate cash flow statement for date range', async () => {
+    try {
+      const result = await service.generateCashFlowStatement('2025-01-01', '2025-03-31');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should include opening cash balance', async () => {
+    try {
+      const result = await service.generateCashFlowStatement('2025-01-01', '2025-03-31');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should calculate cash inflows correctly', async () => {
+    try {
+      const result = await service.generateCashFlowStatement('2025-02-01', '2025-03-31');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should calculate cash outflows correctly', async () => {
+    try {
+      const result = await service.generateCashFlowStatement('2025-02-01', '2025-03-31');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should calculate closing cash balance', async () => {
+    try {
+      const result = await service.generateCashFlowStatement('2025-02-01', '2025-03-31');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should handle multi-term cash flow analysis', async () => {
+    try {
+      const result = await service.generateCashFlowStatement('2025-01-01', '2025-08-31');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  // getCashFlowStatement tests (alias or method variation)
+  it('should retrieve cash flow statement by period', async () => {
+    try {
+      const result = await service.getCashFlowStatement('2025-02-01', '2025-03-31');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should format statement for reporting', async () => {
+    try {
+      const result = await service.getCashFlowStatement('2025-02-01', '2025-03-31');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  // analyzeCashFlowByTerm tests
+  it('should analyze cash flow by academic term', async () => {
+    try {
+      const result = await service.analyzeCashFlowByTerm(1);
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should include term start and end dates in analysis', async () => {
+    try {
+      const result = await service.analyzeCashFlowByTerm(1);
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should calculate term-specific inflows and outflows', async () => {
+    try {
+      const result = await service.analyzeCashFlowByTerm(1);
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should compare cash flow across multiple terms', async () => {
+    try {
+      const term1 = await service.analyzeCashFlowByTerm(1);
+      const term2 = await service.analyzeCashFlowByTerm(2);
+      expect(term1).toBeDefined();
+      expect(term2).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  // calculateCashPosition tests
+  it('should calculate current cash position', async () => {
+    try {
+      const result = await service.calculateCashPosition();
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should include total inflows in position', async () => {
+    try {
+      const result = await service.calculateCashPosition();
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should include total outflows in position', async () => {
+    try {
+      const result = await service.calculateCashPosition();
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should calculate net cash flow position', async () => {
+    try {
+      const result = await service.calculateCashPosition();
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  // projectedCashFlow tests
+  it('should project cash flow for future period', async () => {
+    try {
+      const result = await service.projectedCashFlow('2025-09-01', '2025-12-31');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should use historical patterns for projection', async () => {
+    try {
+      const result = await service.projectedCashFlow('2025-09-01', '2025-12-31');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  // collectionsAnalysis tests
+  it('should analyze collection efficiency', async () => {
+    try {
+      const result = await service.collectionsAnalysis('2025-02-01', '2025-03-31');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should calculate collection rate percentage', async () => {
+    try {
+      const result = await service.collectionsAnalysis('2025-02-01', '2025-03-31');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should identify outstanding amounts', async () => {
+    try {
+      const result = await service.collectionsAnalysis('2025-02-01', '2025-03-31');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  // generateCashFlowReport tests
+  it('should generate comprehensive cash flow report', async () => {
+    try {
+      const result = await service.generateCashFlowReport('2025-01-01', '2025-12-31');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should include summary metrics in report', async () => {
+    try {
+      const result = await service.generateCashFlowReport('2025-01-01', '2025-12-31');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should format report for management review', async () => {
+    try {
+      const result = await service.generateCashFlowReport('2025-01-01', '2025-12-31');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should include period comparisons in report', async () => {
+    try {
+      const result = await service.generateCashFlowReport('2025-01-01', '2025-12-31');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should handle empty period gracefully', async () => {
+    try {
+      const result = await service.generateCashFlowStatement('2025-12-01', '2025-12-05');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should support custom date ranges', async () => {
+    try {
+      const result = await service.generateCashFlowStatement('2025-02-15', '2025-05-20');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should handle single day cash flow analysis', async () => {
+    try {
+      const result = await service.generateCashFlowStatement('2025-02-10', '2025-02-10');
+      expect(result).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+});

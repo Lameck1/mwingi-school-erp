@@ -9,12 +9,14 @@
 ## Installation
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/Lameck1/mwingi-school-erp.git
    cd mwingi-school-erp
    ```
 
 2. **Install dependencies**
+
    ```bash
    npm install
    ```
@@ -29,6 +31,7 @@ npm run dev
 ```
 
 This will start:
+
 - Vite Dev Server (Frontend)
 - Electron Main Process
 - TypeScript Compilation

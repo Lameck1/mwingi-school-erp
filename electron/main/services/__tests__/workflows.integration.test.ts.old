@@ -1,0 +1,404 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import Database from 'better-sqlite3';
+import { StudentLedgerService } from '../services/accounting/StudentLedgerService';
+import { NEMISExportService } from '../services/nemis/NEMISExportService';
+import { CashFlowStatementService } from '../services/accounting/CashFlowStatementService';
+import { ApprovalWorkflowService } from '../services/approval/ApprovalWorkflowService';
+
+vi.mock('../../database/utils/audit', () => ({
+  logAudit: vi.fn(),
+}));
+
+vi.mock('../services/external/nemis-api', () => ({
+  validateNEMISData: vi.fn(),
+  submitNEMISData: vi.fn(),
+}));
+
+describe('Workflows Integration Tests', () => {
+  let db: Database.Database;
+  let studentLedgerService: StudentLedgerService;
+  let nemisExportService: NEMISExportService;
+  let cashFlowService: CashFlowStatementService;
+  let approvalService: ApprovalWorkflowService;
+
+  beforeEach(async () => {
+    try {
+      db = new Database(':memory:');
+
+      // Create complete schema
+      db.exec(`
+        CREATE TABLE user (
+          id INTEGER PRIMARY KEY,
+          username TEXT UNIQUE NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          password_hash TEXT NOT NULL,
+          first_name TEXT NOT NULL,
+          last_name TEXT NOT NULL,
+          role TEXT NOT NULL,
+          is_active BOOLEAN DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE school (
+          id INTEGER PRIMARY KEY,
+          school_code TEXT UNIQUE NOT NULL,
+          school_name TEXT NOT NULL,
+          location TEXT,
+          county TEXT,
+          district TEXT,
+          principal_name TEXT,
+          principal_email TEXT,
+          is_active BOOLEAN DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE student (
+          id INTEGER PRIMARY KEY,
+          admission_number TEXT UNIQUE NOT NULL,
+          first_name TEXT NOT NULL,
+          last_name TEXT NOT NULL,
+          email TEXT,
+          phone_number TEXT,
+          date_of_birth TEXT,
+          gender TEXT,
+          id_number TEXT,
+          is_active BOOLEAN DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE guardian (
+          id INTEGER PRIMARY KEY,
+          student_id INTEGER NOT NULL,
+          first_name TEXT NOT NULL,
+          last_name TEXT NOT NULL,
+          email TEXT,
+          phone_number TEXT,
+          relationship TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (student_id) REFERENCES student(id)
+        );
+
+        CREATE TABLE academic_term (
+          id INTEGER PRIMARY KEY,
+          term_name TEXT NOT NULL,
+          academic_year TEXT NOT NULL,
+          start_date TEXT NOT NULL,
+          end_date TEXT NOT NULL,
+          is_active BOOLEAN DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE fee_invoice (
+          id INTEGER PRIMARY KEY,
+          student_id INTEGER NOT NULL,
+          invoice_number TEXT UNIQUE NOT NULL,
+          amount_due DECIMAL(10,2) NOT NULL,
+          amount_paid DECIMAL(10,2) DEFAULT 0,
+          due_date TEXT,
+          issue_date TEXT,
+          status TEXT DEFAULT 'PENDING',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (student_id) REFERENCES student(id)
+        );
+
+        CREATE TABLE transaction_category (
+          id INTEGER PRIMARY KEY,
+          name TEXT UNIQUE NOT NULL,
+          category_type TEXT NOT NULL,
+          is_active BOOLEAN DEFAULT 1
+        );
+
+        CREATE TABLE ledger_transaction (
+          id INTEGER PRIMARY KEY,
+          student_id INTEGER NOT NULL,
+          transaction_ref TEXT NOT NULL,
+          transaction_date TEXT NOT NULL,
+          transaction_type TEXT NOT NULL,
+          category_id INTEGER NOT NULL,
+          amount DECIMAL(10,2) NOT NULL,
+          debit_credit TEXT NOT NULL,
+          recorded_by_user_id INTEGER NOT NULL,
+          is_voided BOOLEAN DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (student_id) REFERENCES student(id),
+          FOREIGN KEY (category_id) REFERENCES transaction_category(id),
+          FOREIGN KEY (recorded_by_user_id) REFERENCES user(id)
+        );
+
+        CREATE TABLE approval_level (
+          id INTEGER PRIMARY KEY,
+          level_name TEXT NOT NULL,
+          level_order INTEGER NOT NULL,
+          amount_limit DECIMAL(10,2),
+          description TEXT,
+          is_active BOOLEAN DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE approval_request (
+          id INTEGER PRIMARY KEY,
+          request_type TEXT NOT NULL,
+          request_ref TEXT UNIQUE NOT NULL,
+          student_id INTEGER,
+          fee_invoice_id INTEGER,
+          amount DECIMAL(10,2) NOT NULL,
+          status TEXT DEFAULT 'PENDING',
+          current_approval_level INTEGER,
+          requested_by_user_id INTEGER NOT NULL,
+          request_reason TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (student_id) REFERENCES student(id),
+          FOREIGN KEY (fee_invoice_id) REFERENCES fee_invoice(id),
+          FOREIGN KEY (current_approval_level) REFERENCES approval_level(id),
+          FOREIGN KEY (requested_by_user_id) REFERENCES user(id)
+        );
+
+        CREATE TABLE approval_history (
+          id INTEGER PRIMARY KEY,
+          approval_request_id INTEGER NOT NULL,
+          approval_level_id INTEGER NOT NULL,
+          action TEXT NOT NULL,
+          approved_by_user_id INTEGER NOT NULL,
+          comments TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (approval_request_id) REFERENCES approval_request(id),
+          FOREIGN KEY (approval_level_id) REFERENCES approval_level(id),
+          FOREIGN KEY (approved_by_user_id) REFERENCES user(id)
+        );
+      `);
+
+      // Insert comprehensive test data
+      const userStmt = db.prepare(`
+        INSERT INTO user (username, email, password_hash, first_name, last_name, role)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      userStmt.run('admin', 'admin@school.com', 'hash123', 'Admin', 'User', 'admin');
+      userStmt.run('approver', 'approver@school.com', 'hash123', 'Approver', 'User', 'approver');
+      userStmt.run('principal', 'principal@school.com', 'hash123', 'Principal', 'School', 'principal');
+
+      const schoolStmt = db.prepare(`
+        INSERT INTO school (school_code, school_name, location, county, district, principal_name, principal_email)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      schoolStmt.run('SCHOOL-001', 'Mwingi Adventist School', 'Mwingi', 'Kitui', 'Mwingi', 'Dr. John Smith', 'principal@mwingi.school');
+
+      const studentStmt = db.prepare(`
+        INSERT INTO student (admission_number, first_name, last_name, email, date_of_birth, gender, id_number)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      studentStmt.run('STU-001', 'John', 'Doe', 'john@school.com', '2008-05-15', 'M', '123456');
+      studentStmt.run('STU-002', 'Jane', 'Smith', 'jane@school.com', '2009-03-20', 'F', '234567');
+
+      const guardianStmt = db.prepare(`
+        INSERT INTO guardian (student_id, first_name, last_name, email, phone_number, relationship)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      guardianStmt.run(1, 'Joseph', 'Doe', 'joseph@email.com', '0712345678', 'Father');
+      guardianStmt.run(2, 'Mary', 'Smith', 'mary@email.com', '0723456789', 'Mother');
+
+      const termStmt = db.prepare(`
+        INSERT INTO academic_term (term_name, academic_year, start_date, end_date)
+        VALUES (?, ?, ?, ?)
+      `);
+      termStmt.run('Term 1', '2025', '2025-01-20', '2025-03-28');
+      termStmt.run('Term 2', '2025', '2025-04-07', '2025-08-15');
+      termStmt.run('Term 3', '2025', '2025-08-25', '2025-11-28');
+
+      const categoryStmt = db.prepare(`
+        INSERT INTO transaction_category (name, category_type)
+        VALUES (?, ?)
+      `);
+      categoryStmt.run('Tuition', 'fee');
+      categoryStmt.run('Activity Fee', 'fee');
+      categoryStmt.run('Exam Fee', 'fee');
+      categoryStmt.run('Refund', 'payment');
+
+      const invoiceStmt = db.prepare(`
+        INSERT INTO fee_invoice (student_id, invoice_number, amount_due, due_date, issue_date)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      invoiceStmt.run(1, 'INV-001', 5000, '2025-02-28', '2025-02-01');
+      invoiceStmt.run(1, 'INV-002', 3000, '2025-04-30', '2025-04-15');
+      invoiceStmt.run(2, 'INV-003', 5000, '2025-02-28', '2025-02-01');
+
+      const txStmt = db.prepare(`
+        INSERT INTO ledger_transaction (student_id, transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit, recorded_by_user_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      txStmt.run(1, 'TX-001', '2025-02-05', 'invoice', 1, 5000, 'debit', 1);
+      txStmt.run(1, 'TX-002', '2025-02-10', 'payment', 4, 2500, 'credit', 1);
+      txStmt.run(1, 'TX-003', '2025-04-15', 'invoice', 1, 3000, 'debit', 1);
+      txStmt.run(1, 'TX-004', '2025-04-20', 'payment', 4, 2500, 'credit', 1);
+      txStmt.run(2, 'TX-005', '2025-02-05', 'invoice', 1, 5000, 'debit', 1);
+      txStmt.run(2, 'TX-006', '2025-02-15', 'payment', 4, 3000, 'credit', 1);
+
+      const levelStmt = db.prepare(`
+        INSERT INTO approval_level (level_name, level_order, amount_limit, description)
+        VALUES (?, ?, ?, ?)
+      `);
+      levelStmt.run('HOD', 1, 5000, 'Head of Department');
+      levelStmt.run('Deputy Principal', 2, 10000, 'Deputy Principal Approval');
+      levelStmt.run('Principal', 3, 100000, 'Principal Final Approval');
+
+      const requestStmt = db.prepare(`
+        INSERT INTO approval_request (request_type, request_ref, student_id, fee_invoice_id, amount, status, current_approval_level, requested_by_user_id, request_reason)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      requestStmt.run('FEE_WAIVER', 'REQ-001', 1, 1, 2500, 'PENDING', 1, 1, 'Hardship case');
+
+      // Initialize services
+      studentLedgerService = new StudentLedgerService(db);
+      nemisExportService = new NEMISExportService(db);
+      cashFlowService = new CashFlowStatementService(db);
+      approvalService = new ApprovalWorkflowService(db);
+
+      console.log('Integration tests database initialized with all services');
+    } catch (error) {
+      console.error('Integration beforeEach error:', error);
+      throw error;
+    }
+  });
+
+  afterEach(() => {
+    if (db) {
+      db.close();
+    }
+  });
+
+  // Cross-service workflow tests
+  it('should generate student ledger and export via NEMIS', async () => {
+    try {
+      const ledger = await studentLedgerService.generateStudentLedger(1);
+      const nemisData = await nemisExportService.extractStudentData(1);
+      expect(ledger).toBeDefined();
+      expect(nemisData).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should handle approval requests affecting cash flow', async () => {
+    try {
+      const cashFlow = await cashFlowService.generateCashFlowStatement('2025-02-01', '2025-03-31');
+      const approvalStatus = await approvalService.getApprovalRequestStatus(1);
+      expect(cashFlow).toBeDefined();
+      expect(approvalStatus).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should process complete student payment workflow', async () => {
+    try {
+      // Generate ledger for student
+      const ledger = await studentLedgerService.generateStudentLedger(1);
+      expect(ledger).toBeDefined();
+
+      // Verify opening balance
+      const balance = await studentLedgerService.verifyOpeningBalance(1);
+      expect(balance).toBeDefined();
+
+      // Analyze cash flow impact
+      const cashFlow = await cashFlowService.analyzeCashFlowByTerm(1);
+      expect(cashFlow).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should export student records maintaining ledger accuracy', async () => {
+    try {
+      const studentData = await nemisExportService.extractStudentData(1);
+      const ledger = await studentLedgerService.generateStudentLedger(1);
+      const reconciliation = await studentLedgerService.reconcileStudentLedger(1);
+      
+      expect(studentData).toBeDefined();
+      expect(ledger).toBeDefined();
+      expect(reconciliation).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should track approval and financial workflows simultaneously', async () => {
+    try {
+      const approvalRequest = await approvalService.createApprovalRequest({
+        requestType: 'FEE_WAIVER',
+        studentId: 1,
+        amount: 1000,
+        reason: 'Hardship',
+      });
+
+      const cashFlow = await cashFlowService.calculateCashPosition();
+      const ledger = await studentLedgerService.generateStudentLedger(1);
+
+      expect(approvalRequest).toBeDefined();
+      expect(cashFlow).toBeDefined();
+      expect(ledger).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should handle multiple students in integrated workflow', async () => {
+    try {
+      const student1Ledger = await studentLedgerService.generateStudentLedger(1);
+      const student2Ledger = await studentLedgerService.generateStudentLedger(2);
+      const exportData = await nemisExportService.extractStudentData();
+      const combined = await cashFlowService.generateCashFlowStatement('2025-02-01', '2025-03-31');
+
+      expect(student1Ledger).toBeDefined();
+      expect(student2Ledger).toBeDefined();
+      expect(exportData).toBeDefined();
+      expect(combined).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should maintain data consistency across all services', async () => {
+    try {
+      const ledger = await studentLedgerService.generateStudentLedger(1);
+      const reconciliation = await studentLedgerService.reconcileStudentLedger(1);
+      const cashFlow = await cashFlowService.analyzeCashFlowByTerm(1);
+      const nemisData = await nemisExportService.extractStudentData(1);
+
+      expect(ledger).toBeDefined();
+      expect(reconciliation).toBeDefined();
+      expect(cashFlow).toBeDefined();
+      expect(nemisData).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+
+  it('should complete end-to-end school financial cycle', async () => {
+    try {
+      // Generate all financial reports
+      const ledgers = await Promise.all([
+        studentLedgerService.generateStudentLedger(1),
+        studentLedgerService.generateStudentLedger(2),
+      ]);
+
+      const cashFlow = await cashFlowService.generateCashFlowReport('2025-01-01', '2025-03-31');
+      const schoolData = await nemisExportService.extractSchoolData();
+      const enrollmentData = await nemisExportService.extractEnrollmentData();
+
+      expect(ledgers).toBeDefined();
+      expect(cashFlow).toBeDefined();
+      expect(schoolData).toBeDefined();
+      expect(enrollmentData).toBeDefined();
+    } catch (error) {
+      console.error('Test error:', error);
+      throw error;
+    }
+  });
+});

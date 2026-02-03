@@ -1,0 +1,10 @@
+{
+  "*.{ts,tsx}": [
+    "eslint --fix",
+    "git add"
+  ],
+  "*.md": [
+    "npx markdownlint-cli --fix",
+    "git add"
+  ]
+}
