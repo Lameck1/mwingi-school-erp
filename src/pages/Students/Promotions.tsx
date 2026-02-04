@@ -58,7 +58,7 @@ export default function Promotions() {
 
     const loadStreams = async () => {
         try {
-            const data = await (window.electronAPI as any).getPromotionStreams()
+            const data = await (window.electronAPI as unknown).getPromotionStreams()
             setStreams(data)
         } catch (error) {
             console.error('Failed to load streams:', error)
@@ -94,7 +94,7 @@ export default function Promotions() {
         if (!currentAcademicYear) return
         setLoading(true)
         try {
-            const data = await (window.electronAPI as any).getStudentsForPromotion(fromStream, currentAcademicYear.id)
+            const data = await (window.electronAPI as unknown).getStudentsForPromotion(fromStream, currentAcademicYear.id)
             setStudents(data)
             setSelectedStudents([])
         } catch (error) {
@@ -106,7 +106,7 @@ export default function Promotions() {
 
     const suggestNextStream = async () => {
         try {
-            const next = await (window.electronAPI as any).getNextStream(fromStream)
+            const next = await (window.electronAPI as unknown).getNextStream(fromStream)
             if (next) {
                 setToStream(next.id)
             }
@@ -146,7 +146,7 @@ export default function Promotions() {
 
         setPromoting(true)
         try {
-            const result = await (window.electronAPI as any).batchPromoteStudents(
+            const result = await (window.electronAPI as unknown).batchPromoteStudents(
                 selectedStudents,
                 fromStream,
                 toStream,
@@ -311,3 +311,4 @@ export default function Promotions() {
         </div>
     )
 }
+

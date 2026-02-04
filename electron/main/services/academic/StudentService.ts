@@ -20,7 +20,7 @@ export class StudentService extends BaseService<Student, CreateStudentDTO> {
         return 'SELECT * FROM student'
     }
 
-    protected mapRowToEntity(row: any): Student {
+    protected mapRowToEntity(row: unknown): Student {
         return {
             id: row.id,
             full_name: row.full_name,
@@ -59,3 +59,4 @@ export class StudentService extends BaseService<Student, CreateStudentDTO> {
         this.db.prepare(`UPDATE student SET ${sets.join(', ')} WHERE id = ?`).run(...params)
     }
 }
+

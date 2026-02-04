@@ -63,7 +63,7 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
         `
     }
 
-    protected mapRowToEntity(row: any): FixedAsset {
+    protected mapRowToEntity(row: unknown): FixedAsset {
         return row as FixedAsset
     }
 
@@ -166,3 +166,4 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
         return { success: true }
     }
 }
+

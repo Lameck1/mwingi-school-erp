@@ -36,7 +36,7 @@ export default function MessageTemplates() {
     const loadTemplates = async () => {
         setLoading(true)
         try {
-            const data = await (window.electronAPI as any).getNotificationTemplates()
+            const data = await (window.electronAPI as unknown).getNotificationTemplates()
             setTemplates(data)
         } catch (error) {
             console.error('Failed to load templates:', error)
@@ -55,7 +55,7 @@ export default function MessageTemplates() {
 
         setSaving(true)
         try {
-            const result = await (window.electronAPI as any).createNotificationTemplate(editingTemplate, user.id)
+            const result = await (window.electronAPI as unknown).createNotificationTemplate(editingTemplate, user.id)
             if (result.success) {
                 setShowTemplateModal(false)
                 setEditingTemplate({ template_type: 'SMS', category: 'GENERAL' })
@@ -240,3 +240,4 @@ export default function MessageTemplates() {
         </div>
     )
 }
+

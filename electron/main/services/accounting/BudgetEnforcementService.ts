@@ -126,7 +126,7 @@ export class BudgetEnforcementService {
           allocationId,
         };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
         message: `Failed to set budget allocation: ${error.message}`,
@@ -225,7 +225,7 @@ export class BudgetEnforcementService {
         message: 'Transaction is within budget.',
         budget_status,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       // On error, allow transaction but log the issue
       console.error('Budget validation error:', error);
       return {
@@ -303,7 +303,7 @@ export class BudgetEnforcementService {
           is_active: a.is_active === 1,
         };
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to fetch budget allocations:', error);
       return [];
     }
@@ -413,3 +413,4 @@ export class BudgetEnforcementService {
     });
   }
 }
+

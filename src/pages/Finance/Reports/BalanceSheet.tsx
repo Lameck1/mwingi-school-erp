@@ -32,7 +32,7 @@ export default function BalanceSheetPage() {
     setError(null);
 
     try {
-      const result = await (window as any).electronAPI.getBalanceSheet(asOfDate);
+      const result = await (window as unknown).electronAPI.getBalanceSheet(asOfDate);
       
       if (result.success) {
         setBalanceSheet(result.data);
@@ -140,3 +140,4 @@ export default function BalanceSheetPage() {
     </div>
   );
 }
+

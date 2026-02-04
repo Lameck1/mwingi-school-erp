@@ -46,11 +46,12 @@ export interface AcademicAPI {
   // Academic System (New)
   getAcademicSubjects: () => Promise<any[]>
   getAcademicExams: (academicYearId: number, termId: number) => Promise<any[]>
-  createAcademicExam: (data: any, userId: number) => Promise<void>
+  createAcademicExam: (data: unknown, userId: number) => Promise<void>
   deleteAcademicExam: (id: number, userId: number) => Promise<void>
-  allocateTeacher: (data: any, userId: number) => Promise<void>
+  allocateTeacher: (data: unknown, userId: number) => Promise<void>
   getTeacherAllocations: (academicYearId: number, termId: number, streamId?: number) => Promise<any[]>
   saveAcademicResults: (examId: number, results: any[], userId: number) => Promise<void>
   getAcademicResults: (examId: number, subjectId: number, streamId: number, userId: number) => Promise<any[]>
   processAcademicResults: (examId: number, userId: number) => Promise<void>
 }
+

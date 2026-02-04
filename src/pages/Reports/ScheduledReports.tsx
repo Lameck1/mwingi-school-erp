@@ -54,7 +54,7 @@ export default function ScheduledReports() {
     const loadSchedules = async () => {
         setLoading(true)
         try {
-            const data = await (window.electronAPI as any).getScheduledReports()
+            const data = await (window.electronAPI as unknown).getScheduledReports()
             setSchedules(data)
         } catch (error) {
             console.error('Failed to load schedules:', error)
@@ -73,9 +73,9 @@ export default function ScheduledReports() {
         setSaving(true)
         try {
             if (editingSchedule.id) {
-                await (window.electronAPI as any).updateScheduledReport(editingSchedule.id, editingSchedule, user.id)
+                await (window.electronAPI as unknown).updateScheduledReport(editingSchedule.id, editingSchedule, user.id)
             } else {
-                await (window.electronAPI as any).createScheduledReport(editingSchedule, user.id)
+                await (window.electronAPI as unknown).createScheduledReport(editingSchedule, user.id)
             }
             setShowModal(false)
             loadSchedules()
@@ -90,7 +90,7 @@ export default function ScheduledReports() {
         if (!confirm('Are you sure you want to delete this schedule?')) return
 
         try {
-            await (window.electronAPI as any).deleteScheduledReport(id, user!.id)
+            await (window.electronAPI as unknown).deleteScheduledReport(id, user!.id)
             loadSchedules()
         } catch (error) {
             alert('Failed to delete schedule')
@@ -263,7 +263,7 @@ export default function ScheduledReports() {
                             <label className="text-sm font-bold text-foreground/60">Frequency</label>
                             <select
                                 value={editingSchedule.schedule_type}
-                                onChange={(e) => setEditingSchedule({ ...editingSchedule, schedule_type: e.target.value as any })}
+                                onChange={(e) => setEditingSchedule({ ...editingSchedule, schedule_type: e.target.value as unknown })}
                                 className="input w-full"
                             >
                                 <option value="DAILY">Daily</option>
@@ -340,3 +340,4 @@ export default function ScheduledReports() {
         </div>
     )
 }
+

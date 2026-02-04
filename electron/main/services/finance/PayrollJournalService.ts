@@ -76,7 +76,7 @@ export class PayrollJournalService {
       // Get payroll period details
       const period = this.db.prepare(`
         SELECT * FROM payroll_period WHERE id = ?
-      `).get(periodId) as any;
+      `).get(periodId) as unknown;
 
       if (!period) {
         return {
@@ -156,7 +156,7 @@ export class PayrollJournalService {
       // Get period details
       const period = this.db.prepare(`
         SELECT * FROM payroll_period WHERE id = ?
-      `).get(periodId) as any;
+      `).get(periodId) as unknown;
 
       // Aggregate deductions by type
       const deductions = this.db.prepare(`
@@ -235,7 +235,7 @@ export class PayrollJournalService {
       // Get period details
       const period = this.db.prepare(`
         SELECT * FROM payroll_period WHERE id = ?
-      `).get(periodId) as any;
+      `).get(periodId) as unknown;
 
       // Calculate total net salary to be paid
       const totals = this.db.prepare(`
@@ -379,3 +379,4 @@ export class PayrollJournalService {
     }
   }
 }
+

@@ -57,9 +57,9 @@ export class SystemMaintenanceService {
                 `).run(yearId).lastInsertRowid as number
 
                 // 4. Institutional Metadata
-                const streams = db!.prepare('SELECT id, stream_code, stream_name FROM stream WHERE is_active = 1').all() as any[]
-                const feeCats = db!.prepare('SELECT id, category_name FROM fee_category WHERE is_active = 1').all() as any[]
-                const transCats = db!.prepare('SELECT id, category_name, category_type FROM transaction_category WHERE is_active = 1').all() as any[]
+                const streams = db!.prepare('SELECT id, stream_code, stream_name FROM stream WHERE is_active = 1').all() as unknown[]
+                const feeCats = db!.prepare('SELECT id, category_name FROM fee_category WHERE is_active = 1').all() as unknown[]
+                const transCats = db!.prepare('SELECT id, category_name, category_type FROM transaction_category WHERE is_active = 1').all() as unknown[]
 
                 const feeIncomeCat = transCats.find(c => c.category_name === 'School Fees')?.id
                 const utilityCat = transCats.find(c => c.category_name === 'Utilities')?.id
@@ -168,7 +168,7 @@ export class SystemMaintenanceService {
                             FROM fee_structure fs 
                             JOIN fee_category fc ON fs.fee_category_id = fc.id
                             WHERE fs.stream_id = ? AND fs.student_type = ? AND fs.term_id = ?
-                        `).all(stream.id, type, termId) as any[]
+                        `).all(stream.id, type, termId) as unknown[]
 
                         let totalInvoiceAmount = 0
                         for (const fs of structures) {
@@ -238,7 +238,7 @@ export class SystemMaintenanceService {
                 }
 
                 // 10. Seed Inventory
-                const invCat = db!.prepare('SELECT id FROM inventory_category LIMIT 1').get() as any
+                const invCat = db!.prepare('SELECT id FROM inventory_category LIMIT 1').get() as unknown
                 if (invCat) {
                     const itemId = db!.prepare(`
                         INSERT INTO inventory_item (item_code, item_name, category_id, unit_of_measure, current_stock, unit_cost)
@@ -259,7 +259,7 @@ export class SystemMaintenanceService {
                 }
 
                 // 11. Seed Attendance
-                const firstStudent = db!.prepare('SELECT student_id as id, stream_id FROM enrollment LIMIT 1').get() as any
+                const firstStudent = db!.prepare('SELECT student_id as id, stream_id FROM enrollment LIMIT 1').get() as unknown
                 if (firstStudent) {
                     db!.prepare(`
                         INSERT INTO attendance (student_id, stream_id, academic_year_id, term_id, attendance_date, status, marked_by_user_id)
@@ -288,3 +288,4 @@ export class SystemMaintenanceService {
         }
     }
 }
+

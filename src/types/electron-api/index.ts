@@ -60,5 +60,5 @@ export interface ElectronAPI
   // Data Import/Export (General)
   downloadImportTemplate: (entityType: string) => Promise<{ success: boolean; filePath: string }>
   getImportTemplate: (entityType: string) => Promise<{ columns: { name: string; required: boolean }[] }>
-  importData: (filePath: string, config: any, userId: number) => Promise<{ success: boolean; totalRows: number; imported: number; skipped: number; errors: any[] }>
+  importData: (filePath: string, config: unknown, userId: number) => Promise<{ success: boolean; totalRows: number; imported: number; skipped: number; errors: any[] }>
 }

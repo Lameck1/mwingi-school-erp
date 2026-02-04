@@ -46,13 +46,14 @@ export interface BankStatementLine {
 export interface BankReconciliationAPI {
     getAccounts: () => Promise<BankAccount[]>
     getAccountById: (id: number) => Promise<BankAccount | null>
-    createAccount: (data: any) => Promise<{ success: boolean; id?: number; errors?: string[] }>
+    createAccount: (data: unknown) => Promise<{ success: boolean; id?: number; errors?: string[] }>
     getStatements: (bankAccountId?: number) => Promise<BankStatement[]>
     getStatementWithLines: (statementId: number) => Promise<{ statement: BankStatement; lines: BankStatementLine[] } | null>
     createStatement: (bankAccountId: number, statementDate: string, openingBalance: number, closingBalance: number, reference?: string) => Promise<{ success: boolean; id?: number; errors?: string[] }>
-    addStatementLine: (statementId: number, line: any) => Promise<{ success: boolean; id?: number }>
+    addStatementLine: (statementId: number, line: unknown) => Promise<{ success: boolean; id?: number }>
     matchTransaction: (lineId: number, transactionId: number) => Promise<{ success: boolean }>
     unmatchTransaction: (lineId: number) => Promise<{ success: boolean }>
     getUnmatchedTransactions: (startDate: string, endDate: string) => Promise<any[]>
     markReconciled: (statementId: number, userId: number) => Promise<{ success: boolean }>
 }
+

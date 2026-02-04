@@ -19,9 +19,9 @@ export interface SchoolSettings {
 }
 
 export interface SettingsAPI {
-  getSettings: () => Promise<any>
-  getSchoolSettings: () => Promise<any>
-  updateSettings: (data: any) => Promise<{ success: boolean }>
+  getSettings: () => Promise<unknown>
+  getSchoolSettings: () => Promise<unknown>
+  updateSettings: (data: unknown) => Promise<{ success: boolean }>
 
   // Secure Config (Phase 3)
   getSecureConfig(key: string): Promise<string | null>

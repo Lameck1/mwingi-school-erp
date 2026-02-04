@@ -8,7 +8,7 @@ import { Modal } from './Modal'
 interface ImportDialogProps {
     isOpen: boolean
     onClose: () => void
-    onSuccess: (result: any) => void
+    onSuccess: (result: unknown) => void
     entityType: string
     title?: string
 }
@@ -22,7 +22,7 @@ export function ImportDialog({
 }: ImportDialogProps) {
     const [step, setStep] = useState<'UPLOAD' | 'REVIEW' | 'IMPORTING' | 'RESULT'>('UPLOAD')
     const [file, setFile] = useState<File | null>(null)
-    const [importResult, setImportResult] = useState<any>(null)
+    const [importResult, setImportResult] = useState<unknown>(null)
     const [error, setError] = useState<string | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -62,8 +62,8 @@ export function ImportDialog({
 
             const config = {
                 entityType,
-                mappings: await window.electronAPI.getImportTemplate(entityType).then((t: any) =>
-                    t.columns.map((c: any) => ({
+                mappings: await window.electronAPI.getImportTemplate(entityType).then((t: unknown) =>
+                    t.columns.map((c: unknown) => ({
                         sourceColumn: c.name,
                         targetField: c.name.toLowerCase().replace(/\s+/g, '_'), // Naive mapping
                         required: c.required
@@ -73,7 +73,7 @@ export function ImportDialog({
                 duplicateKey: entityType === 'STUDENT' ? 'admission_number' : 'id'
             }
 
-            const result = await window.electronAPI.importData((file as any).path, config, 1) // TODO: User ID
+            const result = await window.electronAPI.importData((file as unknown).path, config, 1) // TODO: User ID
             setImportResult(result)
             setStep('RESULT')
 
@@ -204,7 +204,7 @@ export function ImportDialog({
                                     Errors ({importResult.errors.length})
                                 </div>
                                 <div className="max-h-32 overflow-y-auto divide-y divide-red-500/10">
-                                    {importResult.errors.map((err: any, i: number) => (
+                                    {importResult.errors.map((err: unknown, i: number) => (
                                         <div key={i} className="px-4 py-2 text-xs text-red-300">
                                             Row {err.row}: {err.message}
                                         </div>
@@ -224,3 +224,4 @@ export function ImportDialog({
         </Modal>
     )
 }
+

@@ -154,7 +154,7 @@ class NEMISDataRepository {
     return db.prepare(query).all(...params) as NEMISStudent[]
   }
 
-  async extractSchoolData(): Promise<any> {
+  async extractSchoolData(): Promise<unknown> {
     const db = this.db
     return db.prepare(`
       SELECT 
@@ -166,10 +166,10 @@ class NEMISDataRepository {
         nemis_code
       FROM school
       LIMIT 1
-    `).get() as any
+    `).get() as unknown
   }
 
-  async extractFinancialData(): Promise<any> {
+  async extractFinancialData(): Promise<unknown> {
     const db = this.db
     return db.prepare(`
       SELECT 
@@ -178,19 +178,19 @@ class NEMISDataRepository {
         SUM(f.amount_paid) as total_paid,
         SUM(f.amount_due - COALESCE(f.amount_paid, 0)) as total_outstanding
       FROM fee_invoice f
-    `).get() as any
+    `).get() as unknown
   }
 
-  async generateNEMISReport(startDate?: string, endDate?: string): Promise<any> {
+  async generateNEMISReport(startDate?: string, endDate?: string): Promise<unknown> {
     const db = this.db
     
     const studentCount = db.prepare(`
       SELECT COUNT(*) as count FROM student WHERE status = 'ACTIVE'
-    `).get() as any
+    `).get() as unknown
     
     const enrollmentData = db.prepare(`
       SELECT COUNT(*) as count FROM enrollment
-    `).get() as any
+    `).get() as unknown
     
     const financialData = await this.extractFinancialData()
     const schoolData = await this.extractSchoolData()
@@ -308,15 +308,15 @@ class NEMISDataExtractor implements INEMISDataExtractor {
     return this.dataRepo.extractStaffData()
   }
 
-  async extractSchoolData(): Promise<any> {
+  async extractSchoolData(): Promise<unknown> {
     return this.dataRepo.extractSchoolData()
   }
 
-  async extractFinancialData(): Promise<any> {
+  async extractFinancialData(): Promise<unknown> {
     return this.dataRepo.extractFinancialData()
   }
 
-  async generateNEMISReport(startDate?: string, endDate?: string): Promise<any> {
+  async generateNEMISReport(startDate?: string, endDate?: string): Promise<unknown> {
     return this.dataRepo.generateNEMISReport(startDate, endDate)
   }
 
@@ -553,21 +553,21 @@ export class NEMISExportService
   /**
    * Extract school information for NEMIS export
    */
-  async extractSchoolData(): Promise<any> {
+  async extractSchoolData(): Promise<unknown> {
     return this.extractor.extractSchoolData()
   }
 
   /**
    * Extract financial data for NEMIS export
    */
-  async extractFinancialData(): Promise<any> {
+  async extractFinancialData(): Promise<unknown> {
     return this.extractor.extractFinancialData()
   }
 
   /**
    * Generate NEMIS report
    */
-  async generateNEMISReport(startDate?: string, endDate?: string): Promise<any> {
+  async generateNEMISReport(startDate?: string, endDate?: string): Promise<unknown> {
     return this.extractor.generateNEMISReport(startDate, endDate)
   }
 
@@ -588,7 +588,7 @@ export class NEMISExportService
   /**
    * Validate NEMIS export format
    */
-  async validateNEMISFormat(data: any): Promise<ValidationResult> {
+  async validateNEMISFormat(data: unknown): Promise<ValidationResult> {
     if (!data) {
       return {
         valid: false,
@@ -655,3 +655,4 @@ export class NEMISExportService
     return this.exportManager.getExportHistory(limit)
   }
 }
+

@@ -91,7 +91,7 @@ export default function MarksEntry() {
         }
     }
 
-    const handleScoreChange = (studentId: number, field: keyof StudentResult, value: any) => {
+    const handleScoreChange = (studentId: number, field: keyof StudentResult, value: unknown) => {
         setResults(prev => prev.map(r =>
             r.student_id === studentId ? { ...r, [field]: value } : r
         ))
@@ -272,3 +272,4 @@ export default function MarksEntry() {
         </div>
     )
 }
+

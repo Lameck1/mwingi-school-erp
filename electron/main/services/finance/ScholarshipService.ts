@@ -165,7 +165,7 @@ class ScholarshipAllocationRepository {
     // Get scholarship details for expiry date
     const scholarship = db.prepare(`
       SELECT valid_to FROM scholarship WHERE id = ?
-    `).get(data.scholarship_id) as any
+    `).get(data.scholarship_id) as unknown
 
     const result = db.prepare(`
       INSERT INTO student_scholarship (
@@ -231,7 +231,7 @@ class ScholarshipAllocationRepository {
     const result = db.prepare(`
       SELECT COUNT(*) as count FROM student_scholarship
       WHERE student_id = ? AND scholarship_id = ? AND status = 'ACTIVE'
-    `).get(studentId, scholarshipId) as any
+    `).get(studentId, scholarshipId) as unknown
 
     return (result?.count || 0) > 0
   }
@@ -657,7 +657,7 @@ export class ScholarshipService
         // Get student scholarship
         const allocation = db.prepare(`
           SELECT * FROM student_scholarship WHERE id = ?
-        `).get(studentScholarshipId) as any
+        `).get(studentScholarshipId) as unknown
 
         if (!allocation) {
           throw new Error('Scholarship allocation not found')
@@ -706,3 +706,4 @@ export class ScholarshipService
     }
   }
 }
+

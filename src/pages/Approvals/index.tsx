@@ -53,9 +53,9 @@ export default function Approvals() {
         try {
             const [requestsData, countsData] = await Promise.all([
                 filter === 'pending'
-                    ? (window.electronAPI as any).getPendingApprovals()
-                    : (window.electronAPI as any).getAllApprovals(),
-                (window.electronAPI as any).getApprovalCounts()
+                    ? (window.electronAPI as unknown).getPendingApprovals()
+                    : (window.electronAPI as unknown).getAllApprovals(),
+                (window.electronAPI as unknown).getApprovalCounts()
             ])
             setRequests(requestsData)
             setCounts(countsData)
@@ -74,7 +74,7 @@ export default function Approvals() {
         if (!user) return
         setProcessing(true)
         try {
-            const result = await (window.electronAPI as any).approveRequest(request.id, user.id)
+            const result = await (window.electronAPI as unknown).approveRequest(request.id, user.id)
             if (result.success) {
                 loadData()
             } else {
@@ -96,7 +96,7 @@ export default function Approvals() {
 
         setProcessing(true)
         try {
-            const result = await (window.electronAPI as any).rejectRequest(selectedRequest.id, user.id, rejectReason)
+            const result = await (window.electronAPI as unknown).rejectRequest(selectedRequest.id, user.id, rejectReason)
             if (result.success) {
                 setShowRejectModal(false)
                 setRejectReason('')
@@ -279,3 +279,4 @@ export default function Approvals() {
         </div>
     )
 }
+

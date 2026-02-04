@@ -215,7 +215,7 @@ export class TransportCostService {
       ORDER BY total_amount_cents DESC
     `;
 
-    const results = this.db.prepare(query).all(...params) as any[];
+    const results = this.db.prepare(query).all(...params) as unknown[];
 
     // Calculate total for percentages
     const total = results.reduce((sum, row) => sum + row.total_amount_cents, 0);
@@ -294,7 +294,7 @@ export class TransportCostService {
       countParams.push(term);
     }
 
-    const countResult = this.db.prepare(countQuery).get(...countParams) as any;
+    const countResult = this.db.prepare(countQuery).get(...countParams) as unknown;
     const studentCount = countResult?.student_count || 0;
 
     // Get transport fee revenue
@@ -316,7 +316,7 @@ export class TransportCostService {
       revenueParams.push(term, term);
     }
 
-    const revenueResult = this.db.prepare(revenueQuery).get(...revenueParams) as any;
+    const revenueResult = this.db.prepare(revenueQuery).get(...revenueParams) as unknown;
     return revenueResult?.total_revenue || 0;
   }
 
@@ -351,7 +351,7 @@ export class TransportCostService {
       studentCountParams.push(term);
     }
 
-    const studentCountResult = this.db.prepare(studentCountQuery).get(...studentCountParams) as any;
+    const studentCountResult = this.db.prepare(studentCountQuery).get(...studentCountParams) as unknown;
     const studentCount = studentCountResult?.count || 0;
 
     // Calculate revenue
@@ -467,3 +467,4 @@ export class TransportCostService {
 }
 
 export default TransportCostService;
+

@@ -213,7 +213,7 @@ export default function FeePayment() {
             title: `Receipt - ${receipt.receiptNumber}`,
             template: 'receipt',
             data: receipt,
-            schoolSettings: schoolSettings || {} as any
+            schoolSettings: schoolSettings || {} as unknown
         })
     }
 
@@ -528,3 +528,4 @@ export default function FeePayment() {
         </div>
     )
 }
+

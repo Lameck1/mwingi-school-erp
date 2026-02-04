@@ -37,7 +37,7 @@ export default function BankAccounts() {
     const loadAccounts = async () => {
         setLoading(true)
         try {
-            const data = await (window.electronAPI as any).getBankAccounts()
+            const data = await (window.electronAPI as unknown).getBankAccounts()
             setAccounts(data)
         } catch (error) {
             console.error('Failed to load bank accounts:', error)
@@ -50,7 +50,7 @@ export default function BankAccounts() {
         e.preventDefault()
         setSaving(true)
         try {
-            const result = await (window.electronAPI as any).createBankAccount({
+            const result = await (window.electronAPI as unknown).createBankAccount({
                 ...formData,
                 opening_balance: Math.round(formData.opening_balance) // Whole currency units
             })
@@ -243,3 +243,4 @@ export default function BankAccounts() {
         </div>
     )
 }
+

@@ -17,7 +17,7 @@ export interface Column<T> {
     visible?: boolean
     frozen?: boolean
     align?: 'left' | 'center' | 'right'
-    render?: (value: any, row: T, index: number) => React.ReactNode
+    render?: (value: unknown, row: T, index: number) => React.ReactNode
 }
 
 export interface DataTableProps<T extends { id: number | string }> {
@@ -56,7 +56,7 @@ export interface DataTableProps<T extends { id: number | string }> {
     compact?: boolean
 }
 
-function getNestedValue(obj: any, path: string): any {
+function getNestedValue(obj: unknown, path: string): any {
     return path.split('.').reduce((acc, part) => acc && acc[part], obj)
 }
 
@@ -433,3 +433,4 @@ export function DataTable<T extends { id: number | string }>({
         </div>
     )
 }
+

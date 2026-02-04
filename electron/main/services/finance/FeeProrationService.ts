@@ -51,7 +51,7 @@ class InvoiceTemplateRepository {
     this.db = db || getDatabase()
   }
 
-  async getInvoiceTemplate(templateId: number): Promise<any> {
+  async getInvoiceTemplate(templateId: number): Promise<unknown> {
     const db = this.db
     return db.prepare(`
       SELECT * FROM fee_invoice WHERE id = ?
@@ -62,7 +62,7 @@ class InvoiceTemplateRepository {
     const db = this.db
     const result = db.prepare(`
       SELECT term_start, term_end FROM academic_term WHERE id = ?
-    `).get(termId) as any
+    `).get(termId) as unknown
 
     if (!result) return null
 
@@ -394,14 +394,14 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
    * Generate pro-rated invoice for mid-term enrollment
    */
   // Synchronous wrapper for test compatibility
-  generateProRatedInvoiceSync(data: any): any {
+  generateProRatedInvoiceSync(data: unknown): any {
     const db = this.db
     
     try {
       // Find invoice template for the grade
       const template = db.prepare(`
         SELECT * FROM invoice_template WHERE grade = ? LIMIT 1
-      `).get(data.grade) as any
+      `).get(data.grade) as unknown
 
       if (!template) {
         return {
@@ -413,7 +413,7 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
       // Get term dates
       const term = db.prepare(`
         SELECT * FROM academic_term WHERE is_current = 1
-      `).get() as any
+      `).get() as unknown
 
       if (!term) {
         return {
@@ -506,7 +506,7 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
       LEFT JOIN fee_invoice fi ON pl.invoice_id = fi.id
       WHERE pl.student_id = ?
       ORDER BY pl.created_at DESC
-    `).all(studentId) as any[]
+    `).all(studentId) as unknown[]
   }
 
   /**
@@ -579,3 +579,4 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
     return Math.round(percentage * 100) / 100
   }
 }
+

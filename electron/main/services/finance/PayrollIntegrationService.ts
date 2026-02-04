@@ -46,7 +46,7 @@ export class PayrollIntegrationService {
         // Check if payroll period is approved
         const period = this.db
           .prepare('SELECT * FROM payroll_period WHERE id = ?')
-          .get(periodId) as any;
+          .get(periodId) as unknown;
 
         if (!period) {
           return { success: false, message: 'Payroll period not found' };
@@ -62,7 +62,7 @@ export class PayrollIntegrationService {
         // Check if already posted to GL
         const existingPosting = this.db
           .prepare('SELECT * FROM payroll WHERE period_id = ? AND gl_posted = 1 LIMIT 1')
-          .get(periodId) as any;
+          .get(periodId) as unknown;
 
         if (existingPosting) {
           return {
@@ -124,7 +124,7 @@ export class PayrollIntegrationService {
         // Check if payroll is posted to GL
         const period = this.db
           .prepare('SELECT * FROM payroll_period WHERE id = ?')
-          .get(periodId) as any;
+          .get(periodId) as unknown;
 
         if (!period || !period.gl_posted) {
           return {
@@ -195,7 +195,7 @@ export class PayrollIntegrationService {
         // Verify payroll is paid
         const period = this.db
           .prepare('SELECT * FROM payroll_period WHERE id = ?')
-          .get(periodId) as any;
+          .get(periodId) as unknown;
 
         if (!period || period.status !== 'PAID') {
           return {
@@ -241,7 +241,7 @@ export class PayrollIntegrationService {
   getPayrollSummaryWithGLStatus(periodId: number): any {
     const period = this.db
       .prepare('SELECT * FROM payroll_period WHERE id = ?')
-      .get(periodId) as any;
+      .get(periodId) as unknown;
 
     if (!period) {
       return null;
@@ -258,7 +258,7 @@ export class PayrollIntegrationService {
         JOIN staff s ON p.staff_id = s.id
         WHERE p.period_id = ?
       `)
-      .all(periodId) as any[];
+      .all(periodId) as unknown[];
 
     // Get related journal entries
     const journalEntries = this.db
@@ -278,7 +278,7 @@ export class PayrollIntegrationService {
         GROUP BY je.id
         ORDER BY je.created_at
       `)
-      .all(periodId) as any[];
+      .all(periodId) as unknown[];
 
     return {
       period: {
@@ -357,3 +357,4 @@ export class PayrollIntegrationService {
     }
   }
 }
+

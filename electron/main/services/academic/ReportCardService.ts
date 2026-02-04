@@ -97,7 +97,7 @@ export class ReportCardService {
       LEFT JOIN enrollment e ON s.id = e.student_id AND e.academic_year_id = ? AND e.term_id = ?
       LEFT JOIN stream st ON e.stream_id = st.id
       WHERE s.id = ?
-    `).get(academicYearId, termId, studentId) as any
+    `).get(academicYearId, termId, studentId) as unknown
 
         if (!student) return null
 
@@ -116,7 +116,7 @@ export class ReportCardService {
         })
 
         // Fetch dynamic grading scale for curriculum (Defaulting to 8-4-4 for now, can be refined per student level)
-        const gradingScale = this.db.prepare('SELECT * FROM grading_scale WHERE curriculum = ?').all('8-4-4') as any[]
+        const gradingScale = this.db.prepare('SELECT * FROM grading_scale WHERE curriculum = ?').all('8-4-4') as unknown[]
         const getDynamicGrade = (score: number) => {
             const row = gradingScale.find(gs => score >= gs.min_score && score <= gs.max_score)
             return { grade: row?.grade || 'F', remarks: row?.remarks || 'Poor' }
@@ -130,7 +130,7 @@ export class ReportCardService {
                 FROM exam_result er
                 JOIN exam e ON er.exam_id = e.id
                 WHERE er.student_id = ? AND er.subject_id = ? AND e.term_id = ?
-            `).all(studentId, subject.id, termId) as any[]
+            `).all(studentId, subject.id, termId) as unknown[]
 
             if (results.length === 0) return null
 
@@ -153,7 +153,7 @@ export class ReportCardService {
                 grade_letter: grade,
                 remarks
             }
-        }).filter(g => g !== null) as any[]
+        }).filter(g => g !== null) as unknown[]
 
         // Get attendance
         const attendance = await this.attendanceService.getStudentAttendanceSummary(studentId, academicYearId, termId)
@@ -167,7 +167,7 @@ export class ReportCardService {
             SELECT * FROM report_card_summary 
             WHERE student_id = ? AND exam_id IN (SELECT id FROM exam WHERE term_id = ?)
             ORDER BY id DESC LIMIT 1
-        `).get(studentId, termId) as any
+        `).get(studentId, termId) as unknown
 
         // Calculate class size
         const { count: classSize } = this.db.prepare(`
@@ -236,3 +236,4 @@ export class ReportCardService {
         return 'Needs significant improvement. Please seek additional support.'
     }
 }
+

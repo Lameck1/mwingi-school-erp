@@ -46,8 +46,8 @@ export default function Reports() {
             // Load student statistics
             const students = await window.electronAPI.getStudents({})
             const currentStudents = Array.isArray(students) ? students : []
-            const dayScholars = currentStudents.filter((s: any) => s.student_type === 'DAY_SCHOLAR').length
-            const boarders = currentStudents.filter((s: any) => s.student_type === 'BOARDER').length
+            const dayScholars = currentStudents.filter((s: unknown) => s.student_type === 'DAY_SCHOLAR').length
+            const boarders = currentStudents.filter((s: unknown) => s.student_type === 'BOARDER').length
             setStudentStats({
                 totalStudents: currentStudents.length,
                 dayScholars,
@@ -64,7 +64,7 @@ export default function Reports() {
 
             // Group by month
             const monthlyData: Record<string, number> = {}
-            currentFeeData.forEach((item: any) => {
+            currentFeeData.forEach((item: unknown) => {
                 if (!item.transaction_date && !item.payment_date) return
                 const d = new Date(item.transaction_date || item.payment_date)
                 if (isNaN(d.getTime())) return
@@ -80,7 +80,7 @@ export default function Reports() {
 
             // Group by payment method
             const methodData: Record<string, number> = {}
-            currentFeeData.forEach((item: any) => {
+            currentFeeData.forEach((item: unknown) => {
                 const method = item.payment_method || 'Other'
                 methodData[method] = (methodData[method] || 0) + item.amount
             })
@@ -113,7 +113,7 @@ export default function Reports() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [dateRange, selectedDate])
 
-    const handleSendReminder = async (student: any) => {
+    const handleSendReminder = async (student: unknown) => {
         if (!student.guardian_phone) {
             alert('Guardian phone number missing')
             return
@@ -121,7 +121,7 @@ export default function Reports() {
 
         try {
             const message = `Fee Reminder: ${student.first_name} has an outstanding balance of KES ${student.balance}. Please settle at your earliest convenience. Thank you.`
-            const result = await (window.electronAPI as any).sendSMS({
+            const result = await (window.electronAPI as unknown).sendSMS({
                 to: student.guardian_phone,
                 message,
                 recipientId: student.id,
@@ -154,7 +154,7 @@ export default function Reports() {
 
             try {
                 const message = `Fee Reminder: ${student.first_name} has an outstanding balance of KES ${student.balance}. Please settle at your earliest convenience. Thank you.`
-                const result = await (window.electronAPI as any).sendSMS({
+                const result = await (window.electronAPI as unknown).sendSMS({
                     to: student.guardian_phone,
                     message,
                     recipientId: student.id,
@@ -332,7 +332,7 @@ export default function Reports() {
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id as any)}
+                        onClick={() => setActiveTab(tab.id as unknown)}
                         className={`pb-4 px-2 text-sm font-bold uppercase tracking-widest transition-all relative ${activeTab === tab.id ? 'text-primary' : 'text-foreground/40 hover:text-foreground/60'}`}
                     >
                         <div className="flex items-center gap-2">
@@ -647,3 +647,4 @@ export default function Reports() {
         </div>
     )
 }
+

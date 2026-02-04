@@ -225,7 +225,7 @@ export class JSSTransitionService {
       ORDER BY s.last_name, s.first_name
     `);
 
-    const students = stmt.all(fromGrade) as any[];
+    const students = stmt.all(fromGrade) as unknown[];
     const feeStructure = this.getJSSFeeStructure(toGrade, fiscalYear);
 
     return students.map(student => ({
@@ -311,7 +311,7 @@ export class JSSTransitionService {
       WHERE transition_date BETWEEN ? AND ?
     `);
 
-    const result = stmt.get(startDate, endDate) as any;
+    const result = stmt.get(startDate, endDate) as unknown;
 
     return {
       fiscal_year: fiscalYear,
@@ -405,3 +405,4 @@ export class JSSTransitionService {
     return total;
   }
 }
+

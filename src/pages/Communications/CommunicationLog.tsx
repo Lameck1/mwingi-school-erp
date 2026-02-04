@@ -38,7 +38,7 @@ export default function CommunicationLog() {
             if (typeFilter !== 'ALL') filters.channel = typeFilter
             if (statusFilter !== 'ALL') filters.status = statusFilter
 
-            const data = await (window.electronAPI as any).getNotificationHistory(filters)
+            const data = await (window.electronAPI as unknown).getNotificationHistory(filters)
             setLogs(data)
             calculateStats(data)
         } catch (error) {
@@ -176,3 +176,4 @@ export default function CommunicationLog() {
         </div>
     )
 }
+

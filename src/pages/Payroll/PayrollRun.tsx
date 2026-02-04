@@ -155,7 +155,7 @@ export default function PayrollRun() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border/20">
-                                {payrollData.map((p: any, i: number) => (
+                                {payrollData.map((p: unknown, i: number) => (
                                     <tr key={i} className="group hover:bg-secondary/40 transition-colors">
                                         <td className="px-4 py-5">
                                             <p className="font-bold text-foreground group-hover:text-primary transition-colors">{p.staff_name}</p>
@@ -321,7 +321,7 @@ export default function PayrollRun() {
     )
 
 
-    async function handleNotifyStaff(staff: any) {
+    async function handleNotifyStaff(staff: unknown) {
         if (!staff.phone) {
             alert('Staff phone number missing')
             return
@@ -365,7 +365,7 @@ export default function PayrollRun() {
                 const result = await window.electronAPI.sendSMS({
                     to: staff.phone,
                     message,
-                    recipientId: (staff as any).staff_id,
+                    recipientId: (staff as unknown).staff_id,
                     recipientType: 'STAFF',
                     userId: user!.id
                 })
@@ -380,7 +380,7 @@ export default function PayrollRun() {
         alert(`Finished: ${sent} sent, ${failed} failed.`)
     }
 
-    async function handlePrintPayslip(staffEntry: any) {
+    async function handlePrintPayslip(staffEntry: unknown) {
         printDocument({
             title: `Payslip - ${staffEntry.staff_name} - ${selectedPeriod?.period_name}`,
             template: 'payslip',
@@ -395,7 +395,7 @@ export default function PayrollRun() {
                 allowancesList: [],
                 deductionsList: []
             },
-            schoolSettings: schoolSettings || {} as any
+            schoolSettings: schoolSettings || {} as unknown
         })
     }
 }

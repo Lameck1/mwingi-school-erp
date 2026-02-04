@@ -54,7 +54,7 @@ export class DataMigrationService {
         LEFT JOIN student s ON lt.student_id = s.id
         WHERE lt.is_migrated IS NULL OR lt.is_migrated = 0
         ORDER BY lt.transaction_date, lt.id
-      `).all() as any[];
+      `).all() as unknown[];
 
       if (transactions.length === 0) {
         return {
@@ -240,7 +240,7 @@ export class DataMigrationService {
         SUM(CASE WHEN is_migrated = 0 OR is_migrated IS NULL THEN 1 ELSE 0 END) as pending,
         SUM(CASE WHEN is_migrated = 1 THEN amount ELSE 0 END) as total_amount_migrated
       FROM ledger_transaction
-    `).get() as any;
+    `).get() as unknown;
 
     return {
       total_transactions: stats.total_transactions || 0,
@@ -255,7 +255,7 @@ export class DataMigrationService {
   // PRIVATE HELPER METHODS
   // ============================================================================
 
-  private determineGLAccounts(transaction: any): { debitAccount: string; creditAccount: string } {
+  private determineGLAccounts(transaction: unknown): { debitAccount: string; creditAccount: string } {
     // Determine GL accounts based on transaction type and description
     const type = (transaction.transaction_type || '').toUpperCase();
     const desc = (transaction.description || '').toLowerCase();
@@ -306,3 +306,4 @@ export class DataMigrationService {
     }
   }
 }
+

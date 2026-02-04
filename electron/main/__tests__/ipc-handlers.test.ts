@@ -105,7 +105,7 @@ describe('IPC Handlers Security Tests', () => {
 
     // Get the mock database instance
     const { getDatabase } = await import('../database/index');
-    mockDb = getDatabase() as any;
+    mockDb = getDatabase() as unknown;
 
     // Register all handlers
     registerAllIpcHandlers();
@@ -212,3 +212,4 @@ describe('IPC Handlers Security Tests', () => {
     });
   });
 });
+

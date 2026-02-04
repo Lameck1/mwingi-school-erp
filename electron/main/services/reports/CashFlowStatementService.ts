@@ -6,15 +6,15 @@ import { getDatabase } from '../../database'
 // ============================================================================
 
 export interface IOperatingActivitiesCalculator {
-  getOperatingActivities(startDate: string, endDate: string): Promise<any>
+  getOperatingActivities(startDate: string, endDate: string): Promise<unknown>
 }
 
 export interface IInvestingActivitiesCalculator {
-  getInvestingActivities(startDate: string, endDate: string): Promise<any>
+  getInvestingActivities(startDate: string, endDate: string): Promise<unknown>
 }
 
 export interface IFinancingActivitiesCalculator {
-  getFinancingActivities(startDate: string, endDate: string): Promise<any>
+  getFinancingActivities(startDate: string, endDate: string): Promise<unknown>
 }
 
 export interface ILiquidityAnalyzer {
@@ -83,7 +83,7 @@ class CashFlowRepository {
       WHERE transaction_date >= ? AND transaction_date <= ?
         AND transaction_type IN (${placeholders})
       ORDER BY transaction_date ASC
-    `).all(startDate, endDate, ...transactionTypes) as any[]
+    `).all(startDate, endDate, ...transactionTypes) as unknown[]
   }
 
   async getOpeningBalance(periodStartDate: string): Promise<number> {
@@ -92,7 +92,7 @@ class CashFlowRepository {
       SELECT SUM(amount) as balance
       FROM ledger_transaction
       WHERE transaction_date < ? AND is_voided = 0
-    `).get(periodStartDate) as any
+    `).get(periodStartDate) as unknown
     return result?.balance || 0
   }
 
@@ -104,7 +104,7 @@ class CashFlowRepository {
       FROM expense_transaction
       WHERE expense_type IN (${placeholders})
         AND transaction_date >= ? AND transaction_date <= ?
-    `).get(...expenseTypes, startDate, endDate) as any
+    `).get(...expenseTypes, startDate, endDate) as unknown
     return result?.total || 0
   }
 
@@ -113,7 +113,7 @@ class CashFlowRepository {
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM payroll_transaction
       WHERE transaction_date >= ? AND transaction_date <= ?
-    `).get(startDate, endDate) as any
+    `).get(startDate, endDate) as unknown
     return result?.total || 0
   }
 
@@ -123,7 +123,7 @@ class CashFlowRepository {
       SELECT * FROM asset_transaction
       WHERE transaction_date >= ? AND transaction_date <= ?
       ORDER BY transaction_date ASC
-    `).all(startDate, endDate) as any[]
+    `).all(startDate, endDate) as unknown[]
   }
 
   async getLoanTransactions(startDate: string, endDate: string): Promise<any[]> {
@@ -132,7 +132,7 @@ class CashFlowRepository {
       SELECT * FROM loan_transaction
       WHERE transaction_date >= ? AND transaction_date <= ?
       ORDER BY transaction_date ASC
-    `).all(startDate, endDate) as any[]
+    `).all(startDate, endDate) as unknown[]
   }
 
   async getAverageMonthlyExpenses(): Promise<number> {
@@ -140,7 +140,7 @@ class CashFlowRepository {
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM expense_transaction
       WHERE transaction_date >= date('now', '-3 months')
-    `).get() as any
+    `).get() as unknown
     return (result?.total || 0) / 3
   }
 }
@@ -158,15 +158,15 @@ class OperatingActivitiesCalculator implements IOperatingActivitiesCalculator {
     this.repo = new CashFlowRepository(this.db)
   }
 
-  async getOperatingActivities(startDate: string, endDate: string): Promise<any> {
+  async getOperatingActivities(startDate: string, endDate: string): Promise<unknown> {
     const incomingTransactions = await this.repo.getTransactionsByType(startDate, endDate, ['CREDIT', 'PAYMENT'])
-    const feeCollections = incomingTransactions.reduce((sum: number, t: any) => sum + (t.amount || 0), 0)
+    const feeCollections = incomingTransactions.reduce((sum: number, t: unknown) => sum + (t.amount || 0), 0)
 
     const donationTransactions = await this.repo.getTransactionsByType(startDate, endDate, ['DONATION'])
-    const donationCollections = donationTransactions.reduce((sum: number, t: any) => sum + (t.amount || 0), 0)
+    const donationCollections = donationTransactions.reduce((sum: number, t: unknown) => sum + (t.amount || 0), 0)
 
     const otherIncomeTransactions = await this.repo.getTransactionsByType(startDate, endDate, ['OTHER_INCOME'])
-    const otherIncome = otherIncomeTransactions.reduce((sum: number, t: any) => sum + (t.amount || 0), 0)
+    const otherIncome = otherIncomeTransactions.reduce((sum: number, t: unknown) => sum + (t.amount || 0), 0)
 
     const salaryPayments = await this.repo.getPayrollExpenses(startDate, endDate)
     const supplierPayments = await this.repo.getExpensesByType(startDate, endDate, ['SUPPLIES', 'MATERIALS'])
@@ -203,13 +203,13 @@ class InvestingActivitiesCalculator implements IInvestingActivitiesCalculator {
     this.repo = new CashFlowRepository(this.db)
   }
 
-  async getInvestingActivities(startDate: string, endDate: string): Promise<any> {
+  async getInvestingActivities(startDate: string, endDate: string): Promise<unknown> {
     const assetTransactions = await this.repo.getAssetTransactions(startDate, endDate)
 
     let assetPurchases = 0
     let assetSales = 0
 
-    assetTransactions.forEach((trans: any) => {
+    assetTransactions.forEach((trans: unknown) => {
       if (trans.transaction_type === 'PURCHASE') {
         assetPurchases += trans.amount || 0
       } else if (trans.transaction_type === 'SALE') {
@@ -240,14 +240,14 @@ class FinancingActivitiesCalculator implements IFinancingActivitiesCalculator {
     this.repo = new CashFlowRepository(this.db)
   }
 
-  async getFinancingActivities(startDate: string, endDate: string): Promise<any> {
+  async getFinancingActivities(startDate: string, endDate: string): Promise<unknown> {
     const loanTransactions = await this.repo.getLoanTransactions(startDate, endDate)
 
     let loansReceived = 0
     let loanRepayments = 0
     let grantReceived = 0
 
-    loanTransactions.forEach((trans: any) => {
+    loanTransactions.forEach((trans: unknown) => {
       if (trans.transaction_type === 'DISBURSEMENT') {
         loansReceived += trans.amount || 0
       } else if (trans.transaction_type === 'REPAYMENT') {
@@ -309,7 +309,7 @@ class CashFlowForecaster implements ICashFlowForecaster {
 
     // Calculate 3-day average from historical data (simple moving average)
     const dailyAverages: { [key: string]: number } = {}
-    historicalData.forEach((record: any) => {
+    historicalData.forEach((record: unknown) => {
       const dayOfWeek = new Date(record.transaction_date).getDay()
       if (!dailyAverages[dayOfWeek]) {
         dailyAverages[dayOfWeek] = 0
@@ -520,15 +520,15 @@ export class CashFlowStatementService
   }
 
   // Delegated interface implementations
-  async getOperatingActivities(startDate: string, endDate: string): Promise<any> {
+  async getOperatingActivities(startDate: string, endDate: string): Promise<unknown> {
     return this.operatingCalculator.getOperatingActivities(startDate, endDate)
   }
 
-  async getInvestingActivities(startDate: string, endDate: string): Promise<any> {
+  async getInvestingActivities(startDate: string, endDate: string): Promise<unknown> {
     return this.investingCalculator.getInvestingActivities(startDate, endDate)
   }
 
-  async getFinancingActivities(startDate: string, endDate: string): Promise<any> {
+  async getFinancingActivities(startDate: string, endDate: string): Promise<unknown> {
     return this.financingCalculator.getFinancingActivities(startDate, endDate)
   }
 
@@ -547,3 +547,4 @@ export class CashFlowStatementService
     return this.liquidityAnalyzer.getStatus(closingBalance)
   }
 }
+

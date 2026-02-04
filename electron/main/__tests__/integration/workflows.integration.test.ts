@@ -250,7 +250,7 @@ describe('Workflows Integration Tests', () => {
         recorded_by: 1
       })
 
-      const payments = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').all(1) as any[]
+      const payments = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').all(1) as unknown[]
       expect(payments.length).toBeGreaterThan(0)
     })
 
@@ -287,7 +287,7 @@ describe('Workflows Integration Tests', () => {
         recorded_by: 1
       })
 
-      const invoice = db.prepare('SELECT * FROM fee_invoice WHERE id = ?').get(1) as any
+      const invoice = db.prepare('SELECT * FROM fee_invoice WHERE id = ?').get(1) as unknown
       expect(invoice.amount_paid).toBeGreaterThanOrEqual(0)
     })
 
@@ -310,7 +310,7 @@ describe('Workflows Integration Tests', () => {
         recorded_by: 1
       })
 
-      const payments = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction WHERE student_id = ?').get(1) as any
+      const payments = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction WHERE student_id = ?').get(1) as unknown
       expect(payments.count).toBeGreaterThanOrEqual(2)
     })
 
@@ -333,8 +333,8 @@ describe('Workflows Integration Tests', () => {
         recorded_by: 1
       })
 
-      const payment1 = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').get(1) as any
-      const payment2 = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').get(2) as any
+      const payment1 = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').get(1) as unknown
+      const payment2 = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').get(2) as unknown
 
       expect(payment1).toBeDefined()
       expect(payment2).toBeDefined()
@@ -511,7 +511,7 @@ describe('Workflows Integration Tests', () => {
         recorded_by: 1
       })
 
-      const payments = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction').get() as any
+      const payments = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction').get() as unknown
       expect(payments.count).toBeGreaterThanOrEqual(2)
     })
 
@@ -530,7 +530,7 @@ describe('Workflows Integration Tests', () => {
       expect(rejected.success).toBe(true)
 
       // Verify no payment recorded
-      const payments = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction').get() as any
+      const payments = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction').get() as unknown
       expect(payments.count).toBe(0)
     })
 
@@ -556,7 +556,7 @@ describe('Workflows Integration Tests', () => {
       })
 
       // Verify request was recorded
-      const request = db.prepare('SELECT * FROM approval_request WHERE id = ?').get(req.requestId!) as any
+      const request = db.prepare('SELECT * FROM approval_request WHERE id = ?').get(req.requestId!) as unknown
       expect(request).toBeDefined()
     })
 
@@ -606,8 +606,8 @@ describe('Workflows Integration Tests', () => {
       })
 
       // Verify both records exist and are consistent
-      const approval = db.prepare('SELECT * FROM approval_request WHERE id = ?').get(req.requestId!) as any
-      const payment = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').get(1) as any
+      const approval = db.prepare('SELECT * FROM approval_request WHERE id = ?').get(req.requestId!) as unknown
+      const payment = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').get(1) as unknown
 
       expect(approval.amount).toBe(50000)
       expect(payment.amount).toBe(50000)
@@ -660,7 +660,7 @@ describe('Workflows Integration Tests', () => {
 
       expect(requests.every(r => r.success)).toBe(true)
 
-      const approvals = db.prepare('SELECT COUNT(*) as count FROM approval_request').get() as any
+      const approvals = db.prepare('SELECT COUNT(*) as count FROM approval_request').get() as unknown
       expect(approvals.count).toBeGreaterThanOrEqual(3)
     })
   })
@@ -719,4 +719,5 @@ describe('Workflows Integration Tests', () => {
     })
   })
 })
+
 

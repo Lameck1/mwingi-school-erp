@@ -179,9 +179,9 @@ export class ReportScheduler {
             'export_format', 'is_active']
 
         for (const field of fields) {
-            if ((data as any)[field] !== undefined) {
+            if ((data as unknown)[field] !== undefined) {
                 sets.push(`${field} = ?`)
-                params.push((data as any)[field])
+                params.push((data as unknown)[field])
             }
         }
 
@@ -256,3 +256,4 @@ export class ReportScheduler {
 }
 
 export const reportScheduler = new ReportScheduler()
+

@@ -174,7 +174,7 @@ export class BoardingCostService {
       ORDER BY total_amount_cents DESC
     `;
 
-    const results = this.db.prepare(query).all(...params) as any[];
+    const results = this.db.prepare(query).all(...params) as unknown[];
 
     // Calculate total for percentages
     const total = results.reduce((sum, row) => sum + row.total_amount_cents, 0);
@@ -215,7 +215,7 @@ export class BoardingCostService {
       params.push(term);
     }
 
-    const result = this.db.prepare(query).get(...params) as any;
+    const result = this.db.prepare(query).get(...params) as unknown;
     return result?.total_revenue || 0;
   }
 
@@ -370,3 +370,4 @@ export class BoardingCostService {
 }
 
 export default BoardingCostService;
+

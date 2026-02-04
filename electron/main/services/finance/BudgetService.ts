@@ -90,7 +90,7 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
         return ' GROUP BY b.id'
     }
 
-    protected mapRowToEntity(row: any): Budget {
+    protected mapRowToEntity(row: unknown): Budget {
         return row as Budget
     }
 
@@ -265,3 +265,4 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
         return { success: true }
     }
 }
+

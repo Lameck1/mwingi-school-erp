@@ -111,7 +111,7 @@ describe('FeeProrationService', () => {
         userId: 10
       })
 
-      const prorationLog = db.prepare('SELECT * FROM pro_ration_log WHERE student_id = ?').get(1) as any
+      const prorationLog = db.prepare('SELECT * FROM pro_ration_log WHERE student_id = ?').get(1) as unknown
 
       expect(prorationLog).toBeDefined()
       if (prorationLog) {
@@ -128,7 +128,7 @@ describe('FeeProrationService', () => {
         userId: 10
       })
 
-      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = ?').all(1) as any[]
+      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = ?').all(1) as unknown[]
 
       expect(invoices.length).toBeGreaterThan(0)
     })
@@ -141,7 +141,7 @@ describe('FeeProrationService', () => {
         userId: 10
       })
 
-      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = ?').all(1) as any[]
+      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = ?').all(1) as unknown[]
 
       const nonProratedExists = invoices.some(inv => inv.is_prorated === 0)
       if (nonProratedExists) {
@@ -158,7 +158,7 @@ describe('FeeProrationService', () => {
         userId: 10
       })
 
-      const prorationLogs = db.prepare('SELECT * FROM pro_ration_log WHERE student_id = ?').all(1) as any[]
+      const prorationLogs = db.prepare('SELECT * FROM pro_ration_log WHERE student_id = ?').all(1) as unknown[]
       expect(prorationLogs.length).toBeGreaterThan(0)
     })
 
@@ -224,7 +224,7 @@ describe('FeeProrationService', () => {
     })
 
     it('should show original vs prorated amounts', () => {
-      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = 1').all() as any[]
+      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = 1').all() as unknown[]
 
       expect(invoices.length).toBeGreaterThan(0)
       invoices.forEach(inv => {
@@ -235,7 +235,7 @@ describe('FeeProrationService', () => {
     })
 
     it('should calculate total savings', () => {
-      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = 1').all() as any[]
+      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = 1').all() as unknown[]
       
       let totalOriginal = 0
       let totalProrated = 0
@@ -391,3 +391,4 @@ describe('FeeProrationService', () => {
     })
   })
 })
+

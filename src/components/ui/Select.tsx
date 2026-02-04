@@ -9,7 +9,7 @@ interface SelectOption {
 
 interface SelectProps {
     value: string | number
-    onChange: (value: any) => void
+    onChange: (value: unknown) => void
     options: SelectOption[]
     placeholder?: string
     className?: string
@@ -84,3 +84,4 @@ export function Select({ value, onChange, options, placeholder = 'Select...', cl
         </div>
     )
 }
+

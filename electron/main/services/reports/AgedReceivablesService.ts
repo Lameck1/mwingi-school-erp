@@ -18,7 +18,7 @@ export interface ICollectionReminder {
 }
 
 export interface ICollectionsAnalyzer {
-  getCollectionsEffectivenessReport(): Promise<any>
+  getCollectionsEffectivenessReport(): Promise<unknown>
 }
 
 export interface AgedReceivableBucket {
@@ -61,7 +61,7 @@ class AgedReceivablesRepository {
       JOIN student s ON fi.student_id = s.id
       WHERE fi.status = 'OUTSTANDING' AND fi.due_date <= ?
       ORDER BY fi.due_date ASC
-    `).all(asOfDate, asOfDate) as any[]
+    `).all(asOfDate, asOfDate) as unknown[]
   }
 
   async getStudentLastPaymentDate(studentId: number): Promise<string | null> {
@@ -70,11 +70,11 @@ class AgedReceivablesRepository {
       SELECT transaction_date FROM ledger_transaction
       WHERE student_id = ? AND transaction_type IN ('CREDIT', 'PAYMENT')
       ORDER BY transaction_date DESC LIMIT 1
-    `).get(studentId) as any
+    `).get(studentId) as unknown
     return result?.transaction_date || null
   }
 
-  async recordCollectionAction(action: any): Promise<number> {
+  async recordCollectionAction(action: unknown): Promise<number> {
     const db = this.db
     const result = db.prepare(`
       INSERT INTO collection_action (student_id, action_type, action_date, notes)
@@ -89,7 +89,7 @@ class AgedReceivablesRepository {
       SELECT * FROM collection_action
       WHERE student_id = ?
       ORDER BY action_date DESC
-    `).all(studentId) as any[]
+    `).all(studentId) as unknown[]
   }
 }
 
@@ -205,14 +205,14 @@ class PriorityDeterminer implements IPriorityDeterminer {
   async getHighPriorityCollections(): Promise<any[]> {
     const invoices = await this.repo.getOutstandingInvoices(new Date().toISOString().split('T')[0])
 
-    const highPriority = invoices.filter((inv: any) => {
+    const highPriority = invoices.filter((inv: unknown) => {
       const daysOverdue = Math.ceil(inv.days_overdue || 0)
       // High priority: >90 days OR >100,000 KES
       return daysOverdue > 90 || inv.amount > 100000
     })
 
     return highPriority
-      .sort((a: any, b: any) => (b.amount || 0) - (a.amount || 0))
+      .sort((a: unknown, b: unknown) => (b.amount || 0) - (a.amount || 0))
       .slice(0, 50) // Top 50
   }
 }
@@ -287,7 +287,7 @@ class CollectionsAnalyzer implements ICollectionsAnalyzer {
     this.repo = new AgedReceivablesRepository(this.db)
   }
 
-  async getCollectionsEffectivenessReport(): Promise<any> {
+  async getCollectionsEffectivenessReport(): Promise<unknown> {
     const db = this.db
 
     // Get all payments in last 3 months
@@ -300,7 +300,7 @@ class CollectionsAnalyzer implements ICollectionsAnalyzer {
       FROM ledger_transaction
       WHERE transaction_type IN ('CREDIT', 'PAYMENT')
         AND transaction_date >= date('now', '-3 months')
-    `).get() as any
+    `).get() as unknown
 
     // Get outstanding invoices
     const outstandingMetrics = db.prepare(`
@@ -310,14 +310,14 @@ class CollectionsAnalyzer implements ICollectionsAnalyzer {
         COUNT(DISTINCT student_id) as students_with_arrears
       FROM fee_invoice
       WHERE status = 'OUTSTANDING'
-    `).get() as any
+    `).get() as unknown
 
     // Calculate collection rate
     const totalBilled = db.prepare(`
       SELECT SUM(amount) as total
       FROM fee_invoice
       WHERE invoice_date >= date('now', '-3 months')
-    `).get() as any
+    `).get() as unknown
 
     const collectionRate = totalBilled?.total ? ((paymentMetrics?.total_amount_collected || 0) / (totalBilled.total || 1)) * 100 : 0
 
@@ -399,7 +399,7 @@ export class AgedReceivablesService
   /**
    * Get collections effectiveness report with KPIs
    */
-  async getCollectionsEffectivenessReport(): Promise<any> {
+  async getCollectionsEffectivenessReport(): Promise<unknown> {
     return this.analyzer.getCollectionsEffectivenessReport()
   }
 
@@ -425,3 +425,4 @@ export class AgedReceivablesService
     return this.agingCalculator.calculateAgedReceivables(asOfDate)
   }
 }
+

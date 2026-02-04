@@ -60,7 +60,7 @@ export abstract class BaseService<T, C, U = Partial<C>, F = Record<string, unkno
         try {
             const row = this.db.prepare(query).get(id)
             return row ? this.mapRowToEntity(row) : null
-        } catch (error: any) {
+        } catch (error: unknown) {
             try {
                 const errorMsg = `[${new Date().toISOString()}] ERROR in ${this.constructor.name}: ${error.message} | Query: ${query}\n`
                 fs.appendFileSync('sql_debug.log', errorMsg)
@@ -197,3 +197,4 @@ export abstract class BaseService<T, C, U = Partial<C>, F = Record<string, unkno
      */
     protected abstract executeUpdate(id: number, data: U): void
 }
+

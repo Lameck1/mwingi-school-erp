@@ -77,15 +77,15 @@ describe('CreditAutoApplicationService', () => {
       service.autoApplyCredits(1)
 
       // Check first invoice (oldest due date)
-      const invoice1 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-001') as any
+      const invoice1 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-001') as unknown
       expect(invoice1.amount_paid).toBeGreaterThanOrEqual(0)
 
       // Check second invoice
-      const invoice2 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-002') as any
+      const invoice2 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-002') as unknown
       expect(invoice2.amount_paid).toBeGreaterThanOrEqual(0)
 
       // Check third invoice
-      const invoice3 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-003') as any
+      const invoice3 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-003') as unknown
       expect(invoice3.amount_paid).toBeGreaterThanOrEqual(0)
     })
 
@@ -107,7 +107,7 @@ describe('CreditAutoApplicationService', () => {
       expect(result).toBeDefined()
 
       // First invoice should have some payment
-      const invoice1 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-001') as any
+      const invoice1 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-001') as unknown
       expect(invoice1.amount_paid).toBeGreaterThanOrEqual(0)
     })
 
@@ -127,7 +127,7 @@ describe('CreditAutoApplicationService', () => {
       service.autoApplyCredits(1)
 
       // Overdue invoice should have payment applied
-      const invoice1 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-001') as any
+      const invoice1 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-001') as unknown
       expect(invoice1.amount_paid).toBeGreaterThanOrEqual(0)
     })
 
@@ -165,7 +165,7 @@ describe('CreditAutoApplicationService', () => {
     })
 
     it('should calculate credit correctly', () => {
-      const credits = db.prepare('SELECT SUM(amount) as total FROM credit_transaction WHERE student_id = 1').get() as any
+      const credits = db.prepare('SELECT SUM(amount) as total FROM credit_transaction WHERE student_id = 1').get() as unknown
       expect(credits.total).toBe(70000)
     })
   })
@@ -194,7 +194,7 @@ describe('CreditAutoApplicationService', () => {
     })
 
     it('should create new credit transaction', () => {
-      const beforeCount = db.prepare('SELECT COUNT(*) as count FROM credit_transaction').get() as any
+      const beforeCount = db.prepare('SELECT COUNT(*) as count FROM credit_transaction').get() as unknown
       
       service.addCredit(
         1,  // studentId
@@ -203,7 +203,7 @@ describe('CreditAutoApplicationService', () => {
         10  // userId
       )
 
-      const afterCount = db.prepare('SELECT COUNT(*) as count FROM credit_transaction').get() as any
+      const afterCount = db.prepare('SELECT COUNT(*) as count FROM credit_transaction').get() as unknown
       expect(afterCount.count).toBeGreaterThanOrEqual(beforeCount.count)
     })
   })
@@ -246,3 +246,4 @@ describe('CreditAutoApplicationService', () => {
     })
   })
 })
+

@@ -97,7 +97,7 @@ export class DataImportService {
      */
     private async parseExcel(buffer: Buffer): Promise<Record<string, unknown>[]> {
         const workbook = new ExcelJS.Workbook()
-        await workbook.xlsx.load(buffer as any)
+        await workbook.xlsx.load(buffer as unknown)
         const worksheet = workbook.getWorksheet(1)
         if (!worksheet) return []
 
@@ -427,3 +427,4 @@ export class DataImportService {
 }
 
 export const dataImportService = new DataImportService()
+

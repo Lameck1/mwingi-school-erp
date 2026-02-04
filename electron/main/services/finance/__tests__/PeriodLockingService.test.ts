@@ -55,7 +55,7 @@ describe('PeriodLockingService', () => {
       expect(result.success).toBe(true)
       expect(result.message).toContain('locked successfully')
 
-      const period = db.prepare('SELECT * FROM financial_period WHERE id = ?').get(1) as any
+      const period = db.prepare('SELECT * FROM financial_period WHERE id = ?').get(1) as unknown
       expect(period.status).toBe('LOCKED')
       expect(period.locked_by).toBe(10)
       expect(period.locked_at).not.toBeNull()
@@ -82,7 +82,7 @@ describe('PeriodLockingService', () => {
     it('should log audit trail on lock', () => {
       service.lockPeriod(1, 10)
 
-      const auditLogs = db.prepare('SELECT * FROM audit_log WHERE action_type = ?').all('LOCK_PERIOD') as any[]
+      const auditLogs = db.prepare('SELECT * FROM audit_log WHERE action_type = ?').all('LOCK_PERIOD') as unknown[]
       expect(auditLogs.length).toBeGreaterThan(0)
       expect(auditLogs[0].user_id).toBe(10)
       expect(auditLogs[0].record_id).toBe(1)
@@ -100,7 +100,7 @@ describe('PeriodLockingService', () => {
       expect(result.success).toBe(true)
       expect(result.message).toContain('unlocked successfully')
 
-      const period = db.prepare('SELECT * FROM financial_period WHERE id = ?').get(1) as any
+      const period = db.prepare('SELECT * FROM financial_period WHERE id = ?').get(1) as unknown
       expect(period.status).toBe('OPEN')
       expect(period.locked_by).toBeNull()
       expect(period.locked_at).toBeNull()
@@ -126,7 +126,7 @@ describe('PeriodLockingService', () => {
     it('should log audit trail on unlock', () => {
       service.unlockPeriod(1, 10)
 
-      const auditLogs = db.prepare('SELECT * FROM audit_log WHERE action_type = ?').all('UNLOCK_PERIOD') as any[]
+      const auditLogs = db.prepare('SELECT * FROM audit_log WHERE action_type = ?').all('UNLOCK_PERIOD') as unknown[]
       expect(auditLogs.length).toBeGreaterThan(0)
       expect(auditLogs[0].user_id).toBe(10)
       expect(auditLogs[0].record_id).toBe(1)
@@ -141,7 +141,7 @@ describe('PeriodLockingService', () => {
       expect(result.success).toBe(true)
       expect(result.message).toContain('closed successfully')
 
-      const period = db.prepare('SELECT * FROM financial_period WHERE id = ?').get(1) as any
+      const period = db.prepare('SELECT * FROM financial_period WHERE id = ?').get(1) as unknown
       expect(period.status).toBe('CLOSED')
       expect(period.closed_by).toBe(10)
       expect(period.closed_at).not.toBeNull()
@@ -167,7 +167,7 @@ describe('PeriodLockingService', () => {
       service.lockPeriod(1, 10)
       service.closePeriod(1, 10)
 
-      const auditLogs = db.prepare('SELECT * FROM audit_log WHERE action_type = ?').all('CLOSE_PERIOD') as any[]
+      const auditLogs = db.prepare('SELECT * FROM audit_log WHERE action_type = ?').all('CLOSE_PERIOD') as unknown[]
       expect(auditLogs.length).toBeGreaterThan(0)
       expect(auditLogs[0].user_id).toBe(10)
       expect(auditLogs[0].record_id).toBe(1)
@@ -240,3 +240,4 @@ describe('PeriodLockingService', () => {
     })
   })
 })
+

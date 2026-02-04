@@ -36,7 +36,7 @@ export class AcademicSystemService {
         return this.db.prepare('SELECT * FROM exam WHERE academic_year_id = ? AND term_id = ? ORDER BY created_at DESC').all(academicYearId, termId)
     }
 
-    async createExam(data: any, userId: number): Promise<void> {
+    async createExam(data: unknown, userId: number): Promise<void> {
         this.db.prepare(`
             INSERT INTO exam (academic_year_id, term_id, name, weight)
             VALUES (?, ?, ?, ?)
@@ -175,7 +175,7 @@ export class AcademicSystemService {
                 FROM exam_result er
                 JOIN subject s ON er.subject_id = s.id
                 WHERE er.exam_id = ? AND er.student_id = ?
-            `).all(examId, student_id) as any[]
+            `).all(examId, student_id) as unknown[]
 
             if (results.length === 0) continue
 
@@ -228,3 +228,4 @@ export class AcademicSystemService {
         logAudit(userId, 'PROCESS_RESULTS', 'report_card_summary', 0, null, { examId })
     }
 }
+

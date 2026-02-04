@@ -43,7 +43,7 @@ export default function Attendance() {
         if (selectedStream && currentAcademicYear && currentTerm) {
             loadStudents()
         }
-    }, [selectedStream, selectedDate, currentAcademicYear, currentTerm])
+    }, [selectedStream, selectedDate, currentAcademicYear, currentTerm, loadStudents])
 
     const loadStreams = async () => {
         try {
@@ -69,23 +69,23 @@ export default function Attendance() {
             )
 
             // Map students with their existing status or default to PRESENT
-            const existingMap = new Map(existing.map((e: any) => [e.student_id, e]))
+            const existingMap = new Map(existing.map((e: unknown) => [e.student_id, e]))
 
-            setStudents(enrolled.map((s: any) => {
+            setStudents(enrolled.map((s: unknown) => {
                 const ex = existingMap.get(s.student_id)
                 return {
                     student_id: s.student_id,
                     student_name: s.student_name,
                     admission_number: s.admission_number,
-                    status: (ex as any)?.status || 'PRESENT',
-                    notes: (ex as any)?.notes || ''
+                    status: (ex as unknown)?.status || 'PRESENT',
+                    notes: (ex as unknown)?.notes || ''
                 }
             }))
 
             // Update summary
-            updateSummary(enrolled.map((s: any) => {
+            updateSummary(enrolled.map((s: unknown) => {
                 const ex = existingMap.get(s.student_id)
-                return (ex as any)?.status || 'PRESENT'
+                return (ex as unknown)?.status || 'PRESENT'
             }))
         } catch (error) {
             console.error('Failed to load students:', error)
@@ -273,3 +273,4 @@ export default function Attendance() {
         </div>
     )
 }
+

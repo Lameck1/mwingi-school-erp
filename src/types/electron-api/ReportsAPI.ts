@@ -20,7 +20,7 @@ export interface DefaulterItem {
 export interface ReportsAPI {
   getFeeCollectionReport: (_startDate: string, _endDate: string) => Promise<FeeCollectionItem[]>
   getDefaulters: (_termId?: number) => Promise<any[]>
-  getStudentLedgerReport: (studentId: number) => Promise<any>
+  getStudentLedgerReport: (studentId: number) => Promise<unknown>
   getDashboardData: () => Promise<{
     totalStudents: number
     totalStaff: number
@@ -31,5 +31,5 @@ export interface ReportsAPI {
   getRevenueByCategory: (startDate: string, endDate: string) => Promise<any[]>
   getExpenseByCategory: (startDate: string, endDate: string) => Promise<any[]>
   getDailyCollection: (date: string) => Promise<any[]>
-  generateReportCard: (studentId: number, yearId: number, termId: number) => Promise<any>
+  generateReportCard: (studentId: number, yearId: number, termId: number) => Promise<unknown>
 }

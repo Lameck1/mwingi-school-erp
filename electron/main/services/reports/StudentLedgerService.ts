@@ -69,7 +69,7 @@ class StudentLedgerRepository {
       SELECT * FROM ledger_transaction
       WHERE student_id = ? AND is_voided = 0
       ORDER BY transaction_date ASC, created_at ASC
-    `).all(studentId) as any[]
+    `).all(studentId) as unknown[]
   }
 
   async getTransactionsByPeriod(studentId: number, startDate: string, endDate: string): Promise<any[]> {
@@ -78,7 +78,7 @@ class StudentLedgerRepository {
       SELECT * FROM ledger_transaction
       WHERE student_id = ? AND transaction_date >= ? AND transaction_date <= ? AND is_voided = 0
       ORDER BY transaction_date ASC, created_at ASC
-    `).all(studentId, startDate, endDate) as any[]
+    `).all(studentId, startDate, endDate) as unknown[]
   }
 
   async getOutstandingInvoices(studentId: number): Promise<any[]> {
@@ -87,7 +87,7 @@ class StudentLedgerRepository {
       SELECT * FROM fee_invoice
       WHERE student_id = ? AND status = 'OUTSTANDING'
       ORDER BY due_date ASC
-    `).all(studentId) as any[]
+    `).all(studentId) as unknown[]
   }
 
   async getInvoicesForPeriod(studentId: number, startDate: string, endDate: string): Promise<any[]> {
@@ -96,10 +96,10 @@ class StudentLedgerRepository {
       SELECT * FROM fee_invoice
       WHERE student_id = ? AND invoice_date >= ? AND invoice_date <= ?
       ORDER BY invoice_date ASC
-    `).all(studentId, startDate, endDate) as any[]
+    `).all(studentId, startDate, endDate) as unknown[]
   }
 
-  async getStudent(studentId: number): Promise<any> {
+  async getStudent(studentId: number): Promise<unknown> {
     const db = this.db
     return db.prepare(`SELECT * FROM student WHERE id = ?`).get(studentId)
   }
@@ -118,7 +118,7 @@ class StudentLedgerRepository {
     const result = db.prepare(`
       SELECT opening_balance FROM student_opening_balance
       WHERE student_id = ? AND period_start = ?
-    `).get(studentId, periodStart) as any
+    `).get(studentId, periodStart) as unknown
     return result?.opening_balance || null
   }
 }
@@ -245,7 +245,7 @@ class LedgerReconciler implements ILedgerReconciler {
 
     // Get invoice balance
     const invoices = await this.repo.getInvoicesForPeriod(studentId, periodStart, periodEnd)
-    const invoiceBalance = invoices.reduce((sum: number, inv: any) => sum + (inv.amount || 0), 0)
+    const invoiceBalance = invoices.reduce((sum: number, inv: unknown) => sum + (inv.amount || 0), 0)
 
     const difference = Math.abs(ledgerBalance - invoiceBalance)
     const isBalanced = difference < 1 // Allow for rounding
@@ -398,7 +398,7 @@ export class StudentLedgerService
   /**
    * Generate complete period-end audit report
    */
-  async generateLedgerAuditReport(studentId: number, periodStart: string, periodEnd: string): Promise<any> {
+  async generateLedgerAuditReport(studentId: number, periodStart: string, periodEnd: string): Promise<unknown> {
     const ledger = await this.generateStudentLedger(studentId, periodStart, periodEnd)
     const reconciliation = await this.reconcileStudentLedger(studentId, periodStart, periodEnd)
     const verification = await this.verifyOpeningBalance(studentId, periodStart)
@@ -414,3 +414,4 @@ export class StudentLedgerService
     }
   }
 }
+

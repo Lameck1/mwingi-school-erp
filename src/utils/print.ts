@@ -68,7 +68,7 @@ function generatePrintHTML(
   let content = ''
 
   if (template === 'statement') {
-    const ledger = data.ledger as any[] || []
+    const ledger = data.ledger as unknown[] || []
     content = `
       <div class="meta-grid">
         <div class="meta-box">
@@ -97,7 +97,7 @@ function generatePrintHTML(
           </tr>
         </thead>
         <tbody>
-          ${ledger.map((row: any) => `
+          ${ledger.map((row: unknown) => `
             <tr>
               <td>${new Date(row.date).toLocaleDateString()}</td>
               <td>${row.ref || '-'}</td>
@@ -243,3 +243,4 @@ function generatePrintHTML(
     </html>
   `
 }
+

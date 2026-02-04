@@ -125,7 +125,7 @@ export class ReconciliationService {
           variance: (d.student_credit_balance - d.calculated_balance) / 100,
         })),
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         check_name: 'Student Credit Balance Verification',
         status: 'FAIL',
@@ -177,7 +177,7 @@ export class ReconciliationService {
           variance: variance / 100,
         },
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         check_name: 'Trial Balance Verification',
         status: 'FAIL',
@@ -215,7 +215,7 @@ export class ReconciliationService {
           total_amount: (orphaned.total_amount || 0) / 100,
         },
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         check_name: 'Orphaned Transactions Check',
         status: 'FAIL',
@@ -263,7 +263,7 @@ export class ReconciliationService {
           variance: (d.amount_paid - d.calculated_payments) / 100,
         })),
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         check_name: 'Invoice Payment Verification',
         status: 'FAIL',
@@ -331,7 +331,7 @@ export class ReconciliationService {
         message: `Found ${abnormal.length} GL accounts with unexpected negative balances.`,
         details: abnormal,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         check_name: 'Abnormal Balance Detection',
         status: 'FAIL',
@@ -369,7 +369,7 @@ export class ReconciliationService {
           note: 'This may be normal if PaymentIntegrationService is not yet active.',
         },
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       // If journal_entry_id column doesn't exist yet, this is expected
       return {
         check_name: 'Ledger-Journal Linkage Check',
@@ -406,7 +406,7 @@ export class ReconciliationService {
         status: report.overall_status,
         checks: report.summary.total_checks,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to log reconciliation:', error);
     }
   }
@@ -443,7 +443,7 @@ export class ReconciliationService {
           warnings: row.warning_checks,
         },
       }));
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to fetch reconciliation history:', error);
       return [];
     }
@@ -457,3 +457,4 @@ export class ReconciliationService {
     return history.length > 0 ? history[0] : null;
   }
 }
+

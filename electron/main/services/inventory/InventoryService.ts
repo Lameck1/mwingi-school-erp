@@ -57,7 +57,7 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
         `
     }
 
-    protected mapRowToEntity(row: any): InventoryItem {
+    protected mapRowToEntity(row: unknown): InventoryItem {
         return {
             id: row.id,
             item_code: row.item_code,
@@ -70,10 +70,10 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
             unit_cost: row.unit_cost,
             is_active: Boolean(row.is_active),
             created_at: row.created_at
-        } as any
+        } as unknown
     }
 
-    protected validateCreate(data: any): string[] | null {
+    protected validateCreate(data: unknown): string[] | null {
         const errors: string[] = []
         if (!data.item_name) errors.push('Item name is required')
         if (!data.item_code) errors.push('Item code is required')
@@ -82,11 +82,11 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
         return errors.length > 0 ? errors : null
     }
 
-    protected async validateUpdate(id: number, data: any): Promise<string[] | null> {
+    protected async validateUpdate(id: number, data: unknown): Promise<string[] | null> {
         return null
     }
 
-    protected executeCreate(data: any): { lastInsertRowid: number | bigint } {
+    protected executeCreate(data: unknown): { lastInsertRowid: number | bigint } {
         return this.db.prepare(`
             INSERT INTO inventory_item (
                 item_code, item_name, category_id, unit_of_measure, reorder_level, unit_cost
@@ -97,7 +97,7 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
         )
     }
 
-    protected executeUpdate(id: number, data: any): void {
+    protected executeUpdate(id: number, data: unknown): void {
         const sets: string[] = []
         const params: any[] = []
 
@@ -114,7 +114,7 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
         }
     }
 
-    protected applyFilters(filters: any, conditions: string[], params: any[]): void {
+    protected applyFilters(filters: unknown, conditions: string[], params: any[]): void {
         if (filters.category_id) {
             conditions.push('category_id = ?')
             params.push(filters.category_id)
@@ -134,7 +134,7 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
         const item = await this.findById(itemId)
         if (!item) return { success: false, error: 'Item not found' }
 
-        const current_stock = (item as any).current_stock
+        const current_stock = (item as unknown).current_stock
         let change = 0
         let finalQty = 0
 
@@ -157,7 +157,7 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
                     item_id, movement_type, quantity, unit_cost, 
                     description, movement_date, recorded_by_user_id
                 ) VALUES (?, ?, ?, ?, ?, CURRENT_DATE, ?)
-            `).run(itemId, type, Math.abs(change), (item as any).unit_cost, notes || null, userId)
+            `).run(itemId, type, Math.abs(change), (item as unknown).unit_cost, notes || null, userId)
         })()
 
         logAudit(userId, 'STOCK_UPDATE', 'inventory_item', itemId, { quantity: current_stock }, { quantity: finalQty })
@@ -172,21 +172,22 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
             LEFT JOIN user u ON sm.recorded_by_user_id = u.id
             WHERE sm.item_id = ? 
             ORDER BY sm.created_at DESC
-        `).all(itemId) as any[]
+        `).all(itemId) as unknown[]
     }
 
     async getLowStock(): Promise<any[]> {
         return this.db.prepare(`
             ${this.buildSelectQuery()}
             WHERE i.current_stock <= i.reorder_level AND i.is_active = 1
-        `).all() as any[]
+        `).all() as unknown[]
     }
 
     async getCategories(): Promise<any[]> {
-        return this.db.prepare('SELECT * FROM inventory_category WHERE is_active = 1').all() as any[]
+        return this.db.prepare('SELECT * FROM inventory_category WHERE is_active = 1').all() as unknown[]
     }
 
     async getSuppliers(): Promise<any[]> {
-        return this.db.prepare('SELECT * FROM supplier WHERE is_active = 1').all() as any[]
+        return this.db.prepare('SELECT * FROM supplier WHERE is_active = 1').all() as unknown[]
     }
 }
+

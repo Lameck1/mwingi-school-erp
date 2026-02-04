@@ -125,13 +125,13 @@ describe('SegmentProfitabilityService', () => {
       const tables = db.prepare(`
         SELECT name FROM sqlite_master 
         WHERE type='table' AND name NOT LIKE 'sqlite_%'
-      `).all() as any[]
+      `).all() as unknown[]
 
       expect(tables.length).toBeGreaterThan(0)
     })
 
     it('should have student table with status column', () => {
-      const student = db.prepare('SELECT * FROM student WHERE admission_number = ?').get('STU-001') as any
+      const student = db.prepare('SELECT * FROM student WHERE admission_number = ?').get('STU-001') as unknown
       expect(student).toBeDefined()
       expect(student.status).toBe('ACTIVE')
     })
@@ -284,28 +284,29 @@ describe('SegmentProfitabilityService', () => {
 
   describe('Database integrity', () => {
     it('should have test data inserted correctly', () => {
-      const studentCount = db.prepare('SELECT COUNT(*) as count FROM student').get() as any
+      const studentCount = db.prepare('SELECT COUNT(*) as count FROM student').get() as unknown
       expect(studentCount.count).toBe(3)
     })
 
     it('should have fee invoices in database', () => {
-      const invoiceCount = db.prepare('SELECT COUNT(*) as count FROM fee_invoice').get() as any
+      const invoiceCount = db.prepare('SELECT COUNT(*) as count FROM fee_invoice').get() as unknown
       expect(invoiceCount.count).toBe(5)
     })
 
     it('should have ledger transactions', () => {
-      const transactionCount = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction').get() as any
+      const transactionCount = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction').get() as unknown
       expect(transactionCount.count).toBeGreaterThan(0)
     })
 
     it('should have expense data', () => {
-      const expenseCount = db.prepare('SELECT COUNT(*) as count FROM expense_transaction').get() as any
+      const expenseCount = db.prepare('SELECT COUNT(*) as count FROM expense_transaction').get() as unknown
       expect(expenseCount.count).toBeGreaterThan(0)
     })
 
     it('should have all students with ACTIVE status', () => {
-      const activeStudents = db.prepare("SELECT COUNT(*) as count FROM student WHERE status = 'ACTIVE'").get() as any
+      const activeStudents = db.prepare("SELECT COUNT(*) as count FROM student WHERE status = 'ACTIVE'").get() as unknown
       expect(activeStudents.count).toBe(3)
     })
   })
 })
+

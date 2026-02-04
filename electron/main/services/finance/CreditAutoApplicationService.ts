@@ -79,7 +79,7 @@ class CreditRepository {
       ), 0) as balance
       FROM credit_transaction
       WHERE student_id = ?
-    `).get(studentId) as any
+    `).get(studentId) as unknown
 
     return result?.balance || 0
   }
@@ -389,7 +389,7 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
       // Get student's credit balance
       const creditResult = this.db.prepare(
         'SELECT amount FROM credit_transaction WHERE student_id = ? ORDER BY created_at DESC LIMIT 1'
-      ).get(studentId) as any
+      ).get(studentId) as unknown
 
       const creditBalance = creditResult?.amount || 0
 
@@ -403,7 +403,7 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
         FROM fee_invoice 
         WHERE student_id = ? AND (amount_paid < amount_due OR status = 'OUTSTANDING')
         ORDER BY due_date ASC, id ASC
-      `).all(studentId) as any[]
+      `).all(studentId) as unknown[]
 
       let remainingCredit = creditBalance
       let applicationsCount = 0
@@ -482,7 +482,7 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
    */
   reverseCredit(creditId: number, reason?: string, userId?: number): any {
     try {
-      const credit = this.db.prepare('SELECT * FROM credit_transaction WHERE id = ?').get(creditId) as any
+      const credit = this.db.prepare('SELECT * FROM credit_transaction WHERE id = ?').get(creditId) as unknown
 
       if (!credit) {
         return { success: false, message: 'Credit transaction not found' }
@@ -517,7 +517,7 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
   getCreditBalance(studentId: number): number {
     const result = this.db.prepare(
       'SELECT SUM(amount) as total FROM credit_transaction WHERE student_id = ?'
-    ).get(studentId) as any
+    ).get(studentId) as unknown
     
     return result?.total || 0
   }
@@ -531,6 +531,6 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
   getTransactions(studentId: number): any[] {
     return this.db.prepare(
       'SELECT * FROM credit_transaction WHERE student_id = ? ORDER BY created_at DESC'
-    ).all(studentId) as any[]
+    ).all(studentId) as unknown[]
   }
 }

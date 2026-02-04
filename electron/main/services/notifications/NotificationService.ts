@@ -618,6 +618,7 @@ export class NotificationService {
 
         query += ' ORDER BY cl.created_at DESC LIMIT 500'
 
-        return this.db.prepare(query).all(...params) as any
+        return this.db.prepare(query).all(...params) as unknown
     }
 }
+

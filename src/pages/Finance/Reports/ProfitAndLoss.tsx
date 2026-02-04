@@ -35,7 +35,7 @@ export default function ProfitAndLossPage() {
     setError(null);
 
     try {
-      const result = await (window as any).electronAPI.getProfitAndLoss(startDate, endDate);
+      const result = await (window as unknown).electronAPI.getProfitAndLoss(startDate, endDate);
       
       if (result.success) {
         setProfitAndLoss(result.data);
@@ -186,3 +186,4 @@ export default function ProfitAndLossPage() {
     </div>
   );
 }
+

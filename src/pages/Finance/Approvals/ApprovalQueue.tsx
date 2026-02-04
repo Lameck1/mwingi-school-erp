@@ -32,7 +32,7 @@ export default function ApprovalQueuePage() {
     setError(null);
 
     try {
-      const result = await (window as any).electronAPI.getApprovalQueue(filter);
+      const result = await (window as unknown).electronAPI.getApprovalQueue(filter);
       
       if (result.success) {
         setApprovals(result.data);
@@ -48,7 +48,7 @@ export default function ApprovalQueuePage() {
 
   const handleApprove = async (approvalId: number) => {
     try {
-      const result = await (window as any).electronAPI.approveTransaction(
+      const result = await (window as unknown).electronAPI.approveTransaction(
         approvalId,
         reviewNotes || 'Approved'
       );
@@ -72,7 +72,7 @@ export default function ApprovalQueuePage() {
     }
 
     try {
-      const result = await (window as any).electronAPI.rejectTransaction(
+      const result = await (window as unknown).electronAPI.rejectTransaction(
         approvalId,
         reviewNotes
       );
@@ -288,3 +288,4 @@ export default function ApprovalQueuePage() {
     </div>
   );
 }
+

@@ -245,7 +245,7 @@ export class PaymentIntegrationService {
           .prepare(
             'SELECT * FROM ledger_transaction WHERE id = ? AND is_voided = 0'
           )
-          .get(legacyTransactionId) as any;
+          .get(legacyTransactionId) as unknown;
 
         if (!legacyTxn) {
           return { success: false, message: 'Transaction not found or already voided' };
@@ -322,7 +322,7 @@ export class PaymentIntegrationService {
       ORDER BY lt.transaction_date DESC
     `
       )
-      .all(studentId) as any[];
+      .all(studentId) as unknown[];
 
     return payments.map((p) => ({
       ...p,
@@ -332,3 +332,4 @@ export class PaymentIntegrationService {
     }));
   }
 }
+
