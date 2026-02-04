@@ -385,7 +385,7 @@ export class DataImportService {
         if (template.sampleData.length > 0) {
             const columns = Object.keys(template.sampleData[0]).map(key => ({
                 header: key,
-                key: key,
+                key,
                 width: 20
             }))
             dataSheet.columns = columns

@@ -170,7 +170,7 @@ export class ReconciliationService {
         check_name: 'Trial Balance Verification',
         status: 'FAIL',
         message: 'Trial Balance is OUT OF BALANCE!',
-        variance: variance,
+        variance,
         details: {
           total_debits: result.total_debits / 100,
           total_credits: result.total_credits / 100,

@@ -364,7 +364,7 @@ export class BoardingCostService {
       net_profit_cents: netProfit,
       profit_margin: totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0,
       average_cost_per_boarder_cents: totalOccupancy > 0 ? totalExpenses / totalOccupancy : 0,
-      facilities: facilities
+      facilities
     };
   }
 }

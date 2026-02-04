@@ -151,7 +151,7 @@ export class ReportCardService {
                 subject_code: subject.subject_code,
                 average: Math.round(average * 10) / 10,
                 grade_letter: grade,
-                remarks: remarks
+                remarks
             }
         }).filter(g => g !== null) as any[]
 

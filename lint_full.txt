@@ -1,0 +1,578 @@
+
+> mwingi-school-erp@1.0.0 lint
+> eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0
+
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\__tests__\integration\workflows.integration.test.ts
+  290:86   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  313:118  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  336:102  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  337:102  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  559:104  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  609:105  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  610:101  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\__tests__\ipc-handlers.test.ts
+  108:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\__tests__\modular-ipc.test.ts
+  109:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\database\migrations\011_chart_of_accounts.ts
+   11:24  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  288:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\database\migrations\014_correct_fee_structure.ts
+  130:43  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  141:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\ipc\finance\finance-handlers.ts
+   43:56   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   73:30   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  169:132  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  216:43   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\ipc\messaging\message-handlers.ts
+   6:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   7:51  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  15:64  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  69:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\ipc\notifications\notification-handlers.ts
+  43:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  61:93  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\ipc\payroll\payroll-handlers.ts
+  28:87  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  28:95  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\ipc\reports\financial-reports-handlers.ts
+  166:3  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\ipc\reports\reports-handlers.ts
+   21:32   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   22:51   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  290:95   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  314:98   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  330:100  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\ipc\settings\settings-handlers.ts
+  16:80  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\ipc\transactions\transactions-handlers.ts
+  84:66  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\BackupService.ts
+   31:17  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+   40:17  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+   55:13  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+   57:13  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  102:21  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\ConfigService.ts
+  56:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  61:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\SystemMaintenanceService.ts
+  221:60  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\academic\AcademicSystemService.ts
+   30:37   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   35:72   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   39:28   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   85:100  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  178:43   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\academic\CBCReportCardService.ts
+   73:95   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   77:86   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   81:101  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   85:118  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   86:92   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  112:36   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  144:39   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  162:108  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  170:28   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  242:52   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  274:27   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  310:36   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  350:9    warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  354:93   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  355:84   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  356:94   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  357:108  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  358:90   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  362:22   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\academic\ExamAnalysisService.ts
+   80:63  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  191:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  217:95  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  231:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  248:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\academic\ExamSchedulerService.ts
+  7:5  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\academic\MeritListService.ts
+   89:34  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  132:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  220:91  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  235:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  286:64  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\academic\PerformanceAnalysisService.ts
+   95:64  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  133:95  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  149:59  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  161:62  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  221:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  252:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  267:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  287:59  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\academic\ReportCardService.ts
+  100:50   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  119:114  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  133:54   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  156:39   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  170:38   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\academic\StudentService.ts
+  23:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\accounting\BudgetEnforcementService.ts
+  129:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  228:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  306:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\accounting\DataMigrationService.ts
+   84:13  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  258:44  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\accounting\ReconciliationService.ts
+   23:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  128:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  180:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  218:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  266:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  334:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  372:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  409:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  446:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\base\BaseService.ts
+  63:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\cbc\JSSTransitionService.ts
+  228:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  314:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\data\DataImportService.ts
+  100:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\finance\BudgetService.ts
+  93:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\finance\CreditAutoApplicationService.ts
+   82:26   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  384:57   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  392:27   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  406:28   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  450:82   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  483:70   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  485:104  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  520:25   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  534:25   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\finance\EnhancedPaymentService.ts
+  228:74  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\finance\ExemptionService.ts
+  257:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\finance\FeeProrationService.ts
+   54:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   65:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  397:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  397:43  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  404:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  480:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  498:64  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  509:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  515:43  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  538:81  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\finance\FixedAssetService.ts
+   66:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  136:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\finance\PaymentIntegrationService.ts
+  248:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  325:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\finance\PayrollIntegrationService.ts
+   49:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   65:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  127:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  198:29  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  241:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  244:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  261:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  281:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\finance\PayrollJournalService.ts
+   79:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  159:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  238:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\finance\ScholarshipService.ts
+  168:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  234:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  660:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\finance\__tests__\CreditAutoApplicationService.test.ts
+   80:107  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   84:107  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   88:107  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  110:107  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  130:107  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\finance\__tests__\FeeProrationService.test.ts
+  114:102  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\finance\__tests__\PeriodLockingService.test.ts
+   58:90  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  103:90  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  144:90  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\finance\__tests__\ScholarshipService.test.ts
+  139:113  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  167:90   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  286:111  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  462:108  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\inventory\InventoryService.ts
+   60:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   73:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   76:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   85:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   89:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  100:47  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  117:37  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  137:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  160:61  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  168:47  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  175:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  178:34  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  185:36  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  189:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\notifications\NotificationService.ts
+  621:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\operations\BoardingCostService.ts
+  177:62  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  218:61  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\operations\GrantTrackingService.ts
+  137:80  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\operations\StudentCostService.ts
+   32:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   51:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   63:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  136:77  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\operations\TransportCostService.ts
+  218:62  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  297:76  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  319:82  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  354:97  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\reports\AgedReceivablesService.ts
+   13:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   17:42  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   21:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   55:59  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   64:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   73:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   77:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   86:58  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   92:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  205:47  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  215:17  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  215:25  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  233:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  290:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  379:47  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  386:60  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  395:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  402:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\reports\CashFlowStatementService.ts
+    9:71   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   13:71   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   17:71   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   25:83   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   78:104  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   86:56   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   95:32   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  107:52   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  116:35   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  120:75   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  126:35   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  129:74   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  135:35   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  161:77   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  163:73   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  166:78   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  169:73   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  206:77   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  243:77   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  307:89   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  523:77   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  527:77   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  531:77   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  538:103  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\reports\NEMISExportService.ts
+  157:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  172:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  184:76  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  311:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  315:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  319:76  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  556:38  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  563:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  570:76  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  591:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\reports\ReportScheduler.ts
+   42:9   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+   50:9   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+   62:9   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  190:26  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+  192:38  warning  Unexpected any. Specify a different type                                           @typescript-eslint/no-explicit-any
+  222:9   warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  231:13  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\reports\SegmentProfitabilityService.ts
+    9:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   13:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   17:34  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   21:47  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  138:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  187:51  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  241:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  293:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  367:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  374:51  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  381:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  388:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  429:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  450:72  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  462:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  483:71  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  495:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  520:62  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  532:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  553:71  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  577:58  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  621:48  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  621:63  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  621:78  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\reports\StudentLedgerService.ts
+   66:59   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   72:26   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   75:97   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   81:46   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   84:60   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   90:26   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   93:94   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   99:46   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  102:48   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  121:39   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  248:63   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  401:103  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\reports\__tests__\AgedReceivablesService.test.ts
+   98:104  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  104:106  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  110:106  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  116:136  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  239:117  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\services\reports\__tests__\SegmentProfitabilityService.test.ts
+  134:104  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\main\updates\autoUpdater.ts
+  103:17  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\electron\preload\index.ts
+  190:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  192:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\reseed_fees.js
+    9:1  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+   22:9  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  104:5  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  107:5  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  133:1  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\scripts\verify-encryption.ts
+  11:1  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  25:1  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  26:1  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  29:5  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+  31:5  warning  Unexpected console statement. Only these console methods are allowed: warn, error  no-console
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\components\ui\Dropdown.tsx
+  32:13  warning  Visible, non-interactive elements with click handlers must have at least one keyboard listener  jsx-a11y/click-events-have-key-events
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\components\ui\ImportDialog.tsx
+   25:54  warning  Unexpected any. Specify a different type                                                        @typescript-eslint/no-explicit-any
+   76:73  warning  Unexpected any. Specify a different type                                                        @typescript-eslint/no-explicit-any
+  107:25  warning  Visible, non-interactive elements with click handlers must have at least one keyboard listener  jsx-a11y/click-events-have-key-events
+  207:68  warning  Unexpected any. Specify a different type                                                        @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\components\ui\Modal.tsx
+  45:13  warning  Visible, non-interactive elements with click handlers must have at least one keyboard listener  jsx-a11y/click-events-have-key-events
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\components\ui\Table\DataTable.tsx
+  20:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Academic\AwardsManagement.tsx
+  46:6  warning  React Hook useEffect has a missing dependency: 'loadInitialData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Academic\ExamAnalytics.tsx
+  62:6  warning  React Hook useEffect has a missing dependency: 'loadInitialData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Academic\ExamManagement.tsx
+  31:8  warning  React Hook useEffect has a missing dependency: 'loadExams'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Academic\ExamScheduler.tsx
+  44:38  warning  Unexpected any. Specify a different type                                                                            @typescript-eslint/no-explicit-any
+  48:6   warning  React Hook useEffect has a missing dependency: 'loadInitialData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Academic\MarksEntry.tsx
+  52:8   warning  React Hook useEffect has a missing dependency: 'loadInitialData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  58:8   warning  React Hook useEffect has a missing dependency: 'loadResults'. Either include it or remove the dependency array      react-hooks/exhaustive-deps
+  94:86  warning  Unexpected any. Specify a different type                                                                            @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Academic\MostImproved.tsx
+  45:6  warning  React Hook useEffect has a missing dependency: 'loadInitialData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Academic\ReportCardAnalytics.tsx
+  60:6  warning  React Hook useEffect has a missing dependency: 'loadInitialData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Academic\SubjectMeritLists.tsx
+  43:6  warning  React Hook useEffect has a missing dependency: 'loadInitialData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Academic\TeacherAllocation.tsx
+  60:8  warning  React Hook useEffect has a missing dependency: 'loadAllocations'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Approvals\index.tsx
+  56:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  57:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  58:40  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  77:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  99:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Attendance\index.tsx
+   46:8   warning  React Hook useEffect has a missing dependency: 'loadStudents'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+   80:36  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+   81:35  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+   88:31  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+  153:60  warning  Unexpected any. Specify a different type                                                                         @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\AuditLog\index.tsx
+  13:37  warning  React Hook useEffect has a missing dependency: 'loadLogs'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Backup\index.tsx
+  14:8  warning  React Hook useEffect has a missing dependency: 'loadBackups'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Communications\CommunicationLog.tsx
+  32:8   warning  React Hook useEffect has a missing dependency: 'loadLogs'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  41:55  warning  Unexpected any. Specify a different type                                                                     @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Finance\Approvals\ApprovalQueue.tsx
+  28:6   warning  React Hook useEffect has a missing dependency: 'loadApprovals'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  35:39  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  51:39  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+  75:39  warning  Unexpected any. Specify a different type                                                                          @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Finance\BankAccounts.tsx
+  40:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  53:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Finance\CBC\CBCStrandManagement.tsx
+  34:6  warning  React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Finance\CashFlow\index.tsx
+  27:8  warning  React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Finance\FeeExemptions.tsx
+   42:8   warning  React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array        react-hooks/exhaustive-deps
+   92:8   warning  React Hook useEffect has a missing dependency: 'loadExemptions'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  326:53  warning  Visible, non-interactive elements with click handlers must have at least one keyboard listener                     jsx-a11y/click-events-have-key-events
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Finance\FeePayment.tsx
+  216:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Finance\FinancialReports.tsx
+  18:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  19:52  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Finance\FixedAssets\AssetRegister.tsx
+  31:8  warning  React Hook useEffect has a missing dependency: 'loadAssets'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Finance\Invoices.tsx
+  21:8  warning  React Hook useEffect has a missing dependency: 'loadInvoices'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Finance\Reconciliation\ReconcileAccount.tsx
+  13:72  warning  Unexpected any. Specify a different type                                                                                      @typescript-eslint/no-explicit-any
+  17:8   warning  React Hook useEffect has a missing dependency: 'loadAccounts'. Either include it or remove the dependency array               react-hooks/exhaustive-deps
+  30:8   warning  React Hook useEffect has a missing dependency: 'loadUnmatchedTransactions'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Finance\Reports\BalanceSheet.tsx
+  28:6   warning  React Hook useEffect has a missing dependency: 'loadBalanceSheet'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  35:39  warning  Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Finance\Reports\ProfitAndLoss.tsx
+  31:6   warning  React Hook useEffect has a missing dependency: 'loadProfitAndLoss'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  38:39  warning  Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Finance\Settings\OpeningBalanceImport.tsx
+  448:9   warning  Visible, non-interactive elements with click handlers must have at least one keyboard listener  jsx-a11y/click-events-have-key-events
+  452:11  warning  Visible, non-interactive elements with click handlers must have at least one keyboard listener  jsx-a11y/click-events-have-key-events
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Payroll\PayrollRun.tsx
+  158:54  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  324:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  368:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  383:51  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  398:53  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Reports\ScheduledReports.tsx
+  254:124  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Reports\index.tsx
+   37:64  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   38:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   39:62  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  125:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  158:61  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  336:63  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\pages\Settings\MessageTemplates.tsx
+  53:85  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\lamec\OneDrive\Desktop\MWINGI ADVENTIST SCHOOL\mwingi-school-erp\src\utils\__tests__\validation.test.ts
+  341:43  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  346:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+Γ£û 374 problems (0 errors, 374 warnings)
+
+ESLint found too many warnings (maximum: 0).

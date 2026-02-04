@@ -148,11 +148,11 @@ class TransportProfitabilityCalculator implements ITransportProfitabilityCalcula
     return {
       segment_type: 'TRANSPORT',
       segment_name: 'Transport Services',
-      revenue: revenue,
-      costs: costs,
-      profit: profit,
+      revenue,
+      costs,
+      profit,
       profit_margin_percentage: profitMargin,
-      status: status,
+      status,
       recommendations: this.getTransportRecommendations(profit, revenue)
     }
   }
@@ -198,12 +198,12 @@ class BoardingProfitabilityCalculator implements IBoardingProfitabilityCalculato
     return {
       segment_type: 'BOARDING',
       segment_name: 'Boarding Services',
-      revenue: revenue,
-      costs: costs,
-      profit: profit,
+      revenue,
+      costs,
+      profit,
       profit_margin_percentage: profitMargin,
       occupancy_rate_percentage: occupancyRate * 100,
-      status: status,
+      status,
       recommendations: this.getBoardingRecommendations(profit, occupancyRate)
     }
   }
@@ -251,11 +251,11 @@ class ActivityFeeAnalyzer implements IActivityFeeAnalyzer {
     return {
       segment_type: 'ACTIVITIES',
       segment_name: 'Activity Programs',
-      revenue: revenue,
+      revenue,
       costs: expenses,
-      profit: profit,
+      profit,
       profit_margin_percentage: profitMargin,
-      status: status,
+      status,
       recommendations: this.getActivityRecommendations(profit, revenue)
     }
   }
@@ -306,7 +306,7 @@ class OverallProfitabilityAnalyzer implements IOverallProfitabilityAnalyzer {
         total_expenses: totalExpenses,
         net_profit: netProfit,
         profit_margin_percentage: profitMargin,
-        status: status
+        status
       },
       financial_health: this.assessFinancialHealth(profitMargin, netProfit),
       recommendations: this.getOverallRecommendations(profitMargin, netProfit)
@@ -434,7 +434,7 @@ export class SegmentProfitabilityService
 
     return {
       segments: [transport, boarding, activities],
-      overall: overall,
+      overall,
       unprofitable_segments: await this.getUnprofitableSegments(),
       generated_at: new Date().toISOString()
     }
@@ -469,9 +469,9 @@ export class SegmentProfitabilityService
     return {
       segment_type: 'TRANSPORT',
       segment_name: 'Transport Services',
-      revenue: revenue,
-      costs: costs,
-      profit: profit,
+      revenue,
+      costs,
+      profit,
       profit_margin_percentage: parseFloat(profitMargin.toFixed(2)),
       status: profit > 0 ? 'PROFITABLE' : profit === 0 ? 'BREAKING_EVEN' : 'UNPROFITABLE'
     }
@@ -504,13 +504,13 @@ export class SegmentProfitabilityService
     return {
       segment_type: 'BOARDING',
       segment_name: 'Boarding Services',
-      revenue: revenue,
-      costs: costs,
-      profit: profit,
+      revenue,
+      costs,
+      profit,
       profit_margin_percentage: parseFloat(profitMargin.toFixed(2)),
       occupancy_rate_percentage: occupancyRate,
       status: profit > 0 ? 'PROFITABLE' : profit === 0 ? 'BREAKING_EVEN' : 'UNPROFITABLE',
-      recommendations: recommendations
+      recommendations
     }
   }
 
@@ -539,9 +539,9 @@ export class SegmentProfitabilityService
     return {
       segment_type: 'ACTIVITY',
       segment_name: 'Activity Fees',
-      revenue: revenue,
-      costs: costs,
-      profit: profit,
+      revenue,
+      costs,
+      profit,
       profit_margin_percentage: parseFloat(profitMargin.toFixed(2)),
       status: profit > 0 ? 'PROFITABLE' : profit === 0 ? 'BREAKING_EVEN' : 'UNPROFITABLE'
     }
@@ -562,9 +562,9 @@ export class SegmentProfitabilityService
 
     return {
       segments: [transport, boarding, activity],
-      totalRevenue: totalRevenue,
-      totalExpenses: totalExpenses,
-      netProfit: netProfit,
+      totalRevenue,
+      totalExpenses,
+      netProfit,
       profit_margin_percentage: parseFloat(totalMargin.toFixed(2)),
       status: netProfit > 0 ? 'PROFITABLE' : netProfit === 0 ? 'BREAKING_EVEN' : 'UNPROFITABLE',
       recommendations: this.getOverallRecommendations(transport, boarding, activity)

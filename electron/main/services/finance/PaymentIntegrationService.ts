@@ -125,7 +125,7 @@ export class PaymentIntegrationService {
               amount: data.amount, // In KES
               paymentMethod: data.payment_method,
               transactionDate: data.transaction_date,
-              description: description,
+              description,
               paymentReference: paymentRef,
               termId: data.term_id,
               invoiceId: data.invoice_id,
@@ -220,8 +220,8 @@ export class PaymentIntegrationService {
           success: true,
           transactionRef: txnRef,
           receiptNumber: rcpNum,
-          journalEntryId: journalEntryId,
-          legacyTransactionId: legacyTransactionId,
+          journalEntryId,
+          legacyTransactionId,
         };
       } catch (error) {
         console.error('Payment integration error:', error);

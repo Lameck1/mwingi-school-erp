@@ -183,7 +183,7 @@ class OperatingActivitiesCalculator implements IOperatingActivitiesCalculator {
       other_income: otherIncome,
       salary_payments: salaryPayments,
       supplier_payments: supplierPayments,
-      utilities: utilities,
+      utilities,
       other_expenses: otherExpenses,
       net_operating_cash_flow: netOperatingCashFlow
     }

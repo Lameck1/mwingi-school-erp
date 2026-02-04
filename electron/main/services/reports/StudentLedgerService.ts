@@ -213,8 +213,8 @@ class LedgerGenerator implements ILedgerGenerator {
         transaction_date: transaction.transaction_date,
         transaction_type: transaction.transaction_type,
         description: transaction.description || `${transaction.transaction_type} - ${transaction.reference}`,
-        debit: debit,
-        credit: credit,
+        debit,
+        credit,
         balance: runningBalance
       })
     }
@@ -258,7 +258,7 @@ class LedgerReconciler implements ILedgerReconciler {
         type: 'BALANCE_MISMATCH',
         ledger_balance: ledgerBalance,
         invoice_balance: invoiceBalance,
-        difference: difference
+        difference
       })
     }
 
@@ -266,9 +266,9 @@ class LedgerReconciler implements ILedgerReconciler {
       reconciled: isBalanced,
       ledger_balance: ledgerBalance,
       invoice_balance: invoiceBalance,
-      difference: difference,
+      difference,
       status: isBalanced ? 'BALANCED' : 'OUT_OF_BALANCE',
-      discrepancies: discrepancies
+      discrepancies
     }
   }
 }

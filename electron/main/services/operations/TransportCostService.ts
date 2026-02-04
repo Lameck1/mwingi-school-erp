@@ -448,7 +448,7 @@ export class TransportCostService {
       net_profit_cents: netProfit,
       profit_margin: totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0,
       average_cost_per_student_cents: totalStudents > 0 ? totalExpenses / totalStudents : 0,
-      routes: routes
+      routes
     };
   }
 
