@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 interface ModalProps {
@@ -40,11 +41,19 @@ export function Modal({
 
     if (!isOpen) return null
 
-    return (
+    return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
             <div
                 className="absolute inset-0 bg-background/80 backdrop-blur-sm animate-in fade-in duration-300"
                 onClick={onClose}
+                onKeyDown={(e) => {
+                    if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+                        onClose()
+                    }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label="Close modal"
             />
 
             <div className={`
@@ -61,10 +70,11 @@ export function Modal({
                     </button>
                 </div>
 
-                <div className="px-6 py-6 max-h-[80vh] overflow-y-auto">
+                <div className="px-6 py-6 max-h-[80vh] overflow-y-auto no-scrollbar">
                     {children}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     )
 }

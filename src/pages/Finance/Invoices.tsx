@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { FileText, Plus, Loader2, CheckCircle, AlertCircle, Eye, Printer } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Invoice, InvoiceItem } from '../../types/electron-api/FinanceAPI'
@@ -16,11 +16,7 @@ export default function Invoices() {
     const navigate = useNavigate()
     const { showToast } = useToast()
 
-    useEffect(() => {
-        loadInvoices()
-    }, [])
-
-    const loadInvoices = async () => {
+    const loadInvoices = useCallback(async () => {
         try {
             const data = await window.electronAPI.getInvoices()
             setInvoices(data)
@@ -30,7 +26,11 @@ export default function Invoices() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [showToast])
+
+    useEffect(() => {
+        loadInvoices()
+    }, [loadInvoices])
 
     const viewInvoice = async (invoice: Invoice) => {
         try {
