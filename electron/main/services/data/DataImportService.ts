@@ -97,7 +97,8 @@ export class DataImportService {
      */
     private async parseExcel(buffer: Buffer): Promise<Record<string, unknown>[]> {
         const workbook = new ExcelJS.Workbook()
-        await workbook.xlsx.load(buffer as unknown)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await workbook.xlsx.load(buffer as any)
         const worksheet = workbook.getWorksheet(1)
         if (!worksheet) return []
 

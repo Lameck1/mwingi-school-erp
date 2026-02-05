@@ -53,12 +53,12 @@ export class ConfigService {
     }
 
     // Get all public configs (non-sensitive or filtered)
-    static getAllConfigs(): Record<string, any> {
+    static getAllConfigs(): Record<string, string> {
         if (!db) throw new Error('Database not initialized')
         // Only select non-encrypted or safe to show configs if needed
         const rows = db.prepare('SELECT key, value, is_encrypted FROM system_config').all() as { key: string, value: string, is_encrypted: number }[]
 
-        const config: Record<string, any> = {}
+        const config: Record<string, string> = {}
         for (const row of rows) {
             // For UI, we might not want to send back encrypted values at all, or send mask
             if (row.is_encrypted) {

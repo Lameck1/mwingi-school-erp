@@ -212,7 +212,7 @@ export interface ApprovalRequest {
 export interface AccountingAPIResponse {
   success: boolean;
   message: string;
-  data?: any;
+  data?: unknown;
 }
 
 export interface GLAccountListResponse extends AccountingAPIResponse {

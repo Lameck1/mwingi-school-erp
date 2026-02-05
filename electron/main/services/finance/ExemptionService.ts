@@ -254,7 +254,12 @@ export class ExemptionService {
             query += ' WHERE academic_year_id = ?'
             params.push(academicYearId)
         }
-        return this.db.prepare(query).get(...params) as unknown
+        return this.db.prepare(query).get(...params) as {
+            totalExemptions: number;
+            activeExemptions: number;
+            fullExemptions: number;
+            partialExemptions: number;
+        }
     }
 }
 

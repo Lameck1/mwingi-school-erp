@@ -20,7 +20,7 @@ export interface ReconciliationResult {
   status: 'PASS' | 'FAIL' | 'WARNING';
   message: string;
   variance?: number;
-  details?: any;
+  details?: unknown;
 }
 
 export interface ReconciliationReport {
@@ -60,10 +60,10 @@ export class ReconciliationService {
       warnings: checks.filter(c => c.status === 'WARNING').length,
     };
 
-    const overall_status = 
+    const overall_status =
       summary.failed > 0 ? 'FAIL' :
-      summary.warnings > 0 ? 'WARNING' :
-      'PASS';
+        summary.warnings > 0 ? 'WARNING' :
+          'PASS';
 
     const report: ReconciliationReport = {
       run_date: new Date().toISOString(),
@@ -97,7 +97,7 @@ export class ReconciliationService {
         calculated_balance: number;
       }>;
 
-      const discrepancies = students.filter(s => 
+      const discrepancies = students.filter(s =>
         Math.abs(s.student_credit_balance - s.calculated_balance) > 1 // Tolerance of 1 cent
       );
 
@@ -109,7 +109,7 @@ export class ReconciliationService {
         };
       }
 
-      const totalVariance = discrepancies.reduce((sum, d) => 
+      const totalVariance = discrepancies.reduce((sum, d) =>
         sum + Math.abs(d.student_credit_balance - d.calculated_balance), 0
       );
 
@@ -120,16 +120,16 @@ export class ReconciliationService {
         variance: totalVariance,
         details: discrepancies.map(d => ({
           admission_number: d.admission_number,
-          recorded_balance: d.student_credit_balance / 100,
-          calculated_balance: d.calculated_balance / 100,
-          variance: (d.student_credit_balance - d.calculated_balance) / 100,
+          recorded_balance: d.student_credit_balance,
+          calculated_balance: d.calculated_balance,
+          variance: (d.student_credit_balance - d.calculated_balance),
         })),
       };
     } catch (error: unknown) {
       return {
         check_name: 'Student Credit Balance Verification',
         status: 'FAIL',
-        message: `Error during check: ${error.message}`,
+        message: `Error during check: ${(error as Error).message}`,
       };
     }
   }
@@ -162,7 +162,7 @@ export class ReconciliationService {
         return {
           check_name: 'Trial Balance Verification',
           status: 'PASS',
-          message: `Books are balanced. Debits = Credits = Kes ${(result.total_debits / 100).toFixed(2)}`,
+          message: `Books are balanced. Debits = Credits = ${result.total_debits} cents`,
         };
       }
 
@@ -172,16 +172,16 @@ export class ReconciliationService {
         message: 'Trial Balance is OUT OF BALANCE!',
         variance,
         details: {
-          total_debits: result.total_debits / 100,
-          total_credits: result.total_credits / 100,
-          variance: variance / 100,
+          total_debits: result.total_debits,
+          total_credits: result.total_credits,
+          variance,
         },
       };
     } catch (error: unknown) {
       return {
         check_name: 'Trial Balance Verification',
         status: 'FAIL',
-        message: `Error during check: ${error.message}`,
+        message: `Error during check: ${(error as Error).message}`,
       };
     }
   }
@@ -212,14 +212,14 @@ export class ReconciliationService {
         message: `Found ${orphaned.count} transactions without student linkage.`,
         details: {
           count: orphaned.count,
-          total_amount: (orphaned.total_amount || 0) / 100,
+          total_amount: (orphaned.total_amount || 0),
         },
       };
     } catch (error: unknown) {
       return {
         check_name: 'Orphaned Transactions Check',
         status: 'FAIL',
-        message: `Error during check: ${error.message}`,
+        message: `Error during check: ${(error as Error).message}`,
       };
     }
   }
@@ -258,16 +258,16 @@ export class ReconciliationService {
         message: `${discrepancies.length} invoices have payment mismatches.`,
         details: discrepancies.map(d => ({
           invoice_number: d.invoice_number,
-          recorded_paid: d.amount_paid / 100,
-          calculated_paid: d.calculated_payments / 100,
-          variance: (d.amount_paid - d.calculated_payments) / 100,
+          recorded_paid: d.amount_paid,
+          calculated_paid: d.calculated_payments,
+          variance: (d.amount_paid - d.calculated_payments),
         })),
       };
     } catch (error: unknown) {
       return {
         check_name: 'Invoice Payment Verification',
         status: 'FAIL',
-        message: `Error during check: ${error.message}`,
+        message: `Error during check: ${(error as Error).message}`,
       };
     }
   }
@@ -277,7 +277,7 @@ export class ReconciliationService {
    */
   private async checkAbnormalBalances(): Promise<ReconciliationResult> {
     try {
-      const abnormal: any[] = [];
+      const abnormal: { type: string; account: string; balance: number }[] = [];
 
       // Check for negative asset balances (should be debits)
       const negativeAssets = this.db.prepare(`
@@ -294,7 +294,7 @@ export class ReconciliationService {
         abnormal.push(...negativeAssets.map(a => ({
           type: 'Negative Asset',
           account: `${a.account_code} - ${a.account_name}`,
-          balance: a.balance / 100,
+          balance: a.balance,
         })));
       }
 
@@ -313,7 +313,7 @@ export class ReconciliationService {
         abnormal.push(...negativeLiabilities.map(a => ({
           type: 'Negative Liability',
           account: `${a.account_code} - ${a.account_name}`,
-          balance: a.balance / 100,
+          balance: a.balance,
         })));
       }
 
@@ -335,7 +335,7 @@ export class ReconciliationService {
       return {
         check_name: 'Abnormal Balance Detection',
         status: 'FAIL',
-        message: `Error during check: ${error.message}`,
+        message: `Error during check: ${(error as Error).message}`,
       };
     }
   }
@@ -457,4 +457,3 @@ export class ReconciliationService {
     return history.length > 0 ? history[0] : null;
   }
 }
-

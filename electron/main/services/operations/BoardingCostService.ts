@@ -42,6 +42,10 @@ interface ExpenseSummary {
   percentage: number;
 }
 
+interface RevenueResult {
+  total_revenue: number;
+}
+
 /**
  * BoardingCostService
  * 
@@ -134,7 +138,7 @@ export class BoardingCostService {
       WHERE facility_id = ? AND fiscal_year = ?
     `;
 
-    const params: any[] = [facilityId, fiscalYear];
+    const params: unknown[] = [facilityId, fiscalYear];
 
     if (term) {
       query += ` AND term = ?`;
@@ -162,7 +166,7 @@ export class BoardingCostService {
       WHERE facility_id = ? AND fiscal_year = ?
     `;
 
-    const params: any[] = [facilityId, fiscalYear];
+    const params: unknown[] = [facilityId, fiscalYear];
 
     if (term) {
       query += ` AND term = ?`;
@@ -174,7 +178,7 @@ export class BoardingCostService {
       ORDER BY total_amount_cents DESC
     `;
 
-    const results = this.db.prepare(query).all(...params) as unknown[];
+    const results = this.db.prepare(query).all(...params) as { expense_type: string; total_amount_cents: number }[];
 
     // Calculate total for percentages
     const total = results.reduce((sum, row) => sum + row.total_amount_cents, 0);
@@ -208,14 +212,14 @@ export class BoardingCostService {
         AND strftime('%Y', lt.transaction_date) = ?
     `;
 
-    const params: any[] = [facilityId, fiscalYear.toString()];
+    const params: unknown[] = [facilityId, fiscalYear.toString()];
 
     if (term) {
       query += ` AND lt.term = ?`;
       params.push(term);
     }
 
-    const result = this.db.prepare(query).get(...params) as unknown;
+    const result = this.db.prepare(query).get(...params) as RevenueResult | undefined;
     return result?.total_revenue || 0;
   }
 

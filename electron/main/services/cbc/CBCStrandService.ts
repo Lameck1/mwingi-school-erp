@@ -160,7 +160,7 @@ export class CBCStrandService {
       SELECT * FROM cbc_strand_expense
       WHERE strand_id = ? AND fiscal_year = ?
     `;
-    const params: any[] = [strandId, fiscalYear];
+    const params: unknown[] = [strandId, fiscalYear];
 
     if (term !== undefined) {
       sql += ' AND term = ?';
@@ -195,7 +195,7 @@ export class CBCStrandService {
       JOIN invoice i ON il.invoice_id = i.id
       WHERE i.fiscal_year = ?
     `;
-    const params: any[] = [fiscalYear];
+    const params: unknown[] = [fiscalYear];
 
     if (term !== undefined) {
       sql += ' AND i.term = ?';
@@ -229,8 +229,8 @@ export class CBCStrandService {
       const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount_cents, 0);
 
       const netProfit = rev.total_fees_cents - totalExpenses;
-      const profitMargin = rev.total_fees_cents > 0 
-        ? (netProfit / rev.total_fees_cents) * 100 
+      const profitMargin = rev.total_fees_cents > 0
+        ? (netProfit / rev.total_fees_cents) * 100
         : 0;
 
       results.push({
@@ -243,8 +243,8 @@ export class CBCStrandService {
         net_profit_cents: netProfit,
         profit_margin_percent: profitMargin,
         student_count: rev.student_count,
-        cost_per_student_cents: rev.student_count > 0 
-          ? Math.round(totalExpenses / rev.student_count) 
+        cost_per_student_cents: rev.student_count > 0
+          ? Math.round(totalExpenses / rev.student_count)
           : 0,
         revenue_per_student_cents: Math.round(rev.avg_fee_per_student_cents),
       });

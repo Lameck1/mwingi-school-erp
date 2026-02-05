@@ -24,7 +24,7 @@ vi.mock('../../../database', () => ({
 }))
 
 // Import after mocking
-import ExamSchedulerService_Enhanced from '../ExamSchedulerService_Enhanced'
+import ExamSchedulerService_Enhanced from '../ExamSchedulerService'
 
 describe('ExamSchedulerService_Enhanced', () => {
   afterEach(() => {

@@ -17,11 +17,56 @@ export interface SubjectAnalysis {
   student_count: number
 }
 
+interface SubjectStatisticsResult {
+  subject_id: number
+  subject_name: string
+  student_count: number
+  mean_score: number
+  min_score: number
+  max_score: number
+}
+
+interface ScoreResult {
+  score: number
+}
+
+interface SubjectIdResult {
+  subject_id: number
+}
+
+interface TeacherSubjectPerformanceResult {
+  subject_id: number
+  subject_name: string
+  student_count: number
+  avg_score: number
+}
+
+interface StudentResult {
+  id: number
+  admission_number: string
+  name: string;
+  stream_id: number;
+}
+
+interface StudentSubjectScoreResult {
+  subject_id: number;
+  subject_name: string;
+  score: number;
+}
+
+interface PreviousExamScoreResult {
+  avg_score: number;
+}
+
+interface StudentIdResult {
+  student_id: number;
+}
+
 export interface TeacherPerformance {
   teacher_id: number
   teacher_name: string
   subject_id: number
-  subject_name: number
+  subject_name: string
   avg_class_score: number
   pass_rate: number
   improvement_from_last_term: number
@@ -77,23 +122,23 @@ export class ExamAnalysisService {
 
       query += ` GROUP BY s.id`
 
-      const result = this.db.prepare(query).get(...params) as unknown
+      const result = this.db.prepare(query).get(...params) as SubjectStatisticsResult | undefined
 
       if (!result) throw new Error('No data found for this subject')
 
       // Get all scores for calculations
-      const scores = this.db.prepare(`
+      const scores = (this.db.prepare(`
         SELECT er.score FROM exam_result er
         JOIN student st ON er.student_id = st.id
         WHERE er.exam_id = ? AND er.subject_id = ? AND er.score IS NOT NULL
-      `).all(examId, subjectId).map((r: unknown) => r.score) as number[]
+      `).all(examId, subjectId) as ScoreResult[]).map(r => r.score)
 
       if (streamId) {
-        const filteredScores = this.db.prepare(`
+        const filteredScores = (this.db.prepare(`
           SELECT er.score FROM exam_result er
           JOIN student st ON er.student_id = st.id
           WHERE er.exam_id = ? AND er.subject_id = ? AND st.stream_id = ? AND er.score IS NOT NULL
-        `).all(examId, subjectId, streamId).map((r: unknown) => r.score) as number[]
+        `).all(examId, subjectId, streamId) as ScoreResult[]).map(r => r.score)
         
         return {
           subject_id: result.subject_id,
@@ -139,11 +184,11 @@ export class ExamAnalysisService {
    */
   async analyzeAllSubjects(examId: number, streamId?: number): Promise<SubjectAnalysis[]> {
     try {
-      const subjects = this.db.prepare(`
+      const subjects = (this.db.prepare(`
         SELECT DISTINCT er.subject_id FROM exam_result er
         JOIN student st ON er.student_id = st.id
         WHERE er.exam_id = ?
-      `).all(examId).map((r: unknown) => r.subject_id) as number[]
+      `).all(examId) as SubjectIdResult[]).map(r => r.subject_id)
 
       const analyses: SubjectAnalysis[] = []
 
@@ -188,7 +233,7 @@ export class ExamAnalysisService {
           AND sa.term_id = ?
           AND er.score IS NOT NULL
         GROUP BY sa.subject_id
-      `).all(teacherId, academicYearId, termId) as unknown[]
+      `).all(teacherId, academicYearId, termId) as TeacherSubjectPerformanceResult[]
 
       const performances = subjects.map(subject => ({
         teacher_id: teacherId,
@@ -214,7 +259,7 @@ export class ExamAnalysisService {
    */
   async getStudentPerformance(studentId: number, examId: number): Promise<StudentAnalysis> {
     try {
-      const student = this.db.prepare('SELECT * FROM student WHERE id = ?').get(studentId) as unknown
+      const student = this.db.prepare('SELECT * FROM student WHERE id = ?').get(studentId) as StudentResult | undefined
 
       if (!student) throw new Error('Student not found')
 
@@ -228,7 +273,7 @@ export class ExamAnalysisService {
         JOIN subject s ON er.subject_id = s.id
         WHERE er.exam_id = ? AND er.student_id = ? AND er.score IS NOT NULL
         ORDER BY er.score DESC
-      `).all(examId, studentId) as unknown[]
+      `).all(examId, studentId) as StudentSubjectScoreResult[]
 
       if (results.length === 0) throw new Error('No exam results found')
 
@@ -245,10 +290,10 @@ export class ExamAnalysisService {
           SELECT academic_year_id FROM exam WHERE id = ?
         ) AND e.term_id < (SELECT term_id FROM exam WHERE id = ?)
         LIMIT 1
-      `).get(studentId, examId, examId) as unknown
+      `).get(studentId, examId, examId) as PreviousExamScoreResult | undefined
 
       let trend: 'improving' | 'declining' | 'stable' = 'stable'
-      if (previousExam?.avg_score) {
+      if (previousExam && previousExam.avg_score) {
         if (averageScore > previousExam.avg_score + 5) trend = 'improving'
         else if (averageScore < previousExam.avg_score - 5) trend = 'declining'
       }
@@ -280,10 +325,10 @@ export class ExamAnalysisService {
     failThreshold: number = 50
   ): Promise<StudentAnalysis[]> {
     try {
-      const students = this.db.prepare(`
+      const students = (this.db.prepare(`
         SELECT DISTINCT er.student_id FROM exam_result er
         WHERE er.exam_id = ?
-      `).all(examId).map((r: unknown) => r.student_id) as number[]
+      `).all(examId) as StudentIdResult[]).map(r => r.student_id)
 
       const struggling: StudentAnalysis[] = []
 

@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3-multiple-ciphers'
+import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CreditAutoApplicationService } from '../CreditAutoApplicationService'
 
@@ -62,7 +62,7 @@ describe('CreditAutoApplicationService', () => {
   })
 
   afterEach(() => {
-    db.close()
+    if (db) db.close()
   })
 
   describe('autoApplyCredits', () => {

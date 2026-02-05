@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { Plus, Users, Search, Edit, Lock, Trash, Check, Loader2, UserCircle2, ShieldCheck, Fingerprint, Save } from 'lucide-react'
 import type { User, CreateUserData, UpdateUserData } from '../../types/electron-api/UserAPI'
 import { Modal } from '../../components/ui/Modal'
@@ -26,7 +26,7 @@ export default function UsersPage() {
         newPassword: '', confirmPassword: ''
     })
 
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         setLoading(true)
         try {
             const usersData = await window.electronAPI.getUsers()
@@ -35,16 +35,16 @@ export default function UsersPage() {
             console.error('Failed to load users:', error)
             showToast('Failed to load system users', 'error')
         } finally { setLoading(false) }
-    }
+    }, [showToast])
 
-    useEffect(() => { loadData() }, [])
+    useEffect(() => { loadData() }, [loadData])
 
     const handleSaveUser = async (e: React.FormEvent) => {
         e.preventDefault()
         setSaving(true)
         try {
             if (isEditing && selectedUser) {
-                const { password, ...updateData } = userData  
+                const { password, ...updateData } = userData
                 await window.electronAPI.updateUser(selectedUser.id, updateData as UpdateUserData)
                 showToast('User profile updated successfully', 'success')
             } else {
@@ -207,8 +207,8 @@ export default function UsersPage() {
                                         </td>
                                         <td className="py-4">
                                             <span className={`px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-widest flex items-center gap-2 w-fit border ${user.role === 'ADMIN' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' :
-                                                    user.role === 'AUDITOR' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
-                                                        'bg-secondary/50 text-foreground/50 border-border/40'
+                                                user.role === 'AUDITOR' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
+                                                    'bg-secondary/50 text-foreground/50 border-border/40'
                                                 }`}>
                                                 {user.role === 'ADMIN' ? <ShieldCheck className="w-3 h-3" /> : <UserCircle2 className="w-3 h-3" />}
                                                 {user.role}

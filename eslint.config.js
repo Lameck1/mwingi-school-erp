@@ -67,7 +67,7 @@ const baseConfig = {
 export default [
   {
     // Global ignore patterns for all configurations
-    ignores: ['dist/**/*', 'dist-electron/**/*', 'node_modules/**/*', '**/*.min.js', '**/assets/*.js']
+    ignores: ['dist/**/*', 'dist-electron/**/*', 'node_modules/**/*', '**/*.min.js', '**/assets/*.js', 'coverage/**/*']
   },
   js.configs.recommended,
   {

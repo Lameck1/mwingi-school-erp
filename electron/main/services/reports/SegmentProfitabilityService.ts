@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3-multiple-ciphers'
+import Database from 'better-sqlite3'
 import { getDatabase } from '../../database'
 
 // ============================================================================
@@ -6,19 +6,19 @@ import { getDatabase } from '../../database'
 // ============================================================================
 
 export interface ITransportProfitabilityCalculator {
-  calculateTransportProfitability(): Promise<unknown>
+  calculateTransportProfitability(): Promise<SegmentProfitability>
 }
 
 export interface IBoardingProfitabilityCalculator {
-  calculateBoardingProfitability(): Promise<unknown>
+  calculateBoardingProfitability(): Promise<SegmentProfitability>
 }
 
 export interface IActivityFeeAnalyzer {
-  analyzeActivityFees(): Promise<unknown>
+  calculateActivityProfitability(): Promise<SegmentProfitability>
 }
 
 export interface IOverallProfitabilityAnalyzer {
-  getOverallProfitabilityBreakdown(): Promise<unknown>
+  getOverallProfitabilityBreakdown(): Promise<OverallProfitability>
 }
 
 export interface SegmentProfitability {
@@ -29,11 +29,64 @@ export interface SegmentProfitability {
   profit: number
   profit_margin_percentage: number
   status: 'PROFITABLE' | 'BREAKING_EVEN' | 'UNPROFITABLE'
+  occupancy_rate_percentage?: number
+  recommendations?: string[]
+}
+
+export interface OverallProfitability {
+  overall_summary: {
+    total_revenue: number
+    total_expenses: number
+    net_profit: number
+    profit_margin_percentage: number
+    status: 'PROFITABLE' | 'BREAKING_EVEN' | 'UNPROFITABLE'
+  }
+  financial_health: string
+  recommendations: string[]
+}
+
+export interface OverallProfitabilitySync {
+  segments: SegmentProfitability[]
+  totalRevenue: number
+  totalExpenses: number
+  netProfit: number
+  profit_margin_percentage: number
+  status: 'PROFITABLE' | 'BREAKING_EVEN' | 'UNPROFITABLE'
+  recommendations: string[]
+}
+
+export interface ComparisonSummary {
+  segments: SegmentProfitability[]
+  comparison_summary: {
+    highest_performing: string
+    lowest_performing: string
+    total_segments: number
+  }
+}
+
+export interface SegmentAnalysisReport {
+  segments: SegmentProfitability[]
+  overall: OverallProfitability
+  unprofitable_segments: SegmentProfitability[]
+  generated_at: string
 }
 
 // ============================================================================
 // REPOSITORY LAYER (SRP)
 // ============================================================================
+
+interface TotalResult {
+    total: number
+}
+
+interface CountResult {
+    count: number
+}
+
+interface SegmentAnalysisResult {
+    revenue: number
+    costs: number
+}
 
 class ProfitabilityRepository {
   private db: Database.Database
@@ -48,7 +101,7 @@ class ProfitabilityRepository {
       SELECT SUM(amount) as total FROM ledger_transaction
       WHERE description LIKE '%transport%' OR description LIKE '%bus%'
       AND transaction_type IN ('CREDIT', 'PAYMENT')
-    `).get() as unknown
+    `).get() as TotalResult | undefined
     return result?.total || 0
   }
 
@@ -57,7 +110,7 @@ class ProfitabilityRepository {
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM expense_transaction
       WHERE expense_type IN ('FUEL', 'VEHICLE_MAINTENANCE', 'VEHICLE_DEPRECIATION', 'DRIVER_SALARY')
-    `).get() as unknown
+    `).get() as TotalResult | undefined
     return result?.total || 0
   }
 
@@ -66,7 +119,7 @@ class ProfitabilityRepository {
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM fee_invoice
       WHERE fee_type = 'BOARDING'
-    `).get() as unknown
+    `).get() as TotalResult | undefined
     return result?.total || 0
   }
 
@@ -75,7 +128,7 @@ class ProfitabilityRepository {
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM expense_transaction
       WHERE expense_type IN ('FOOD', 'BEDDING', 'DORM_MAINTENANCE', 'UTILITIES')
-    `).get() as unknown
+    `).get() as TotalResult | undefined
     return result?.total || 0
   }
 
@@ -84,7 +137,7 @@ class ProfitabilityRepository {
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM fee_invoice
       WHERE fee_type = 'ACTIVITY'
-    `).get() as unknown
+    `).get() as TotalResult | undefined
     return result?.total || 0
   }
 
@@ -93,7 +146,7 @@ class ProfitabilityRepository {
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM expense_transaction
       WHERE expense_type = 'ACTIVITY'
-    `).get() as unknown
+    `).get() as TotalResult | undefined
     return result?.total || 0
   }
 
@@ -102,7 +155,7 @@ class ProfitabilityRepository {
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM fee_invoice
       WHERE status IN ('PAID', 'OUTSTANDING')
-    `).get() as unknown
+    `).get() as TotalResult | undefined
     return result?.total || 0
   }
 
@@ -110,14 +163,14 @@ class ProfitabilityRepository {
     const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM expense_transaction
-    `).get() as unknown
+    `).get() as TotalResult | undefined
     return result?.total || 0
   }
 
   async getStudentOccupancyRate(): Promise<number> {
     const db = this.db
-    const currentStudents = db.prepare(`SELECT COUNT(*) as count FROM student WHERE status = 'ACTIVE'`).get() as unknown
-    const totalCapacity = db.prepare(`SELECT SUM(capacity) as total FROM dormitory`).get() as unknown
+    const currentStudents = db.prepare(`SELECT COUNT(*) as count FROM student WHERE status = 'ACTIVE'`).get() as CountResult | undefined
+    const totalCapacity = db.prepare(`SELECT SUM(capacity) as total FROM dormitory`).get() as TotalResult | undefined
     return totalCapacity?.total ? (currentStudents?.count || 0) / totalCapacity.total : 0
   }
 }
@@ -135,7 +188,7 @@ class TransportProfitabilityCalculator implements ITransportProfitabilityCalcula
     this.repo = new ProfitabilityRepository(this.db)
   }
 
-  async calculateTransportProfitability(): Promise<unknown> {
+  async calculateTransportProfitability(): Promise<SegmentProfitability> {
     const revenue = await this.repo.getTransportRevenue()
     const costs = await this.repo.getTransportCosts()
     const profit = revenue - costs
@@ -184,7 +237,7 @@ class BoardingProfitabilityCalculator implements IBoardingProfitabilityCalculato
     this.repo = new ProfitabilityRepository(this.db)
   }
 
-  async calculateBoardingProfitability(): Promise<unknown> {
+  async calculateBoardingProfitability(): Promise<SegmentProfitability> {
     const revenue = await this.repo.getBoardingRevenue()
     const costs = await this.repo.getBoardingCosts()
     const occupancyRate = await this.repo.getStudentOccupancyRate()
@@ -202,7 +255,7 @@ class BoardingProfitabilityCalculator implements IBoardingProfitabilityCalculato
       costs,
       profit,
       profit_margin_percentage: profitMargin,
-      occupancy_rate_percentage: occupancyRate * 100,
+      occupancy_rate_percentage: occupancyRate * 100, // Added to SegmentProfitability if we extend it, or just extra prop
       status,
       recommendations: this.getBoardingRecommendations(profit, occupancyRate)
     }
@@ -238,7 +291,7 @@ class ActivityFeeAnalyzer implements IActivityFeeAnalyzer {
     this.repo = new ProfitabilityRepository(this.db)
   }
 
-  async analyzeActivityFees(): Promise<unknown> {
+  async calculateActivityProfitability(): Promise<SegmentProfitability> {
     const revenue = await this.repo.getActivityFeeRevenue()
     const expenses = await this.repo.getActivityFeeExpenses()
     const profit = revenue - expenses
@@ -290,7 +343,7 @@ class OverallProfitabilityAnalyzer implements IOverallProfitabilityAnalyzer {
     this.repo = new ProfitabilityRepository(this.db)
   }
 
-  async getOverallProfitabilityBreakdown(): Promise<unknown> {
+  async getOverallProfitabilityBreakdown(): Promise<OverallProfitability> {
     const totalRevenue = await this.repo.getTotalRevenue()
     const totalExpenses = await this.repo.getTotalExpenses()
     const netProfit = totalRevenue - totalExpenses
@@ -364,72 +417,63 @@ export class SegmentProfitabilityService
   /**
    * Calculate transport segment profitability
    */
-  async calculateTransportProfitability(): Promise<unknown> {
+  async calculateTransportProfitability(): Promise<SegmentProfitability> {
     return this.transportCalculator.calculateTransportProfitability()
   }
 
   /**
    * Calculate boarding segment profitability
    */
-  async calculateBoardingProfitability(): Promise<unknown> {
+  async calculateBoardingProfitability(): Promise<SegmentProfitability> {
     return this.boardingCalculator.calculateBoardingProfitability()
+  }
+
+  /**
+   * Calculate activity fee profitability
+   */
+  async calculateActivityProfitability(): Promise<SegmentProfitability> {
+    return this.activityAnalyzer.calculateActivityProfitability()
   }
 
   /**
    * Get overall school profitability breakdown
    */
-  async getOverallProfitabilityBreakdown(): Promise<unknown> {
+  async getOverallProfitabilityBreakdown(): Promise<OverallProfitability> {
     return this.overallAnalyzer.getOverallProfitabilityBreakdown()
   }
 
   /**
    * Get list of unprofitable segments with recommendations
    */
-  async getUnprofitableSegments(): Promise<any[]> {
+  async getUnprofitableSegments(): Promise<SegmentProfitability[]> {
     const transport = await this.calculateTransportProfitability()
     const boarding = await this.calculateBoardingProfitability()
-    const activities = await this.activityAnalyzer.analyzeActivityFees()
+    const activities = await this.activityAnalyzer.calculateActivityProfitability()
 
-    const unprofitable: any[] = []
+    const unprofitable: SegmentProfitability[] = []
 
     if (transport.status === 'UNPROFITABLE') {
-      unprofitable.push({
-        segment: transport.segment_name,
-        profit: transport.profit,
-        margin: transport.profit_margin_percentage,
-        recommendations: transport.recommendations
-      })
+      unprofitable.push(transport)
     }
 
     if (boarding.status === 'UNPROFITABLE') {
-      unprofitable.push({
-        segment: boarding.segment_name,
-        profit: boarding.profit,
-        margin: boarding.profit_margin_percentage,
-        occupancy: boarding.occupancy_rate_percentage,
-        recommendations: boarding.recommendations
-      })
+      unprofitable.push(boarding)
     }
 
     if (activities.status === 'UNPROFITABLE') {
-      unprofitable.push({
-        segment: activities.segment_name,
-        profit: activities.profit,
-        margin: activities.profit_margin_percentage,
-        recommendations: activities.recommendations
-      })
+      unprofitable.push(activities)
     }
 
-    return unprofitable.sort((a, b) => a.profit - b.profit) // Worst first
+    return unprofitable
   }
 
   /**
    * Get comprehensive segment analysis report
    */
-  async getSegmentAnalysisReport(): Promise<unknown> {
+  async getSegmentAnalysisReport(): Promise<SegmentAnalysisReport> {
     const transport = await this.calculateTransportProfitability()
     const boarding = await this.calculateBoardingProfitability()
-    const activities = await this.activityAnalyzer.analyzeActivityFees()
+    const activities = await this.activityAnalyzer.calculateActivityProfitability()
     const overall = await this.getOverallProfitabilityBreakdown()
 
     return {
@@ -447,7 +491,7 @@ export class SegmentProfitabilityService
   /**
    * Analyze transport profitability (synchronous wrapper)
    */
-  analyzeTransportProfitability(startDate?: string, endDate?: string): any {
+  analyzeTransportProfitability(startDate?: string, endDate?: string): SegmentProfitability {
     const db = this.db
     const result = db.prepare(`
       SELECT 
@@ -459,7 +503,7 @@ export class SegmentProfitabilityService
       WHERE (description LIKE '%transport%' OR description LIKE '%bus%')
         AND (? IS NULL OR transaction_date >= ?)
         AND (? IS NULL OR transaction_date <= ?)
-    `).get(startDate, startDate, endDate, endDate) as unknown
+    `).get(startDate, startDate, endDate, endDate) as SegmentAnalysisResult | undefined
 
     const revenue = result?.revenue || 0
     const costs = result?.costs || 0
@@ -480,7 +524,7 @@ export class SegmentProfitabilityService
   /**
    * Analyze boarding profitability (synchronous wrapper)
    */
-  analyzeBoardingProfitability(startDate?: string, endDate?: string): any {
+  analyzeBoardingProfitability(startDate?: string, endDate?: string): SegmentProfitability {
     const db = this.db
     const result = db.prepare(`
       SELECT 
@@ -492,7 +536,7 @@ export class SegmentProfitabilityService
       WHERE (description LIKE '%boarding%' OR description LIKE '%hostel%')
         AND (? IS NULL OR transaction_date >= ?)
         AND (? IS NULL OR transaction_date <= ?)
-    `).get(startDate, startDate, endDate, endDate) as unknown
+    `).get(startDate, startDate, endDate, endDate) as SegmentAnalysisResult | undefined
 
     const revenue = result?.revenue || 0
     const costs = result?.costs || 0
@@ -517,7 +561,7 @@ export class SegmentProfitabilityService
   /**
    * Analyze activity fees profitability (synchronous wrapper)
    */
-  analyzeActivityFees(startDate?: string, endDate?: string): any {
+  analyzeActivityFees(startDate?: string, endDate?: string): SegmentProfitability {
     const db = this.db
     const result = db.prepare(`
       SELECT 
@@ -529,7 +573,7 @@ export class SegmentProfitabilityService
       WHERE (description LIKE '%activity%' OR description LIKE '%club%')
         AND (? IS NULL OR transaction_date >= ?)
         AND (? IS NULL OR transaction_date <= ?)
-    `).get(startDate, startDate, endDate, endDate) as unknown
+    `).get(startDate, startDate, endDate, endDate) as SegmentAnalysisResult | undefined
 
     const revenue = result?.revenue || 0
     const costs = result?.costs || 0
@@ -550,7 +594,7 @@ export class SegmentProfitabilityService
   /**
    * Get comprehensive profitability analysis (synchronous wrapper)
    */
-  generateOverallProfitability(startDate?: string, endDate?: string): any {
+  generateOverallProfitability(startDate?: string, endDate?: string): OverallProfitabilitySync {
     const transport = this.analyzeTransportProfitability(startDate, endDate)
     const boarding = this.analyzeBoardingProfitability(startDate, endDate)
     const activity = this.analyzeActivityFees(startDate, endDate)
@@ -574,7 +618,7 @@ export class SegmentProfitabilityService
   /**
    * Compare segment profitability (synchronous wrapper)
    */
-  compareSegments(startDate?: string, endDate?: string): any {
+  compareSegments(startDate?: string, endDate?: string): ComparisonSummary {
     const segments = [
       this.analyzeTransportProfitability(startDate, endDate),
       this.analyzeBoardingProfitability(startDate, endDate),
@@ -618,7 +662,7 @@ export class SegmentProfitabilityService
   /**
    * Generate overall recommendations based on segment analysis
    */
-  private getOverallRecommendations(transport: unknown, boarding: unknown, activity: unknown): string[] {
+  private getOverallRecommendations(transport: SegmentProfitability, boarding: SegmentProfitability, activity: SegmentProfitability): string[] {
     const recommendations: string[] = []
 
     if (transport.profit_margin_percentage < 10) {

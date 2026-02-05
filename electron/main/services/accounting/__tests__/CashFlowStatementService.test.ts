@@ -150,7 +150,7 @@ describe('CashFlowStatementService', () => {
   })
 
   afterEach(() => {
-    db.close()
+    if (db) db.close()
   })
 
   // generateCashFlowStatement tests (4 tests)

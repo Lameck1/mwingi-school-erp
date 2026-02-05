@@ -1,110 +1,229 @@
 import { ipcMain } from '../../electron-env';
+import type { IpcMainInvokeEvent } from 'electron';
 import { getDatabase } from '../../database';
 
+// Roles that can approve awards
+const APPROVER_ROLES = ['ADMIN', 'PRINCIPAL', 'DEPUTY_PRINCIPAL'];
+
+interface AwardAssignParams {
+  studentId: number;
+  categoryId: number;
+  academicYearId: number;
+  termId?: number;
+  userId: number;
+  userRole: string;
+  remarks?: string;
+}
+
+interface AwardApproveParams {
+  awardId: number;
+  userId: number;
+}
+
+interface AwardRejectParams {
+  awardId: number;
+  userId: number;
+  reason: string;
+}
+
 export function registerAwardsHandlers() {
-  ipcMain.handle('awards:assign', async (_event, params: {
-    studentId: number;
-    categoryId: number;
-    academicYearId: number;
-    termId: number;
-  }) => {
+  const db = getDatabase();
+
+  // Assign award to student
+  ipcMain.handle('awards:assign', async (_event: IpcMainInvokeEvent, params: AwardAssignParams) => {
     try {
-      const db = getDatabase();
+      // Auto-approve if user is ADMIN/PRINCIPAL/DEPUTY_PRINCIPAL
+      const autoApprove = APPROVER_ROLES.includes(params.userRole);
+      const status = autoApprove ? 'approved' : 'pending';
+      const approvedAt = autoApprove ? new Date().toISOString() : null;
+      const approvedBy = autoApprove ? params.userId : null;
+
       const result = db.prepare(`
-        INSERT INTO student_award (student_id, award_category_id, academic_year_id, term_id, award_date, approval_status)
-        VALUES (?, ?, ?, ?, datetime('now'), 'pending')
-      `).run(params.studentId, params.categoryId, params.academicYearId, params.termId);
-      
-      return { id: result.lastInsertRowid, status: 'success' };
-    } catch (error) {
-      throw new Error(`Failed to assign award: ${error.message}`);
+        INSERT INTO student_award (
+          student_id, award_category_id, academic_year_id, term_id,
+          awarded_date, remarks, approval_status, assigned_by_user_id,
+          approved_by_user_id, approved_at
+        )
+        VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?)
+      `).run(
+        params.studentId, params.categoryId, params.academicYearId, params.termId || null,
+        params.remarks || null, status, params.userId, approvedBy, approvedAt
+      );
+
+      return {
+        id: result.lastInsertRowid,
+        status: 'success',
+        approval_status: status,
+        auto_approved: autoApprove
+      };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to assign award: ${message}`);
     }
   });
 
-  ipcMain.handle('awards:getStudentAwards', async (_event, studentId: number) => {
+  // Get all awards with filtering
+  ipcMain.handle('awards:getAll', async (_event: IpcMainInvokeEvent, params?: {
+    status?: string;
+    categoryId?: number;
+    academicYearId?: number;
+    termId?: number;
+  }) => {
     try {
-      const db = getDatabase();
+      let query = `
+        SELECT 
+          sa.*,
+          ac.name as category_name, 
+          ac.category_type,
+          st.admission_number, 
+          st.first_name, 
+          st.last_name,
+          st.first_name || ' ' || st.last_name as student_name,
+          u1.full_name as assigned_by_name,
+          u2.full_name as approved_by_name
+        FROM student_award sa
+        JOIN award_category ac ON sa.award_category_id = ac.id
+        JOIN student st ON sa.student_id = st.id
+        LEFT JOIN user u1 ON sa.assigned_by_user_id = u1.id
+        LEFT JOIN user u2 ON sa.approved_by_user_id = u2.id
+        WHERE 1=1
+      `;
+      const args: (string | number)[] = [];
+
+      if (params?.status && params.status !== 'all') {
+        query += ` AND sa.approval_status = ?`;
+        args.push(params.status);
+      }
+
+      if (params?.categoryId) {
+        query += ` AND sa.award_category_id = ?`;
+        args.push(params.categoryId);
+      }
+
+      if (params?.academicYearId) {
+        query += ` AND sa.academic_year_id = ?`;
+        args.push(params.academicYearId);
+      }
+
+      if (params?.termId) {
+        query += ` AND sa.term_id = ?`;
+        args.push(params.termId);
+      }
+
+      query += ` ORDER BY sa.created_at DESC`;
+
+      return db.prepare(query).all(...args);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to get awards: ${message}`);
+    }
+  });
+
+  // Approve an award
+  ipcMain.handle('awards:approve', async (_event: IpcMainInvokeEvent, params: AwardApproveParams) => {
+    try {
+      db.prepare(`
+        UPDATE student_award 
+        SET approval_status = 'approved', 
+            approved_by_user_id = ?, 
+            approved_at = datetime('now')
+        WHERE id = ?
+      `).run(params.userId, params.awardId);
+
+      return { status: 'success', message: 'Award approved successfully' };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to approve award: ${message}`);
+    }
+  });
+
+  // Reject an award
+  ipcMain.handle('awards:reject', async (_event: IpcMainInvokeEvent, params: AwardRejectParams) => {
+    try {
+      db.prepare(`
+        UPDATE student_award 
+        SET approval_status = 'rejected', 
+            approved_by_user_id = ?, 
+            approved_at = datetime('now'),
+            rejection_reason = ?
+        WHERE id = ?
+      `).run(params.userId, params.reason, params.awardId);
+
+      return { status: 'success', message: 'Award rejected' };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to reject award: ${message}`);
+    }
+  });
+
+  // Get pending awards count (for badge/notification)
+  ipcMain.handle('awards:getPendingCount', async () => {
+    try {
+      const result = db.prepare(`
+        SELECT COUNT(*) as count FROM student_award WHERE approval_status = 'pending'
+      `).get() as { count: number };
+      return result.count;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to get pending count: ${message}`);
+    }
+  });
+
+  // Get student awards
+  ipcMain.handle('awards:getStudentAwards', async (_event: IpcMainInvokeEvent, studentId: number) => {
+    try {
       return db.prepare(`
         SELECT sa.*, ac.name as category_name, ac.category_type
         FROM student_award sa
         JOIN award_category ac ON sa.award_category_id = ac.id
         WHERE sa.student_id = ?
-        ORDER BY sa.award_date DESC
+        ORDER BY sa.awarded_date DESC
       `).all(studentId);
-    } catch (error) {
-      throw new Error(`Failed to get student awards: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to get student awards: ${message}`);
     }
   });
 
-  ipcMain.handle('awards:getAll', async (_event, params?: {
-    status?: string;
-    categoryId?: number;
-  }) => {
+  // Get award by ID
+  ipcMain.handle('awards:getById', async (_event: IpcMainInvokeEvent, awardId: number) => {
     try {
-      const db = getDatabase();
-      let query = `
-        SELECT sa.*, ac.name as category_name, ac.category_type, st.admission_number, st.first_name, st.last_name
+      return db.prepare(`
+        SELECT sa.*, ac.name as category_name, ac.category_type, 
+               st.admission_number, st.first_name, st.last_name
         FROM student_award sa
         JOIN award_category ac ON sa.award_category_id = ac.id
-        JOIN students st ON sa.student_id = st.id
-        WHERE 1=1
-      `;
-      const args = [];
-      
-      if (params?.status) {
-        query += ` AND sa.approval_status = ?`;
-        args.push(params.status);
-      }
-      
-      if (params?.categoryId) {
-        query += ` AND sa.award_category_id = ?`;
-        args.push(params.categoryId);
-      }
-      
-      query += ` ORDER BY sa.award_date DESC`;
-      
-      return db.prepare(query).all(...args);
-    } catch (error) {
-      throw new Error(`Failed to get awards: ${error.message}`);
+        JOIN student st ON sa.student_id = st.id
+        WHERE sa.id = ?
+      `).get(awardId);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to get award: ${message}`);
     }
   });
 
-  ipcMain.handle('awards:approve', async (_event, awardId: number) => {
+  // Delete award
+  ipcMain.handle('awards:delete', async (_event: IpcMainInvokeEvent, awardId: number) => {
     try {
-      const db = getDatabase();
-      db.prepare(`
-        UPDATE student_award
-        SET approval_status = 'approved', approved_at = datetime('now')
-        WHERE id = ?
-      `).run(awardId);
-      
-      return { status: 'success', message: 'Award approved' };
-    } catch (error) {
-      throw new Error(`Failed to approve award: ${error.message}`);
-    }
-  });
-
-  ipcMain.handle('awards:delete', async (_event, awardId: number) => {
-    try {
-      const db = getDatabase();
       db.prepare(`DELETE FROM student_award WHERE id = ?`).run(awardId);
-      
       return { status: 'success', message: 'Award deleted' };
-    } catch (error) {
-      throw new Error(`Failed to delete award: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to delete award: ${message}`);
     }
   });
 
-  ipcMain.handle('awards:getCategories', async (_event) => {
+  // Get award categories
+  ipcMain.handle('awards:getCategories', async () => {
     try {
-      const db = getDatabase();
       return db.prepare(`
         SELECT * FROM award_category
         WHERE is_active = 1
         ORDER BY sort_order ASC, name ASC
       `).all();
-    } catch (error) {
-      throw new Error(`Failed to get award categories: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to get award categories: ${message}`);
     }
   });
 }

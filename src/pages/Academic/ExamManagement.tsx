@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
     ClipboardList, Plus, Trash2, Save, Loader2, Calendar, LayoutGrid
 } from 'lucide-react'
@@ -8,9 +8,9 @@ import { useAppStore, useAuthStore } from '../../stores'
 interface Exam {
     id: number
     name: string
-    weight: number
-    is_published: boolean
-    created_at: string
+    weight?: number
+    is_published?: boolean
+    created_at?: string
 }
 
 export default function ExamManagement() {
@@ -24,13 +24,7 @@ export default function ExamManagement() {
     const [newExamName, setNewExamName] = useState('')
     const [newExamWeight, setNewExamWeight] = useState(1.0)
 
-    useEffect(() => {
-        if (currentAcademicYear && currentTerm) {
-            loadExams()
-        }
-    }, [currentAcademicYear, currentTerm])
-
-    const loadExams = async () => {
+    const loadExams = useCallback(async () => {
         if (!currentAcademicYear || !currentTerm) return
         setLoading(true)
         try {
@@ -41,7 +35,11 @@ export default function ExamManagement() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [currentAcademicYear, currentTerm])
+
+    useEffect(() => {
+        loadExams()
+    }, [loadExams])
 
     const handleCreate = async () => {
         if (!currentAcademicYear || !currentTerm || !user || !newExamName) return
@@ -157,7 +155,7 @@ export default function ExamManagement() {
                                             </div>
                                             <div>
                                                 <p className="font-bold text-foreground">{exam.name}</p>
-                                                <p className="text-xs text-foreground/40">Weight: {exam.weight} • Created: {new Date(exam.created_at).toLocaleDateString()}</p>
+                                                <p className="text-xs text-foreground/40">Weight: {exam.weight} • Created: {exam.created_at ? new Date(exam.created_at).toLocaleDateString() : 'N/A'}</p>
                                             </div>
                                         </div>
 

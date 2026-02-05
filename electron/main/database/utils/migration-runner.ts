@@ -1,6 +1,10 @@
 import { getDatabase } from '../index'
 import * as fs from 'fs'
 import * as path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 interface MigrationRecord {
   id: number
@@ -66,7 +70,7 @@ export class MigrationRunner {
     const migrationPath = path.join(this.migrationsPath, migrationFile)
     const sql = fs.readFileSync(migrationPath, 'utf-8')
 
-    console.log(`Executing migration: ${migrationFile}`)
+    console.warn(`Executing migration: ${migrationFile}`)
 
     // SQLite doesn't support multi-statement transactions directly
     // Split by semicolons and execute individually (excluding comments)
@@ -98,7 +102,7 @@ export class MigrationRunner {
       `).run(migrationFile)
     })()
 
-    console.log(`✓ Migration completed: ${migrationFile}`)
+    console.warn(`✓ Migration completed: ${migrationFile}`)
   }
 
   /**
@@ -116,7 +120,7 @@ export class MigrationRunner {
         }
       }
 
-      console.log(`Found ${pendingMigrations.length} pending migration(s)`)
+      console.warn(`Found ${pendingMigrations.length} pending migration(s)`)
 
       const executed: string[] = []
 
@@ -242,3 +246,4 @@ export class MigrationRunner {
 
 // Export singleton instance
 export const migrationRunner = new MigrationRunner()
+

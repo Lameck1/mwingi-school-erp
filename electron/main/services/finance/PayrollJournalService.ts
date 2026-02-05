@@ -1,6 +1,5 @@
-import Database from 'better-sqlite3-multiple-ciphers';
+import Database from 'better-sqlite3';
 import { getDatabase } from '../../database';
-import { logAudit } from '../../database/utils/audit';
 import { DoubleEntryJournalService, JournalEntryData } from '../accounting/DoubleEntryJournalService';
 
 /**
@@ -14,6 +13,17 @@ export interface PayrollJournalResult {
   success: boolean;
   message: string;
   journal_entry_ids?: number[];
+}
+
+export interface PayrollPeriod {
+  id: number;
+  period_name: string;
+  start_date: string;
+  end_date: string;
+  status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'POSTED' | 'PAID';
+  gl_posted: number;
+  payment_status: string;
+  payment_date: string;
 }
 
 export class PayrollJournalService {
@@ -76,7 +86,7 @@ export class PayrollJournalService {
       // Get payroll period details
       const period = this.db.prepare(`
         SELECT * FROM payroll_period WHERE id = ?
-      `).get(periodId) as unknown;
+      `).get(periodId) as PayrollPeriod | undefined;
 
       if (!period) {
         return {
@@ -156,7 +166,14 @@ export class PayrollJournalService {
       // Get period details
       const period = this.db.prepare(`
         SELECT * FROM payroll_period WHERE id = ?
-      `).get(periodId) as unknown;
+      `).get(periodId) as PayrollPeriod | undefined;
+
+      if (!period) {
+        return {
+          success: false,
+          message: `Payroll period ${periodId} not found`
+        };
+      }
 
       // Aggregate deductions by type
       const deductions = this.db.prepare(`
@@ -235,7 +252,14 @@ export class PayrollJournalService {
       // Get period details
       const period = this.db.prepare(`
         SELECT * FROM payroll_period WHERE id = ?
-      `).get(periodId) as unknown;
+      `).get(periodId) as PayrollPeriod | undefined;
+
+      if (!period) {
+        return {
+          success: false,
+          message: `Payroll period ${periodId} not found`
+        };
+      }
 
       // Calculate total net salary to be paid
       const totals = this.db.prepare(`

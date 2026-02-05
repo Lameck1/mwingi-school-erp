@@ -38,6 +38,26 @@ export interface StudentPerformanceSnapshot {
   subjects: SubjectPerformance[]
 }
 
+export interface PerformanceTrend {
+  term_id: number
+  term_name: string
+  term_number: number
+  average_score: number
+  subject_count: number
+  lowest_score: number
+  highest_score: number
+}
+
+export interface StrugglingStudent {
+  student_id: number
+  admission_number: string
+  student_name: string
+  total_subjects: number
+  failing_subjects: number
+  average_score: number
+  lowest_score: number
+}
+
 export class PerformanceAnalysisService {
   private get db() {
     return getDatabase()
@@ -92,23 +112,32 @@ export class PerformanceAnalysisService {
 
       query += ` ORDER BY (curr.average_marks - prev.average_marks) DESC`
 
-      const results = this.db.prepare(query).all(...params) as unknown[]
+      interface MostImprovedStudentRaw {
+        student_id: number
+        admission_number: string
+        student_name: string
+        previous_term_average: number // SQLite returns numbers for calculated columns usually, but check parsing
+        current_term_average: number
+        improvement_points: number
+      }
+
+      const results = this.db.prepare(query).all(...params) as MostImprovedStudentRaw[]
 
       return results
         .filter(r => r.improvement_points >= minimumImprovement)
-        .map((result, index) => ({
+        .map((result) => ({
           student_id: result.student_id,
           admission_number: result.admission_number,
           student_name: result.student_name,
-          previous_term_average: parseFloat(result.previous_term_average),
-          current_term_average: parseFloat(result.current_term_average),
-          improvement_percentage: result.previous_term_average > 0
-            ? ((result.improvement_points / result.previous_term_average) * 100)
+          previous_term_average: Number(result.previous_term_average),
+          current_term_average: Number(result.current_term_average),
+          improvement_percentage: Number(result.previous_term_average) > 0
+            ? ((Number(result.improvement_points) / Number(result.previous_term_average)) * 100)
             : 0,
-          improvement_points: parseFloat(result.improvement_points),
+          improvement_points: Number(result.improvement_points),
           grade_improvement: this.getGradeImprovement(
-            result.previous_term_average,
-            result.current_term_average
+            Number(result.previous_term_average),
+            Number(result.current_term_average)
           ),
           subjects_improved: 0, // Will be calculated separately if needed
           subjects_declined: 0  // Will be calculated separately if needed
@@ -130,9 +159,20 @@ export class PerformanceAnalysisService {
     comparisonTermId: number
   ): Promise<StudentPerformanceSnapshot | null> {
     try {
-      const student = this.db.prepare('SELECT * FROM student WHERE id = ?').get(studentId) as unknown
+      interface StudentRaw {
+        id: number
+        admission_number: string
+        name: string
+      }
+      const student = this.db.prepare('SELECT * FROM student WHERE id = ?').get(studentId) as StudentRaw | undefined
 
       if (!student) return null
+
+      interface CurrentPerformanceRaw {
+        subject_id: number
+        subject_name: string
+        current_score: number
+      }
 
       // Get current term performance
       const currentPerformance = this.db.prepare(`
@@ -146,7 +186,12 @@ export class PerformanceAnalysisService {
         WHERE er.student_id = ?
           AND e.term_id = ?
           AND e.academic_year_id = ?
-      `).all(studentId, currentTermId, academicYearId) as unknown[]
+      `).all(studentId, currentTermId, academicYearId) as CurrentPerformanceRaw[]
+
+      interface ComparisonPerformanceRaw {
+        subject_id: number
+        previous_score: number
+      }
 
       // Get comparison term performance
       const comparisonPerformance = this.db.prepare(`
@@ -158,7 +203,7 @@ export class PerformanceAnalysisService {
         WHERE er.student_id = ?
           AND e.term_id = ?
           AND e.academic_year_id = ?
-      `).all(studentId, comparisonTermId, academicYearId) as unknown[]
+      `).all(studentId, comparisonTermId, academicYearId) as ComparisonPerformanceRaw[]
 
       // Map scores
       const scoreMap = new Map(comparisonPerformance.map(p => [p.subject_id, p.previous_score]))
@@ -218,7 +263,7 @@ export class PerformanceAnalysisService {
     termId: number,
     passThreshold: number = 50,
     streamId?: number
-  ): Promise<unknown[]> {
+  ): Promise<StrugglingStudent[]> {
     try {
       let query = `
         SELECT 
@@ -249,7 +294,7 @@ export class PerformanceAnalysisService {
 
       query += ` ORDER BY failing_subjects DESC, average_score ASC`
 
-      return this.db.prepare(query).all(...params) as unknown[]
+      return this.db.prepare(query).all(...params) as StrugglingStudent[]
     } catch (error) {
       throw new Error(
         `Failed to get struggling students: ${error instanceof Error ? error.message : String(error)}`
@@ -264,7 +309,7 @@ export class PerformanceAnalysisService {
     studentId: number,
     academicYearId: number,
     numberOfTerms: number = 3
-  ): Promise<unknown[]> {
+  ): Promise<PerformanceTrend[]> {
     try {
       const trends = this.db.prepare(`
         SELECT 
@@ -284,7 +329,7 @@ export class PerformanceAnalysisService {
         GROUP BY t.id
         ORDER BY t.term_number DESC
         LIMIT ?
-      `).all(academicYearId, studentId, numberOfTerms) as unknown[]
+      `).all(academicYearId, studentId, numberOfTerms) as PerformanceTrend[]
 
       return trends
     } catch (error) {

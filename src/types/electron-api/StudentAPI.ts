@@ -31,6 +31,42 @@ export interface StudentFilters {
   search?: string
 }
 
+export interface AttendanceStudent {
+  student_id: number
+  student_name: string
+  admission_number: string
+}
+
+export interface AttendanceRecord {
+  id: number
+  student_id: number
+  stream_id: number
+  academic_year_id: number
+  term_id: number
+  attendance_date: string
+  status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED'
+  notes: string | null
+  marked_by_user_id: number
+  created_at: string
+  student_name?: string
+  admission_number?: string
+}
+
+export interface AttendanceEntry {
+  student_id: number
+  status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED'
+  notes?: string
+}
+
+export interface ReportCardStudent {
+  student_id: number
+  student_name: string
+  admission_number: string
+  stream_name: string
+  average_score?: number
+  rank?: number
+}
+
 export interface StudentAPI {
   getStudents(filters?: StudentFilters): Promise<Student[]>
   getStudentById(id: number): Promise<Student>
@@ -38,9 +74,9 @@ export interface StudentAPI {
   updateStudent(id: number, data: Partial<Student>): Promise<{ success: boolean }>
   getStudentBalance(studentId: number): Promise<number>
   // Attendance
-  getStudentsForAttendance(streamId: number, yearId: number, termId: number): Promise<Student[]>
-  getAttendanceByDate(streamId: number, date: string, yearId: number, termId: number): Promise<any[]>
-  markAttendance(entries: any[], streamId: number, date: string, yearId: number, termId: number, userId: number): Promise<{ success: boolean; marked: number; errors?: string[] }>
+  getStudentsForAttendance(streamId: number, yearId: number, termId: number): Promise<AttendanceStudent[]>
+  getAttendanceByDate(streamId: number, date: string, yearId: number, termId: number): Promise<AttendanceRecord[]>
+  markAttendance(entries: AttendanceEntry[], streamId: number, date: string, yearId: number, termId: number, userId: number): Promise<{ success: boolean; marked: number; errors?: string[] }>
   // Reports
-  getStudentsForReportCards(streamId: number, yearId: number, termId: number): Promise<any[]>
+  getStudentsForReportCards(streamId: number, yearId: number, termId: number): Promise<ReportCardStudent[]>
 }

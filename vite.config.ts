@@ -13,7 +13,7 @@ export default defineConfig({
                     build: {
                         outDir: 'dist-electron/main',
                         rollupOptions: {
-                            external: ['electron', 'better-sqlite3-multiple-ciphers', 'bcryptjs', 'nodemailer'],
+                            external: ['electron', 'better-sqlite3-multiple-ciphers', 'better-sqlite3', 'bcryptjs', 'nodemailer'],
                         },
                         commonjsOptions: {
                             ignoreDynamicRequires: true,

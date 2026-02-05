@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3-multiple-ciphers'
+import type { Database } from 'better-sqlite3'
 import { getDatabase } from '../../database'
 
 // ============================================================================

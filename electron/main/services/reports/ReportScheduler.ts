@@ -39,7 +39,7 @@ export class ReportScheduler {
     initialize(): void {
         if (this.isRunning) return
 
-        console.log('Initializing report scheduler...')
+        this.logInfo('Initializing report scheduler...')
 
         // Check every minute
         this.checkInterval = setInterval(() => {
@@ -47,7 +47,7 @@ export class ReportScheduler {
         }, 60 * 1000)
 
         this.isRunning = true
-        console.log('Report scheduler initialized')
+        this.logInfo('Report scheduler initialized')
     }
 
     /**
@@ -59,7 +59,7 @@ export class ReportScheduler {
             this.checkInterval = null
         }
         this.isRunning = false
-        console.log('Report scheduler shutdown')
+        this.logInfo('Report scheduler shutdown')
     }
 
     private async checkAndRunReports(): Promise<void> {
@@ -179,9 +179,10 @@ export class ReportScheduler {
             'export_format', 'is_active']
 
         for (const field of fields) {
-            if ((data as unknown)[field] !== undefined) {
+            const key = field as keyof ScheduledReport
+            if (data[key] !== undefined) {
                 sets.push(`${field} = ?`)
-                params.push((data as unknown)[field])
+                params.push(data[key])
             }
         }
 
@@ -211,7 +212,7 @@ export class ReportScheduler {
     }
 
     private async executeReport(schedule: ScheduledReport): Promise<void> {
-        console.log(`Executing scheduled report: ${schedule.report_name}`)
+        this.logInfo(`Executing scheduled report: ${schedule.report_name}`)
 
         // In a real implementation:
         // 1. Generate report (PDF/Excel) using ReportEngine
@@ -220,7 +221,7 @@ export class ReportScheduler {
 
         try {
             // Simulate execution
-            console.log('Simulating report generation and email...')
+            this.logInfo('Simulating report generation and email...')
 
             // Update last run time
             this.db.prepare(`
@@ -253,7 +254,13 @@ export class ReportScheduler {
         if (!data.recipients) errors.push('At least one recipient is required')
         return errors
     }
+
+    private logInfo(message: string): void {
+        // eslint-disable-next-line no-console
+        console.info(message)
+    }
 }
 
 export const reportScheduler = new ReportScheduler()
+
 

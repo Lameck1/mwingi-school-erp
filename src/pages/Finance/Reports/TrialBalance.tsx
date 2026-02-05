@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
+import { formatCurrency } from '../../../utils/format';
+import { ElectronAPI } from '../../../types/electron-api';
 
 interface TrialBalanceAccount {
   account_code: string;
@@ -26,6 +28,7 @@ export default function TrialBalancePage() {
 
   useEffect(() => {
     loadTrialBalance();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadTrialBalance = async () => {
@@ -33,8 +36,8 @@ export default function TrialBalancePage() {
     setError(null);
 
     try {
-      const result = await (window as unknown).electronAPI.getTrialBalance(startDate, endDate);
-      
+      const result = await (window as unknown as { electronAPI: ElectronAPI }).electronAPI.getTrialBalance(startDate, endDate);
+
       if (result.success) {
         setTrialBalance(result.data);
       } else {
@@ -45,14 +48,6 @@ export default function TrialBalancePage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatAmount = (amount: number): string => {
-    if (amount === 0) return '-';
-    return `Kes ${(amount / 100).toLocaleString('en-KE', { 
-      minimumFractionDigits: 2, 
-      maximumFractionDigits: 2 
-    })}`;
   };
 
   if (loading) {
@@ -119,7 +114,7 @@ export default function TrialBalancePage() {
               </div>
               {!trialBalance.is_balanced && (
                 <div className="text-red-600 font-medium">
-                  Variance: {formatAmount(Math.abs(trialBalance.total_debits - trialBalance.total_credits))}
+                  Variance: {formatCurrency(Math.abs(trialBalance.total_debits - trialBalance.total_credits))}
                 </div>
               )}
             </div>
@@ -141,10 +136,10 @@ export default function TrialBalancePage() {
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{account.account_code}</td>
                     <td className="px-6 py-4 text-sm text-gray-900">{account.account_name}</td>
                     <td className="px-6 py-4 text-sm text-right text-gray-900">
-                      {formatAmount(account.debit_total)}
+                      {formatCurrency(account.debit_total)}
                     </td>
                     <td className="px-6 py-4 text-sm text-right text-gray-900">
-                      {formatAmount(account.credit_total)}
+                      {formatCurrency(account.credit_total)}
                     </td>
                   </tr>
                 ))}
@@ -153,10 +148,10 @@ export default function TrialBalancePage() {
                 <tr>
                   <td colSpan={2} className="px-6 py-4 text-sm font-bold text-gray-900">TOTAL</td>
                   <td className="px-6 py-4 text-sm font-bold text-right text-gray-900">
-                    {formatAmount(trialBalance.total_debits)}
+                    {formatCurrency(trialBalance.total_debits)}
                   </td>
                   <td className="px-6 py-4 text-sm font-bold text-right text-gray-900">
-                    {formatAmount(trialBalance.total_credits)}
+                    {formatCurrency(trialBalance.total_credits)}
                   </td>
                 </tr>
               </tfoot>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
     Users, BookOpen, Save, Loader2, UserPlus, Trash2
 } from 'lucide-react'
@@ -49,45 +49,49 @@ export default function TeacherAllocation() {
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
 
-    useEffect(() => {
-        loadInitialData()
-    }, [])
-
-    useEffect(() => {
-        if (selectedStream && currentAcademicYear && currentTerm) {
-            loadAllocations()
-        }
-    }, [selectedStream, currentAcademicYear, currentTerm])
-
-    const loadInitialData = async () => {
+    const loadAllocations = useCallback(async () => {
         try {
-            const [streamsData, staffData, subjectsData] = await Promise.all([
-                window.electronAPI.getStreams(),
-                window.electronAPI.getStaff(),
-                window.electronAPI.getAcademicSubjects()
-            ])
-            setStreams(streamsData)
-            setStaff(staffData)
-            setSubjects(subjectsData)
-        } catch (error) {
-            console.error('Failed to load initial data:', error)
-        }
-    }
+            if (currentAcademicYear && currentTerm) {
+                setLoading(true)
+                const [allocationsData, streamsData, subjectsData] = await Promise.all([
+                    window.electronAPI.getTeacherAllocations(
+                        currentAcademicYear.id,
+                        currentTerm.id,
+                        selectedStream || undefined
+                    ),
+                    window.electronAPI.getStreams(),
+                    window.electronAPI.getAcademicSubjects()
+                ])
 
-    const loadAllocations = async () => {
-        if (!currentAcademicYear || !currentTerm || !selectedStream) return
-        setLoading(true)
-        try {
-            const data = await window.electronAPI.getTeacherAllocations(
-                currentAcademicYear.id, currentTerm.id, selectedStream
-            )
-            setAllocations(data)
+                setAllocations(allocationsData || [])
+                setStreams(streamsData || [])
+                setSubjects(subjectsData || [])
+            }
         } catch (error) {
             console.error('Failed to load allocations:', error)
         } finally {
             setLoading(false)
         }
-    }
+    }, [currentAcademicYear, currentTerm, selectedStream])
+
+    const loadInitialData = useCallback(async () => {
+        try {
+            const [staffData] = await Promise.all([
+                window.electronAPI.getStaff(),
+            ])
+            setStaff(staffData)
+        } catch (error) {
+            console.error('Failed to load initial data:', error)
+        }
+    }, [])
+
+    useEffect(() => {
+        loadInitialData()
+    }, [loadInitialData])
+
+    useEffect(() => {
+        loadAllocations()
+    }, [loadAllocations])
 
     const handleAllocate = async () => {
         if (!currentAcademicYear || !currentTerm || !selectedStream || !selectedSubject || !selectedTeacher || !user) {

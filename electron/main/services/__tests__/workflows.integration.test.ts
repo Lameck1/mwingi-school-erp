@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import Database from 'better-sqlite3-multiple-ciphers'
+import Database from 'better-sqlite3'
 
 vi.mock('../../database/utils/audit', () => ({
   logAudit: vi.fn()
@@ -134,7 +134,7 @@ describe('Integration Workflows', () => {
   })
 
   afterEach(() => {
-    db.close()
+    if (db) db.close()
   })
 
   // Cross-service workflow tests
@@ -155,7 +155,7 @@ describe('Integration Workflows', () => {
   })
 
   it('should process approval workflow with financial data', () => {
-    const approval = db.prepare('SELECT * FROM approval_request WHERE id = ?').get('req-1')
+    const approval = db.prepare('SELECT * FROM approval_request WHERE id = ?').get('req-1') as { invoice_id: string }
     expect(approval).toBeDefined()
 
     const invoice = db.prepare('SELECT * FROM fee_invoice WHERE id = ?').get(approval.invoice_id)
@@ -181,7 +181,7 @@ describe('Integration Workflows', () => {
   })
 
   it('should verify approval request data consistency', () => {
-    const allApprovals = db.prepare('SELECT * FROM approval_request').all()
+    const allApprovals = db.prepare('SELECT * FROM approval_request').all() as { student_id: string; invoice_id: string }[]
     expect(Array.isArray(allApprovals)).toBe(true)
 
     for (const approval of allApprovals) {

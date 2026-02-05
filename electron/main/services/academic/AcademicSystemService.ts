@@ -23,20 +23,66 @@ export interface ExamResult {
     teacher_remarks: string | null
 }
 
+export interface ExamResultWithCurriculum {
+    score: number | null
+    competency_level: number | null
+    curriculum: string
+}
+
+export interface StudentSummary {
+    student_id: number
+    total_marks: number
+    average_score: number
+    mean_grade: string
+}
+
+export interface Subject {
+    id: number
+    name: string
+    code: string
+    curriculum: string
+    is_active: number
+}
+
+export interface Exam {
+    id: number
+    academic_year_id: number
+    term_id: number
+    name: string
+    weight: number
+    created_at: string
+}
+
+export interface CreateExamDTO {
+    academic_year_id: number
+    term_id: number
+    name: string
+    weight?: number
+}
+
+export interface ExamResultView {
+    student_id: number
+    student_name: string
+    admission_number: string
+    score: number | null
+    competency_level: number | null
+    teacher_remarks: string | null
+}
+
 export class AcademicSystemService {
     private get db() { return getDatabase() }
 
     // ==================== Subject Management ====================
-    async getAllSubjects(): Promise<any[]> {
-        return this.db.prepare('SELECT * FROM subject WHERE is_active = 1 ORDER BY curriculum, name').all()
+    async getAllSubjects(): Promise<Subject[]> {
+        return this.db.prepare('SELECT * FROM subject WHERE is_active = 1 ORDER BY curriculum, name').all() as Subject[]
     }
 
     // ==================== Exam Management ====================
-    async getAllExams(academicYearId: number, termId: number): Promise<any[]> {
-        return this.db.prepare('SELECT * FROM exam WHERE academic_year_id = ? AND term_id = ? ORDER BY created_at DESC').all(academicYearId, termId)
+    async getAllExams(academicYearId: number, termId: number): Promise<Exam[]> {
+        return this.db.prepare('SELECT * FROM exam WHERE academic_year_id = ? AND term_id = ? ORDER BY created_at DESC').all(academicYearId, termId) as Exam[]
     }
 
-    async createExam(data: unknown, userId: number): Promise<void> {
+    async createExam(data: CreateExamDTO, userId: number): Promise<void> {
         this.db.prepare(`
             INSERT INTO exam (academic_year_id, term_id, name, weight)
             VALUES (?, ?, ?, ?)
@@ -71,7 +117,7 @@ export class AcademicSystemService {
             JOIN stream st ON sa.stream_id = st.id
             WHERE sa.academic_year_id = ? AND sa.term_id = ?
         `
-        const params: any[] = [academicYearId, termId]
+        const params: (number | string)[] = [academicYearId, termId]
 
         if (streamId) {
             sql += ' AND sa.stream_id = ?'
@@ -82,7 +128,7 @@ export class AcademicSystemService {
     }
 
     // ==================== Results Management ====================
-    async getResults(examId: number, subjectId: number, streamId: number, userId: number): Promise<any[]> {
+    async getResults(examId: number, subjectId: number, streamId: number, userId: number): Promise<ExamResultView[]> {
         // SECURITY: Verify user has access to this class/subject
         const canAccess = await this.verifyAccess(subjectId, streamId, userId)
         if (!canAccess) {
@@ -103,7 +149,7 @@ export class AcademicSystemService {
             LEFT JOIN exam_result er ON s.id = er.student_id AND er.exam_id = ? AND er.subject_id = ?
             WHERE e.stream_id = ? AND e.status = 'ACTIVE'
             ORDER BY s.first_name, s.last_name
-        `).all(examId, subjectId, streamId)
+        `).all(examId, subjectId, streamId) as ExamResultView[]
     }
 
     private async checkTermOpen(termId: number): Promise<void> {
@@ -146,7 +192,7 @@ export class AcademicSystemService {
             VALUES (?, ?, ?, ?, ?, ?, ?)
         `)
 
-        const transaction = this.db.transaction((data: any[]) => {
+        const transaction = this.db.transaction((data: Omit<ExamResult, 'id' | 'exam_id'>[]) => {
             for (const res of data) {
                 insert.run(examId, res.student_id, res.subject_id, res.score, res.competency_level, res.teacher_remarks, userId)
             }
@@ -166,7 +212,7 @@ export class AcademicSystemService {
             SELECT DISTINCT student_id FROM exam_result WHERE exam_id = ?
         `).all(examId) as { student_id: number }[]
 
-        const studentSummaries: any[] = []
+        const studentSummaries: StudentSummary[] = []
 
         for (const { student_id } of students) {
             // Get all results for this student in this exam
@@ -175,7 +221,7 @@ export class AcademicSystemService {
                 FROM exam_result er
                 JOIN subject s ON er.subject_id = s.id
                 WHERE er.exam_id = ? AND er.student_id = ?
-            `).all(examId, student_id) as unknown[]
+            `).all(examId, student_id) as ExamResultWithCurriculum[]
 
             if (results.length === 0) continue
 
@@ -217,7 +263,7 @@ export class AcademicSystemService {
             VALUES (?, ?, ?, ?, ?, ?)
         `)
 
-        const transaction = db.transaction((summaries: any[]) => {
+        const transaction = db.transaction((summaries: StudentSummary[]) => {
             summaries.forEach((s, index) => {
                 upsert.run(examId, s.student_id, s.total_marks, s.average_score, s.mean_grade, index + 1)
             })

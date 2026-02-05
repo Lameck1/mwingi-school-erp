@@ -3,7 +3,9 @@ import { getDatabase } from '../../database/index';
 import { logAudit } from '../../database/utils/audit';
 
 export function registerMessageHandlers(): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = new Proxy({} as any, {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         get: (_target, prop) => (getDatabase() as any)[prop]
     });
 
@@ -12,6 +14,7 @@ export function registerMessageHandlers(): void {
         return db.prepare('SELECT * FROM message_template WHERE is_active = 1').all();
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ipcMain.handle('message:saveTemplate', async (_, template: any) => {
         if (template.id) {
             db.prepare(`UPDATE message_template SET 
@@ -36,7 +39,7 @@ export function registerMessageHandlers(): void {
 
     // ======== SENDING SMS ========
     ipcMain.handle('message:sendSms', async (event, options: { to: string, message: string, recipientId?: number, recipientType?: string, userId: number }) => {
-        const settings = db.prepare('SELECT sms_api_key, sms_api_secret, sms_sender_id FROM school_settings WHERE id = 1').get() as any;
+        const settings = db.prepare('SELECT sms_api_key, sms_api_secret, sms_sender_id FROM school_settings WHERE id = 1').get() as { sms_api_key: string; sms_api_secret: string; sms_sender_id: string } | undefined;
 
         // Create log entry as PENDING
         const logStmt = db.prepare(`INSERT INTO message_log 
@@ -66,10 +69,11 @@ export function registerMessageHandlers(): void {
                 .run('SENT', `SIM-${Date.now()}`, logId);
 
             return { success: true, messageId: `SIM-${Date.now()}` };
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             db.prepare("UPDATE message_log SET status = 'FAILED', error_message = ? WHERE id = ?")
-                .run(error.message, logId);
-            return { success: false, error: error.message };
+                .run(errorMessage, logId);
+            return { success: false, error: errorMessage };
         }
     });
 

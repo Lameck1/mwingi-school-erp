@@ -6,6 +6,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { formatCurrency } from '../../../utils/format';
+
 
 interface GLAccount {
   code: string;
@@ -115,12 +117,8 @@ export const GLAccountManagement: React.FC = () => {
     }
   };
 
-  const formatCurrency = (amount: number): string => {
-    return `Kes ${amount.toLocaleString('en-KE', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-  };
+
+
 
   return (
     <div className="p-6 space-y-6">
@@ -211,6 +209,13 @@ export const GLAccountManagement: React.FC = () => {
                   key={account.code}
                   className="hover:bg-gray-50 cursor-pointer"
                   onClick={() => setSelectedAccount(account)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      setSelectedAccount(account)
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                 >
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {account.code}
@@ -232,11 +237,10 @@ export const GLAccountManagement: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <span
-                      className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        account.isActive
+                      className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${account.isActive
                           ? 'bg-green-100 text-green-800'
                           : 'bg-gray-100 text-gray-800'
-                      }`}
+                        }`}
                     >
                       {account.isActive ? 'Active' : 'Inactive'}
                     </span>
@@ -264,10 +268,19 @@ export const GLAccountManagement: React.FC = () => {
         <div
           className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50"
           onClick={() => setSelectedAccount(null)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setSelectedAccount(null)
+            }
+          }}
+          role="button"
+          tabIndex={0}
         >
           <div
             className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="presentation"
           >
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               Account Details
@@ -317,11 +330,10 @@ export const GLAccountManagement: React.FC = () => {
                 <label className="text-sm font-medium text-gray-700">Status</label>
                 <p>
                   <span
-                    className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      selectedAccount.isActive
+                    className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${selectedAccount.isActive
                         ? 'bg-green-100 text-green-800'
                         : 'bg-gray-100 text-gray-800'
-                    }`}
+                      }`}
                   >
                     {selectedAccount.isActive ? 'Active' : 'Inactive'}
                   </span>

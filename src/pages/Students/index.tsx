@@ -10,7 +10,16 @@ import { useAppStore } from '../../stores'
 import { Student } from '../../types/electron-api/StudentAPI'
 import { Stream } from '../../types/electron-api/AcademicAPI'
 import { printDocument } from '../../utils/print'
+import { formatCurrency } from '../../utils/format'
 import { ImportDialog } from '../../components/ui/ImportDialog'
+
+interface StudentLedgerResult {
+    student: Student;
+    openingBalance: number;
+    ledger: Record<string, unknown>[];
+    closingBalance: number;
+    error?: string;
+}
 
 export default function Students() {
     const navigate = useNavigate()
@@ -81,15 +90,14 @@ export default function Students() {
         currentPage * itemsPerPage
     )
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', minimumFractionDigits: 0 }).format(amount)
-    }
+
+
 
     const handlePrintStatement = async (student: Student) => {
         setPrintingId(student.id)
         try {
-            const result = await window.electronAPI.getStudentLedgerReport(student.id)
-            if (result && !('error' in result)) {
+            const result = await window.electronAPI.getStudentLedgerReport(student.id) as unknown as StudentLedgerResult
+            if (result && !result.error) {
                 printDocument({
                     title: `Statement - ${student.first_name} ${student.last_name}`,
                     template: 'statement',

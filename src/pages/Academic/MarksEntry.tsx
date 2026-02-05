@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
     Save, Loader2, Search, AlertCircle, TrendingUp
 } from 'lucide-react'
@@ -28,6 +28,7 @@ interface StudentResult {
     score: number | null
     competency_level: number | null
     teacher_remarks: string
+    [key: string]: unknown
 }
 
 export default function MarksEntry() {
@@ -45,36 +46,29 @@ export default function MarksEntry() {
     const [saving, setSaving] = useState(false)
     const [processing, setProcessing] = useState(false)
 
-    useEffect(() => {
-        if (currentAcademicYear && currentTerm) {
-            loadInitialData()
-        }
-    }, [currentAcademicYear, currentTerm])
-
-    useEffect(() => {
-        if (selectedExam && selectedAllocation) {
-            loadResults()
-        }
-    }, [selectedExam, selectedAllocation])
-
-    const loadInitialData = async () => {
+    const loadInitialData = useCallback(async () => {
         if (!currentAcademicYear || !currentTerm || !user) return
         try {
             const [examsData, allocationsData] = await Promise.all([
                 window.electronAPI.getAcademicExams(currentAcademicYear.id, currentTerm.id),
-                window.electronAPI.getTeacherAllocations(currentAcademicYear.id, currentTerm.id) // Filtered by teacher in backend would be better
+                window.electronAPI.getTeacherAllocations(currentAcademicYear.id, currentTerm.id)
             ])
 
-            // In a real app, we would filter allocations by the logged-in teacher's staff ID.
-            // Since we are in a demo, let's show all or the user's allocated ones.
             setExams(examsData)
-            setAllocations(allocationsData)
+            setAllocations(allocationsData.map((a) => ({
+                id: a.id,
+                subject_id: a.subject_id,
+                stream_id: a.stream_id,
+                subject_name: a.subject_name || 'Unknown Subject',
+                stream_name: a.stream_name || 'Unknown Stream',
+                curriculum: a.curriculum || 'KCSE'
+            })))
         } catch (error) {
             console.error('Failed to load marks entry data:', error)
         }
-    }
+    }, [currentAcademicYear, currentTerm, user])
 
-    const loadResults = async () => {
+    const loadResults = useCallback(async () => {
         const alloc = allocations.find((a: Allocation) => a.id === selectedAllocation)
         if (!selectedExam || !alloc) return
 
@@ -83,13 +77,32 @@ export default function MarksEntry() {
             const data = await window.electronAPI.getAcademicResults(
                 selectedExam, alloc.subject_id, alloc.stream_id, user!.id
             )
-            setResults(data)
+            setResults(data.map((r) => ({
+                student_id: r.student_id,
+                student_name: r.student_name || 'Unknown Student',
+                admission_number: r.admission_number || '',
+                score: r.score,
+                competency_level: r.competency_level,
+                teacher_remarks: r.teacher_remarks || ''
+            })))
         } catch (error) {
             console.error('Failed to load results:', error)
         } finally {
             setLoading(false)
         }
-    }
+    }, [allocations, selectedAllocation, selectedExam, user])
+
+    useEffect(() => {
+        if (currentAcademicYear && currentTerm) {
+            loadInitialData()
+        }
+    }, [loadInitialData, currentAcademicYear, currentTerm])
+
+    useEffect(() => {
+        if (selectedExam && selectedAllocation) {
+            loadResults()
+        }
+    }, [selectedExam, selectedAllocation, loadResults])
 
     const handleScoreChange = (studentId: number, field: keyof StudentResult, value: unknown) => {
         setResults(prev => prev.map(r =>

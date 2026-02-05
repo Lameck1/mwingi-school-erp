@@ -11,12 +11,17 @@ interface TransactionSummary {
     netBalance: number
 }
 
+interface ChartData {
+    name: string
+    value: number
+}
+
 export default function FinancialReports() {
     const { showToast } = useToast()
 
     const [summary, setSummary] = useState<TransactionSummary>({ totalIncome: 0, totalExpense: 0, netBalance: 0 })
-    const [revenueData, setRevenueData] = useState<any[]>([])
-    const [expenseData, setExpenseData] = useState<any[]>([])
+    const [revenueData, setRevenueData] = useState<ChartData[]>([])
+    const [expenseData, setExpenseData] = useState<ChartData[]>([])
     const [loading, setLoading] = useState(false)
     const [dateRange, setDateRange] = useState({
         startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10),
@@ -34,8 +39,8 @@ export default function FinancialReports() {
                 window.electronAPI.getExpenseByCategory(dateRange.startDate, dateRange.endDate)
             ])
             setSummary(summaryData)
-            setRevenueData(revenue)
-            setExpenseData(expenses)
+            setRevenueData(revenue as ChartData[])
+            setExpenseData(expenses as ChartData[])
         } catch (error) {
             console.error('Failed to load report data:', error)
             showToast('Failed to correlate financial data', 'error')

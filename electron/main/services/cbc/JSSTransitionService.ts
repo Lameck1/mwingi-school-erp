@@ -225,7 +225,14 @@ export class JSSTransitionService {
       ORDER BY s.last_name, s.first_name
     `);
 
-    const students = stmt.all(fromGrade) as unknown[];
+    interface EligibleStudentResult {
+      student_id: number;
+      student_name: string;
+      current_grade: number;
+      current_boarding_status: 'BOARDER' | 'DAY_SCHOLAR';
+    }
+
+    const students = stmt.all(fromGrade) as EligibleStudentResult[];
     const feeStructure = this.getJSSFeeStructure(toGrade, fiscalYear);
 
     return students.map(student => ({
@@ -311,7 +318,18 @@ export class JSSTransitionService {
       WHERE transition_date BETWEEN ? AND ?
     `);
 
-    const result = stmt.get(startDate, endDate) as unknown;
+    interface TransitionSummaryResult {
+      total_transitions: number;
+      grade_6_to_7: number;
+      grade_7_to_8: number;
+      grade_8_to_9: number;
+      to_boarder_count: number;
+      to_day_scholar_count: number;
+      avg_outstanding_balance_cents: number | null;
+      total_outstanding_balance_cents: number | null;
+    }
+
+    const result = stmt.get(startDate, endDate) as TransitionSummaryResult;
 
     return {
       fiscal_year: fiscalYear,

@@ -1,9 +1,10 @@
 
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { useAppStore } from '../../stores'
 import { Download } from 'lucide-react'
+import { SubjectDifficulty } from '../../types/electron-api/AcademicAPI'
 
 interface SubjectRanking {
   position: number
@@ -14,14 +15,6 @@ interface SubjectRanking {
   grade: string
 }
 
-interface SubjectDifficulty {
-  subject_id: number
-  subject_name: string
-  mean_score: number
-  median_score: number
-  pass_rate: number
-  difficulty_index: number
-}
 
 const SubjectMeritLists = () => {
   const { currentAcademicYear, currentTerm } = useAppStore()
@@ -38,30 +31,25 @@ const SubjectMeritLists = () => {
   const [difficulty, setDifficulty] = useState<SubjectDifficulty | null>(null)
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    loadInitialData()
-  }, [currentAcademicYear, currentTerm])
-
-  const loadInitialData = async () => {
+  const loadInitialData = useCallback(async () => {
     try {
-      if (currentAcademicYear && currentTerm) {
-        const [examsData, subjectsData, streamsData] = await Promise.all([
-          window.electronAPI.getExams({
-            academicYearId: currentAcademicYear.id,
-            termId: currentTerm.id
-          }),
-          window.electronAPI.getSubjects(),
-          window.electronAPI.getStreams()
-        ])
+      const [examsData, streamsData, subjectsData] = await Promise.all([
+        window.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
+        window.electronAPI.getStreams(),
+        window.electronAPI.getAcademicSubjects()
+      ])
 
-        setExams(examsData || [])
-        setSubjects(subjectsData || [])
-        setStreams(streamsData || [])
-      }
+      setExams(examsData || [])
+      setStreams(streamsData || [])
+      setSubjects(subjectsData || [])
     } catch (error) {
       console.error('Failed to load initial data:', error)
     }
-  }
+  }, [currentAcademicYear, currentTerm])
+
+  useEffect(() => {
+    loadInitialData()
+  }, [loadInitialData])
 
   const handleGenerateMeritList = async () => {
     if (!selectedExam || !selectedSubject || !selectedStream) {
@@ -79,7 +67,8 @@ const SubjectMeritLists = () => {
         }),
         window.electronAPI.getSubjectDifficulty({
           examId: selectedExam,
-          subjectId: selectedSubject
+          subjectId: selectedSubject,
+          streamId: selectedStream
         })
       ])
 

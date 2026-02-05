@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import Database from 'better-sqlite3-multiple-ciphers'
+import Database from 'better-sqlite3'
 import { SegmentProfitabilityService } from '../SegmentProfitabilityService'
 
 // Mock audit utilities
@@ -113,7 +113,7 @@ describe('SegmentProfitabilityService', () => {
   })
 
   afterEach(() => {
-    db.close()
+    if (db) db.close()
   })
 
   describe('Service initialization', () => {

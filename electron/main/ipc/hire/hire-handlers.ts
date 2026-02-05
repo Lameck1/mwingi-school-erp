@@ -1,6 +1,20 @@
 import { ipcMain, IpcMainInvokeEvent } from 'electron'
 import { HireService } from '../../services/finance/HireService'
 
+// Local interfaces to avoid importing from src/ which is not in electron tsconfig
+interface HireClient {
+    id: number; client_name: string; contact_phone?: string; contact_email?: string; is_active: number;
+}
+interface HireAsset {
+    id: number; asset_name: string; asset_type: 'VEHICLE' | 'FACILITY' | 'EQUIPMENT' | 'OTHER'; default_rate?: number; is_active: number;
+}
+interface HireBooking {
+    id: number; asset_id: number; client_id: number; hire_date: string; total_amount: number; status: 'PENDING' | 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+}
+interface HirePayment {
+    id: number; booking_id: number; amount: number; payment_date: string;
+}
+
 export function registerHireHandlers(): void {
     const hireService = new HireService()
 
@@ -13,11 +27,11 @@ export function registerHireHandlers(): void {
         return hireService.getClientById(id)
     })
 
-    ipcMain.handle('hire:createClient', async (_event: IpcMainInvokeEvent, data: any) => {
+    ipcMain.handle('hire:createClient', async (_event: IpcMainInvokeEvent, data: Partial<HireClient>) => {
         return hireService.createClient(data)
     })
 
-    ipcMain.handle('hire:updateClient', async (_event: IpcMainInvokeEvent, id: number, data: any) => {
+    ipcMain.handle('hire:updateClient', async (_event: IpcMainInvokeEvent, id: number, data: Partial<HireClient>) => {
         return hireService.updateClient(id, data)
     })
 
@@ -30,11 +44,11 @@ export function registerHireHandlers(): void {
         return hireService.getAssetById(id)
     })
 
-    ipcMain.handle('hire:createAsset', async (_event: IpcMainInvokeEvent, data: any) => {
+    ipcMain.handle('hire:createAsset', async (_event: IpcMainInvokeEvent, data: Partial<HireAsset>) => {
         return hireService.createAsset(data)
     })
 
-    ipcMain.handle('hire:updateAsset', async (_event: IpcMainInvokeEvent, id: number, data: any) => {
+    ipcMain.handle('hire:updateAsset', async (_event: IpcMainInvokeEvent, id: number, data: Partial<HireAsset>) => {
         return hireService.updateAsset(id, data)
     })
 
@@ -43,7 +57,7 @@ export function registerHireHandlers(): void {
     })
 
     // ========== BOOKINGS ==========
-    ipcMain.handle('hire:getBookings', async (_event: IpcMainInvokeEvent, filters?: any) => {
+    ipcMain.handle('hire:getBookings', async (_event: IpcMainInvokeEvent, filters?: { status?: string; assetId?: number; clientId?: number }) => {
         return hireService.getBookings(filters)
     })
 
@@ -51,7 +65,7 @@ export function registerHireHandlers(): void {
         return hireService.getBookingById(id)
     })
 
-    ipcMain.handle('hire:createBooking', async (_event: IpcMainInvokeEvent, data: any, userId: number) => {
+    ipcMain.handle('hire:createBooking', async (_event: IpcMainInvokeEvent, data: Partial<HireBooking>, userId: number) => {
         return hireService.createBooking(data, userId)
     })
 
@@ -60,7 +74,7 @@ export function registerHireHandlers(): void {
     })
 
     // ========== PAYMENTS ==========
-    ipcMain.handle('hire:recordPayment', async (_event: IpcMainInvokeEvent, bookingId: number, data: any, userId: number) => {
+    ipcMain.handle('hire:recordPayment', async (_event: IpcMainInvokeEvent, bookingId: number, data: Partial<HirePayment>, userId: number) => {
         return hireService.recordPayment(bookingId, data, userId)
     })
 

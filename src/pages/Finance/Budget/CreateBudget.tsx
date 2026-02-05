@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { PageHeader } from '../../../components/patterns/PageHeader'
 import { useAppStore, useAuthStore } from '../../../stores'
-import { formatCurrency } from '../../../utils/format'
+import { formatCurrency, shillingsToCents } from '../../../utils/format'
 import { CreateBudgetLineItemData } from '../../../types/electron-api'
 
 interface TransactionCategory {
@@ -94,7 +94,7 @@ export default function CreateBudget() {
                 notes: notes || undefined,
                 line_items: validLineItems.map(item => ({
                     ...item,
-                    budgeted_amount: Math.round(item.budgeted_amount) // Whole currency units
+                    budgeted_amount: shillingsToCents(item.budgeted_amount) // Whole currency units
                 }))
             }, user?.id || 1)
 
@@ -271,7 +271,7 @@ export default function CreateBudget() {
                         </span>
                         <div className="flex items-center gap-2 text-2xl font-bold text-white font-mono">
                             <DollarSign className="w-5 h-5 text-primary" />
-                            {formatCurrency(totalBudgeted)}
+                            {formatCurrency(totalBudgeted * 100)}
                         </div>
                     </div>
                 </div>

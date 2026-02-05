@@ -9,8 +9,7 @@
         "esModuleInterop": true,
         "strict": true,
         "types": [
-            "node",
-            "jest"
+            "node"
         ]
     },
     "include": [

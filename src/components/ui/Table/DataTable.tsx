@@ -56,8 +56,10 @@ export interface DataTableProps<T extends { id: number | string }> {
     compact?: boolean
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getNestedValue(obj: unknown, path: string): any {
-    return path.split('.').reduce((acc, part) => acc && acc[part], obj)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return path.split('.').reduce((acc, part) => acc && (acc as any)[part], obj)
 }
 
 export function DataTable<T extends { id: number | string }>({

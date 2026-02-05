@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import Database from 'better-sqlite3-multiple-ciphers'
+import Database from 'better-sqlite3'
 import { NEMISExportService } from '../../reports/NEMISExportService'
 
 vi.mock('../../../../database/utils/audit', () => ({
@@ -252,7 +252,7 @@ describe('NEMISExportService', () => {
   })
 
   afterEach(() => {
-    db.close()
+    if (db) db.close()
   })
 
   // extractStudentData tests (8 tests)

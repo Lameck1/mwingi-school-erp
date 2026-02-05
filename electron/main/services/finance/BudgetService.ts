@@ -176,6 +176,38 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
     }
 
     protected executeUpdate(id: number, data: Partial<CreateBudgetData>): void {
+        const sets: string[] = []
+        const params: unknown[] = []
+        // Implementation omitted for executeUpdate? No, this is replacing executeUpdate, so I should implement it or keep it.
+        // Wait, the previous attempt to replace executeUpdate failed.
+        // The file content I read shows:
+        /*
+        178:     protected executeUpdate(id: number, data: Partial<CreateBudgetData>): void {
+        179:         const sets: string[] = []
+        180:         const params: unknown[] = []
+        181:         if (filters.academic_year_id) {
+        */
+        // It seems the file IS messed up. The previous multi_replace was partially successful or left it in a bad state?
+        // Step 1266 output said "chunk 1: replacement overlaps".
+        // Step 1281 view_file shows that `executeUpdate` body was replaced with `const sets... const params...` AND THEN `if (filters...)`.
+        // `filters` is not defined in `executeUpdate`. `filters` belongs in `applyFilters`.
+        // I need to RESTORE `executeUpdate` and `applyFilters` properly.
+
+        // Let's reconstruct `executeUpdate` and `applyFilters`.
+        // The original `executeUpdate` (from lines 178-207 in step 1256, before my botched edit):
+        /*
+        this.db.transaction(() => { ... })()
+        */
+        // The current state (from lines 178-194 in step 1281):
+        /*
+        protected executeUpdate(id: number, data: Partial<CreateBudgetData>): void {
+            const sets: string[] = []
+            const params: unknown[] = []
+            if (filters.academic_year_id) { ... }
+        }
+        */
+        // This is definitely broken. I removed the original `executeUpdate` logic and pasted `applyFilters` logic into it, but with missing function signature for `applyFilters`.
+
         this.db.transaction(() => {
             if (data.budget_name || data.notes !== undefined) {
                 this.db.prepare(`
@@ -206,7 +238,7 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
         })()
     }
 
-    protected applyFilters(filters: BudgetFilters, conditions: string[], params: any[]): void {
+    protected applyFilters(filters: BudgetFilters, conditions: string[], params: unknown[]): void {
         if (filters.academic_year_id) {
             conditions.push('b.academic_year_id = ?')
             params.push(filters.academic_year_id)

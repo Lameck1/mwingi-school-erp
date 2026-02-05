@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAuthStore } from '../../stores'
 import { FeeExemption, ExemptionStats } from '../../types/electron-api/ExemptionAPI'
 import { AcademicYear, Term } from '../../types/electron-api/AcademicAPI'
@@ -37,23 +37,7 @@ export default function FeeExemptions() {
 
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
 
-    useEffect(() => {
-        loadData()
-    }, [])
-
-    useEffect(() => {
-        if (studentSearch.length >= 2) {
-            const filtered = students.filter(s =>
-                `${s.first_name} ${s.last_name}`.toLowerCase().includes(studentSearch.toLowerCase()) ||
-                s.admission_number.toLowerCase().includes(studentSearch.toLowerCase())
-            )
-            setFilteredStudents(filtered.slice(0, 10))
-        } else {
-            setFilteredStudents([])
-        }
-    }, [studentSearch, students])
-
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         setLoading(true)
         try {
             const [exemptionsRes, yearsRes, categoriesRes, studentsRes, statsRes] = await Promise.all([
@@ -85,16 +69,34 @@ export default function FeeExemptions() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [statusFilter])
+
+    useEffect(() => {
+        loadData()
+    }, [loadData])
+
+    useEffect(() => {
+        if (studentSearch.length >= 2) {
+            const filtered = students.filter(s =>
+                `${s.first_name} ${s.last_name}`.toLowerCase().includes(studentSearch.toLowerCase()) ||
+                s.admission_number.toLowerCase().includes(studentSearch.toLowerCase())
+            )
+            setFilteredStudents(filtered.slice(0, 10))
+        } else {
+            setFilteredStudents([])
+        }
+    }, [studentSearch, students])
+
+
+
+    const loadExemptions = useCallback(async () => {
+        const exemptionsRes = await window.electronAPI.getExemptions({ status: statusFilter || undefined })
+        setExemptions(exemptionsRes)
+    }, [statusFilter])
 
     useEffect(() => {
         loadExemptions()
-    }, [statusFilter])
-
-    const loadExemptions = async () => {
-        const exemptionsRes = await window.electronAPI.getExemptions({ status: statusFilter || undefined })
-        setExemptions(exemptionsRes)
-    }
+    }, [loadExemptions])
 
     const handleYearChange = async (yearId: number) => {
         setFormData(prev => ({ ...prev, academic_year_id: yearId, term_id: 0 }))
@@ -326,6 +328,13 @@ export default function FeeExemptions() {
                                                     <div
                                                         key={s.id}
                                                         onClick={() => handleSelectStudent(s)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                                handleSelectStudent(s)
+                                                            }
+                                                        }}
+                                                        tabIndex={0}
+                                                        role="button"
                                                         className="p-2 hover:bg-gray-100 cursor-pointer"
                                                     >
                                                         {s.first_name} {s.last_name} ({s.admission_number})

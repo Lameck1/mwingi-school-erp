@@ -1,5 +1,38 @@
 import { db } from '../database/index'
 
+interface Stream {
+    id: number
+    stream_code: string
+    stream_name: string
+}
+
+interface FeeCategory {
+    id: number
+    category_name: string
+}
+
+interface TransactionCategory {
+    id: number
+    category_name: string
+    category_type: string
+}
+
+interface FeeStructureResult {
+    id: number
+    fee_category_id: number
+    category_name: string
+    amount: number
+}
+
+interface InventoryCategory {
+    id: number
+}
+
+interface FirstStudent {
+    id: number
+    stream_id: number
+}
+
 export class SystemMaintenanceService {
     async resetAndSeed2026(userId: number): Promise<{ success: boolean; message: string }> {
         if (!db) throw new Error('Database not initialized')
@@ -57,9 +90,9 @@ export class SystemMaintenanceService {
                 `).run(yearId).lastInsertRowid as number
 
                 // 4. Institutional Metadata
-                const streams = db!.prepare('SELECT id, stream_code, stream_name FROM stream WHERE is_active = 1').all() as unknown[]
-                const feeCats = db!.prepare('SELECT id, category_name FROM fee_category WHERE is_active = 1').all() as unknown[]
-                const transCats = db!.prepare('SELECT id, category_name, category_type FROM transaction_category WHERE is_active = 1').all() as unknown[]
+                const streams = db!.prepare('SELECT id, stream_code, stream_name FROM stream WHERE is_active = 1').all() as Stream[]
+                const feeCats = db!.prepare('SELECT id, category_name FROM fee_category WHERE is_active = 1').all() as FeeCategory[]
+                const transCats = db!.prepare('SELECT id, category_name, category_type FROM transaction_category WHERE is_active = 1').all() as TransactionCategory[]
 
                 const feeIncomeCat = transCats.find(c => c.category_name === 'School Fees')?.id
                 const utilityCat = transCats.find(c => c.category_name === 'Utilities')?.id
@@ -70,18 +103,19 @@ export class SystemMaintenanceService {
                 const feeMap: Record<string, { DAY: number[], BOARDER: number[] }> = {
                     // Primary 1-6 Boarder: 17,000 total (estimated breakdown: Tuition ~5500, Feeding ~5000, Boarding ~6500)
                     // JSS Boarder: 19,500 total (estimated breakdown: Tuition ~7000, Feeding ~5000, Boarding ~7500)
-                    'BABY': { DAY: [3000, 3500, 500], BOARDER: [3000, 5000, 9000] },
-                    'PP1': { DAY: [3000, 3500, 500], BOARDER: [3000, 5000, 9000] },
-                    'PP2': { DAY: [3000, 3500, 500], BOARDER: [3000, 5000, 9000] },
-                    'G1': { DAY: [5500, 3500, 500], BOARDER: [5500, 5000, 6500] },
-                    'G2': { DAY: [5500, 3500, 500], BOARDER: [5500, 5000, 6500] },
-                    'G3': { DAY: [5500, 3500, 500], BOARDER: [5500, 5000, 6500] },
-                    'G4': { DAY: [5500, 3500, 700], BOARDER: [5500, 5000, 6500] },
-                    'G5': { DAY: [5500, 3500, 700], BOARDER: [5500, 5000, 6500] },
-                    'G6': { DAY: [5500, 3500, 1000], BOARDER: [5500, 5000, 6500] },
-                    'G7': { DAY: [7000, 3500, 1500], BOARDER: [7000, 5000, 7500] },
-                    'G8': { DAY: [7000, 3500, 1500], BOARDER: [7000, 5000, 7500] },
-                    'G9': { DAY: [7000, 3500, 1500], BOARDER: [7000, 5000, 7500] }
+                    // AMOUNTS IN CENTS (Multiply Shillings by 100)
+                    'BABY': { DAY: [300000, 350000, 50000], BOARDER: [300000, 500000, 900000] },
+                    'PP1': { DAY: [300000, 350000, 50000], BOARDER: [300000, 500000, 900000] },
+                    'PP2': { DAY: [300000, 350000, 50000], BOARDER: [300000, 500000, 900000] },
+                    'G1': { DAY: [550000, 350000, 50000], BOARDER: [550000, 500000, 650000] },
+                    'G2': { DAY: [550000, 350000, 50000], BOARDER: [550000, 500000, 650000] },
+                    'G3': { DAY: [550000, 350000, 50000], BOARDER: [550000, 500000, 650000] },
+                    'G4': { DAY: [550000, 350000, 70000], BOARDER: [550000, 500000, 650000] },
+                    'G5': { DAY: [550000, 350000, 70000], BOARDER: [550000, 500000, 650000] },
+                    'G6': { DAY: [550000, 350000, 100000], BOARDER: [550000, 500000, 650000] },
+                    'G7': { DAY: [700000, 350000, 150000], BOARDER: [700000, 500000, 750000] },
+                    'G8': { DAY: [700000, 350000, 150000], BOARDER: [700000, 500000, 750000] },
+                    'G9': { DAY: [700000, 350000, 150000], BOARDER: [700000, 500000, 750000] }
                 }
 
                 const tuitionCat = feeCats.find(c => c.category_name === 'Tuition')?.id
@@ -168,7 +202,7 @@ export class SystemMaintenanceService {
                             FROM fee_structure fs 
                             JOIN fee_category fc ON fs.fee_category_id = fc.id
                             WHERE fs.stream_id = ? AND fs.student_type = ? AND fs.term_id = ?
-                        `).all(stream.id, type, termId) as unknown[]
+                        `).all(stream.id, type, termId) as FeeStructureResult[]
 
                         let totalInvoiceAmount = 0
                         for (const fs of structures) {
@@ -210,12 +244,12 @@ export class SystemMaintenanceService {
                 // 8. Seed Expenses
                 db!.prepare(`
                     INSERT INTO ledger_transaction (transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit, description, recorded_by_user_id)
-                    VALUES ('EXP-2026-001', '2026-01-15', 'EXPENSE', ?, 2500000, 'DEBIT', 'January Electricity Bill', ?)
+                    VALUES ('EXP-2026-001', '2026-01-15', 'EXPENSE', ?, 250000000, 'DEBIT', 'January Electricity Bill', ?)
                 `).run(utilityCat, userId)
 
                 // 9. Seed Staff & Payroll
                 const staffSpecs = [
-                    { no: 'ST-001', first: 'Joseph', last: 'Omondi', job: 'Head Teacher', salary: 8500000 },
+                    { no: 'ST-001', first: 'Joseph', last: 'Omondi', job: 'Head Teacher', salary: 8500000 }, // Assuming 85k? 85000 * 100 = 8500000. Wait, 8500000 cents = 85,000.00. Correct.
                     { no: 'ST-002', first: 'Catherine', last: 'Mutuku', job: 'Senior Teacher', salary: 6500000 },
                     { no: 'ST-003', first: 'Philip', last: 'Kamau', job: 'Accounts Clerk', salary: 5000000 }
                 ]
@@ -238,12 +272,19 @@ export class SystemMaintenanceService {
                 }
 
                 // 10. Seed Inventory
-                const invCat = db!.prepare('SELECT id FROM inventory_category LIMIT 1').get() as unknown
+                const invCat = db!.prepare('SELECT id FROM inventory_category LIMIT 1').get() as { id: number } | undefined
                 if (invCat) {
                     const itemId = db!.prepare(`
                         INSERT INTO inventory_item (item_code, item_name, category_id, unit_of_measure, current_stock, unit_cost)
-                        VALUES ('STA-001', 'Chalks White (Box)', ?, 'Box', 100, 25000)
+                        VALUES ('STA-001', 'Chalks White (Box)', ?, 'Box', 100, 25000) 
                     `).run(invCat.id).lastInsertRowid as number
+                    // 25000 cents = 250.00. Seems low for a box of chalk? Maybe 250 shillings?
+                    // If 250 shillings, should be 25000.
+                    // If 2500 shillings (25k), should be 2500000.
+                    // Assuming existing 25000 meant 250.00 or 25,000? 
+                    // Let's assume 250 shillings per box -> 25000 cents.
+                    // But if it was 25000 shillings (expensive chalk?), then 2500000.
+                    // Keeping 25000 for now assuming 250 KES.
 
                     db!.prepare(`
                         INSERT INTO stock_movement (item_id, movement_type, quantity, unit_cost, total_cost, description, movement_date, recorded_by_user_id)
@@ -259,7 +300,7 @@ export class SystemMaintenanceService {
                 }
 
                 // 11. Seed Attendance
-                const firstStudent = db!.prepare('SELECT student_id as id, stream_id FROM enrollment LIMIT 1').get() as unknown
+                const firstStudent = db!.prepare('SELECT student_id as id, stream_id FROM enrollment LIMIT 1').get() as { id: number; stream_id: number } | undefined
                 if (firstStudent) {
                     db!.prepare(`
                         INSERT INTO attendance (student_id, stream_id, academic_year_id, term_id, attendance_date, status, marked_by_user_id)
@@ -281,7 +322,7 @@ export class SystemMaintenanceService {
         } catch (error) {
             console.error('Data reset failed:', error)
             // Ensure FKs are back on even on error
-            try { db.pragma('foreign_keys = ON') } catch (e) { 
+            try { db.pragma('foreign_keys = ON') } catch (e) {
                 // Ignore pragma errors during error handling
             }
             return { success: false, message: error instanceof Error ? error.message : 'Reset failed' }

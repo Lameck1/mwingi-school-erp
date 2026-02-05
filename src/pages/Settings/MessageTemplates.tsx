@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
     Mail, MessageSquare, Plus, Save,
     Eye, Loader2
@@ -29,14 +29,10 @@ export default function MessageTemplates() {
         category: 'GENERAL'
     })
 
-    useEffect(() => {
-        loadTemplates()
-    }, [])
-
-    const loadTemplates = async () => {
+    const loadTemplates = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await (window.electronAPI as unknown).getNotificationTemplates()
+            const data = await window.electronAPI.getNotificationTemplates()
             setTemplates(data)
         } catch (error) {
             console.error('Failed to load templates:', error)
@@ -44,7 +40,11 @@ export default function MessageTemplates() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [showToast])
+
+    useEffect(() => {
+        loadTemplates()
+    }, [loadTemplates])
 
     const handleSaveTemplate = async () => {
         if (!user) return
@@ -55,7 +55,7 @@ export default function MessageTemplates() {
 
         setSaving(true)
         try {
-            const result = await (window.electronAPI as unknown).createNotificationTemplate(editingTemplate, user.id)
+            const result = await window.electronAPI.createNotificationTemplate(editingTemplate, user.id)
             if (result.success) {
                 setShowTemplateModal(false)
                 setEditingTemplate({ template_type: 'SMS', category: 'GENERAL' })

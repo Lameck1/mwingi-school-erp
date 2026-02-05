@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import Database from 'better-sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -7,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const dbPath = path.join(__dirname, 'electron/main/database/school.db');
-console.log('Opening DB at:', dbPath);
+console.error('Opening DB at:', dbPath);
 
 try {
     const db = new Database(dbPath);
@@ -17,11 +16,12 @@ try {
         WHERE credit_balance > 0
     `).all();
 
-    console.log('Students with Credit Balance:');
+    console.error('Students with Credit Balance:');
     students.forEach(s => {
         // Divide by 100 to show shillings if stored in cents
-        console.log(`${s.first_name} ${s.last_name}: ${s.credit_balance} cents (Ksh ${s.credit_balance / 100})`);
+        console.error(`${s.first_name} ${s.last_name}: ${s.credit_balance} cents (Ksh ${s.credit_balance / 100})`);
     });
 } catch (e) {
     console.error(e);
 }
+

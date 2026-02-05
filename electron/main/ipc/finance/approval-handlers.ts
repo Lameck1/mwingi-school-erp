@@ -68,7 +68,7 @@ ipcMain.handle('approvals:approve', async (_event, approvalId: number, reviewNot
       FROM transaction_approval ta
       JOIN journal_entry je ON ta.journal_entry_id = je.id
       WHERE ta.id = ? AND ta.status = 'PENDING'
-    `).get(approvalId) as any;
+    `).get(approvalId) as { journal_entry_id: number, status: string };
 
     if (!approval) {
       return {
@@ -138,7 +138,7 @@ ipcMain.handle('approvals:reject', async (_event, approvalId: number, reviewNote
       FROM transaction_approval ta
       JOIN journal_entry je ON ta.journal_entry_id = je.id
       WHERE ta.id = ? AND ta.status = 'PENDING'
-    `).get(approvalId) as any;
+    `).get(approvalId) as { journal_entry_id: number, status: string };
 
     if (!approval) {
       return {
@@ -224,4 +224,4 @@ ipcMain.handle('approvals:getStats', async (_event) => {
   }
 });
 
-console.log('Approval IPC handlers registered');
+console.warn('Approval IPC handlers registered');

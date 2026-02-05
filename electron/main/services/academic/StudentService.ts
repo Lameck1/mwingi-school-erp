@@ -21,10 +21,11 @@ export class StudentService extends BaseService<Student, CreateStudentDTO> {
     }
 
     protected mapRowToEntity(row: unknown): Student {
+        const r = row as Student
         return {
-            id: row.id,
-            full_name: row.full_name,
-            admission_number: row.admission_number,
+            id: r.id,
+            full_name: r.full_name,
+            admission_number: r.admission_number,
         }
     }
 
@@ -48,7 +49,7 @@ export class StudentService extends BaseService<Student, CreateStudentDTO> {
     protected executeUpdate(id: number, data: Partial<CreateStudentDTO>): void {
         // Basic implementation
         const sets: string[] = []
-        const params: any[] = []
+        const params: unknown[] = []
 
         Object.entries(data).forEach(([key, value]) => {
             sets.push(`${key} = ?`)

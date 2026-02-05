@@ -2,9 +2,10 @@ export interface MessageTemplate {
     id: number;
     template_name: string;
     template_type: 'SMS' | 'EMAIL';
-    subject?: string;
+    category: string;
+    subject: string | null;
     body: string;
-    placeholders?: string;
+    variables: string[];
     is_active: boolean;
 }
 
@@ -21,6 +22,7 @@ export interface MessageLog {
     external_id?: string;
     error_message?: string;
     sent_by_user_id: number;
+    sent_by_name?: string;
     created_at: string;
 }
 
@@ -42,10 +44,12 @@ export interface EmailSendOptions {
 }
 
 export interface MessagingAPI {
-    getTemplates: () => Promise<MessageTemplate[]>;
-    saveTemplate: (template: Partial<MessageTemplate>) => Promise<{ success: boolean; id?: number }>;
-    deleteTemplate: (id: number) => Promise<{ success: boolean }>;
+    getMessageTemplates: () => Promise<MessageTemplate[]>;
+    saveMessageTemplate: (template: Partial<MessageTemplate>) => Promise<{ success: boolean; id?: number }>;
+    // deleteTemplate is NOT in preload, removing or keeping if used internally? Preload has saveMessageTemplate.
+    // Preload does NOT have deleteTemplate.
     sendSMS: (options: SMSSendOptions) => Promise<{ success: boolean; messageId?: string; error?: string }>;
     sendEmail: (options: EmailSendOptions) => Promise<{ success: boolean; messageId?: string; error?: string }>;
     getMessageLogs: (limit?: number) => Promise<MessageLog[]>;
+    // getCommunicationLogs is NOT in preload. Preload only has getMessageLogs.
 }

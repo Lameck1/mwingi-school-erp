@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3-multiple-ciphers'
+import Database from 'better-sqlite3'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 
@@ -37,7 +37,7 @@ export interface ReconciliationResult {
   invoice_balance: number
   difference: number
   status: 'BALANCED' | 'OUT_OF_BALANCE'
-  discrepancies: any[]
+  discrepancies: Discrepancy[]
 }
 
 export interface VerificationResult {
@@ -52,6 +52,34 @@ export interface StudentLedgerData {
   end_date: string
 }
 
+export interface LedgerTransactionRow {
+  id: number
+  student_id: number
+  transaction_type: string
+  amount: number
+  description?: string
+  reference?: string
+  transaction_date: string
+  is_voided: number
+  created_at: string
+}
+
+export interface FeeInvoiceRow {
+  id: number
+  student_id: number
+  amount: number
+  status: string
+  invoice_date: string
+  due_date: string
+}
+
+export interface Discrepancy {
+  type: string
+  ledger_balance: number
+  invoice_balance: number
+  difference: number
+}
+
 // ============================================================================
 // REPOSITORY LAYER (SRP)
 // ============================================================================
@@ -63,40 +91,40 @@ class StudentLedgerRepository {
     this.db = db || getDatabase()
   }
 
-  async getTransactionHistory(studentId: number): Promise<any[]> {
+  async getTransactionHistory(studentId: number): Promise<LedgerTransactionRow[]> {
     const db = this.db
     return db.prepare(`
       SELECT * FROM ledger_transaction
       WHERE student_id = ? AND is_voided = 0
       ORDER BY transaction_date ASC, created_at ASC
-    `).all(studentId) as unknown[]
+    `).all(studentId) as LedgerTransactionRow[]
   }
 
-  async getTransactionsByPeriod(studentId: number, startDate: string, endDate: string): Promise<any[]> {
+  async getTransactionsByPeriod(studentId: number, startDate: string, endDate: string): Promise<LedgerTransactionRow[]> {
     const db = this.db
     return db.prepare(`
       SELECT * FROM ledger_transaction
       WHERE student_id = ? AND transaction_date >= ? AND transaction_date <= ? AND is_voided = 0
       ORDER BY transaction_date ASC, created_at ASC
-    `).all(studentId, startDate, endDate) as unknown[]
+    `).all(studentId, startDate, endDate) as LedgerTransactionRow[]
   }
 
-  async getOutstandingInvoices(studentId: number): Promise<any[]> {
+  async getOutstandingInvoices(studentId: number): Promise<FeeInvoiceRow[]> {
     const db = this.db
     return db.prepare(`
       SELECT * FROM fee_invoice
       WHERE student_id = ? AND status = 'OUTSTANDING'
       ORDER BY due_date ASC
-    `).all(studentId) as unknown[]
+    `).all(studentId) as FeeInvoiceRow[]
   }
 
-  async getInvoicesForPeriod(studentId: number, startDate: string, endDate: string): Promise<any[]> {
+  async getInvoicesForPeriod(studentId: number, startDate: string, endDate: string): Promise<FeeInvoiceRow[]> {
     const db = this.db
     return db.prepare(`
       SELECT * FROM fee_invoice
       WHERE student_id = ? AND invoice_date >= ? AND invoice_date <= ?
       ORDER BY invoice_date ASC
-    `).all(studentId, startDate, endDate) as unknown[]
+    `).all(studentId, startDate, endDate) as FeeInvoiceRow[]
   }
 
   async getStudent(studentId: number): Promise<unknown> {
@@ -118,7 +146,7 @@ class StudentLedgerRepository {
     const result = db.prepare(`
       SELECT opening_balance FROM student_opening_balance
       WHERE student_id = ? AND period_start = ?
-    `).get(studentId, periodStart) as unknown
+    `).get(studentId, periodStart) as { opening_balance: number } | undefined
     return result?.opening_balance || null
   }
 }
@@ -245,12 +273,12 @@ class LedgerReconciler implements ILedgerReconciler {
 
     // Get invoice balance
     const invoices = await this.repo.getInvoicesForPeriod(studentId, periodStart, periodEnd)
-    const invoiceBalance = invoices.reduce((sum: number, inv: unknown) => sum + (inv.amount || 0), 0)
+    const invoiceBalance = invoices.reduce((sum: number, inv: FeeInvoiceRow) => sum + (inv.amount || 0), 0)
 
     const difference = Math.abs(ledgerBalance - invoiceBalance)
     const isBalanced = difference < 1 // Allow for rounding
 
-    const discrepancies: any[] = []
+    const discrepancies: Discrepancy[] = []
 
     // Identify discrepancies
     if (!isBalanced) {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
     MessageSquare, Mail, CheckCircle, XCircle
 } from 'lucide-react'
@@ -8,13 +8,13 @@ import { StatCard } from '../../components/patterns/StatCard'
 interface LogEntry {
     id: number
     recipient_type: string
-    recipient_id: number
+    recipient_id?: number
     message_type: 'SMS' | 'EMAIL'
-    subject: string | null
+    subject?: string | null
     message_body: string
-    status: 'SENT' | 'FAILED'
-    error_message: string | null
-    sent_by_name: string
+    status: 'SENT' | 'FAILED' | 'PENDING'
+    error_message?: string | null
+    sent_by_name?: string
     created_at: string
 }
 
@@ -27,26 +27,48 @@ export default function CommunicationLog() {
     const [typeFilter, setTypeFilter] = useState<'ALL' | 'SMS' | 'EMAIL'>('ALL')
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'SENT' | 'FAILED'>('ALL')
 
-    useEffect(() => {
-        loadLogs()
-    }, [typeFilter, statusFilter])
+    const [pagination, setPagination] = useState({ currentPage: 1, limit: 10, total: 0, totalPages: 1 });
+    const [searchQuery, setSearchQuery] = useState('');
+    const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
-    const loadLogs = async () => {
+
+    const loadLogs = useCallback(async () => {
         setLoading(true)
         try {
-            const filters: any = {}
-            if (typeFilter !== 'ALL') filters.channel = typeFilter
-            if (statusFilter !== 'ALL') filters.status = statusFilter
+            // Use existing getMessageLogs API which takes a limit parameter
+            const data = await window.electronAPI.getMessageLogs(100)
 
-            const data = await (window.electronAPI as unknown).getNotificationHistory(filters)
-            setLogs(data)
-            calculateStats(data)
+            // Apply client-side filtering since the API doesn't support it
+            let filteredData = data || []
+
+            if (typeFilter !== 'ALL') {
+                filteredData = filteredData.filter((l: LogEntry) => l.message_type === typeFilter)
+            }
+            if (statusFilter !== 'ALL') {
+                filteredData = filteredData.filter((l: LogEntry) => l.status === statusFilter)
+            }
+            if (searchQuery) {
+                const query = searchQuery.toLowerCase()
+                filteredData = filteredData.filter((l: LogEntry) =>
+                    l.message_body?.toLowerCase().includes(query) ||
+                    l.subject?.toLowerCase().includes(query)
+                )
+            }
+
+            setLogs(filteredData)
+            calculateStats(filteredData)
         } catch (error) {
-            console.error('Failed to load logs:', error)
+            console.error('Failed to load communication logs:', error)
+            setLogs([])
         } finally {
             setLoading(false)
         }
-    }
+    }, [typeFilter, statusFilter, searchQuery])
+
+    useEffect(() => {
+        loadLogs()
+    }, [loadLogs])
+
 
     const calculateStats = (data: LogEntry[]) => {
         setStats({
@@ -73,6 +95,30 @@ export default function CommunicationLog() {
                 <StatCard label="Failed" value={stats.failed.toString()} icon={XCircle} color="from-red-500/20 to-rose-500/20 text-red-400" compact />
                 <StatCard label="SMS" value={stats.sms.toString()} icon={MessageSquare} color="from-amber-500/20 to-orange-500/20 text-amber-400" compact />
                 <StatCard label="Emails" value={stats.email.toString()} icon={Mail} color="from-purple-500/20 to-pink-500/20 text-purple-400" compact />
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-center premium-card p-4">
+                <div className="flex gap-4 w-full md:w-auto">
+                    <input
+                        type="text"
+                        placeholder="Search logs..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="px-3 py-1.5 bg-background/50 border border-white/10 rounded-md text-sm w-full md:w-64"
+                    />
+                    <input
+                        type="date"
+                        value={dateRange.start}
+                        onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                        className="px-3 py-1.5 bg-background/50 border border-white/10 rounded-md text-sm"
+                    />
+                    <input
+                        type="date"
+                        value={dateRange.end}
+                        onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                        className="px-3 py-1.5 bg-background/50 border border-white/10 rounded-md text-sm"
+                    />
+                </div>
             </div>
 
             {/* Filters */}

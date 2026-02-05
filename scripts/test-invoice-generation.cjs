@@ -5,7 +5,7 @@ const academicYearId = 1; // 2025
 const termId = 1; // Term 1
 void registerFinanceHandlers; // Suppress unused variable warning
 
-console.log('--- Testing Batch Invoice Generation Logic ---');
+console.error('--- Testing Batch Invoice Generation Logic ---');
 
 const db = getDatabase();
 // We are not actually running the app, so we don't need to register handlers, 
@@ -18,9 +18,9 @@ const structure = db.prepare(`
     WHERE academic_year_id = ? AND term_id = ?
 `).all(academicYearId, termId);
 
-console.log(`Fee Structure Items found: ${structure.length}`);
+console.error(`Fee Structure Items found: ${structure.length}`);
 if (structure.length > 0) {
-    console.log('Sample structure item:', structure[0]);
+    console.error('Sample structure item:', structure[0]);
 }
 
 // 2. Get Active Students with Enrollment
@@ -31,10 +31,10 @@ const enrollments = db.prepare(`
     WHERE e.academic_year_id = ? AND e.term_id = ? AND e.status = 'ACTIVE'
 `).all(academicYearId, termId);
 
-console.log(`Active Enrollments found: ${enrollments.length}`);
+console.error(`Active Enrollments found: ${enrollments.length}`);
 
 if (structure.length > 0 && enrollments.length > 0) {
-    console.log('Ready to generate...');
+    console.error('Ready to generate...');
     
     // Simulate generation loop
     let count = 0;
@@ -43,7 +43,7 @@ if (structure.length > 0 && enrollments.length > 0) {
     for (const enrollment of enrollments) {
         const existing = checkInvoiceStmt.get(enrollment.student_id, enrollment.term_id);
         if (existing) {
-            console.log(`Skipping student ${enrollment.student_id} (Invoice exists)`);
+            console.error(`Skipping student ${enrollment.student_id} (Invoice exists)`);
             continue;
         }
 
@@ -53,16 +53,16 @@ if (structure.length > 0 && enrollments.length > 0) {
         );
 
         if (fees.length === 0) {
-             console.log(`No fees defined for Student ${enrollment.student_id} (Stream: ${enrollment.stream_id}, Type: ${enrollment.student_type})`);
+             console.error(`No fees defined for Student ${enrollment.student_id} (Stream: ${enrollment.stream_id}, Type: ${enrollment.student_type})`);
              continue;
         }
 
         const total = fees.reduce((sum, f) => sum + f.amount, 0);
-        console.log(`Will generate invoice for Student ${enrollment.student_id}: Amount ${total}`);
+        console.error(`Will generate invoice for Student ${enrollment.student_id}: Amount ${total}`);
         count++;
     }
     
-    console.log(`Total invoices to be generated: ${count}`);
+    console.error(`Total invoices to be generated: ${count}`);
 } else {
-    console.log('Cannot generate: Missing structure or enrollments.');
+    console.error('Cannot generate: Missing structure or enrollments.');
 }

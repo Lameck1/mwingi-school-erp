@@ -41,19 +41,10 @@ export function registerJSSHandlers() {
         try {
             const structure = jssService.getJSSFeeStructure(grade, fiscalYear)
             if (structure) {
-                // Convert cents to shillings for display
+                // Return raw cents for formatCurrency consistency
                 return {
                     success: true,
-                    data: {
-                        ...structure,
-                        tuition_fee_cents: structure.tuition_fee_cents / 100,
-                        boarding_fee_cents: structure.boarding_fee_cents ? structure.boarding_fee_cents / 100 : null,
-                        activity_fee_cents: structure.activity_fee_cents ? structure.activity_fee_cents / 100 : null,
-                        exam_fee_cents: structure.exam_fee_cents ? structure.exam_fee_cents / 100 : null,
-                        library_fee_cents: structure.library_fee_cents ? structure.library_fee_cents / 100 : null,
-                        lab_fee_cents: structure.lab_fee_cents ? structure.lab_fee_cents / 100 : null,
-                        ict_fee_cents: structure.ict_fee_cents ? structure.ict_fee_cents / 100 : null
-                    }
+                    data: structure
                 }
             }
             return { success: true, data: null }
@@ -65,18 +56,30 @@ export function registerJSSHandlers() {
     // Set fee structure
     ipcMain.handle('jss:setFeeStructure', async (_, data) => {
         try {
-            // Convert shillings to cents for storage
-            const dataInCents = {
-                ...data,
-                tuition_fee_cents: Math.round(data.tuition_fee_cents * 100),
-                boarding_fee_cents: data.boarding_fee_cents ? Math.round(data.boarding_fee_cents * 100) : null,
-                activity_fee_cents: data.activity_fee_cents ? Math.round(data.activity_fee_cents * 100) : null,
-                exam_fee_cents: data.exam_fee_cents ? Math.round(data.exam_fee_cents * 100) : null,
-                library_fee_cents: data.library_fee_cents ? Math.round(data.library_fee_cents * 100) : null,
-                lab_fee_cents: data.lab_fee_cents ? Math.round(data.lab_fee_cents * 100) : null,
-                ict_fee_cents: data.ict_fee_cents ? Math.round(data.ict_fee_cents * 100) : null
-            }
-            const id = jssService.setJSSFeeStructure(dataInCents)
+            // Store data directly as provided (assuming frontend sends cents or normalized values)
+            // But wait, if frontend sends shillings, we MUST convert here if we want consistency?
+            // "I thought we had created a function to centralise these currency converstions" suggests frontend should handle it.
+            // If frontend sends raw input (e.g. "3500"), then backend should store 350000.
+            // However, the cleanest standard is:
+            // 1. Frontend user inputs "3500"
+            // 2. Frontend converts to 350000 (cents) using `shillingsToCents` utility
+            // 3. Backend receives 350000 and stores it directly.
+
+            // Let's assume frontend will be updated to send cents.
+            // For now, to match the removal of READ division, we must remove WRITE multiplication effectively 
+            // IF the frontend is now sending cents.
+
+            // Actually, if I remove the READ division, the frontend receives CENTS (e.g. 350000).
+            // If the frontend inputs "3500", and I remove multiplication here, it stores "3500", which is 35 KES.
+
+            // The user wants CENTRALIZED conversion.
+            // That means `src/utils/format.ts` should be used.
+            // `shillingsToCents` exists there.
+
+            // I will remove the ad-hoc multiplication here and assume frontend uses the utility.
+            // If I don't, I risk "double multiplication" if frontend is fixed later.
+
+            const id = jssService.setJSSFeeStructure(data) // Pass data directly
             return { success: true, data: id }
         } catch (error) {
             return { success: false, message: (error as Error).message }

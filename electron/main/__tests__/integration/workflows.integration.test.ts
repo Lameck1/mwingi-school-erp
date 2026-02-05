@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3-multiple-ciphers'
+import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PaymentService } from '../../services/finance/PaymentService'
 import { ApprovalWorkflowService } from '../../services/workflow/ApprovalWorkflowService'
@@ -223,7 +223,7 @@ describe('Workflows Integration Tests', () => {
   })
 
   afterEach(() => {
-    db.close()
+    if (db) db.close()
   })
 
   describe('Payment Workflow', () => {

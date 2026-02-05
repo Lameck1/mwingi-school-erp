@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useAppStore } from '../../stores'
-import { Save, Loader2, School, Calendar, CreditCard, Globe, MessageSquare, Plus, CheckCircle2, Database, AlertTriangle, Coins } from 'lucide-react'
+import { Save, Loader2, School, Calendar, CreditCard, Globe, MessageSquare, Plus, CheckCircle2, Database, AlertTriangle } from 'lucide-react'
 import IntegrationsSettings from './Integrations'
 import MessageTemplates from './MessageTemplates'
 import { useToast } from '../../contexts/ToastContext'
 import { Modal } from '../../components/ui/Modal'
 import { AcademicYear } from '../../types/electron-api/AcademicAPI'
+import { SchoolSettings } from '../../types/electron-api/SettingsAPI'
 
 export default function Settings() {
     const { schoolSettings, setSchoolSettings } = useAppStore()
@@ -48,13 +49,7 @@ export default function Settings() {
         }
     }, [schoolSettings])
 
-    useEffect(() => {
-        if (activeTab === 'academic') {
-            loadAcademicYears()
-        }
-    }, [activeTab])
-
-    const loadAcademicYears = async () => {
+    const loadAcademicYears = useCallback(async () => {
         setLoadingYears(true)
         try {
             const years = await window.electronAPI.getAcademicYears()
@@ -64,14 +59,20 @@ export default function Settings() {
         } finally {
             setLoadingYears(false)
         }
-    }
+    }, [showToast])
+
+    useEffect(() => {
+        if (activeTab === 'academic') {
+            loadAcademicYears()
+        }
+    }, [activeTab, loadAcademicYears])
 
     const handleSave = async () => {
         setSaving(true)
         try {
             await window.electronAPI.updateSettings(formData)
             const updated = await window.electronAPI.getSettings()
-            setSchoolSettings(updated)
+            setSchoolSettings(updated as unknown as SchoolSettings)
             showToast('School settings synchronized successfully', 'success')
         } catch (error) {
             showToast(error instanceof Error ? error.message : 'Critical error updating settings', 'error')
@@ -383,131 +384,11 @@ export default function Settings() {
                                     </button>
                                 </div>
 
-                                <div className="p-8 bg-amber-500/5 rounded-3xl border border-amber-500/20 relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 p-8 opacity-5">
-                                        <Coins className="w-32 h-32 text-amber-500" />
-                                    </div>
+                                {/* Feature Removed */}
 
-                                    <h3 className="text-lg font-bold text-amber-600 flex items-center gap-2 mb-2">
-                                        <Coins className="w-5 h-5" />
-                                        Data Correction: Fix Currency Scale
-                                    </h3>
-                                    <p className="text-sm text-foreground/60 font-medium leading-relaxed max-w-2xl mb-8">
-                                        Use this utility if your financial balances appear 100x smaller than expected (e.g., Ksh 85 instead of Ksh 8,500).
-                                        This runs a one-time multiplication of legacy data to align with the new currency logic.
-                                        <span className="text-amber-600 font-bold"> Only run this once.</span>
-                                    </p>
+                                {/* Feature Removed */}
 
-                                    <button
-                                        onClick={async () => {
-                                            if (confirm('Verify: Do your balances look too small (e.g., Ksh 85)? If yes, confirm this action. Do not run this if balances are already correct.')) {
-                                                setSaving(true)
-                                                try {
-                                                    const result = await window.electronAPI.fixCurrencyData(1) // Assuming user ID 1
-                                                    if (result.success) {
-                                                        showToast('Currency scale corrected successfully', 'success')
-                                                        window.location.reload()
-                                                    } else {
-                                                        showToast(result.message, 'error')
-                                                    }
-                                                } catch (error) {
-                                                    showToast('Fix failed', 'error')
-                                                } finally {
-                                                    setSaving(false)
-                                                }
-                                            }
-                                        }}
-                                        disabled={saving}
-                                        className="btn bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-3 py-4 px-10 text-sm font-bold shadow-2xl shadow-amber-500/20 transition-all hover:-translate-y-1 active:scale-95 disabled:opacity-50"
-                                    >
-                                        {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Coins className="w-5 h-5" />}
-                                        <span>Fix Currency Scale</span>
-                                    </button>
-                                </div>
-
-                                <div className="p-8 bg-amber-500/5 rounded-3xl border border-amber-500/20 relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 p-8 opacity-5">
-                                        <Coins className="w-32 h-32 text-amber-500" />
-                                    </div>
-
-                                    <h3 className="text-lg font-bold text-amber-600 flex items-center gap-2 mb-2">
-                                        <Coins className="w-5 h-5" />
-                                        Data Correction: Fix Currency Scale
-                                    </h3>
-                                    <p className="text-sm text-foreground/60 font-medium leading-relaxed max-w-2xl mb-8">
-                                        Use this utility if your financial balances appear 100x smaller than expected (e.g., Ksh 85 instead of Ksh 8,500).
-                                        This runs a one-time multiplication of legacy data to align with the new currency logic.
-                                        <span className="text-amber-600 font-bold"> Only run this once.</span>
-                                    </p>
-
-                                    <button
-                                        onClick={async () => {
-                                            if (confirm('Verify: Do your balances look too small (e.g., Ksh 85)? If yes, confirm this action. Do not run this if balances are already correct.')) {
-                                                setSaving(true)
-                                                try {
-                                                    const result = await window.electronAPI.fixCurrencyData(1) // Assuming user ID 1
-                                                    if (result.success) {
-                                                        showToast('Currency scale corrected successfully', 'success')
-                                                        window.location.reload()
-                                                    } else {
-                                                        showToast(result.message, 'error')
-                                                    }
-                                                } catch (error) {
-                                                    showToast('Fix failed', 'error')
-                                                } finally {
-                                                    setSaving(false)
-                                                }
-                                            }
-                                        }}
-                                        disabled={saving}
-                                        className="btn bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-3 py-4 px-10 text-sm font-bold shadow-2xl shadow-amber-500/20 transition-all hover:-translate-y-1 active:scale-95 disabled:opacity-50"
-                                    >
-                                        {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Coins className="w-5 h-5" />}
-                                        <span>Fix Currency Scale</span>
-                                    </button>
-                                </div>
-
-                                <div className="p-8 bg-amber-500/5 rounded-3xl border border-amber-500/20 relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 p-8 opacity-5">
-                                        <Coins className="w-32 h-32 text-amber-500" />
-                                    </div>
-
-                                    <h3 className="text-lg font-bold text-amber-600 flex items-center gap-2 mb-2">
-                                        <Coins className="w-5 h-5" />
-                                        Data Correction: Fix Currency Scale
-                                    </h3>
-                                    <p className="text-sm text-foreground/60 font-medium leading-relaxed max-w-2xl mb-8">
-                                        Use this utility if your financial balances appear 100x smaller than expected (e.g., Ksh 85 instead of Ksh 8,500).
-                                        This runs a one-time multiplication of legacy data to align with the new currency logic.
-                                        <span className="text-amber-600 font-bold"> Only run this once.</span>
-                                    </p>
-
-                                    <button
-                                        onClick={async () => {
-                                            if (confirm('Verify: Do your balances look too small (e.g., Ksh 85)? If yes, confirm this action. Do not run this if balances are already correct.')) {
-                                                setSaving(true)
-                                                try {
-                                                    const result = await window.electronAPI.fixCurrencyData(1) // Assuming user ID 1
-                                                    if (result.success) {
-                                                        showToast('Currency scale corrected successfully', 'success')
-                                                        window.location.reload()
-                                                    } else {
-                                                        showToast(result.message, 'error')
-                                                    }
-                                                } catch (error) {
-                                                    showToast('Fix failed', 'error')
-                                                } finally {
-                                                    setSaving(false)
-                                                }
-                                            }
-                                        }}
-                                        disabled={saving}
-                                        className="btn bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-3 py-4 px-10 text-sm font-bold shadow-2xl shadow-amber-500/20 transition-all hover:-translate-y-1 active:scale-95 disabled:opacity-50"
-                                    >
-                                        {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Coins className="w-5 h-5" />}
-                                        <span>Fix Currency Scale</span>
-                                    </button>
-                                </div>
+                                {/* Feature Removed */}
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="p-6 bg-secondary/10 rounded-2xl border border-border/20">
@@ -573,6 +454,7 @@ export default function Settings() {
                             <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Start Date</label>
                             <input
                                 type="date"
+                                title="Start Date"
                                 className="input w-full bg-secondary/30"
                                 value={newYearData.start_date}
                                 onChange={e => setNewYearData({ ...newYearData, start_date: e.target.value })}
@@ -582,6 +464,7 @@ export default function Settings() {
                             <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">End Date</label>
                             <input
                                 type="date"
+                                title="End Date"
                                 className="input w-full bg-secondary/30"
                                 value={newYearData.end_date}
                                 onChange={e => setNewYearData({ ...newYearData, end_date: e.target.value })}

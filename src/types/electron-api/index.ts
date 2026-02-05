@@ -16,6 +16,8 @@ import type { FixedAssetAPI } from './FixedAssetAPI'
 import type { BankReconciliationAPI } from './BankReconciliationAPI'
 import type { HireAPI } from './HireAPI'
 import type { ExemptionAPI } from './ExemptionAPI'
+import type { ApprovalAPI } from './ApprovalAPI'
+import type { NotificationAPI } from './NotificationAPI'
 
 export * from './AuthAPI'
 export * from './SettingsAPI'
@@ -36,6 +38,11 @@ export * from './FixedAssetAPI'
 export * from './BankReconciliationAPI'
 export * from './HireAPI'
 export * from './ExemptionAPI'
+export * from './ApprovalAPI'
+export * from './NotificationAPI'
+
+import type { OperationsAPI } from './OperationsAPI'
+export * from './OperationsAPI'
 
 // Combined interface for backward compatibility
 export interface ElectronAPI
@@ -56,9 +63,13 @@ export interface ElectronAPI
   FixedAssetAPI,
   BankReconciliationAPI,
   HireAPI,
-  ExemptionAPI {
+  HireAPI,
+  ExemptionAPI,
+  ApprovalAPI,
+  NotificationAPI,
+  OperationsAPI {
   // Data Import/Export (General)
   downloadImportTemplate: (entityType: string) => Promise<{ success: boolean; filePath: string }>
   getImportTemplate: (entityType: string) => Promise<{ columns: { name: string; required: boolean }[] }>
-  importData: (filePath: string, config: unknown, userId: number) => Promise<{ success: boolean; totalRows: number; imported: number; skipped: number; errors: any[] }>
+  importData: (filePath: string, config: unknown, userId: number) => Promise<{ success: boolean; totalRows: number; imported: number; skipped: number; errors: string[] }>
 }

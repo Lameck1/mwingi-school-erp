@@ -104,4 +104,38 @@ export interface EnrollmentWithStudent {
   last_name: string
 }
 
+export interface FeeInvoiceDB {
+  id: number
+  invoice_number: string
+  student_id: number
+  term_id: number
+  invoice_date: string
+  due_date: string
+  total_amount: number
+  amount_paid: number
+  status: 'PENDING' | 'PAID' | 'PARTIAL'
+  created_by_user_id: number
+  created_at: string
+  updated_at: string
+}
+
+export interface FeeInvoiceWithDetails extends FeeInvoiceDB {
+  student_name: string
+  term_name: string
+}
+
+export interface FeeStructureWithDetails extends FeeStructureDB {
+  category_name: string
+  stream_name: string
+}
+
+export interface InvoiceItemCreation {
+    fee_category_id: number
+    description: string
+    amount: number
+    exemption_id: number | null
+    original_amount: number
+    exemption_amount: number
+}
+
 

@@ -102,7 +102,7 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
 
     protected executeUpdate(id: number, data: UpdateAssetData): void {
         const sets: string[] = []
-        const params: any[] = []
+        const params: unknown[] = []
 
         if (data.asset_name) { sets.push('asset_name = ?'); params.push(data.asset_name) }
         if (data.category_id) { sets.push('category_id = ?'); params.push(data.category_id) }
@@ -115,7 +115,7 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
         }
     }
 
-    protected applyFilters(filters: AssetFilters, conditions: string[], params: any[]): void {
+    protected applyFilters(filters: AssetFilters, conditions: string[], params: unknown[]): void {
         if (filters.category_id) {
             conditions.push('fa.category_id = ?')
             params.push(filters.category_id)

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatCurrency } from '../../../utils/format';
 
 interface EligibleStudent {
   student_id: number;
@@ -132,10 +133,6 @@ const JSSTransition: React.FC = () => {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return `Kes ${(amount / 100).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
-
   const getCurrentFeeStructure = () => {
     return feeStructures.find(f => f.jss_grade === filters.to_grade && f.fiscal_year === filters.academic_year);
   };
@@ -157,8 +154,10 @@ const JSSTransition: React.FC = () => {
       <div className="bg-white rounded-lg shadow p-4 mb-6">
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">From Grade</label>
+            <label htmlFor="from_grade" className="block text-sm font-medium text-gray-700 mb-1">From Grade</label>
             <select
+              id="from_grade"
+              title="From Grade"
               value={filters.from_grade}
               onChange={(e) => setFilters({ ...filters, from_grade: parseInt(e.target.value) })}
               className="w-full border rounded px-3 py-2"
@@ -169,8 +168,10 @@ const JSSTransition: React.FC = () => {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">To Grade</label>
+            <label htmlFor="to_grade" className="block text-sm font-medium text-gray-700 mb-1">To Grade</label>
             <select
+              id="to_grade"
+              title="To Grade"
               value={filters.to_grade}
               onChange={(e) => setFilters({ ...filters, to_grade: parseInt(e.target.value) })}
               className="w-full border rounded px-3 py-2"
@@ -181,8 +182,10 @@ const JSSTransition: React.FC = () => {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Academic Year</label>
+            <label htmlFor="academic_year" className="block text-sm font-medium text-gray-700 mb-1">Academic Year</label>
             <select
+              id="academic_year"
+              title="Academic Year"
               value={filters.academic_year}
               onChange={(e) => setFilters({ ...filters, academic_year: parseInt(e.target.value) })}
               className="w-full border rounded px-3 py-2"
@@ -246,6 +249,8 @@ const JSSTransition: React.FC = () => {
                 <th className="px-6 py-3 text-left">
                   <input
                     type="checkbox"
+                    title="Select all students"
+                    aria-label="Select all students"
                     checked={selectedStudents.size === eligibleStudents.length}
                     onChange={handleSelectAll}
                     className="rounded"
@@ -264,6 +269,8 @@ const JSSTransition: React.FC = () => {
                   <td className="px-6 py-4">
                     <input
                       type="checkbox"
+                      title={`Select ${student.full_name}`}
+                      aria-label={`Select ${student.full_name}`}
                       checked={selectedStudents.has(student.student_id)}
                       onChange={() => handleSelectStudent(student.student_id)}
                       className="rounded"

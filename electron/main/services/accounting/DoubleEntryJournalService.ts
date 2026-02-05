@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3-multiple-ciphers';
+import Database from 'better-sqlite3';
 import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
 
@@ -315,7 +315,7 @@ export class DoubleEntryJournalService {
     entryId: number,
     voidReason: string,
     userId: number
-  ): Promise<{ success: boolean; message: string }> {
+  ): Promise<{ success: boolean; message: string; requires_approval?: boolean }> {
     try {
       // Get original entry
       const originalEntry = this.db.prepare(`
@@ -323,7 +323,7 @@ export class DoubleEntryJournalService {
         FROM journal_entry je
         JOIN journal_entry_line jel ON je.id = jel.journal_entry_id
         WHERE je.id = ? AND je.is_voided = 0
-      `).all(entryId);
+      `).all(entryId) as Array<{ entry_date: string; debit_amount: number }>;
 
       if (!originalEntry || originalEntry.length === 0) {
         return {
@@ -348,7 +348,7 @@ export class DoubleEntryJournalService {
             (min_amount IS NOT NULL AND ? >= min_amount)
             OR (days_since_transaction IS NOT NULL AND ? >= days_since_transaction)
           )
-      `).get(totalAmount, daysOld);
+      `).get(totalAmount, daysOld) as { id: number } | undefined;
 
       if (needsApproval) {
         // Create approval request
@@ -361,7 +361,8 @@ export class DoubleEntryJournalService {
 
         return {
           success: true,
-          message: 'Void request submitted for approval'
+          message: 'Void request submitted for approval',
+          requires_approval: true
         };
       }
 
@@ -377,7 +378,8 @@ export class DoubleEntryJournalService {
 
       return {
         success: true,
-        message: 'Journal entry voided successfully'
+        message: 'Journal entry voided successfully',
+        requires_approval: false
       };
     } catch (error) {
       return {

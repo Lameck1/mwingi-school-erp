@@ -70,9 +70,9 @@ const MeritLists = () => {
       const streamName = streams.find(s => s.id === selectedStream)?.stream_name || 'Class';
       await window.electronAPI.exportToPDF({
         data: meritList,
-        filename: `Merit_List_${streamName}_${currentTerm?.name}.pdf`,
+        filename: `Merit_List_${streamName}_${currentTerm?.term_name}.pdf`,
         title: `Merit List - ${streamName}`,
-        subtitle: `Academic Year: ${currentAcademicYear?.name} | Term: ${currentTerm?.name}`
+        subtitle: `Academic Year: ${currentAcademicYear?.year_name} | Term: ${currentTerm?.term_name}`
       });
     } catch (error) {
       console.error('Failed to export PDF:', error);
@@ -106,7 +106,7 @@ const MeritLists = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Merit_List_${currentTerm?.name}.csv`;
+      a.download = `Merit_List_${currentTerm?.term_name}.csv`;
       a.click();
     } catch (error) {
       console.error('Failed to export Excel:', error);
@@ -206,7 +206,7 @@ const MeritLists = () => {
             <div className="mb-4 print:text-black">
               <h2 className="text-xl font-bold mb-2">Merit List - {getStreamName()}</h2>
               <p className="text-sm text-foreground/60">
-                Academic Year: {currentAcademicYear?.name} | Term: {currentTerm?.name}
+                Academic Year: {currentAcademicYear?.year_name} | Term: {currentTerm?.term_name}
               </p>
             </div>
             <div className="overflow-x-auto">
@@ -232,9 +232,9 @@ const MeritLists = () => {
                       <td className="py-4 pr-4 print:text-black">
                         <span className="px-2 py-1 rounded text-sm font-semibold" style={{
                           backgroundColor: row.grade === 'A' || row.grade === 'A-' ? '#10b981' :
-                                          row.grade === 'B+' || row.grade === 'B' ? '#3b82f6' :
-                                          row.grade === 'B-' || row.grade === 'C+' ? '#f59e0b' :
-                                          row.grade === 'C' ? '#ef4444' : '#6b7280',
+                            row.grade === 'B+' || row.grade === 'B' ? '#3b82f6' :
+                              row.grade === 'B-' || row.grade === 'C+' ? '#f59e0b' :
+                                row.grade === 'C' ? '#ef4444' : '#6b7280',
                           color: 'white'
                         }}>
                           {row.grade}

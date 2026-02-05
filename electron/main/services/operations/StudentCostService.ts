@@ -17,6 +17,21 @@ export interface CostBreakdown {
     other_share: number
 }
 
+interface StudentEnrollmentInfo {
+    id: number
+    student_type: string
+    stream_id: number
+    [key: string]: unknown // For other student fields
+}
+
+interface StudentRouteAssignment {
+    id: number
+    student_id: number
+    route_id: number
+    is_active: number
+    // Add other fields as necessary
+}
+
 export class StudentCostService {
     private get db() {
         return getDatabase()
@@ -29,30 +44,30 @@ export class StudentCostService {
             FROM student s
             JOIN enrollment e ON s.id = e.student_id
             WHERE s.id = ? AND e.term_id = ? AND e.academic_year_id = ?
-        `).get(studentId, termId, academicYearId) as unknown
+        `).get(studentId, termId, academicYearId) as StudentEnrollmentInfo | undefined
 
         if (!student) throw new Error('Student not found or not enrolled in this term')
 
         // 2. Calculate Boarding Cost (if boarder)
         let boardingCost = 0
         if (student.student_type === 'BOARDER') {
-             // Get average boarding cost per student from BoardingCostService logic
-             // For now, we query the boarding_expense table and divide by total boarders
-             const totalBoardingExpense = this.db.prepare(`
+            // Get average boarding cost per student from BoardingCostService logic
+            // For now, we query the boarding_expense table and divide by total boarders
+            const totalBoardingExpense = this.db.prepare(`
                 SELECT SUM(amount) as total FROM boarding_expense 
                 WHERE expense_date BETWEEN ? AND ? -- Term dates need to be fetched
              `).get('2026-01-01', '2026-04-01') as { total: number } // Mock dates
-             
-             // In real impl, we'd get term dates first.
-             // Simplified: Get snapshot if available
-             const snapshot = this.db.prepare(`
+
+            // In real impl, we'd get term dates first.
+            // Simplified: Get snapshot if available
+            const snapshot = this.db.prepare(`
                 SELECT * FROM student_cost_snapshot 
                 WHERE academic_year = ? AND term = ?
-             `).get(2026, 1) as unknown // Mock IDs
+             `).get(2026, 1) as { [key: string]: unknown } | undefined // Mock IDs
 
-             if (snapshot) {
-                 boardingCost = 25000 // Mock from snapshot logic
-             }
+            if (snapshot) {
+                boardingCost = 2500000 // Mock from snapshot logic (25,000.00)
+            }
         }
 
         // 3. Calculate Transport Cost (if uses transport)
@@ -60,12 +75,12 @@ export class StudentCostService {
         const transportAssignment = this.db.prepare(`
             SELECT * FROM student_route_assignment 
             WHERE student_id = ? AND is_active = 1
-        `).get(studentId) as unknown
+        `).get(studentId) as StudentRouteAssignment | undefined
 
         if (transportAssignment) {
             // Get specific route cost per student
             // Simplified logic
-            transportCost = 15000 
+            transportCost = 1500000 // 15,000.00
         }
 
         // 4. Activity Cost (CBC Strands)
@@ -74,7 +89,7 @@ export class StudentCostService {
         // ... logic to sum strand expenses / students in strand
 
         // 5. General Admin/Tuition Cost (Overhead / Total Students)
-        const overheadCost = 10000 // Mock
+        const overheadCost = 1000000 // Mock (10,000.00)
 
         const total = boardingCost + transportCost + activityCost + overheadCost
 
@@ -98,12 +113,12 @@ export class StudentCostService {
         // Implementation would call calculateStudentCost
         // Mocking for now as calculateStudentCost needs proper Term date logic
         return {
-            tuition_share: 5000,
-            boarding_share: 15000,
-            transport_share: 8000,
-            activity_share: 2000,
-            admin_share: 3000,
-            other_share: 1000
+            tuition_share: 500000,
+            boarding_share: 1500000,
+            transport_share: 800000,
+            activity_share: 200000,
+            admin_share: 300000,
+            other_share: 100000
         }
     }
 
@@ -117,9 +132,9 @@ export class StudentCostService {
         const invoice = this.db.prepare(`
             SELECT total_amount FROM fee_invoice 
             WHERE student_id = ? AND term_id = ?
-        `).get(studentId, termId) as { total_amount: number }
+        `).get(studentId, termId) as { total_amount: number } | undefined
 
-        const revenue = (invoice?.total_amount || 0) / 100
+        const revenue = (invoice?.total_amount || 0)
 
         return {
             cost: totalCost,
@@ -130,16 +145,14 @@ export class StudentCostService {
 
     async getAverageCostPerStudent(grade: number, termId: number): Promise<number> {
         // Query snapshot or calculate aggregate
-        return 35000 // Mock
+        return 3500000 // Mock (35,000.00)
     }
 
     async getCostTrendAnalysis(studentId: number, periods: number): Promise<unknown[]> {
         return [
-            { period: 'Term 1 2025', cost: 32000 },
-            { period: 'Term 2 2025', cost: 34000 },
-            { period: 'Term 3 2025', cost: 33000 },
+            { period: 'Term 1 2025', cost: 3200000 },
+            { period: 'Term 2 2025', cost: 3400000 },
+            { period: 'Term 3 2025', cost: 3300000 },
         ]
     }
 }
-
-

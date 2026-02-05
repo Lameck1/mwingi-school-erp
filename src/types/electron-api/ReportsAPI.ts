@@ -19,8 +19,8 @@ export interface DefaulterItem {
 
 export interface ReportsAPI {
   getFeeCollectionReport: (_startDate: string, _endDate: string) => Promise<FeeCollectionItem[]>
-  getDefaulters: (_termId?: number) => Promise<any[]>
-  getStudentLedgerReport: (studentId: number) => Promise<unknown>
+  getDefaulters: (_termId?: number) => Promise<DefaulterItem[]>
+  getStudentLedgerReport: (studentId: number) => Promise<{ ledger: Record<string, unknown>[]; openingBalance: number; closingBalance: number }>
   getDashboardData: () => Promise<{
     totalStudents: number
     totalStaff: number
@@ -28,8 +28,14 @@ export interface ReportsAPI {
     outstandingBalance: number
   }>
   getFeeCategoryBreakdown: () => Promise<{ name: string; value: number }[]>
-  getRevenueByCategory: (startDate: string, endDate: string) => Promise<any[]>
-  getExpenseByCategory: (startDate: string, endDate: string) => Promise<any[]>
-  getDailyCollection: (date: string) => Promise<any[]>
-  generateReportCard: (studentId: number, yearId: number, termId: number) => Promise<unknown>
+  getRevenueByCategory: (startDate: string, endDate: string) => Promise<{ name: string; value: number }[]>
+  getExpenseByCategory: (startDate: string, endDate: string) => Promise<{ name: string; value: number }[]>
+  getDailyCollection: (date: string) => Promise<{ date: string; amount: number; method: string }[]>
+  generateReportCard: (studentId: number, yearId: number, termId: number) => Promise<{ success: boolean; filePath?: string; error?: string }>
+
+  // Financial Reports
+  getProfitAndLoss: (startDate: string, endDate: string) => Promise<{ success: boolean; data: Record<string, unknown>; message?: string }>
+  getBalanceSheet: (asOfDate: string) => Promise<{ success: boolean; data: Record<string, unknown>; message?: string }>
+  getTrialBalance: (startDate: string, endDate: string) => Promise<{ success: boolean; data: Record<string, unknown>; message?: string }>
+  getComparativeProfitAndLoss: (currentStart: string, currentEnd: string, priorStart: string, priorEnd: string) => Promise<{ success: boolean; data: Record<string, unknown>; message?: string }>
 }

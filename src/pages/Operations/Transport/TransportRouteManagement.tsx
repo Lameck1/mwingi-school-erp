@@ -5,6 +5,7 @@ import {
     Plus,
     DollarSign
 } from 'lucide-react'
+import { formatCurrency } from '../../../utils/format'
 import { PageHeader } from '../../../components/patterns/PageHeader'
 import { StatCard } from '../../../components/patterns/StatCard'
 import { DataTable } from '../../../components/ui/Table/DataTable'
@@ -24,7 +25,7 @@ export default function TransportRouteManagement() {
     const [loading, setLoading] = useState(false)
     const [routes, setRoutes] = useState<TransportRoute[]>([])
     const [summary, setSummary] = useState<TransportSummary | null>(null)
-    
+
     // Create Route State
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
     const [createForm, setCreateForm] = useState<{
@@ -58,10 +59,10 @@ export default function TransportRouteManagement() {
         try {
             const data = await window.electronAPI.getTransportRoutes()
             setRoutes(data)
-            
+
             const totalRoutes = data.length
             const totalStudents = data.reduce((acc: number, curr: TransportRoute) => acc + (curr.estimated_students || 0), 0)
-            
+
             setSummary({
                 totalRoutes,
                 totalStudents
@@ -121,11 +122,11 @@ export default function TransportRouteManagement() {
         { key: 'route_name', header: 'Route Name', accessorKey: 'route_name' },
         { key: 'distance_km', header: 'Distance (KM)', accessorKey: 'distance_km' },
         { key: 'estimated_students', header: 'Est. Students', accessorKey: 'estimated_students' },
-        { 
+        {
             key: 'budget_per_term_cents',
-            header: 'Budget (KES)', 
+            header: 'Budget (KES)',
             accessorKey: 'budget_per_term_cents',
-            cell: (row: TransportRoute) => (row.budget_per_term_cents / 100).toLocaleString()
+            cell: (row: TransportRoute) => formatCurrency(row.budget_per_term_cents)
         },
         {
             key: 'is_active',
@@ -147,14 +148,14 @@ export default function TransportRouteManagement() {
                 breadcrumbs={[{ label: 'Operations' }, { label: 'Transport' }]}
                 actions={
                     <div className="flex gap-2">
-                         <button 
+                        <button
                             type="button"
                             onClick={() => setIsExpenseModalOpen(true)}
                             className="btn btn-secondary flex items-center gap-2"
                         >
                             <DollarSign className="w-4 h-4" /> Record Expense
                         </button>
-                        <button 
+                        <button
                             type="button"
                             onClick={() => setIsCreateModalOpen(true)}
                             className="btn btn-primary flex items-center gap-2"
@@ -167,17 +168,17 @@ export default function TransportRouteManagement() {
 
             {/* Summary Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <StatCard 
-                    label="Total Routes" 
-                    value={summary?.totalRoutes || 0} 
-                    icon={Truck} 
-                    color="text-blue-500" 
+                <StatCard
+                    label="Total Routes"
+                    value={summary?.totalRoutes || 0}
+                    icon={Truck}
+                    color="text-blue-500"
                 />
-                <StatCard 
-                    label="Students Transported" 
-                    value={summary?.totalStudents || 0} 
-                    icon={Users} 
-                    color="text-green-500" 
+                <StatCard
+                    label="Students Transported"
+                    value={summary?.totalStudents || 0}
+                    icon={Users}
+                    color="text-green-500"
                 />
             </div>
 
@@ -202,7 +203,7 @@ export default function TransportRouteManagement() {
                         <label className="text-xs font-bold text-foreground/60 px-1">Route Name</label>
                         <Input
                             value={createForm.route_name}
-                            onChange={(e) => setCreateForm({...createForm, route_name: e.target.value})}
+                            onChange={(e) => setCreateForm({ ...createForm, route_name: e.target.value })}
                             required
                         />
                     </div>
@@ -211,7 +212,7 @@ export default function TransportRouteManagement() {
                         <Input
                             type="number"
                             value={createForm.distance_km}
-                            onChange={(e) => setCreateForm({...createForm, distance_km: e.target.value})}
+                            onChange={(e) => setCreateForm({ ...createForm, distance_km: e.target.value })}
                             required
                         />
                     </div>
@@ -220,7 +221,7 @@ export default function TransportRouteManagement() {
                         <Input
                             type="number"
                             value={createForm.estimated_students}
-                            onChange={(e) => setCreateForm({...createForm, estimated_students: e.target.value})}
+                            onChange={(e) => setCreateForm({ ...createForm, estimated_students: e.target.value })}
                             required
                         />
                     </div>
@@ -229,7 +230,7 @@ export default function TransportRouteManagement() {
                         <Input
                             type="number"
                             value={createForm.budget_per_term}
-                            onChange={(e) => setCreateForm({...createForm, budget_per_term: e.target.value})}
+                            onChange={(e) => setCreateForm({ ...createForm, budget_per_term: e.target.value })}
                             required
                         />
                     </div>
@@ -254,13 +255,13 @@ export default function TransportRouteManagement() {
                     <Select
                         label="Route"
                         value={expenseForm.route_id}
-                        onChange={(e) => setExpenseForm({...expenseForm, route_id: e.target.value})}
+                        onChange={(value) => setExpenseForm({ ...expenseForm, route_id: String(value) })}
                         options={routes.map(r => ({ value: r.id, label: r.route_name }))}
                     />
                     <Select
                         label="Expense Type"
                         value={expenseForm.expense_type}
-                        onChange={(e) => setExpenseForm({...expenseForm, expense_type: e.target.value})}
+                        onChange={(value) => setExpenseForm({ ...expenseForm, expense_type: String(value) })}
                         options={[
                             { value: 'FUEL', label: 'Fuel' },
                             { value: 'MAINTENANCE', label: 'Maintenance' },
@@ -275,7 +276,7 @@ export default function TransportRouteManagement() {
                         <Input
                             type="number"
                             value={expenseForm.amount}
-                            onChange={(e) => setExpenseForm({...expenseForm, amount: e.target.value})}
+                            onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
                             required
                         />
                     </div>
@@ -283,7 +284,7 @@ export default function TransportRouteManagement() {
                         <label className="text-xs font-bold text-foreground/60 px-1">Description</label>
                         <Input
                             value={expenseForm.description}
-                            onChange={(e) => setExpenseForm({...expenseForm, description: e.target.value})}
+                            onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
                             required
                         />
                     </div>

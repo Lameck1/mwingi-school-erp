@@ -1,7 +1,4 @@
-
 import { getDatabase } from '../../database'
-import QRCode from 'qrcode'
-import { PDFDocument } from 'pdf-lib'
 
 export interface StudentReportCard {
   student_id: number
@@ -10,28 +7,30 @@ export interface StudentReportCard {
   stream_name: string
   academic_year: string
   term_name: string
-  
-  // Academic Performance
-  subjects: SubjectGrade[]
+  subjects: {
+    subject_id: number
+    subject_name: string
+    marks: number
+    grade: string
+    percentage: number
+    teacher_comment: string
+    competency_level: string
+  }[]
   total_marks: number
   average_marks: number
   overall_grade: string
   position_in_class: number
   position_in_stream: number
-  
-  // CBC Learning Areas
-  learning_areas: LearningAreaCompetency[]
-  
-  // Attendance
+  learning_areas: {
+    area_name: string
+    competency_level: 'meets_expectations'
+    teacher_comment: string
+  }[]
   days_present: number
   days_absent: number
   attendance_percentage: number
-  
-  // Comments
   class_teacher_comment: string
   principal_comment: string
-  
-  // Additional Info
   next_term_begin_date: string
   fees_balance: number
   qr_code_token: string
@@ -39,7 +38,36 @@ export interface StudentReportCard {
   email_sent_at?: string
 }
 
-export interface SubjectGrade {
+interface StudentResult {
+  id: number
+  admission_number: string
+  name: string
+  stream_id: number
+  balance?: number
+}
+
+interface ExamResult {
+  id: number
+  academic_year_id: number
+  term_id: number
+}
+
+interface StreamResult {
+  id: number
+  stream_name: string
+}
+
+interface AcademicYearResult {
+  id: number
+  name: string
+}
+
+interface TermResult {
+  id: number
+  name: string
+}
+
+interface SubjectGradeResult {
   subject_id: number
   subject_name: string
   marks: number
@@ -49,10 +77,50 @@ export interface SubjectGrade {
   competency_level: string
 }
 
-export interface LearningAreaCompetency {
+interface AttendanceResult {
+  days_present: number
+  days_absent: number
+}
+
+interface ClassPositionResult {
+  position: number
+}
+
+interface FeeBalanceResult {
+  balance: number
+}
+
+interface LearningAreaResult {
   area_name: string
-  competency_level: 'exceeds_expectations' | 'meets_expectations' | 'approaching_expectations' | 'below_expectations'
+  competency_level: string
   teacher_comment: string
+}
+
+interface ReportCardRecord {
+  id: number
+  stream_id: number
+  total_marks: number
+  average_marks: number
+  overall_grade: string
+  position_in_class: number
+  position_in_stream: number
+  attendance_days_present: number
+  attendance_days_absent: number
+  attendance_percentage: number
+  class_teacher_remarks: string
+  principal_remarks: string
+  qr_code_token: string
+  generated_at: string
+  email_sent_at?: string
+}
+
+interface ReportCardSubjectRecord {
+  subject_id: number
+  marks: number
+  grade: string
+  percentage: number
+  teacher_comment: string
+  competency_level: string
 }
 
 export class CBCReportCardService {
@@ -70,20 +138,20 @@ export class CBCReportCardService {
   ): Promise<StudentReportCard> {
     try {
       // Get student info
-      const student = this.db.prepare('SELECT * FROM student WHERE id = ?').get(studentId) as unknown
+      const student = this.db.prepare('SELECT * FROM student WHERE id = ?').get(studentId) as StudentResult | undefined
       if (!student) throw new Error('Student not found')
 
       // Get exam details
-      const exam = this.db.prepare('SELECT * FROM exam WHERE id = ?').get(examId) as unknown
+      const exam = this.db.prepare('SELECT * FROM exam WHERE id = ?').get(examId) as ExamResult | undefined
       if (!exam) throw new Error('Exam not found')
 
       // Get stream info
-      const stream = this.db.prepare('SELECT * FROM stream WHERE id = ?').get(student.stream_id) as unknown
+      const stream = this.db.prepare('SELECT * FROM stream WHERE id = ?').get(student.stream_id) as StreamResult | undefined
       const streamName = stream?.stream_name || 'Unknown'
 
       // Get academic year and term
-      const academicYear = this.db.prepare('SELECT * FROM academic_year WHERE id = ?').get(exam.academic_year_id) as unknown
-      const term = this.db.prepare('SELECT * FROM term WHERE id = ?').get(exam.term_id) as unknown
+      const academicYear = this.db.prepare('SELECT * FROM academic_year WHERE id = ?').get(exam.academic_year_id) as AcademicYearResult | undefined
+      const term = this.db.prepare('SELECT * FROM term WHERE id = ?').get(exam.term_id) as TermResult | undefined
 
       // Get subject grades
       const subjects = this.db.prepare(`
@@ -109,7 +177,7 @@ export class CBCReportCardService {
         JOIN subject s ON er.subject_id = s.id
         WHERE er.exam_id = ? AND er.student_id = ?
         ORDER BY s.name
-      `).all(examId, studentId) as unknown[]
+      `).all(examId, studentId) as SubjectGradeResult[]
 
       if (subjects.length === 0) {
         throw new Error('No exam results found for this student')
@@ -132,7 +200,7 @@ export class CBCReportCardService {
         SELECT 'Agriculture & Nutrition', 'meets_expectations', 'Active in field work'
         UNION ALL
         SELECT 'Leadership & Community Service', 'meets_expectations', 'Good contributions'
-      `).all() as unknown[]
+      `).all() as LearningAreaResult[]
 
       // Get attendance
       const attendance = this.db.prepare(`
@@ -141,11 +209,11 @@ export class CBCReportCardService {
           COALESCE((SELECT COUNT(*) FROM attendance WHERE student_id = ? AND is_present = 0), 0) as days_absent
         FROM attendance
         WHERE student_id = ? AND is_present = 1
-      `).get(studentId, studentId) as unknown
+      `).get(studentId, studentId) as AttendanceResult | undefined
 
-      const totalAttendanceDays = (attendance.days_present || 0) + (attendance.days_absent || 0)
+      const totalAttendanceDays = (attendance?.days_present || 0) + (attendance?.days_absent || 0)
       const attendancePercentage = totalAttendanceDays > 0
-        ? ((attendance.days_present || 0) / totalAttendanceDays) * 100
+        ? ((attendance?.days_present || 0) / totalAttendanceDays) * 100
         : 0
 
       // Get position
@@ -159,7 +227,7 @@ export class CBCReportCardService {
         ) > (
           SELECT AVG(score) FROM exam_result WHERE student_id = ? AND exam_id = ?
         )
-      `).get(examId, student.stream_id, exam.academic_year_id, exam.term_id, examId, studentId, examId) as unknown
+      `).get(examId, student.stream_id, exam.academic_year_id, exam.term_id, examId, studentId, examId) as ClassPositionResult | undefined
 
       // Generate QR code token
       const qrCodeToken = this.generateQRToken(studentId, examId)
@@ -167,7 +235,7 @@ export class CBCReportCardService {
       // Get fees balance
       const feeBalance = this.db.prepare(`
         SELECT COALESCE(balance, 0) as balance FROM student WHERE id = ?
-      `).get(studentId) as unknown
+      `).get(studentId) as FeeBalanceResult | undefined
 
       // Create report card record
       const insertQuery = this.db.prepare(`
@@ -190,8 +258,8 @@ export class CBCReportCardService {
         classPosition?.position || 1,
         'Excellent performance this term. Keep up the good work!',
         'Well done on your academic progress.',
-        attendance.days_present || 0,
-        attendance.days_absent || 0,
+        attendance?.days_present || 0,
+        attendance?.days_absent || 0,
         attendancePercentage,
         qrCodeToken,
         now
@@ -239,11 +307,11 @@ export class CBCReportCardService {
         position_in_stream: classPosition?.position || 1,
         learning_areas: learningAreas.map(la => ({
           area_name: la.area_name,
-          competency_level: la.competency_level as unknown,
+          competency_level: la.competency_level as 'meets_expectations', // Cast to valid enum member
           teacher_comment: la.teacher_comment
         })),
-        days_present: attendance.days_present || 0,
-        days_absent: attendance.days_absent || 0,
+        days_present: attendance?.days_present || 0,
+        days_absent: attendance?.days_absent || 0,
         attendance_percentage: attendancePercentage,
         class_teacher_comment: 'Excellent performance this term. Keep up the good work!',
         principal_comment: 'Well done on your academic progress.',
@@ -271,7 +339,7 @@ export class CBCReportCardService {
       // Get all students in stream
       const students = this.db.prepare(`
         SELECT id FROM student WHERE stream_id = ? AND is_active = 1 ORDER BY name
-      `).all(streamId) as unknown[]
+      `).all(streamId) as { id: number }[]
 
       const reportCards: StudentReportCard[] = []
 
@@ -307,7 +375,7 @@ export class CBCReportCardService {
     try {
       const rc = this.db.prepare(`
         SELECT * FROM report_card WHERE exam_id = ? AND student_id = ?
-      `).get(examId, studentId) as unknown
+      `).get(examId, studentId) as ReportCardRecord | undefined
 
       if (!rc) return null
 
@@ -347,19 +415,19 @@ export class CBCReportCardService {
   }
 
   private async buildReportCardFromRecord(
-    rc: unknown,
+    rc: ReportCardRecord,
     examId: number,
     studentId: number
   ): Promise<StudentReportCard> {
-    const student = this.db.prepare('SELECT * FROM student WHERE id = ?').get(studentId) as unknown
-    const exam = this.db.prepare('SELECT * FROM exam WHERE id = ?').get(examId) as unknown
-    const stream = this.db.prepare('SELECT * FROM stream WHERE id = ?').get(rc.stream_id) as unknown
-    const year = this.db.prepare('SELECT * FROM academic_year WHERE id = ?').get(exam.academic_year_id) as unknown
-    const term = this.db.prepare('SELECT * FROM term WHERE id = ?').get(exam.term_id) as unknown
+    const student = this.db.prepare('SELECT * FROM student WHERE id = ?').get(studentId) as StudentResult | undefined
+    const exam = this.db.prepare('SELECT * FROM exam WHERE id = ?').get(examId) as ExamResult | undefined
+    const stream = this.db.prepare('SELECT * FROM stream WHERE id = ?').get(rc.stream_id) as StreamResult | undefined
+    const year = this.db.prepare('SELECT * FROM academic_year WHERE id = ?').get(exam?.academic_year_id) as AcademicYearResult | undefined
+    const term = this.db.prepare('SELECT * FROM term WHERE id = ?').get(exam?.term_id) as TermResult | undefined
 
     const subjects = this.db.prepare(`
       SELECT * FROM report_card_subject WHERE report_card_id = ?
-    `).all(rc.id) as unknown[]
+    `).all(rc.id) as ReportCardSubjectRecord[]
 
     return {
       student_id: studentId,
@@ -396,5 +464,3 @@ export class CBCReportCardService {
     }
   }
 }
-
-

@@ -75,7 +75,7 @@ describe('PaymentService', () => {
     })
 
     afterEach(() => {
-        db.close()
+        if (db) db.close()
     })
 
     describe('recordPayment', () => {
@@ -137,8 +137,8 @@ describe('PaymentService', () => {
             try {
                 const result = await service.voidPayment({
                     transaction_id: 1,
-                    voided_reason: 'Duplicate entry',
-                    voided_by_user_id: 1
+                    void_reason: 'Duplicate entry',
+                    voided_by: 1
                 })
                 expect(result).toBeDefined()
             } catch (error) {
@@ -149,8 +149,8 @@ describe('PaymentService', () => {
         it('should reject voiding without reason', async () => {
             const result = await service.voidPayment({
                 transaction_id: 1,
-                voided_reason: '',
-                voided_by_user_id: 1
+                void_reason: '',
+                voided_by: 1
             })
 
             expect(result).toBeDefined()
@@ -160,8 +160,8 @@ describe('PaymentService', () => {
         it('should reject voiding already voided payment', async () => {
             const result = await service.voidPayment({
                 transaction_id: 999,
-                voided_reason: 'Test reason',
-                voided_by_user_id: 1
+                void_reason: 'Test reason',
+                voided_by: 1
             })
 
             expect(result).toBeDefined()

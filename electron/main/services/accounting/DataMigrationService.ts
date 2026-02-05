@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3-multiple-ciphers';
+import Database from 'better-sqlite3';
 import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
 import { DoubleEntryJournalService, JournalEntryData } from './DoubleEntryJournalService';
@@ -24,6 +24,19 @@ export interface MigrationStats {
   failed: number;
   skipped: number;
   total_amount_migrated: number;
+}
+
+interface LegacyTransaction {
+  id: number;
+  student_id: number | null;
+  transaction_date: string;
+  transaction_type: string;
+  amount: number;
+  debit_credit: 'DEBIT' | 'CREDIT';
+  description: string | null;
+  is_migrated: number | null;
+  student_name: string | null;
+  admission_number: string | null;
 }
 
 export class DataMigrationService {
@@ -54,7 +67,7 @@ export class DataMigrationService {
         LEFT JOIN student s ON lt.student_id = s.id
         WHERE lt.is_migrated IS NULL OR lt.is_migrated = 0
         ORDER BY lt.transaction_date, lt.id
-      `).all() as unknown[];
+      `).all() as LegacyTransaction[];
 
       if (transactions.length === 0) {
         return {
@@ -81,7 +94,7 @@ export class DataMigrationService {
         try {
           if (dryRun) {
             // Just validate, don't actually create entries
-            console.log(`[DRY RUN] Would migrate transaction ${transaction.id}`);
+            console.error(`[DRY RUN] Would migrate transaction ${transaction.id}`);
             migratedCount++;
           } else {
             // Determine GL accounts based on transaction type and description
@@ -240,7 +253,12 @@ export class DataMigrationService {
         SUM(CASE WHEN is_migrated = 0 OR is_migrated IS NULL THEN 1 ELSE 0 END) as pending,
         SUM(CASE WHEN is_migrated = 1 THEN amount ELSE 0 END) as total_amount_migrated
       FROM ledger_transaction
-    `).get() as unknown;
+    `).get() as {
+      total_transactions: number;
+      migrated: number;
+      pending: number;
+      total_amount_migrated: number;
+    };
 
     return {
       total_transactions: stats.total_transactions || 0,
@@ -255,7 +273,7 @@ export class DataMigrationService {
   // PRIVATE HELPER METHODS
   // ============================================================================
 
-  private determineGLAccounts(transaction: unknown): { debitAccount: string; creditAccount: string } {
+  private determineGLAccounts(transaction: LegacyTransaction): { debitAccount: string; creditAccount: string } {
     // Determine GL accounts based on transaction type and description
     const type = (transaction.transaction_type || '').toUpperCase();
     const desc = (transaction.description || '').toLowerCase();
@@ -306,4 +324,5 @@ export class DataMigrationService {
     }
   }
 }
+
 

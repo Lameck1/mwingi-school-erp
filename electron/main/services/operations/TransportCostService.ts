@@ -53,6 +53,23 @@ interface ExpenseSummary {
   percentage: number;
 }
 
+interface StudentCountResult {
+  student_count: number;
+}
+
+interface CountResult {
+  count: number;
+}
+
+interface RevenueResult {
+  total_revenue: number;
+}
+
+interface ExpenseSummaryResult {
+  expense_type: string;
+  total_amount_cents: number;
+}
+
 /**
  * TransportCostService
  * 
@@ -175,7 +192,7 @@ export class TransportCostService {
       WHERE route_id = ? AND fiscal_year = ?
     `;
 
-    const params: any[] = [routeId, fiscalYear];
+    const params: unknown[] = [routeId, fiscalYear];
 
     if (term) {
       query += ` AND term = ?`;
@@ -203,7 +220,7 @@ export class TransportCostService {
       WHERE route_id = ? AND fiscal_year = ?
     `;
 
-    const params: any[] = [routeId, fiscalYear];
+    const params: unknown[] = [routeId, fiscalYear];
 
     if (term) {
       query += ` AND term = ?`;
@@ -215,7 +232,7 @@ export class TransportCostService {
       ORDER BY total_amount_cents DESC
     `;
 
-    const results = this.db.prepare(query).all(...params) as unknown[];
+    const results = this.db.prepare(query).all(...params) as ExpenseSummaryResult[];
 
     // Calculate total for percentages
     const total = results.reduce((sum, row) => sum + row.total_amount_cents, 0);
@@ -287,14 +304,14 @@ export class TransportCostService {
       WHERE route_id = ? AND academic_year = ?
     `;
 
-    const countParams: any[] = [routeId, fiscalYear];
+    const countParams: unknown[] = [routeId, fiscalYear];
 
     if (term) {
       countQuery += ` AND term = ?`;
       countParams.push(term);
     }
 
-    const countResult = this.db.prepare(countQuery).get(...countParams) as unknown;
+    const countResult = this.db.prepare(countQuery).get(...countParams) as StudentCountResult | undefined;
     const studentCount = countResult?.student_count || 0;
 
     // Get transport fee revenue
@@ -309,14 +326,14 @@ export class TransportCostService {
         AND lt.description LIKE '%transport%'
     `;
 
-    const revenueParams: any[] = [routeId, fiscalYear];
+    const revenueParams: unknown[] = [routeId, fiscalYear];
 
     if (term) {
       revenueQuery += ` AND sra.term = ? AND lt.term = ?`;
       revenueParams.push(term, term);
     }
 
-    const revenueResult = this.db.prepare(revenueQuery).get(...revenueParams) as unknown;
+    const revenueResult = this.db.prepare(revenueQuery).get(...revenueParams) as RevenueResult | undefined;
     return revenueResult?.total_revenue || 0;
   }
 
@@ -344,14 +361,14 @@ export class TransportCostService {
       WHERE route_id = ? AND academic_year = ?
     `;
 
-    const studentCountParams: any[] = [routeId, fiscalYear];
+    const studentCountParams: unknown[] = [routeId, fiscalYear];
 
     if (term) {
       studentCountQuery += ` AND term = ?`;
       studentCountParams.push(term);
     }
 
-    const studentCountResult = this.db.prepare(studentCountQuery).get(...studentCountParams) as unknown;
+    const studentCountResult = this.db.prepare(studentCountQuery).get(...studentCountParams) as CountResult | undefined;
     const studentCount = studentCountResult?.count || 0;
 
     // Calculate revenue

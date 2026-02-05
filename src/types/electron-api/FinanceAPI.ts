@@ -109,6 +109,20 @@ export interface PaymentRecordData {
   transaction_date: string
 }
 
+export interface FinanceApprovalRequest {
+  id: number;
+  journal_entry_id: number;
+  entry_ref: string;
+  entry_type: string;
+  description: string;
+  amount: number;
+  student_name?: string;
+  requested_by_name: string;
+  requested_at: string;
+  rule_name: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+}
+
 export interface FinanceAPI {
   // Fee Categories
   getFeeCategories: () => Promise<FeeCategory[]>
@@ -141,6 +155,10 @@ export interface FinanceAPI {
   getCashFlowStatement: (startDate: string, endDate: string) => Promise<CashFlowStatement>
   getForecast: (months: number) => Promise<FinancialForecast>
 
+  // Approvals
+  getApprovalQueue: (filter: 'PENDING' | 'ALL') => Promise<{ success: boolean; data: FinanceApprovalRequest[]; message?: string }>
+  approveTransaction: (id: number, notes: string) => Promise<{ success: boolean; message?: string }>
+  rejectTransaction: (id: number, notes: string) => Promise<{ success: boolean; message?: string }>
+
   // Manual Fixes
-  fixCurrencyData: (_userId: number) => Promise<{ success: boolean; message: string }>
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, ElementType } from 'react'
 import {
     Download, FileText, Users, TrendingUp, TrendingDown,
     Calendar, AlertCircle, MessageSquare, Loader2, Search, Printer
@@ -10,6 +10,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 import { exportToPDF, downloadCSV } from '../../utils/exporters'
 
 const COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed']
+const COLOR_CLASSES = ['bg-blue-600', 'bg-emerald-600', 'bg-amber-600', 'bg-red-600', 'bg-violet-600']
 
 interface StudentStats {
     totalStudents: number
@@ -23,6 +24,28 @@ interface FinancialSummary {
     netBalance: number
 }
 
+interface Defaulter {
+    id: number | string
+    admission_number: string
+    first_name: string
+    last_name: string
+    stream_name: string
+    total_amount: number
+    amount_paid: number
+    balance: number
+    guardian_phone?: string
+}
+
+interface DailyCollectionItem {
+    admission_number: string
+    student_name: string;
+    stream_name: string;
+    amount: number;
+    payment_method: string;
+    payment_reference?: string
+    date?: string
+}
+
 export default function Reports() {
     const [loading, setLoading] = useState(false)
     const [dateRange, setDateRange] = useState({
@@ -33,9 +56,9 @@ export default function Reports() {
     const [studentStats, setStudentStats] = useState<StudentStats | null>(null)
     const [financialSummary, setFinancialSummary] = useState<FinancialSummary | null>(null)
     const [feeCollectionData, setFeeCollectionData] = useState<{ month: string; amount: number }[]>([])
-    const [paymentMethodData, setPaymentMethodData] = useState<any[]>([])
-    const [defaulters, setDefaulters] = useState<any[]>([])
-    const [dailyCollections, setDailyCollections] = useState<any[]>([])
+    const [paymentMethodData, setPaymentMethodData] = useState<{ name: string; value: number }[]>([])
+    const [defaulters, setDefaulters] = useState<Defaulter[]>([])
+    const [dailyCollections, setDailyCollections] = useState<DailyCollectionItem[]>([])
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10))
     const [sendingBulk, setSendingBulk] = useState(false)
     const [activeTab, setActiveTab] = useState<'fee-collection' | 'defaulters' | 'daily-collection' | 'students' | 'financial'>('fee-collection')
@@ -46,8 +69,8 @@ export default function Reports() {
             // Load student statistics
             const students = await window.electronAPI.getStudents({})
             const currentStudents = Array.isArray(students) ? students : []
-            const dayScholars = currentStudents.filter((s: unknown) => s.student_type === 'DAY_SCHOLAR').length
-            const boarders = currentStudents.filter((s: unknown) => s.student_type === 'BOARDER').length
+            const dayScholars = currentStudents.filter((s) => s.student_type === 'DAY_SCHOLAR').length
+            const boarders = currentStudents.filter((s) => s.student_type === 'BOARDER').length
             setStudentStats({
                 totalStudents: currentStudents.length,
                 dayScholars,
@@ -64,9 +87,9 @@ export default function Reports() {
 
             // Group by month
             const monthlyData: Record<string, number> = {}
-            currentFeeData.forEach((item: unknown) => {
-                if (!item.transaction_date && !item.payment_date) return
-                const d = new Date(item.transaction_date || item.payment_date)
+            currentFeeData.forEach((item) => {
+                if (!item.payment_date) return
+                const d = new Date(item.payment_date)
                 if (isNaN(d.getTime())) return
                 const month = d.toLocaleDateString('en-US', { month: 'short' })
                 monthlyData[month] = (monthlyData[month] || 0) + item.amount
@@ -80,7 +103,7 @@ export default function Reports() {
 
             // Group by payment method
             const methodData: Record<string, number> = {}
-            currentFeeData.forEach((item: unknown) => {
+            currentFeeData.forEach((item) => {
                 const method = item.payment_method || 'Other'
                 methodData[method] = (methodData[method] || 0) + item.amount
             })
@@ -113,7 +136,7 @@ export default function Reports() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [dateRange, selectedDate])
 
-    const handleSendReminder = async (student: unknown) => {
+    const handleSendReminder = async (student: Defaulter) => {
         if (!student.guardian_phone) {
             alert('Guardian phone number missing')
             return
@@ -121,10 +144,10 @@ export default function Reports() {
 
         try {
             const message = `Fee Reminder: ${student.first_name} has an outstanding balance of KES ${student.balance}. Please settle at your earliest convenience. Thank you.`
-            const result = await (window.electronAPI as unknown).sendSMS({
+            const result = await window.electronAPI.sendSMS({
                 to: student.guardian_phone,
                 message,
-                recipientId: student.id,
+                recipientId: Number(student.id),
                 recipientType: 'STUDENT',
                 userId: 1
             })
@@ -154,13 +177,13 @@ export default function Reports() {
 
             try {
                 const message = `Fee Reminder: ${student.first_name} has an outstanding balance of KES ${student.balance}. Please settle at your earliest convenience. Thank you.`
-                const result = await (window.electronAPI as unknown).sendSMS({
-                    to: student.guardian_phone,
-                    message,
-                    recipientId: student.id,
-                    recipientType: 'STUDENT',
-                    userId: 1
-                })
+                const result = await window.electronAPI.sendSMS({
+                to: student.guardian_phone,
+                message,
+                recipientId: Number(student.id),
+                recipientType: 'STUDENT',
+                userId: 1
+            })
                 if (result.success) sentCount++
                 else failedCount++
             } catch (error) {
@@ -286,14 +309,14 @@ export default function Reports() {
                     { key: 'payment_reference', header: 'Reference' },
                     { key: 'amount', header: 'Amount', format: 'currency' },
                 ],
-                data: dailyCollections
+                data: dailyCollections as unknown as Record<string, unknown>[]
             })
         } else {
             alert('Please select a report with data to export')
         }
     }
 
-    const tabs = [
+    const tabs: { id: typeof activeTab; label: string; icon: ElementType }[] = [
         { id: 'fee-collection', label: 'Fee Collection', icon: TrendingUp },
         { id: 'daily-collection', label: 'Daily Collection', icon: Calendar },
         { id: 'defaulters', label: 'Fee Defaulters', icon: AlertCircle },
@@ -332,7 +355,7 @@ export default function Reports() {
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id as unknown)}
+                        onClick={() => setActiveTab(tab.id)}
                         className={`pb-4 px-2 text-sm font-bold uppercase tracking-widest transition-all relative ${activeTab === tab.id ? 'text-primary' : 'text-foreground/40 hover:text-foreground/60'}`}
                     >
                         <div className="flex items-center gap-2">
@@ -349,8 +372,9 @@ export default function Reports() {
                 <div className="flex flex-col md:flex-row md:items-center gap-6">
                     <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1">
-                            <label className="text-[10px] font-bold uppercase text-foreground/40 tracking-widest ml-1">Period From</label>
+                            <label htmlFor="period-start" className="text-[10px] font-bold uppercase text-foreground/40 tracking-widest ml-1">Period From</label>
                             <input
+                                id="period-start"
                                 type="date"
                                 value={dateRange.start}
                                 onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
@@ -358,8 +382,9 @@ export default function Reports() {
                             />
                         </div>
                         <div className="space-y-1">
-                            <label className="text-[10px] font-bold uppercase text-foreground/40 tracking-widest ml-1">Period To</label>
+                            <label htmlFor="period-end" className="text-[10px] font-bold uppercase text-foreground/40 tracking-widest ml-1">Period To</label>
                             <input
+                                id="period-end"
                                 type="date"
                                 value={dateRange.end}
                                 onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
@@ -443,7 +468,7 @@ export default function Reports() {
                                     <div className="mt-4 flex flex-wrap gap-4 justify-center">
                                         {paymentMethodData.map((item, index) => (
                                             <div key={item.name} className="flex items-center gap-2">
-                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                                                <div className={`w-2 h-2 rounded-full ${COLOR_CLASSES[index % COLOR_CLASSES.length]}`} />
                                                 <span className="text-[10px] font-bold uppercase text-foreground/60">{item.name} ({item.value}%)</span>
                                             </div>
                                         ))}
@@ -468,14 +493,15 @@ export default function Reports() {
                                 <Calendar className="w-6 h-6" />
                             </div>
                             <div>
-                                <p className="text-[10px] font-bold uppercase text-foreground/40 tracking-widest">Audit Date</p>
-                                <input
-                                    type="date"
-                                    value={selectedDate}
-                                    onChange={(e) => setSelectedDate(e.target.value)}
-                                    className="bg-transparent border-none p-0 text-xl font-bold text-foreground focus:ring-0 cursor-pointer"
-                                />
-                            </div>
+                            <label htmlFor="audit-date" className="text-[10px] font-bold uppercase text-foreground/40 tracking-widest block">Audit Date</label>
+                            <input
+                                id="audit-date"
+                                type="date"
+                                value={selectedDate}
+                                onChange={(e) => setSelectedDate(e.target.value)}
+                                className="bg-transparent border-none p-0 text-xl font-bold text-foreground focus:ring-0 cursor-pointer"
+                            />
+                        </div>
                         </div>
                         <div className="flex gap-3">
                             <button onClick={() => window.print()} className="btn btn-secondary flex items-center gap-2 px-6">

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import Database from 'better-sqlite3-multiple-ciphers'
+import Database from 'better-sqlite3'
 import { PeriodLockingService } from '../PeriodLockingService'
 
 describe('PeriodLockingService', () => {
@@ -45,7 +45,7 @@ describe('PeriodLockingService', () => {
   })
 
   afterEach(() => {
-    db.close()
+    if (db) db.close()
   })
 
   describe('lockPeriod', () => {

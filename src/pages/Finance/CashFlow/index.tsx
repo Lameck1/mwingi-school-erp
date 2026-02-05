@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
     TrendingUp, DollarSign, Activity,
     Download
@@ -22,11 +22,7 @@ export default function CashFlow() {
     const [forecast, setForecast] = useState<FinancialForecast | null>(null)
     const [activeTab, setActiveTab] = useState<'statement' | 'forecast'>('statement')
 
-    useEffect(() => {
-        loadData()
-    }, [dateRange])
-
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         setLoading(true)
         try {
             const stmt = await window.electronAPI.getCashFlowStatement(dateRange.start, dateRange.end)
@@ -39,7 +35,11 @@ export default function CashFlow() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [dateRange])
+
+    useEffect(() => {
+        loadData()
+    }, [loadData])
 
     const handleExport = () => {
         if (!statement) return

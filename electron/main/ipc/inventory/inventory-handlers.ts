@@ -26,7 +26,7 @@ export function registerInventoryHandlers() {
     ipcMain.handle('inventory:recordMovement', async (_event, data, userId) => {
         const service = container.resolve<InventoryService>('InventoryService')
         // In the service, adjustStock might be the underlying method
-        return await service.adjustStock(data.item_id, data.quantity, data.movement_type, userId, data.description)
+        return await service.adjustStock(data.item_id, data.quantity, data.movement_type, userId, data.description, data.unit_cost)
     })
 
     ipcMain.handle('inventory:getHistory', async (_event, itemId) => {

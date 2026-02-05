@@ -6,66 +6,41 @@ import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
 import { Select } from '../../components/ui/Select'
 import { useAppStore, useAuthStore } from '../../stores'
-
-interface Stream {
-    id: number
-    stream_name: string
-    grade_level: number
-}
-
-interface Enrollment {
-    id: number
-    student_id: number
-    student_name: string
-    admission_number: string
-    stream_name: string
-}
+import { Stream, AcademicYear, Term, PromotionStudent } from '../../types/electron-api/AcademicAPI'
 
 export default function Promotions() {
     const { currentAcademicYear } = useAppStore()
     const { user } = useAuthStore()
 
     const [streams, setStreams] = useState<Stream[]>([])
-    const [students, setStudents] = useState<Enrollment[]>([])
+    const [students, setStudents] = useState<PromotionStudent[]>([])
     const [selectedStudents, setSelectedStudents] = useState<number[]>([])
     const [loading, setLoading] = useState(false)
     const [promoting, setPromoting] = useState(false)
 
     const [fromStream, setFromStream] = useState<number>(0)
     const [toStream, setToStream] = useState<number>(0)
-    const [academicYears, setAcademicYears] = useState<any[]>([])
+    const [academicYears, setAcademicYears] = useState<AcademicYear[]>([])
     const [toAcademicYear, setToAcademicYear] = useState<number>(0)
     const [toTerm, setToTerm] = useState<number>(0)
-    const [terms, setTerms] = useState<any[]>([])
+    const [terms, setTerms] = useState<Term[]>([])
 
-    useEffect(() => {
-        loadStreams()
-        loadAcademicYears()
-    }, [])
 
-    useEffect(() => {
-        if (fromStream && currentAcademicYear) {
-            loadStudents()
-            suggestNextStream()
-        }
-    }, [fromStream, currentAcademicYear])
 
-    useEffect(() => {
-        if (toAcademicYear) {
-            loadTerms()
-        }
-    }, [toAcademicYear])
 
-    const loadStreams = async () => {
+
+
+
+    const loadStreams = useCallback(async () => {
         try {
-            const data = await (window.electronAPI as unknown).getPromotionStreams()
+            const data = await window.electronAPI.getPromotionStreams()
             setStreams(data)
         } catch (error) {
             console.error('Failed to load streams:', error)
         }
-    }
+    }, [])
 
-    const loadAcademicYears = async () => {
+    const loadAcademicYears = useCallback(async () => {
         try {
             const data = await window.electronAPI.getAcademicYears()
             setAcademicYears(data)
@@ -76,9 +51,9 @@ export default function Promotions() {
         } catch (error) {
             console.error('Failed to load academic years:', error)
         }
-    }
+    }, [])
 
-    const loadTerms = async () => {
+    const loadTerms = useCallback(async () => {
         try {
             const data = await window.electronAPI.getTermsByYear(toAcademicYear)
             setTerms(data)
@@ -88,13 +63,24 @@ export default function Promotions() {
         } catch (error) {
             console.error('Failed to load terms:', error)
         }
-    }
+    }, [toAcademicYear])
+
+    useEffect(() => {
+        loadStreams()
+        loadAcademicYears()
+    }, [loadStreams, loadAcademicYears])
+
+    useEffect(() => {
+        if (toAcademicYear) {
+            loadTerms()
+        }
+    }, [toAcademicYear, loadTerms])
 
     const loadStudents = useCallback(async () => {
         if (!currentAcademicYear) return
         setLoading(true)
         try {
-            const data = await (window.electronAPI as unknown).getStudentsForPromotion(fromStream, currentAcademicYear.id)
+            const data = await window.electronAPI.getStudentsForPromotion(fromStream, currentAcademicYear.id)
             setStudents(data)
             setSelectedStudents([])
         } catch (error) {
@@ -104,16 +90,23 @@ export default function Promotions() {
         }
     }, [fromStream, currentAcademicYear])
 
-    const suggestNextStream = async () => {
+    const suggestNextStream = useCallback(async () => {
         try {
-            const next = await (window.electronAPI as unknown).getNextStream(fromStream)
+            const next = await window.electronAPI.getNextStream(fromStream)
             if (next) {
                 setToStream(next.id)
             }
         } catch (error) {
             console.error('Failed to get next stream:', error)
         }
-    }
+    }, [fromStream])
+
+    useEffect(() => {
+        if (fromStream && currentAcademicYear) {
+            loadStudents()
+            suggestNextStream()
+        }
+    }, [fromStream, currentAcademicYear, loadStudents, suggestNextStream])
 
     const toggleStudent = (studentId: number) => {
         setSelectedStudents(prev =>
@@ -146,7 +139,7 @@ export default function Promotions() {
 
         setPromoting(true)
         try {
-            const result = await (window.electronAPI as unknown).batchPromoteStudents(
+            const result = await window.electronAPI.batchPromoteStudents(
                 selectedStudents,
                 fromStream,
                 toStream,
@@ -284,6 +277,13 @@ export default function Promotions() {
                             <div
                                 key={student.student_id}
                                 onClick={() => toggleStudent(student.student_id)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        toggleStudent(student.student_id)
+                                    }
+                                }}
+                                role="button"
+                                tabIndex={0}
                                 className={`p-4 rounded-xl border cursor-pointer transition-all duration-300 ${selectedStudents.includes(student.student_id)
                                     ? 'bg-primary/10 border-primary/40'
                                     : 'bg-secondary/30 border-border/20 hover:border-primary/30 hover:bg-secondary/50'

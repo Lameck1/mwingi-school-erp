@@ -82,7 +82,7 @@ vi.mock('../database/index', () => {
 
   // Mock transaction to properly handle the callback
   mockDb.transaction.mockImplementation((callback: Function) => {
-    console.log('MOCK DB TRANSACTION CALLED');
+    console.error('MOCK DB TRANSACTION CALLED');
     return (...args: unknown[]) => callback(...args);
   });
 
@@ -193,7 +193,7 @@ describe('Modular IPC Handlers Security Tests', () => {
       };
 
       const result = await handler({}, paymentData, 1);
-      // console.log('Handler Result:', result);
+      // console.error('Handler Result:', result);
 
       expect(mockDb.transaction).toHaveBeenCalled();
     });
@@ -214,6 +214,7 @@ describe('Modular IPC Handlers Security Tests', () => {
     });
   });
 });
+
 
 
 

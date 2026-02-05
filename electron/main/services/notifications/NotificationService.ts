@@ -56,6 +56,20 @@ export interface EmailProviderConfig {
     fromName: string
 }
 
+export interface CommunicationLog {
+    id: number
+    recipient_type: string
+    recipient_id: number
+    message_type: string
+    subject: string | null
+    message_body: string
+    status: string
+    error_message: string | null
+    sent_by_user_id: number
+    created_at: string
+    sent_by_name?: string
+}
+
 export class NotificationService {
     private get db() { return getDatabase() }
     private isConfigLoaded = false
@@ -574,19 +588,7 @@ export class NotificationService {
         status?: string
         startDate?: string
         endDate?: string
-    }): Array<{
-        id: number
-        recipient_type: string
-        recipient_id: number
-        message_type: string
-        subject: string | null
-        message_body: string
-        status: string
-        error_message: string | null
-        sent_by_user_id: number
-        created_at: string
-        sent_by_name?: string
-    }> {
+    }): CommunicationLog[] {
         let query = `
       SELECT cl.*, u.full_name as sent_by_name
       FROM message_log cl
@@ -618,7 +620,7 @@ export class NotificationService {
 
         query += ' ORDER BY cl.created_at DESC LIMIT 500'
 
-        return this.db.prepare(query).all(...params) as unknown
+        return this.db.prepare(query).all(...params) as CommunicationLog[]
     }
 }
 

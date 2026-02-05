@@ -6,6 +6,8 @@
  */
 
 import React, { useState } from 'react';
+import { formatCurrency } from '../../../utils/format';
+
 
 interface ImportedBalance {
   type: 'STUDENT' | 'GL_ACCOUNT';
@@ -148,12 +150,8 @@ export const OpeningBalanceImport: React.FC = () => {
   const variance = Math.abs(totalDebits - totalCredits);
   const isBalanced = variance < 0.01;
 
-  const formatCurrency = (amount: number): string => {
-    return `Kes ${amount.toLocaleString('en-KE', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-  };
+
+
 
   return (
     <div className="p-6 space-y-6">
@@ -223,15 +221,13 @@ export const OpeningBalanceImport: React.FC = () => {
               </p>
             </div>
             <div
-              className={`text-center p-4 rounded-lg ${
-                isBalanced ? 'bg-blue-50' : 'bg-yellow-50'
-              }`}
+              className={`text-center p-4 rounded-lg ${isBalanced ? 'bg-blue-50' : 'bg-yellow-50'
+                }`}
             >
               <p className="text-sm text-gray-600 mb-1">Variance</p>
               <p
-                className={`text-2xl font-bold ${
-                  isBalanced ? 'text-blue-700' : 'text-yellow-700'
-                }`}
+                className={`text-2xl font-bold ${isBalanced ? 'text-blue-700' : 'text-yellow-700'
+                  }`}
               >
                 {formatCurrency(variance)}
               </p>
@@ -248,11 +244,10 @@ export const OpeningBalanceImport: React.FC = () => {
             <button
               onClick={handleImport}
               disabled={!verified || importing}
-              className={`px-6 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                verified && !importing
+              className={`px-6 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${verified && !importing
                   ? 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
+                }`}
             >
               {importing ? 'Importing...' : 'Import to System'}
             </button>
@@ -299,11 +294,10 @@ export const OpeningBalanceImport: React.FC = () => {
                 <tr key={index} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
-                      className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        balance.type === 'STUDENT'
+                      className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${balance.type === 'STUDENT'
                           ? 'bg-blue-100 text-blue-800'
                           : 'bg-purple-100 text-purple-800'
-                      }`}
+                        }`}
                     >
                       {balance.type}
                     </span>
@@ -316,11 +310,10 @@ export const OpeningBalanceImport: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
-                      className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        balance.debitCredit === 'DEBIT'
+                      className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${balance.debitCredit === 'DEBIT'
                           ? 'bg-green-100 text-green-800'
                           : 'bg-red-100 text-red-800'
-                      }`}
+                        }`}
                     >
                       {balance.debitCredit}
                     </span>
@@ -357,10 +350,19 @@ export const OpeningBalanceImport: React.FC = () => {
         <div
           className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50"
           onClick={() => setShowAddModal(false)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setShowAddModal(false)
+            }
+          }}
+          role="button"
+          tabIndex={0}
         >
           <div
             className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="presentation"
           >
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               Add Balance Entry

@@ -49,6 +49,20 @@ interface StudentCreateData {
   address: string
   notes: string
   is_active?: boolean
+  stream_id?: number
+}
+
+const toDbGender = (gender: string) => {
+  const g = gender?.toUpperCase()
+  if (g === 'MALE') return 'M'
+  if (g === 'FEMALE') return 'F'
+  return gender
+}
+
+const fromDbGender = (gender: string) => {
+  if (gender === 'M') return 'MALE'
+  if (gender === 'F') return 'FEMALE'
+  return gender
 }
 
 export function registerStudentHandlers(): void {
@@ -57,7 +71,7 @@ export function registerStudentHandlers(): void {
   // ======== STUDENTS ========
   ipcMain.handle('student:getAll', async (_event: IpcMainInvokeEvent, filters?: StudentFilters) => {
     let query = `SELECT s.*, st.stream_name, e.student_type as current_type,
-        (SELECT COALESCE(SUM(total_amount - amount_paid), 0) / 100.0
+        (SELECT COALESCE(SUM(total_amount - amount_paid), 0)
          FROM fee_invoice 
          WHERE student_id = s.id AND status != 'CANCELLED'
         ) as balance
@@ -82,19 +96,30 @@ export function registerStudentHandlers(): void {
       params.push(filters.isActive ? 1 : 0)
     }
     query += ` ORDER BY s.admission_number`
-    return db.prepare(query).all(...params) as Student[]
+    const students = db.prepare(query).all(...params) as Student[]
+    return students.map(s => ({
+      ...s,
+      gender: fromDbGender(s.gender)
+    })) as Student[]
   })
 
   ipcMain.handle('student:getById', async (_event: IpcMainInvokeEvent, id: number) => {
-    const student = db.prepare('SELECT * FROM student WHERE id = ?').get(id) as Student | undefined
-    if (student) {
-      // Convert stored cents to shillings for display
-      return {
-        ...student,
-        credit_balance: (student.credit_balance || 0) / 100
-      }
-    }
-    return undefined
+    const student = db.prepare('SELECT * FROM student WHERE id = ?').get(id) as Student
+    if (!student) return undefined
+    const enr = db.prepare(`
+      SELECT e.stream_id, st.stream_name FROM enrollment e
+      LEFT JOIN stream st ON e.stream_id = st.id
+      WHERE e.student_id = ?
+      ORDER BY e.id DESC
+      LIMIT 1
+    `).get(id) as { stream_id: number; stream_name: string } | undefined
+    return {
+      ...student,
+      gender: fromDbGender(student.gender),
+      credit_balance: (student.credit_balance || 0),
+      stream_id: enr?.stream_id,
+      stream_name: enr?.stream_name
+    } as Student
   })
 
   ipcMain.handle('student:create', async (_event: IpcMainInvokeEvent, data: StudentCreateData) => {
@@ -105,11 +130,28 @@ export function registerStudentHandlers(): void {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     const result = stmt.run(
       data.admission_number, data.first_name, data.middle_name, data.last_name,
-      data.date_of_birth, data.gender, data.student_type, data.admission_date,
+      data.date_of_birth, toDbGender(data.gender), data.student_type, data.admission_date,
       data.guardian_name, data.guardian_phone, data.guardian_email,
       data.guardian_relationship, data.address, data.notes
     )
-    return { success: true, id: result.lastInsertRowid }
+    const newStudentId = Number(result.lastInsertRowid)
+    try {
+      if (data.stream_id) {
+        const currentYear = db.prepare(`SELECT id FROM academic_year WHERE is_current = 1 LIMIT 1`).get() as { id: number } | undefined
+        const yearId = currentYear?.id ?? (db.prepare(`SELECT id FROM academic_year ORDER BY id DESC LIMIT 1`).get() as { id: number } | undefined)?.id
+        const currentTerm = db.prepare(`SELECT id, academic_year_id FROM term WHERE is_current = 1 LIMIT 1`).get() as { id: number; academic_year_id: number } | undefined
+        const termId = currentTerm?.id ?? (yearId ? (db.prepare(`SELECT id FROM term WHERE academic_year_id = ? ORDER BY term_number DESC LIMIT 1`).get(yearId) as { id: number } | undefined)?.id : undefined)
+        if (yearId && termId) {
+          db.prepare(`INSERT INTO enrollment (student_id, academic_year_id, term_id, stream_id, student_type, enrollment_date, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE')`).run(
+            newStudentId, yearId, termId, data.stream_id, data.student_type, data.admission_date
+          )
+        }
+      }
+    } catch (_e) {
+      // Ignore error
+    }
+    return { success: true, id: newStudentId }
   })
 
   ipcMain.handle('student:update', async (_event: IpcMainInvokeEvent, id: number, data: Partial<StudentCreateData>) => {
@@ -130,7 +172,7 @@ export function registerStudentHandlers(): void {
       data.middle_name !== undefined ? data.middle_name : student.middle_name,
       data.last_name !== undefined ? data.last_name : student.last_name,
       data.date_of_birth !== undefined ? data.date_of_birth : student.date_of_birth,
-      data.gender !== undefined ? data.gender : student.gender,
+      data.gender !== undefined ? toDbGender(data.gender) : student.gender,
       data.student_type !== undefined ? data.student_type : student.student_type,
       data.admission_date !== undefined ? data.admission_date : student.admission_date,
       data.guardian_name !== undefined ? data.guardian_name : student.guardian_name,
@@ -142,13 +184,29 @@ export function registerStudentHandlers(): void {
       data.is_active !== undefined ? (data.is_active ? 1 : 0) : student.is_active,
       id
     )
+    try {
+      if (data.stream_id) {
+        const currentYear = db.prepare(`SELECT id FROM academic_year WHERE is_current = 1 LIMIT 1`).get() as { id: number } | undefined
+        const yearId = currentYear?.id ?? (db.prepare(`SELECT id FROM academic_year ORDER BY id DESC LIMIT 1`).get() as { id: number } | undefined)?.id
+        const currentTerm = db.prepare(`SELECT id, academic_year_id FROM term WHERE is_current = 1 LIMIT 1`).get() as { id: number; academic_year_id: number } | undefined
+        const termId = currentTerm?.id ?? (yearId ? (db.prepare(`SELECT id FROM term WHERE academic_year_id = ? ORDER BY term_number DESC LIMIT 1`).get(yearId) as { id: number } | undefined)?.id : undefined)
+        if (yearId && termId) {
+          db.prepare(`INSERT INTO enrollment (student_id, academic_year_id, term_id, stream_id, student_type, enrollment_date, status)
+            VALUES (?, ?, ?, ?, ?, DATE('now'), 'ACTIVE')`).run(
+            id, yearId, termId, data.stream_id, data.student_type ?? student.student_type
+          )
+        }
+      }
+    } catch (_e) {
+      // Ignore error
+    }
     return { success: true }
   })
 
   ipcMain.handle('student:getBalance', async (_event: IpcMainInvokeEvent, studentId: number) => {
     const invoices = db.prepare(`SELECT COALESCE(SUM(total_amount - amount_paid), 0) as balance 
       FROM fee_invoice WHERE student_id = ? AND status != 'CANCELLED'`).get(studentId) as { balance: number } | undefined
-    return (invoices?.balance || 0) / 100
+    return (invoices?.balance || 0)
   })
 }
 

@@ -8,7 +8,7 @@ const USER_DATA_PATH = process.platform === 'win32'
     ? path.join(process.env.APPDATA || '', APP_NAME, 'data', 'school_erp.db')
     : path.join(process.env.HOME || '', '.config', APP_NAME, 'data', 'school_erp.db')
 
-console.log('Checking database at:', USER_DATA_PATH)
+console.error('Checking database at:', USER_DATA_PATH)
 
 if (!fs.existsSync(USER_DATA_PATH)) {
     console.error('Database file not found at expected path:', USER_DATA_PATH)
@@ -22,11 +22,12 @@ fs.readSync(fd, buffer, 0, 16, 0)
 fs.closeSync(fd)
 
 const header = buffer.toString('utf8')
-console.log('First 16 bytes (Hex):', buffer.toString('hex'))
-console.log('Header string:', header)
+console.error('First 16 bytes (Hex):', buffer.toString('hex'))
+console.error('Header string:', header)
 
 if (header.startsWith('SQLite format 3')) {
-    console.log('RESULT: ❌ UNENCRYPTED (Standard SQLite Header found)')
+    console.error('RESULT: ❌ UNENCRYPTED (Standard SQLite Header found)')
 } else {
-    console.log('RESULT: ✅ ENCRYPTED (Header is random/encrypted bytes)')
+    console.error('RESULT: ✅ ENCRYPTED (Header is random/encrypted bytes)')
 }
+

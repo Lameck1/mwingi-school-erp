@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { useAppStore } from '../../stores'
@@ -40,19 +40,15 @@ const MostImproved = () => {
     { value: 'consistent_improver', label: 'Consistent Improver' }
   ]
 
-  useEffect(() => {
-    loadInitialData()
-  }, [currentAcademicYear])
-
-  const loadInitialData = async () => {
+  const loadInitialData = useCallback(async () => {
     try {
       if (currentAcademicYear) {
         const [termsData, streamsData] = await Promise.all([
-          window.electronAPI.getTerms({ academicYearId: currentAcademicYear.id }),
+          window.electronAPI.getTermsByYear(currentAcademicYear.id),
           window.electronAPI.getStreams()
         ])
 
-        setTerms(termsData || [])
+        setTerms(termsData?.map(t => ({ id: t.id, name: t.term_name })) || [])
         setStreams(streamsData || [])
 
         // Auto-select current term as comparison and previous term
@@ -67,7 +63,11 @@ const MostImproved = () => {
     } catch (error) {
       console.error('Failed to load initial data:', error)
     }
-  }
+  }, [currentAcademicYear, currentTerm])
+
+  useEffect(() => {
+    loadInitialData()
+  }, [loadInitialData])
 
   const handleGenerateMostImproved = async () => {
     if (!selectedCurrentTerm || !selectedComparisonTerm) {
@@ -234,7 +234,7 @@ const MostImproved = () => {
             <Select
               label="Award Category"
               value={selectedAward}
-              onChange={(val) => setSelectedAward(val)}
+              onChange={(val) => setSelectedAward(String(val))}
               options={awardCategories}
             />
             <button

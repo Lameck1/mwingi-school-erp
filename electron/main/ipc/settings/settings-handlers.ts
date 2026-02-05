@@ -13,8 +13,9 @@ export function registerSettingsHandlers(): void {
         return db.prepare('SELECT * FROM school_settings WHERE id = 1').get()
     })
 
-    ipcMain.handle('settings:update', async (_event: IpcMainInvokeEvent, data: any) => {
+    ipcMain.handle('settings:update', async (_event: IpcMainInvokeEvent, data: unknown) => {
         // Use explicit UPDATE statement instead of dynamic builder for maximum security
+        const settings = data as Record<string, unknown>
         const stmt = db.prepare(`
             UPDATE school_settings 
             SET school_name = COALESCE(?, school_name),
@@ -32,9 +33,9 @@ export function registerSettingsHandlers(): void {
         `)
 
         stmt.run(
-            data.school_name, data.school_motto, data.address, data.phone,
-            data.email, data.logo_path, data.mpesa_paybill, data.sms_api_key,
-            data.sms_api_secret, data.sms_sender_id
+            settings.school_name, settings.school_motto, settings.address, settings.phone,
+            settings.email, settings.logo_path, settings.mpesa_paybill, settings.sms_api_key,
+            settings.sms_api_secret, settings.sms_sender_id
         )
         return { success: true }
     })
@@ -45,13 +46,6 @@ export function registerSettingsHandlers(): void {
         // Return masked value if encrypted
         const val = ConfigService.getConfig(key)
         if (!val) return null
-        // If it looks encrypted/sensitive, maybe we mask it here? 
-        // Logic in Service says getConfig returns decrypted. 
-        // UI should decide to mask or Service getAllConfigs does.
-        // For individual get, we return decrypted so "Test Connection" works.
-        // Wait, for UI display we generally want Masked. 
-        // Let's rely on getAllConfigs for bulk display and getSecure for internal use?
-        // Actually, let's expose getAll for UI.
         return val
     })
 

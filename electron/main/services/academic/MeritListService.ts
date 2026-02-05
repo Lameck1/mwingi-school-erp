@@ -49,6 +49,46 @@ export interface PerformanceImprovement {
   subjects_declined: number
 }
 
+interface MeritListRow {
+  position: number;
+  student_id: number;
+  admission_number: string;
+  student_name: string;
+  total_marks: number;
+  average_marks: number;
+  grade: string;
+}
+
+interface StudentResultRow {
+  id: number;
+  name: string;
+  admission_number: string;
+  subject_count: number;
+  total_marks: number;
+  average_marks: number;
+}
+
+interface GradingScaleRow {
+  grade: string;
+  min_score: number;
+  max_score: number;
+}
+
+interface SubjectMeritListRow {
+  student_id: number;
+  student_name: string;
+  admission_number: string;
+  marks: number;
+  percentage: number;
+}
+
+interface ImprovementRow {
+  id: number;
+  name: string;
+  previous_average: number;
+  current_average: number;
+}
+
 export class MeritListService {
   private get db() {
     return getDatabase()
@@ -86,7 +126,7 @@ export class MeritListService {
       JOIN student s ON rcs.student_id = s.id
       WHERE rcs.exam_id = ? AND s.stream_id = ? AND s.is_active = 1
       ORDER BY rcs.class_position ASC
-    `).all(exam.id, streamId) as unknown[]
+    `).all(exam.id, streamId) as MeritListRow[]
 
     // Format results
     return meritList.map((item, index) => ({
@@ -129,7 +169,7 @@ export class MeritListService {
           AND s.is_active = 1
         GROUP BY s.id
         ORDER BY average_marks DESC, total_marks DESC
-      `).all(examId, streamId) as unknown[]
+      `).all(examId, streamId) as StudentResultRow[]
 
       if (studentResults.length === 0) {
         throw new Error('No exam results found for this class/stream')
@@ -161,7 +201,7 @@ export class MeritListService {
         SELECT * FROM grading_scale 
         WHERE curriculum = 'CBC'
         ORDER BY min_score DESC
-      `).all() as unknown[]
+      `).all() as GradingScaleRow[]
 
       // Insert merit list entries
       const entryInsert = this.db.prepare(`
@@ -217,7 +257,7 @@ export class MeritListService {
   /**
    * Get subject merit list
    */
-  async getSubjectMeritList(examId: number, subjectId: number, streamId: number): Promise<unknown[]> {
+  async getSubjectMeritList(examId: number, subjectId: number, streamId: number): Promise<(SubjectMeritListRow & { position: number })[]> {
     const results = this.db.prepare(`
       SELECT 
         s.id as student_id,
@@ -232,7 +272,7 @@ export class MeritListService {
         AND s.stream_id = ?
         AND er.score IS NOT NULL
       ORDER BY er.score DESC
-    `).all(examId, subjectId, streamId) as unknown[]
+    `).all(examId, subjectId, streamId) as SubjectMeritListRow[]
 
     return results.map((r, index) => ({
       ...r,
@@ -283,7 +323,7 @@ export class MeritListService {
 
       query += ` ORDER BY ((curr.average_marks - prev.average_marks) / NULLIF(prev.average_marks, 0) * 100) DESC`
 
-      const results = this.db.prepare(query).all(...params) as unknown[]
+      const results = this.db.prepare(query).all(...params) as ImprovementRow[]
 
       return results.map(result => {
         const improvement = result.current_average - result.previous_average
@@ -314,7 +354,7 @@ export class MeritListService {
   /**
    * Private helper methods
    */
-  private calculateRankings(students: unknown[]): StudentRanking[] {
+  private calculateRankings(students: StudentResultRow[]): StudentRanking[] {
     const rankings: StudentRanking[] = []
     let position = 1
 
@@ -356,7 +396,7 @@ export class MeritListService {
     return rankings
   }
 
-  private getGrade(score: number, gradingScale: unknown[]): string {
+  private getGrade(score: number, gradingScale: GradingScaleRow[]): string {
     for (const grade of gradingScale) {
       if (score >= grade.min_score && score <= grade.max_score) {
         return grade.grade

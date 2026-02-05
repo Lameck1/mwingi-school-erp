@@ -53,7 +53,7 @@ export interface BankReconciliationAPI {
     addStatementLine: (statementId: number, line: unknown) => Promise<{ success: boolean; id?: number }>
     matchTransaction: (lineId: number, transactionId: number) => Promise<{ success: boolean }>
     unmatchTransaction: (lineId: number) => Promise<{ success: boolean }>
-    getUnmatchedTransactions: (startDate: string, endDate: string) => Promise<any[]>
+    getUnmatchedTransactions: (startDate: string, endDate: string) => Promise<unknown[]>
     markReconciled: (statementId: number, userId: number) => Promise<{ success: boolean }>
 }
 

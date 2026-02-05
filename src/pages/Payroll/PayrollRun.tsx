@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
+import { formatCurrency } from '../../utils/format'
 import { Calculator, Play, Download, AlertCircle, ChevronLeft, Eye, Printer, MessageSquare, Loader2, Calendar } from 'lucide-react'
 import { useAuthStore, useAppStore } from '../../stores'
 import { PayrollPeriod, PayrollEntry } from '../../types/electron-api/PayrollAPI'
+import { ElectronAPI } from '../../types/electron-api'
 import { printDocument } from '../../utils/print'
 
 export default function PayrollRun() {
@@ -26,7 +28,8 @@ export default function PayrollRun() {
     const loadHistory = async () => {
         setLoadingHistory(true)
         try {
-            const data = await window.electronAPI.getPayrollHistory()
+            const api = (window as unknown as { electronAPI: ElectronAPI }).electronAPI
+            const data = await api.getPayrollHistory()
             setHistory(data)
         } catch (err) {
             console.error('Failed to load history', err)
@@ -39,7 +42,8 @@ export default function PayrollRun() {
         setRunning(true)
         setError('')
         try {
-            const response = await window.electronAPI.getPayrollDetails(periodId)
+            const api = (window as unknown as { electronAPI: ElectronAPI }).electronAPI
+            const response = await api.getPayrollDetails(periodId)
             if (response.success) {
                 setPayrollData(response.results || [])
                 setSelectedPeriod(response.period || {
@@ -57,9 +61,8 @@ export default function PayrollRun() {
         }
     }
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', minimumFractionDigits: 0 }).format(amount)
-    }
+
+
 
     const runPayroll = async () => {
         setRunning(true)
@@ -69,7 +72,8 @@ export default function PayrollRun() {
                 setError('User not authenticated')
                 return
             }
-            const result = await window.electronAPI.runPayroll(month, year, user.id)
+            const api = (window as unknown as { electronAPI: ElectronAPI }).electronAPI
+            const result = await api.runPayroll(month, year, user.id)
             if (result.success) {
                 setPayrollData(result.results || [])
                 setSelectedPeriod({ period_name: `${months[month - 1]} ${year}`, status: 'DRAFT' }) // Temporary period obj
@@ -99,6 +103,7 @@ export default function PayrollRun() {
                     <div className="flex items-center gap-5">
                         <button
                             onClick={handleBack}
+                            aria-label="Go back"
                             className="p-3 bg-secondary hover:bg-primary/20 text-primary rounded-2xl transition-all hover:-translate-x-1"
                         >
                             <ChevronLeft className="w-5 h-5" />
@@ -155,7 +160,7 @@ export default function PayrollRun() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border/20">
-                                {payrollData.map((p: unknown, i: number) => (
+                                {payrollData.map((p, i) => (
                                     <tr key={i} className="group hover:bg-secondary/40 transition-colors">
                                         <td className="px-4 py-5">
                                             <p className="font-bold text-foreground group-hover:text-primary transition-colors">{p.staff_name}</p>
@@ -226,6 +231,7 @@ export default function PayrollRun() {
                                 <select
                                     value={month}
                                     onChange={(e) => setMonth(Number(e.target.value))}
+                                    aria-label="Select Month"
                                     className="input bg-secondary/30 border-border/20 py-3"
                                 >
                                     {months.map((m, i) => (<option key={i} value={i + 1}>{m}</option>))}
@@ -237,6 +243,7 @@ export default function PayrollRun() {
                                     type="number"
                                     value={year}
                                     onChange={(e) => setYear(Number(e.target.value))}
+                                    aria-label="Select Year"
                                     className="input bg-secondary/30 border-border/20 py-3"
                                     min={2020}
                                     max={2030}
@@ -306,6 +313,7 @@ export default function PayrollRun() {
                                         </span>
                                         <button
                                             onClick={() => loadPeriodDetails(h.id)}
+                                            aria-label="View payroll details"
                                             className="p-3 bg-white/5 hover:bg-primary text-foreground/40 hover:text-white rounded-xl transition-all shadow-sm"
                                         >
                                             <Eye className="w-5 h-5" />
@@ -321,20 +329,25 @@ export default function PayrollRun() {
     )
 
 
-    async function handleNotifyStaff(staff: unknown) {
+    async function handleNotifyStaff(staff: PayrollEntry) {
         if (!staff.phone) {
             alert('Staff phone number missing')
             return
         }
+        if (!user) {
+            alert('User not authenticated')
+            return
+        }
 
         try {
+            const api = (window as unknown as { electronAPI: ElectronAPI }).electronAPI
             const message = `Salary Notification: Your salary for ${selectedPeriod?.period_name} has been processed. Net Pay: KES ${staff.net_salary}. Thank you.`
-            const result = await window.electronAPI.sendSMS({
+            const result = await api.sendSMS({
                 to: staff.phone,
                 message,
                 recipientId: staff.staff_id,
                 recipientType: 'STAFF',
-                userId: user!.id
+                userId: user.id
             })
 
             if (result.success) {
@@ -349,10 +362,15 @@ export default function PayrollRun() {
 
     async function handleBulkNotify() {
         if (!confirm(`Send salary notifications to ${payrollData.length} staff members?`)) return
+        if (!user) {
+            alert('User not authenticated')
+            return
+        }
 
         setNotifying(true)
         let sent = 0
         let failed = 0
+        const api = (window as unknown as { electronAPI: ElectronAPI }).electronAPI
 
         for (const staff of payrollData) {
             if (!staff.phone) {
@@ -362,12 +380,12 @@ export default function PayrollRun() {
 
             try {
                 const message = `Salary Notification: Your salary for ${selectedPeriod?.period_name} has been processed. Net Pay: KES ${staff.net_salary}. Thank you.`
-                const result = await window.electronAPI.sendSMS({
+                const result = await api.sendSMS({
                     to: staff.phone,
                     message,
-                    recipientId: (staff as unknown).staff_id,
+                    recipientId: staff.staff_id,
                     recipientType: 'STAFF',
-                    userId: user!.id
+                    userId: user.id
                 })
                 if (result.success) sent++
                 else failed++
@@ -380,7 +398,7 @@ export default function PayrollRun() {
         alert(`Finished: ${sent} sent, ${failed} failed.`)
     }
 
-    async function handlePrintPayslip(staffEntry: unknown) {
+    async function handlePrintPayslip(staffEntry: PayrollEntry) {
         printDocument({
             title: `Payslip - ${staffEntry.staff_name} - ${selectedPeriod?.period_name}`,
             template: 'payslip',
@@ -395,7 +413,7 @@ export default function PayrollRun() {
                 allowancesList: [],
                 deductionsList: []
             },
-            schoolSettings: schoolSettings || {} as unknown
+            schoolSettings: (schoolSettings as unknown as Record<string, unknown>) || {}
         })
     }
 }

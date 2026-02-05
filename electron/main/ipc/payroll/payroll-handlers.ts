@@ -12,6 +12,16 @@ interface StaffAllowanceRow {
     is_active: number
 }
 
+interface StatutoryRate {
+    id: number
+    rate_type: string
+    min_amount: number
+    max_amount?: number
+    rate: number
+    fixed_amount: number
+    is_current: number
+}
+
 export function registerPayrollHandlers(): void {
     const db = getDatabase()
 
@@ -23,9 +33,9 @@ export function registerPayrollHandlers(): void {
             if (existing) return { success: false, error: 'Payroll for this period already exists' }
 
             // 2. Fetch Active Statutory Rates
-            const rates = db.prepare('SELECT * FROM statutory_rates WHERE is_current = 1').all() as any[]
+            const rates = db.prepare('SELECT * FROM statutory_rates WHERE is_current = 1').all() as StatutoryRate[]
             const getRate = (type: string) => rates.find(r => r.rate_type === type)
-            const payeBands = rates.filter(r => r.rate_type === 'PAYE_BAND').sort((a: any, b: any) => a.min_amount - b.min_amount)
+            const payeBands = rates.filter(r => r.rate_type === 'PAYE_BAND').sort((a, b) => a.min_amount - b.min_amount)
 
             // 3. Create Payroll Period
             const periodName = `${new Date(year, month - 1).toLocaleString('default', { month: 'long' })} ${year}`

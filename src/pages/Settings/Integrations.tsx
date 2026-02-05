@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Save, Lock, Smartphone, Mail, Globe, Eye, EyeOff } from 'lucide-react'
 import { useToast } from '../../contexts/ToastContext'
 
@@ -22,11 +22,7 @@ export default function IntegrationsSettings() {
         secure: 'false'
     })
 
-    useEffect(() => {
-        loadConfigs()
-    }, [])
-
-    const loadConfigs = async () => {
+    const loadConfigs = useCallback(async () => {
         try {
             const all = await window.electronAPI.getAllConfigs()
 
@@ -49,7 +45,11 @@ export default function IntegrationsSettings() {
             console.error(error)
             showToast('Failed to load integration settings', 'error')
         }
-    }
+    }, [showToast])
+
+    useEffect(() => {
+        loadConfigs()
+    }, [loadConfigs])
 
     const handleSaveSMS = async () => {
         setLoading(true)

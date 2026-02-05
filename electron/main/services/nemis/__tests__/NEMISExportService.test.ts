@@ -252,7 +252,7 @@ describe('NEMISExportService', () => {
   })
 
   afterEach(() => {
-    db.close()
+    if (db) db.close()
   })
 
   // extractStudentData tests (8 tests)

@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3-multiple-ciphers'
+import Database from 'better-sqlite3'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 
@@ -10,6 +10,9 @@ export interface INEMISDataExtractor {
   extractStudentData(filters?: NEMISFilters): Promise<NEMISStudent[]>
   extractStaffData(): Promise<NEMISStaff[]>
   extractEnrollmentData(academicYear: string): Promise<NEMISEnrollment[]>
+  extractSchoolData(): Promise<SchoolData | undefined>
+  extractFinancialData(): Promise<FinancialData | undefined>
+  generateNEMISReport(startDate?: string, endDate?: string): Promise<NEMISReport>
 }
 
 export interface INEMISValidator {
@@ -18,8 +21,8 @@ export interface INEMISValidator {
 }
 
 export interface INEMISFormatter {
-  formatToCSV(data: any[], exportType: NEMISExportType): string
-  formatToJSON(data: any[], exportType: NEMISExportType): string
+  formatToCSV(data: Record<string, unknown>[], exportType: NEMISExportType): string
+  formatToJSON(data: Record<string, unknown>[], exportType: NEMISExportType): string
 }
 
 export interface INEMISExportManager {
@@ -59,6 +62,33 @@ export interface NEMISStaff {
   employment_date: string
 }
 
+export interface SchoolData {
+  id: number
+  name: string
+  code: string
+  county: string
+  subcounty: string
+  nemis_code: string
+}
+
+export interface FinancialData {
+  total_invoices: number
+  total_fees: number
+  total_paid: number
+  total_outstanding: number
+}
+
+export interface NEMISReport {
+  timestamp: string
+  school: SchoolData | undefined
+  student_count: number
+  enrollment_count: number
+  financial_summary: FinancialData | undefined
+  period_start?: string
+  period_end?: string
+  generated_by: string
+}
+
 export interface NEMISEnrollment {
   class_name: string
   grade_level: string
@@ -73,6 +103,14 @@ export interface ValidationResult {
   message: string
   errors?: string[]
 }
+
+export interface NEMISExportDataStructure {
+  students?: unknown[]
+  school?: unknown
+  enrollments?: unknown[]
+  financial?: unknown
+}
+
 
 export interface NEMISExportConfig {
   export_type: NEMISExportType
@@ -137,7 +175,7 @@ class NEMISDataRepository {
       WHERE s.status = 'ACTIVE'
     `
 
-    const params: any[] = []
+    const params: (string | number)[] = []
 
     if (filters?.class_id) {
       query += ` AND s.class_id = ?`
@@ -154,7 +192,7 @@ class NEMISDataRepository {
     return db.prepare(query).all(...params) as NEMISStudent[]
   }
 
-  async extractSchoolData(): Promise<unknown> {
+  async extractSchoolData(): Promise<SchoolData | undefined> {
     const db = this.db
     return db.prepare(`
       SELECT 
@@ -166,10 +204,10 @@ class NEMISDataRepository {
         nemis_code
       FROM school
       LIMIT 1
-    `).get() as unknown
+    `).get() as SchoolData | undefined
   }
 
-  async extractFinancialData(): Promise<unknown> {
+  async extractFinancialData(): Promise<FinancialData | undefined> {
     const db = this.db
     return db.prepare(`
       SELECT 
@@ -178,19 +216,19 @@ class NEMISDataRepository {
         SUM(f.amount_paid) as total_paid,
         SUM(f.amount_due - COALESCE(f.amount_paid, 0)) as total_outstanding
       FROM fee_invoice f
-    `).get() as unknown
+    `).get() as FinancialData | undefined
   }
 
-  async generateNEMISReport(startDate?: string, endDate?: string): Promise<unknown> {
+  async generateNEMISReport(startDate?: string, endDate?: string): Promise<NEMISReport> {
     const db = this.db
     
     const studentCount = db.prepare(`
       SELECT COUNT(*) as count FROM student WHERE status = 'ACTIVE'
-    `).get() as unknown
+    `).get() as { count: number }
     
     const enrollmentData = db.prepare(`
       SELECT COUNT(*) as count FROM enrollment
-    `).get() as unknown
+    `).get() as { count: number }
     
     const financialData = await this.extractFinancialData()
     const schoolData = await this.extractSchoolData()
@@ -226,7 +264,8 @@ class NEMISDataRepository {
     `).all() as NEMISStaff[]
   }
 
-  async extractEnrollmentData(academicYear?: string): Promise<NEMISEnrollment[]> {
+  // Unused params prefixed with _
+  async extractEnrollmentData(_academicYear?: string): Promise<NEMISEnrollment[]> {
     const db = this.db
     return db.prepare(`
       SELECT 
@@ -308,15 +347,15 @@ class NEMISDataExtractor implements INEMISDataExtractor {
     return this.dataRepo.extractStaffData()
   }
 
-  async extractSchoolData(): Promise<unknown> {
+  async extractSchoolData(): Promise<SchoolData | undefined> {
     return this.dataRepo.extractSchoolData()
   }
 
-  async extractFinancialData(): Promise<unknown> {
+  async extractFinancialData(): Promise<FinancialData | undefined> {
     return this.dataRepo.extractFinancialData()
   }
 
-  async generateNEMISReport(startDate?: string, endDate?: string): Promise<unknown> {
+  async generateNEMISReport(startDate?: string, endDate?: string): Promise<NEMISReport> {
     return this.dataRepo.generateNEMISReport(startDate, endDate)
   }
 
@@ -362,7 +401,7 @@ class NEMISValidator implements INEMISValidator {
 }
 
 class NEMISFormatter implements INEMISFormatter {
-  formatToCSV(data: any[], exportType: NEMISExportType): string {
+  formatToCSV(data: Record<string, unknown>[], exportType: NEMISExportType): string {
     if (data.length === 0) return ''
 
     // Get column headers
@@ -387,7 +426,7 @@ class NEMISFormatter implements INEMISFormatter {
     return csv
   }
 
-  formatToJSON(data: any[], exportType: NEMISExportType): string {
+  formatToJSON(data: Record<string, unknown>[], exportType: NEMISExportType): string {
     return JSON.stringify({
       export_type: exportType,
       export_date: new Date().toISOString(),
@@ -408,14 +447,14 @@ class NEMISExportManager implements INEMISExportManager {
   async createExport(exportConfig: NEMISExportConfig, userId: number): Promise<ExportResult> {
     try {
       // Extract data based on export type
-      let data: any[] = []
+      let data: Record<string, unknown>[] = []
       
       switch (exportConfig.export_type) {
         case 'STUDENTS':
-          data = await this.extractor.extractStudentData(exportConfig.filters)
+          data = (await this.extractor.extractStudentData(exportConfig.filters)) as unknown as Record<string, unknown>[]
           break
         case 'STAFF':
-          data = await this.extractor.extractStaffData()
+          data = (await this.extractor.extractStaffData()) as unknown as Record<string, unknown>[]
           break
         case 'ENROLLMENT':
           if (!exportConfig.academic_year) {
@@ -424,7 +463,7 @@ class NEMISExportManager implements INEMISExportManager {
               message: 'Academic year required for enrollment export'
             }
           }
-          data = await this.extractor.extractEnrollmentData(exportConfig.academic_year)
+          data = (await this.extractor.extractEnrollmentData(exportConfig.academic_year)) as unknown as Record<string, unknown>[]
           break
         default:
           return {
@@ -442,7 +481,7 @@ class NEMISExportManager implements INEMISExportManager {
 
       // Validate data (for students)
       if (exportConfig.export_type === 'STUDENTS') {
-        for (const student of data as NEMISStudent[]) {
+        for (const student of data as unknown as NEMISStudent[]) {
           const validation = this.validator.validateStudentData(student)
           if (!validation.valid) {
             return {
@@ -553,21 +592,21 @@ export class NEMISExportService
   /**
    * Extract school information for NEMIS export
    */
-  async extractSchoolData(): Promise<unknown> {
+  async extractSchoolData(): Promise<SchoolData | undefined> {
     return this.extractor.extractSchoolData()
   }
 
   /**
    * Extract financial data for NEMIS export
    */
-  async extractFinancialData(): Promise<unknown> {
+  async extractFinancialData(): Promise<FinancialData | undefined> {
     return this.extractor.extractFinancialData()
   }
 
   /**
    * Generate NEMIS report
    */
-  async generateNEMISReport(startDate?: string, endDate?: string): Promise<unknown> {
+  async generateNEMISReport(startDate?: string, endDate?: string): Promise<NEMISReport> {
     return this.extractor.generateNEMISReport(startDate, endDate)
   }
 
@@ -588,7 +627,7 @@ export class NEMISExportService
   /**
    * Validate NEMIS export format
    */
-  async validateNEMISFormat(data: unknown): Promise<ValidationResult> {
+  async validateNEMISFormat(data: NEMISExportDataStructure): Promise<ValidationResult> {
     if (!data) {
       return {
         valid: false,
@@ -630,14 +669,14 @@ export class NEMISExportService
   /**
    * Format data to CSV
    */
-  formatToCSV(data: any[], exportType: NEMISExportType): string {
+  formatToCSV(data: Record<string, unknown>[], exportType: NEMISExportType): string {
     return this.formatter.formatToCSV(data, exportType)
   }
 
   /**
    * Format data to JSON
    */
-  formatToJSON(data: any[], exportType: NEMISExportType): string {
+  formatToJSON(data: Record<string, unknown>[], exportType: NEMISExportType): string {
     return this.formatter.formatToJSON(data, exportType)
   }
 

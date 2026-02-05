@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { useAppStore } from '../../stores'
@@ -28,12 +28,17 @@ interface ClashReport {
   affected_students: number
 }
 
+interface TimetableStats {
+  total_slots: number
+  total_students: number
+  venues_used: number
+  average_capacity_usage: number
+}
+
 const ExamScheduler = () => {
   const { currentAcademicYear, currentTerm } = useAppStore()
 
   const [exams, setExams] = useState<{ id: number; name: string }[]>([])
-  const [venues, setVenues] = useState<{ id: number; name: string; capacity: number }[]>([])
-  const [staff, setStaff] = useState<{ id: number; name: string }[]>([])
 
   const [selectedExam, setSelectedExam] = useState<number>(0)
   const [startDate, setStartDate] = useState<string>('')
@@ -41,27 +46,20 @@ const ExamScheduler = () => {
   const [slots, setSlots] = useState<ExamSlot[]>([])
   const [clashes, setClashes] = useState<ClashReport[]>([])
   const [loading, setLoading] = useState(false)
-  const [stats, setStats] = useState<unknown>(null)
+  const [stats, setStats] = useState<TimetableStats | null>(null)
 
-  useEffect(() => {
-    loadInitialData()
-  }, [currentAcademicYear, currentTerm])
-
-  const loadInitialData = async () => {
+  const loadInitialData = useCallback(async () => {
     try {
-      const [examsData, venuesData, staffData] = await Promise.all([
-        window.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
-        window.electronAPI.getVenues(),
-        window.electronAPI.getStaff()
-      ])
-
+      const examsData = await window.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id })
       setExams(examsData || [])
-      setVenues(venuesData || [])
-      setStaff(staffData || [])
     } catch (error) {
       console.error('Failed to load initial data:', error)
     }
-  }
+  }, [currentAcademicYear, currentTerm])
+
+  useEffect(() => {
+    loadInitialData()
+  }, [loadInitialData])
 
   const handleGenerateTimetable = async () => {
     if (!selectedExam || !startDate || !endDate) {
@@ -287,4 +285,3 @@ const ExamScheduler = () => {
 }
 
 export default ExamScheduler
-

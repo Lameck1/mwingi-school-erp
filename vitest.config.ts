@@ -6,7 +6,7 @@ export default defineConfig({
     test: {
         globals: true,
         environment: 'node',
-        include: ['electron/main/**/*.{test,spec}.ts'],
+        include: ['electron/main/**/*.{test,spec}.ts', 'src/**/*.{test,spec}.ts'],
         exclude: ['**/node_modules/**', '**/dist/**', '**/dist-electron/**'],
         coverage: {
             provider: 'v8',
@@ -26,7 +26,6 @@ export default defineConfig({
                 branches: 75,
                 statements: 80
             },
-            all: true,
             reportsDirectory: './coverage'
         },
         alias: {

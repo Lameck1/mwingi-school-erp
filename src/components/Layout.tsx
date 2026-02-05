@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { NavLink, useNavigate, Outlet } from 'react-router-dom'
 import { useAuthStore, useAppStore } from '../stores'
+import { SchoolSettings } from '../types/electron-api/SettingsAPI'
 import {
     LayoutDashboard, Users, Wallet, ClipboardList, Package,
     BarChart3, Settings, LogOut, ChevronDown, Shield, Database,
@@ -43,6 +44,19 @@ const navItems: NavItem[] = [
             { path: '/academic/allocations', label: 'Subject Allocation', icon: UserPlus },
             { path: '/academic/exams', label: 'Exam Management', icon: ClipboardList },
             { path: '/academic/marks-entry', label: 'Marks Entry', icon: ClipboardList },
+            { path: '/academic/merit-lists', label: 'Merit Lists', icon: ClipboardList },
+            { path: '/academic/schedule', label: 'Exam Schedule', icon: Clock },
+            { path: '/academic/awards', label: 'Awards', icon: ClipboardList },
+            {
+                label: 'Analytics',
+                icon: BarChart3,
+                children: [
+                    { path: '/academic/analytics/exams', label: 'Exam Analytics', icon: BarChart3 },
+                    { path: '/academic/analytics/report-cards', label: 'Report Card Stats', icon: BarChart3 },
+                    { path: '/academic/analytics/subject-merit-list', label: 'Subject Merit', icon: TableProperties },
+                    { path: '/academic/analytics/most-improved', label: 'Most Improved', icon: TrendingUp },
+                ]
+            }
         ],
     },
     {
@@ -101,7 +115,7 @@ export default function Layout() {
     const { user, logout } = useAuthStore()
     const { schoolSettings, setSchoolSettings, setCurrentAcademicYear, setCurrentTerm } = useAppStore()
     const { theme, toggleTheme } = useTheme()
-    const [expandedMenu, setExpandedMenu] = useState<string | null>(null)
+    const [expandedMenus, setExpandedMenus] = useState<string[]>([])
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
     useEffect(() => {
@@ -112,7 +126,7 @@ export default function Layout() {
                     window.electronAPI.getCurrentAcademicYear(),
                     window.electronAPI.getCurrentTerm()
                 ])
-                setSchoolSettings(settings)
+                setSchoolSettings(settings as SchoolSettings)
                 setCurrentAcademicYear(year)
                 setCurrentTerm(term)
             } catch (error) {
@@ -128,13 +142,21 @@ export default function Layout() {
         navigate('/login')
     }
 
+    const toggleMenu = (label: string) => {
+        setExpandedMenus(prev =>
+            prev.includes(label)
+                ? prev.filter(item => item !== label)
+                : [...prev, label]
+        )
+    }
+
     const renderNavItem = (item: NavItem, isChild = false) => {
         if (item.children) {
-            const isExpanded = expandedMenu === item.label
+            const isExpanded = expandedMenus.includes(item.label)
             return (
                 <div key={item.label}>
                     <button
-                        onClick={() => setExpandedMenu(isExpanded ? null : item.label)}
+                        onClick={() => toggleMenu(item.label)}
                         className="w-full flex items-center justify-between px-4 py-3 text-foreground/60 hover:bg-secondary rounded-lg transition-colors"
                     >
                         <div className="flex items-center gap-3">
@@ -181,6 +203,14 @@ export default function Layout() {
                 <div
                     className="fixed inset-0 bg-background/60 backdrop-blur-sm z-40 lg:hidden animate-in fade-in duration-300"
                     onClick={() => setIsSidebarOpen(false)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+                            setIsSidebarOpen(false)
+                        }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Close sidebar"
                 />
             )}
 

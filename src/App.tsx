@@ -35,6 +35,13 @@ import CashFlow from './pages/Finance/CashFlow'
 import TeacherAllocation from './pages/Academic/TeacherAllocation'
 import ExamManagement from './pages/Academic/ExamManagement'
 import MarksEntry from './pages/Academic/MarksEntry'
+import MeritLists from './pages/Academic/MeritLists'
+import ExamAnalytics from './pages/Academic/ExamAnalytics'
+import ReportCardAnalytics from './pages/Academic/ReportCardAnalytics'
+import SubjectMeritLists from './pages/Academic/SubjectMeritLists'
+import MostImproved from './pages/Academic/MostImproved'
+import AwardsManagement from './pages/Academic/AwardsManagement'
+import ExamScheduler from './pages/Academic/ExamScheduler'
 import AssetHire from './pages/Finance/AssetHire'
 import FeeExemptions from './pages/Finance/FeeExemptions'
 import { OfflineIndicator } from './components/feedback/OfflineIndicator'
@@ -95,6 +102,13 @@ export default function App() {
                             <Route path="academic/allocations" element={<TeacherAllocation />} />
                             <Route path="academic/exams" element={<ExamManagement />} />
                             <Route path="academic/marks-entry" element={<MarksEntry />} />
+                            <Route path="academic/merit-lists" element={<MeritLists />} />
+                            <Route path="academic/analytics/exams" element={<ExamAnalytics />} />
+                            <Route path="academic/analytics/report-cards" element={<ReportCardAnalytics />} />
+                            <Route path="academic/analytics/subject-merit-list" element={<SubjectMeritLists />} />
+                            <Route path="academic/analytics/most-improved" element={<MostImproved />} />
+                            <Route path="academic/awards" element={<AwardsManagement />} />
+                            <Route path="academic/schedule" element={<ExamScheduler />} />
                             <Route path="asset-hire" element={<AssetHire />} />
                             <Route path="fee-exemptions" element={<FeeExemptions />} />
                         </Route>

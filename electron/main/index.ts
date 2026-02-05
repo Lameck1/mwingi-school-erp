@@ -4,6 +4,7 @@ import type { BrowserWindow as BrowserWindowType } from 'electron'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { initializeDatabase } from './database/index'
+import { verifyMigrations } from './database/verify_migrations'
 import { registerAllIpcHandlers } from './ipc/index'
 import { registerServices } from './services/base/ServiceContainer'
 import { BackupService } from './backup-service'
@@ -59,7 +60,7 @@ function createWindow() {
 
     // Pipe renderer logs to main process
     mainWindow!.webContents.on('console-message', (_event, _level, message) => {
-        console.log(`[Renderer] ${message}`)
+        console.error(`[Renderer] ${message}`)
     })
 
     // Load the app
@@ -80,7 +81,10 @@ app.whenReady().then(async () => {
     // Initialize database
     try {
         await initializeDatabase()
-        // console.log('Database initialized successfully')
+        // console.error('Database initialized successfully')
+        
+        // Verify migrations
+        verifyMigrations()
     } catch (error) {
         console.error('Failed to initialize database:', error)
         dialog.showErrorBox('Database Error', 'Failed to initialize database. Application will exit.')
@@ -129,6 +133,7 @@ app.on('window-all-closed', () => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason)
     // In production, you might want to gracefully exit or restart
 });
+
 
 
 

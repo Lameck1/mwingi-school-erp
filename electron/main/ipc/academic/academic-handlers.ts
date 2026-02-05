@@ -62,9 +62,59 @@ export function registerAcademicHandlers(): void {
         return db.prepare('SELECT * FROM stream WHERE is_active = 1 ORDER BY level_order').all()
     })
 
+    // ======== EXAMS LIST ========
+    ipcMain.handle('academic:getExamsList', async (_event, filters: { academicYearId?: number; termId?: number }) => {
+        let query = 'SELECT id, name FROM academic_exam WHERE 1=1'
+        const params: any[] = []
+
+        if (filters?.academicYearId) {
+            query += ' AND academic_year_id = ?'
+            params.push(filters.academicYearId)
+        }
+        if (filters?.termId) {
+            query += ' AND term_id = ?'
+            params.push(filters.termId)
+        }
+
+        query += ' ORDER BY created_at DESC'
+        return db.prepare(query).all(...params)
+    })
+
+    // ======== PDF EXPORT (Placeholder) ========
+    ipcMain.handle('export:pdf', async (_event, data: any) => {
+        console.log('PDF Export requested:', data.title, data.filename);
+        // TODO: Implement actual PDF generation (e.g. using pdfmake or puppeteer on backend)
+        return { success: true, message: 'PDF export simulated' }
+    })
+
     // ======== FEE CATEGORIES ========
     ipcMain.handle('feeCategory:getAll', async () => {
         return db.prepare('SELECT * FROM fee_category WHERE is_active = 1').all()
+    })
+
+    // ======== EXAM SCHEDULER (Stubs) ========
+    ipcMain.handle('schedule:generate', async (_event, data: any) => {
+        console.log('Generating timetable for:', data.examId)
+        // Stub: Return empty or mock slots
+        return {
+            slots: [],
+            clashes: [],
+            stats: {
+                total_slots: 0,
+                total_students: 0,
+                venues_used: 0,
+                average_capacity_usage: 0
+            }
+        }
+    })
+
+    ipcMain.handle('schedule:detectClashes', async (_event, data: any) => {
+        return [] // No clashes
+    })
+
+    ipcMain.handle('schedule:exportPDF', async (_event, data: any) => {
+        console.log('Exporting timetable PDF:', data.examId)
+        return { success: true }
     })
 }
 

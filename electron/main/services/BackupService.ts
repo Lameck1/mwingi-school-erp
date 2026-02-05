@@ -28,7 +28,7 @@ export class BackupService {
         setInterval(async () => {
             const backups = this.listBackups()
             if (backups.length === 0) {
-                console.log('No backups found. Creating initial auto-backup...')
+                console.error('No backups found. Creating initial auto-backup...')
                 await this.createBackup('auto')
                 return
             }
@@ -37,7 +37,7 @@ export class BackupService {
             const hoursSinceLast = (new Date().getTime() - lastBackup.created_at.getTime()) / (1000 * 60 * 60)
 
             if (hoursSinceLast >= 24) {
-                console.log(`Last backup was ${hoursSinceLast.toFixed(1)}h ago. Creating auto-backup...`)
+                console.error(`Last backup was ${hoursSinceLast.toFixed(1)}h ago. Creating auto-backup...`)
                 await this.createBackup('auto')
             }
         }, 1000 * 60 * 60) // 1 hour
@@ -52,9 +52,9 @@ export class BackupService {
             const filename = `backup-${prefix}-${timestamp}.sqlite`
             const backupPath = path.join(this.BACKUP_DIR, filename)
 
-            console.log(`Starting backup to ${backupPath}...`)
+            console.error(`Starting backup to ${backupPath}...`)
             await db.backup(backupPath)
-            console.log('Backup completed.')
+            console.error('Backup completed.')
 
             // Validate encryption? 
             // The backup uses the same key as the source DB automatically with better-sqlite3 backup API?
@@ -99,7 +99,7 @@ export class BackupService {
             for (const backup of toDelete) {
                 try {
                     fs.unlinkSync(path.join(this.BACKUP_DIR, backup.filename))
-                    console.log(`Deleted old backup: ${backup.filename}`)
+                    console.error(`Deleted old backup: ${backup.filename}`)
                 } catch (e) {
                     console.error(`Failed to delete old backup ${backup.filename}`, e)
                 }
@@ -143,3 +143,4 @@ export class BackupService {
         }
     }
 }
+

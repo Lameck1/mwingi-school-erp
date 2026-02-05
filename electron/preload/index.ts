@@ -31,7 +31,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getFeeStructure: (yearId: number, termId: number) => ipcRenderer.invoke('fee:getStructure', yearId, termId),
   saveFeeStructure: (data: unknown, yearId: number, termId: number) => ipcRenderer.invoke('fee:saveStructure', data, yearId, termId),
   generateBatchInvoices: (yearId: number, termId: number, userId: number) => ipcRenderer.invoke('invoice:generateBatch', yearId, termId, userId),
-  fixCurrencyData: (userId: number) => ipcRenderer.invoke('finance:fixCurrency', userId),
   getInvoices: () => ipcRenderer.invoke('invoice:getAll'),
   getInvoicesByStudent: (studentId: number) => ipcRenderer.invoke('invoice:getByStudent', studentId),
   getInvoiceItems: (invoiceId: number) => ipcRenderer.invoke('invoice:getItems', invoiceId),
@@ -101,10 +100,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAuditLog: (limit?: number) => ipcRenderer.invoke('audit:getLog', limit),
 
   // Messaging
-  sendSMS: (options: any) => ipcRenderer.invoke('message:sendSms', options),
-  sendEmail: (options: any) => ipcRenderer.invoke('message:sendEmail', options),
+  sendSMS: (options: unknown) => ipcRenderer.invoke('message:sendSms', options),
+  sendEmail: (options: unknown) => ipcRenderer.invoke('message:sendEmail', options),
   getMessageTemplates: () => ipcRenderer.invoke('message:getTemplates'),
-  saveMessageTemplate: (template: any) => ipcRenderer.invoke('message:saveTemplate', template),
+  saveMessageTemplate: (template: unknown) => ipcRenderer.invoke('message:saveTemplate', template),
   getMessageLogs: (limit?: number) => ipcRenderer.invoke('message:getLogs', limit),
 
   // Backup
@@ -171,20 +170,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getStudentsForReportCards: (streamId: number, academicYearId: number, termId: number) =>
     ipcRenderer.invoke('reportcard:getStudentsForGeneration', streamId, academicYearId, termId),
 
+  // New Report Card Methods
+  generateBatchReportCards: (data: unknown) => ipcRenderer.invoke('report-card:generateBatch', data),
+  emailReportCards: (data: unknown) => ipcRenderer.invoke('report-card:emailReports', data),
+  mergeReportCards: (data: unknown) => ipcRenderer.invoke('report-card:mergePDFs', data),
+  downloadReportCards: (data: unknown) => ipcRenderer.invoke('report-card:downloadReports', data),
+
+  // General
+  exportToPDF: (data: unknown) => ipcRenderer.invoke('export:pdf', data),
+
   // Academic System
   getAcademicSubjects: () => ipcRenderer.invoke('academic:getSubjects'),
   getAcademicExams: (academicYearId: number, termId: number) => ipcRenderer.invoke('academic:getExams', academicYearId, termId),
-  createAcademicExam: (data: any, userId: number) => ipcRenderer.invoke('academic:createExam', data, userId),
+  createAcademicExam: (data: unknown, userId: number) => ipcRenderer.invoke('academic:createExam', data, userId),
   deleteAcademicExam: (id: number, userId: number) => ipcRenderer.invoke('academic:deleteExam', id, userId),
-  allocateTeacher: (data: any, userId: number) => ipcRenderer.invoke('academic:allocateTeacher', data, userId),
+  allocateTeacher: (data: unknown, userId: number) => ipcRenderer.invoke('academic:allocateTeacher', data, userId),
   getTeacherAllocations: (academicYearId: number, termId: number, streamId?: number) =>
     ipcRenderer.invoke('academic:getAllocations', academicYearId, termId, streamId),
-  saveAcademicResults: (examId: number, results: any[], userId: number) =>
+  saveAcademicResults: (examId: number, results: unknown[], userId: number) =>
     ipcRenderer.invoke('academic:saveResults', examId, results, userId),
   getAcademicResults: (examId: number, subjectId: number, streamId: number, userId: number) =>
     ipcRenderer.invoke('academic:getResults', examId, subjectId, streamId, userId),
-  processAcademicResults: (examId: number, userId: number) =>
-    ipcRenderer.invoke('academic:processResults', examId, userId),
+  processAcademicResults: (examId: number, userId: number) => ipcRenderer.invoke('academic:processResults', examId, userId),
+
+  // Merit Lists & Analysis
+  generateMeritList: (options: unknown) => ipcRenderer.invoke('merit-list:generate', options),
+  generateClassMeritList: (examId: number, streamId: number) => ipcRenderer.invoke('merit-list:getClass', examId, streamId),
+  getSubjectMeritList: (subjectId: number, examId: number) => ipcRenderer.invoke('merit-list:getSubject', subjectId, examId),
+  getPerformanceImprovement: (studentId: number) => ipcRenderer.invoke('merit-list:getImprovement', studentId),
 
   // Notifications
   reloadNotificationConfig: () => ipcRenderer.invoke('notifications:reloadConfig'),
@@ -233,4 +246,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createExemption: (data: unknown, userId: number) => ipcRenderer.invoke('exemption:create', data, userId),
   revokeExemption: (id: number, reason: string, userId: number) => ipcRenderer.invoke('exemption:revoke', id, reason, userId),
   getExemptionStats: (academicYearId?: number) => ipcRenderer.invoke('exemption:getStats', academicYearId),
+  // Analytics & Advanced Academic Features
+  getExamAnalytics: (examId: number, streamId?: number) => ipcRenderer.invoke('analytics:getExamAnalytics', examId, streamId),
+  getReportCardAnalytics: (academicYearId: number, termId: number) => ipcRenderer.invoke('analytics:getReportCardAnalytics', academicYearId, termId),
+  getSubjectMeritAnalysis: (examId: number, subjectId: number) => ipcRenderer.invoke('analytics:getSubjectMeritAnalysis', examId, subjectId),
+  getMostImprovedStudents: (examId: number, limit?: number) => ipcRenderer.invoke('analytics:getMostImproved', examId, limit),
+
+  // Awards
+  getAwards: (filters?: unknown) => ipcRenderer.invoke('awards:getAll', filters), // Updated to accept filters
+  getAwardById: (id: number) => ipcRenderer.invoke('awards:getById', id),
+  getAwardCategories: () => ipcRenderer.invoke('awards:getCategories'), // Added missing getAwardCategories
+  awardStudent: (data: unknown) => ipcRenderer.invoke('awards:assign', data),
+  approveAward: (data: unknown) => ipcRenderer.invoke('awards:approve', data),
+  rejectAward: (data: unknown) => ipcRenderer.invoke('awards:reject', data),
+  deleteAward: (data: unknown) => ipcRenderer.invoke('awards:delete', data),
+  getStudentAwards: (studentId: number) => ipcRenderer.invoke('awards:getStudentAwards', studentId),
+  getPendingAwardsCount: () => ipcRenderer.invoke('awards:getPendingCount'),
+
+  // Exam Scheduling
+  generateExamTimetable: (config: unknown) => ipcRenderer.invoke('schedule:generate', config),
+  detectExamClashes: (filters: unknown) => ipcRenderer.invoke('schedule:detectClashes', filters),
+  exportExamTimetableToPDF: (data: unknown) => ipcRenderer.invoke('schedule:exportPDF', data),
+  getExams: (filters?: unknown) => ipcRenderer.invoke('academic:getExamsList', filters),
+
 })

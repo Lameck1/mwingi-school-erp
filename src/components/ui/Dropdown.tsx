@@ -29,7 +29,17 @@ export function Dropdown({ trigger, items, align = 'right' }: DropdownProps) {
 
     return (
         <div className="relative" ref={containerRef}>
-            <div onClick={() => setIsOpen(!isOpen)} className="cursor-pointer">
+            <div
+                onClick={() => setIsOpen(!isOpen)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        setIsOpen(!isOpen)
+                    }
+                }}
+                role="button"
+                tabIndex={0}
+                className="cursor-pointer"
+            >
                 {trigger}
             </div>
 

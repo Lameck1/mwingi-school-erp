@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, ElementType } from 'react'
 import {
     CheckCircle, XCircle, Clock, AlertCircle, Users, Save, Loader2
 } from 'lucide-react'
@@ -35,15 +35,15 @@ export default function Attendance() {
     const [saving, setSaving] = useState(false)
     const [summary, setSummary] = useState({ present: 0, absent: 0, late: 0, excused: 0, total: 0 })
 
-    useEffect(() => {
-        loadStreams()
-    }, [])
-
-    useEffect(() => {
-        if (selectedStream && currentAcademicYear && currentTerm) {
-            loadStudents()
-        }
-    }, [selectedStream, selectedDate, currentAcademicYear, currentTerm, loadStudents])
+    const updateSummary = (statuses: AttendanceStatus[]) => {
+        setSummary({
+            present: statuses.filter(s => s === 'PRESENT').length,
+            absent: statuses.filter(s => s === 'ABSENT').length,
+            late: statuses.filter(s => s === 'LATE').length,
+            excused: statuses.filter(s => s === 'EXCUSED').length,
+            total: statuses.length
+        })
+    }
 
     const loadStreams = async () => {
         try {
@@ -69,23 +69,23 @@ export default function Attendance() {
             )
 
             // Map students with their existing status or default to PRESENT
-            const existingMap = new Map(existing.map((e: unknown) => [e.student_id, e]))
+            const existingMap = new Map(existing.map((e) => [e.student_id, e]))
 
-            setStudents(enrolled.map((s: unknown) => {
+            setStudents(enrolled.map((s) => {
                 const ex = existingMap.get(s.student_id)
                 return {
                     student_id: s.student_id,
                     student_name: s.student_name,
                     admission_number: s.admission_number,
-                    status: (ex as unknown)?.status || 'PRESENT',
-                    notes: (ex as unknown)?.notes || ''
+                    status: ex?.status || 'PRESENT',
+                    notes: ex?.notes || ''
                 }
             }))
 
             // Update summary
-            updateSummary(enrolled.map((s: unknown) => {
+            updateSummary(enrolled.map((s) => {
                 const ex = existingMap.get(s.student_id)
-                return (ex as unknown)?.status || 'PRESENT'
+                return ex?.status || 'PRESENT'
             }))
         } catch (error) {
             console.error('Failed to load students:', error)
@@ -94,15 +94,15 @@ export default function Attendance() {
         }
     }, [selectedStream, selectedDate, currentAcademicYear, currentTerm])
 
-    const updateSummary = (statuses: AttendanceStatus[]) => {
-        setSummary({
-            present: statuses.filter(s => s === 'PRESENT').length,
-            absent: statuses.filter(s => s === 'ABSENT').length,
-            late: statuses.filter(s => s === 'LATE').length,
-            excused: statuses.filter(s => s === 'EXCUSED').length,
-            total: statuses.length
-        })
-    }
+    useEffect(() => {
+        loadStreams()
+    }, [])
+
+    useEffect(() => {
+        if (selectedStream && currentAcademicYear && currentTerm) {
+            loadStudents()
+        }
+    }, [selectedStream, selectedDate, currentAcademicYear, currentTerm, loadStudents])
 
     const setStatus = (studentId: number, status: AttendanceStatus) => {
         setStudents(prev => {
@@ -150,7 +150,7 @@ export default function Attendance() {
         }
     }
 
-    const statusButtons: { status: AttendanceStatus; icon: any; label: string; color: string }[] = [
+    const statusButtons: { status: AttendanceStatus; icon: ElementType; label: string; color: string }[] = [
         { status: 'PRESENT', icon: CheckCircle, label: 'P', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
         { status: 'ABSENT', icon: XCircle, label: 'A', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
         { status: 'LATE', icon: Clock, label: 'L', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
@@ -165,6 +165,7 @@ export default function Attendance() {
                 breadcrumbs={[{ label: 'Students' }, { label: 'Attendance' }]}
                 actions={
                     <button
+                        type="button"
                         onClick={handleSave}
                         disabled={saving || students.length === 0}
                         className="btn btn-primary flex items-center gap-2"
@@ -201,6 +202,8 @@ export default function Attendance() {
                         <label className="text-sm font-bold text-foreground/60">Date</label>
                         <input
                             type="date"
+                            title="Attendance Date"
+                            placeholder="Select date"
                             value={selectedDate}
                             onChange={(e) => setSelectedDate(e.target.value)}
                             className="w-full bg-secondary/30 border border-border/40 rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary/50 text-foreground"
@@ -215,6 +218,7 @@ export default function Attendance() {
                                     content={`Mark all as ${btn.status.charAt(0) + btn.status.slice(1).toLowerCase()}`}
                                 >
                                     <button
+                                        type="button"
                                         onClick={() => markAllAs(btn.status)}
                                         className={`w-full py-2 rounded-lg text-xs font-bold border ${btn.color} hover:opacity-80 transition-opacity`}
                                     >
@@ -254,6 +258,8 @@ export default function Attendance() {
                                             >
                                                 <button
                                                     onClick={() => setStatus(student.student_id, btn.status)}
+                                                    title={`Mark as ${btn.status}`}
+                                                    aria-label={`Mark as ${btn.status}`}
                                                     className={`w-10 h-10 rounded-lg border flex items-center justify-center transition-all ${isActive
                                                         ? btn.color + ' scale-110 shadow-lg'
                                                         : 'bg-secondary/40 border-border/20 text-foreground/30 hover:bg-secondary/60 hover:text-foreground/60'

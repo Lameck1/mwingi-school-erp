@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import Database from 'better-sqlite3-multiple-ciphers'
+import Database from 'better-sqlite3'
 import { ApprovalWorkflowService } from '../../workflow/ApprovalWorkflowService'
 
 vi.mock('../../../../database/utils/audit', () => ({
@@ -109,7 +109,7 @@ describe('ApprovalWorkflowService', () => {
   })
 
   afterEach(() => {
-    db.close()
+    if (db) db.close()
   })
 
   it('should create approval request successfully', async () => {

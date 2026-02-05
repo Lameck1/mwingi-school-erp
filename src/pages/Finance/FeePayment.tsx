@@ -1,49 +1,18 @@
 import React, { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useAuthStore, useAppStore } from '../../stores'
-import { Search, Check, Printer, Loader2, MessageSquare, Users, CreditCard } from 'lucide-react'
+import { useAppStore } from '../../stores'
 import { Student } from '../../types/electron-api/StudentAPI'
 import { Payment } from '../../types/electron-api/FinanceAPI'
-import { printDocument } from '../../utils/print'
-import { useToast } from '../../contexts/ToastContext'
-import { formatCurrency, formatDate } from '../../utils/format'
-
-interface PaymentSuccess {
-    success: boolean
-    transactionRef?: string
-    receipt_number?: string
-    receiptNumber?: string // Alias for compatibility
-    amount: number
-    payment_method: string
-    payment_reference: string
-    description: string
-    date: string
-}
+import { StudentLedgerSearch } from './components/StudentLedgerSearch'
+import { PaymentEntryForm } from './components/PaymentEntryForm'
+import { LedgerHistory } from './components/LedgerHistory'
 
 export default function FeePayment() {
     const [searchParams] = useSearchParams()
-    const { user } = useAuthStore()
     const { schoolSettings } = useAppStore()
-    const { showToast } = useToast()
 
-    const [students, setStudents] = useState<Student[]>([])
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
     const [payments, setPayments] = useState<Payment[]>([])
-    const [search, setSearch] = useState('')
-    const [loading, setLoading] = useState(false)
-    const [saving, setSaving] = useState(false)
-    const [sendingSms, setSendingSms] = useState(false)
-    const [success, setSuccess] = useState<PaymentSuccess | null>(null)
-
-    const [formData, setFormData] = useState({
-        amount: '',
-        payment_method: 'CASH',
-        payment_reference: '',
-        transaction_date: new Date().toISOString().slice(0, 10),
-        description: '',
-    })
-
-    const [useCredit, setUseCredit] = useState(false)
 
     useEffect(() => {
         const studentId = searchParams.get('student')
@@ -51,19 +20,6 @@ export default function FeePayment() {
             loadStudent(parseInt(studentId))
         }
     }, [searchParams])
-
-    const handleSearch = async () => {
-        if (!search) return
-        setLoading(true)
-        try {
-            const results = await window.electronAPI.getStudents({ search })
-            setStudents(results)
-        } catch (error) {
-            console.error('Search failed:', error)
-        } finally {
-            setLoading(false)
-        }
-    }
 
     const loadStudent = async (studentId: number) => {
         try {
@@ -77,177 +33,18 @@ export default function FeePayment() {
         }
     }
 
-    const selectStudent = (student: Student) => {
+    const handleStudentSelect = (student: Student) => {
         loadStudent(student.id)
-        setStudents([])
-        setSearch('')
     }
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!selectedStudent || !formData.amount) return
-
-        setSaving(true)
-        setSuccess(null)
-
-        try {
-            const amount = Math.round(parseFloat(formData.amount)) // Whole currency units
-
-            if (useCredit) {
-                const invoices = await window.electronAPI.getInvoicesByStudent(selectedStudent.id)
-                const pending = invoices.find(inv => inv.balance > 0)
-
-                if (!pending) {
-                    showToast('No pending invoices to pay', 'error')
-                    setSaving(false)
-                    return
-                }
-
-                if (amount > (selectedStudent.credit_balance || 0)) {
-                    showToast('Insufficient credit balance', 'error')
-                    setSaving(false)
-                    return
-                }
-
-                const result = await window.electronAPI.payWithCredit({
-                    studentId: selectedStudent.id,
-                    invoiceId: pending.id,
-                    amount: parseFloat(formData.amount)
-                }, user!.id)
-
-                if (!result.success) throw new Error(result.message || 'Credit payment failed')
-
-                setSuccess({
-                    success: true,
-                    amount: parseFloat(formData.amount),
-                    payment_method: 'CREDIT',
-                    payment_reference: 'CREDIT_BALANCE',
-                    description: 'Payment via Credit',
-                    date: new Date().toISOString(),
-                    receiptNumber: 'N/A'
-                })
-            } else {
-                const result = await window.electronAPI.recordPayment({
-                    student_id: selectedStudent.id,
-                    amount,
-                    payment_method: formData.payment_method,
-                    payment_reference: formData.payment_reference,
-                    transaction_date: formData.transaction_date,
-                }, user!.id)
-
-                if (!result.success) throw new Error(result.errors ? result.errors[0] : 'Payment failed')
-
-                setSuccess({
-                    ...result,
-                    receiptNumber: result.receipt_number,
-                    amount,
-                    payment_method: formData.payment_method,
-                    payment_reference: formData.payment_reference,
-                    description: formData.description,
-                    date: formData.transaction_date
-                })
-            }
-
-            // Immediately update the displayed balance for better UX
-            const newBalance = Math.max(0, (selectedStudent.balance || 0) - amount)
-
-            setSelectedStudent(prev => prev ? { ...prev, balance: newBalance } : null)
-
-            setFormData({
-                amount: '', payment_method: 'CASH', payment_reference: '',
-                transaction_date: new Date().toISOString().slice(0, 10), description: ''
-            })
-
-            // Also refresh from server to ensure accuracy
+    const handlePaymentComplete = (newBalance: number) => {
+        if (selectedStudent) {
+            // Optimistic update
+            setSelectedStudent({ ...selectedStudent, balance: newBalance })
+            // Reload to get new payment in history
             loadStudent(selectedStudent.id)
-        } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : 'Payment failed'
-            showToast(errorMessage, 'error')
-        } finally {
-            setSaving(false)
         }
     }
-
-    const handlePrint = (paymentData: Payment | PaymentSuccess | null = null) => {
-        // If paymentData is provided (from history), use it. Otherwise use success state (new payment).
-        // If passed from history (onclick), it might be a click event if not careful, so check type or explicitly pass null in JSX
-        const dataToPrint = (paymentData && 'amount' in paymentData) ? paymentData : success
-
-        if (!dataToPrint || !selectedStudent) return
-
-        // Normalize data structure since DB results might differ from local success state
-        // Helper to check if it's PaymentSuccess (has receiptNumber)
-        const isSuccess = 'receiptNumber' in dataToPrint;
-        const receiptNo = isSuccess ? (dataToPrint as PaymentSuccess).receiptNumber : (dataToPrint as Payment).receipt_number;
-        const date = 'date' in dataToPrint ? (dataToPrint as PaymentSuccess).date : (dataToPrint as Payment).created_at;
-        const ref = 'payment_reference' in dataToPrint ? (dataToPrint as PaymentSuccess).payment_reference : (dataToPrint as Payment).transaction_ref;
-
-        // Convert amount to words
-        const amountToWords = (num: number): string => {
-            const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
-                'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
-            const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
-
-            if (num === 0) return 'Zero'
-            if (num < 20) return ones[num]
-            if (num < 100) return tens[Math.floor(num / 10)] + (num % 10 ? ' ' + ones[num % 10] : '')
-            if (num < 1000) return ones[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' and ' + amountToWords(num % 100) : '')
-            if (num < 1000000) return amountToWords(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + amountToWords(num % 1000) : '')
-            return amountToWords(Math.floor(num / 1000000)) + ' Million' + (num % 1000000 ? ' ' + amountToWords(num % 1000000) : '')
-        }
-
-        const receipt = {
-            receiptNumber: receiptNo,
-            date,
-            amount: dataToPrint.amount,
-            paymentMode: dataToPrint.payment_method || 'CASH', // Fixed: use paymentMode (not paymentMethod)
-            reference: ref,
-            description: 'description' in dataToPrint ? dataToPrint.description : '',
-            studentName: `${selectedStudent.first_name} ${selectedStudent.last_name}`,
-            admissionNumber: selectedStudent.admission_number,
-            balance: selectedStudent.balance,
-            amountInWords: amountToWords(dataToPrint.amount) + ' Shillings Only' // Added amount in words
-        }
-
-        printDocument({
-            title: `Receipt - ${receipt.receiptNumber}`,
-            template: 'receipt',
-            data: receipt,
-            schoolSettings: schoolSettings || {} as unknown
-        })
-    }
-
-    const handleSendSms = async () => {
-        if (!success || !selectedStudent || !selectedStudent.guardian_phone) {
-            alert('Guardian phone number missing')
-            return
-        }
-
-        setSendingSms(true)
-        try {
-            const message = `Payment Received: ${selectedStudent.first_name} ${selectedStudent.last_name}. Amount: KES ${success.amount}. Receipt: ${success.receiptNumber}. Bal: KES ${selectedStudent.balance}. Thank you.`
-
-            const result = await window.electronAPI.sendSMS({
-                to: selectedStudent.guardian_phone,
-                message,
-                recipientId: selectedStudent.id,
-                recipientType: 'STUDENT',
-                userId: user!.id
-            })
-
-            if (result.success) {
-                alert('SMS receipt sent successfully!')
-            } else {
-                alert('Failed to send SMS: ' + result.error)
-            }
-        } catch (error) {
-            alert('Error sending SMS')
-        } finally {
-            setSendingSms(false)
-        }
-    }
-
-
 
     return (
         <div className="space-y-8 pb-10">
@@ -260,269 +57,26 @@ export default function FeePayment() {
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                 {/* Left Panel - Student Search & Profile (Span 2) */}
                 <div className="lg:col-span-2 space-y-6">
-                    <div className="card h-fit">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                                <Search className="w-5 h-5" />
-                            </div>
-                            <h2 className="text-lg font-bold text-foreground">Student Locator</h2>
-                        </div>
-
-                        <div className="relative mb-6">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40" />
-                            <input
-                                type="text"
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                                placeholder="Search by name or admission..."
-                                className="input pl-11 py-3 bg-secondary/30 border-border/20"
-                            />
-                        </div>
-
-                        {loading && (
-                            <div className="flex items-center justify-center py-8">
-                                <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                            </div>
-                        )}
-
-                        {students.length > 0 && (
-                            <div className="space-y-2 max-h-[400px] overflow-y-auto no-scrollbar pr-2">
-                                {students.map((s) => (
-                                    <button
-                                        key={s.id}
-                                        onClick={() => selectStudent(s)}
-                                        className="w-full p-4 text-left bg-secondary/20 hover:bg-primary/10 border border-border/40 rounded-xl transition-all group flex items-center justify-between"
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
-                                                {s.first_name?.charAt(0)}
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-foreground group-hover:text-primary transition-colors">{s.first_name} {s.last_name}</p>
-                                                <p className="text-[11px] text-foreground/40 font-mono tracking-wider uppercase">{s.admission_number}</p>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-xs font-bold text-foreground/60">{s.stream_name}</p>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-
-                        {/* Selected Student Profile */}
-                        {selectedStudent && (
-                            <div className="mt-8 p-6 bg-gradient-to-br from-primary/10 to-transparent border border-primary/20 rounded-2xl relative overflow-hidden group">
-                                <div className="absolute top-0 right-0 p-4 opacity-10">
-                                    <Users className="w-20 h-20" />
-                                </div>
-                                <div className="relative z-10">
-                                    <div className="flex items-center gap-5 mb-6">
-                                        <div className="w-14 h-14 bg-primary rounded-2xl flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-primary/30">
-                                            {selectedStudent.first_name?.charAt(0)}
-                                        </div>
-                                        <div>
-                                            <h3 className="font-bold text-xl text-foreground">
-                                                {selectedStudent.first_name} {selectedStudent.last_name}
-                                            </h3>
-                                            <p className="text-xs text-primary font-bold uppercase tracking-widest">{selectedStudent.student_type}</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="p-3 bg-secondary/30 rounded-xl border border-border/20">
-                                            <p className="text-[10px] text-foreground/40 font-bold uppercase mb-1">Fee Balance</p>
-                                            <p className="text-lg font-bold text-amber-500">{formatCurrency(selectedStudent.balance || 0)}</p>
-                                        </div>
-                                        <div className="p-3 bg-secondary/30 rounded-xl border border-border/20">
-                                            <p className="text-[10px] text-foreground/40 font-bold uppercase mb-1">Fee Credit</p>
-                                            <p className="text-lg font-bold text-emerald-500">{formatCurrency(selectedStudent.credit_balance || 0)}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                    <StudentLedgerSearch
+                        onSelectStudent={handleStudentSelect}
+                        selectedStudent={selectedStudent}
+                    />
                 </div>
 
                 {/* Right Panel - Payment Form (Span 3) */}
                 <div className="lg:col-span-3 space-y-8">
-                    <div className="card min-h-[500px]">
-                        <div className="flex items-center justify-between mb-8">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
-                                    <CreditCard className="w-5 h-5" />
-                                </div>
-                                <h2 className="text-lg font-bold text-foreground">Transaction Details</h2>
-                            </div>
-                            {selectedStudent && <div className="text-[10px] bg-primary/20 text-primary px-3 py-1 rounded-full font-bold uppercase tracking-tighter">SECURE CHANNEL ACTIVE</div>}
-                        </div>
-
-                        {success && (
-                            <div className="mb-8 p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl animate-slide-up">
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-center gap-3 text-emerald-400 mb-4">
-                                        <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                                            <Check className="w-5 h-5" />
-                                        </div>
-                                        <span className="font-bold text-lg">Transaction Confirmed</span>
-                                    </div>
-                                    <p className="text-xs font-mono text-emerald-400/60 uppercase tracking-widest">#{success.receiptNumber}</p>
-                                </div>
-                                <div className="flex flex-wrap gap-3">
-                                    <button
-                                        onClick={() => handlePrint(success)}
-                                        className="btn btn-secondary flex items-center gap-2 py-2 px-6 text-sm"
-                                    >
-                                        <Printer className="w-4 h-4" />
-                                        Print Official Receipt
-                                    </button>
-                                    <button
-                                        onClick={handleSendSms}
-                                        disabled={sendingSms}
-                                        className="btn btn-primary flex items-center gap-2 py-2 px-6 text-sm"
-                                    >
-                                        {sendingSms ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-                                        Dispatch SMS Confirmation
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        <form onSubmit={handleSubmit} className="space-y-8">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div className="space-y-2">
-                                    <label className="label">Amount Payable (KES)</label>
-                                    <div className="relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-foreground/40 font-bold">KSh</div>
-                                        <input
-                                            type="number"
-                                            value={formData.amount}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-                                            className="input pl-14 text-xl font-bold bg-secondary/30 border-border/20 focus:border-primary/50"
-                                            required
-                                            placeholder="0.00"
-                                            min="1"
-                                            disabled={!selectedStudent}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="label">Value Date</label>
-                                    <input
-                                        type="date"
-                                        value={formData.transaction_date}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, transaction_date: e.target.value }))}
-                                        className="input bg-secondary/30 border-border/20"
-                                        required
-                                        disabled={!selectedStudent}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div className="space-y-2">
-                                    <label className="label">Payment Instrument</label>
-                                    <select
-                                        value={formData.payment_method}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, payment_method: e.target.value }))}
-                                        className="input bg-secondary/30 border-border/20"
-                                        disabled={!selectedStudent || useCredit}
-                                    >
-                                        <option value="CASH">Liquid Cash</option>
-                                        <option value="MPESA">M-PESA / Mobile Money</option>
-                                        <option value="BANK_TRANSFER">Direct EFT/Transfer</option>
-                                        <option value="CHEQUE">Banker's Cheque</option>
-                                    </select>
-                                    {(selectedStudent?.credit_balance || 0) > 0 && (
-                                        <label className="flex items-center gap-2 mt-2 text-sm font-medium text-foreground cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={useCredit}
-                                                onChange={e => setUseCredit(e.target.checked)}
-                                                className="checkbox checkbox-primary w-4 h-4 rounded"
-                                            />
-                                            <span>Use Credit ({formatCurrency(selectedStudent?.credit_balance || 0)})</span>
-                                        </label>
-                                    )}
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="label">Reference / Slip Number</label>
-                                    <input
-                                        type="text"
-                                        value={formData.payment_reference}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, payment_reference: e.target.value }))}
-                                        className="input bg-secondary/30 border-border/20"
-                                        disabled={!selectedStudent}
-                                        placeholder="e.g., M-PESA Code"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="label">Transaction Narrative</label>
-                                <textarea
-                                    value={formData.description}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                                    className="input bg-secondary/30 border-border/20 min-h-[100px]"
-                                    rows={3}
-                                    disabled={!selectedStudent}
-                                    placeholder="Optional notes for this payment..."
-                                />
-                            </div>
-
-                            <button
-                                type="submit"
-                                disabled={saving || !selectedStudent}
-                                className="w-full btn btn-primary py-5 rounded-2xl flex items-center justify-center gap-3 text-lg font-bold shadow-xl shadow-primary/20 transition-all hover:-translate-y-1 active:scale-95 disabled:hover:translate-y-0"
-                            >
-                                {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <Check className="w-6 h-6" />}
-                                <span>{saving ? 'Processing Ledger...' : 'Finalize Payment'}</span>
-                            </button>
-                        </form>
-                    </div>
+                    <PaymentEntryForm
+                        selectedStudent={selectedStudent}
+                        onPaymentComplete={handlePaymentComplete}
+                        schoolSettings={schoolSettings}
+                    />
 
                     {/* Transaction History Sub-Section */}
-                    {payments.length > 0 && (
-                        <div className="card animate-slide-up">
-                            <div className="flex items-center justify-between mb-8">
-                                <h3 className="text-lg font-bold text-foreground">Recent Ledger Entries</h3>
-                                <div className="text-[10px] text-foreground/40 font-bold uppercase tracking-widest">Showing last {payments.length} items</div>
-                            </div>
-
-                            <div className="space-y-3">
-                                {payments.map((p) => (
-                                    <div key={p.id} className="p-4 bg-secondary/20 hover:bg-secondary/40 border border-border/10 rounded-2xl flex justify-between items-center transition-all group">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
-                                                <Printer className="w-5 h-5 opacity-40 group-hover:opacity-100 transition-opacity" />
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-foreground">{formatCurrency(p.amount)}</p>
-                                                <p className="text-[10px] text-foreground/40 font-bold uppercase tracking-tighter">{p.payment_method} • {p.receipt_number}</p>
-                                            </div>
-                                        </div>
-                                        <div className="text-right flex items-center gap-4">
-                                            <div className="hidden sm:block">
-                                                <p className="text-xs font-medium text-foreground/60">{formatDate(p.created_at)}</p>
-                                                <p className="text-[10px] text-foreground/40 italic">Ledger Posted</p>
-                                            </div>
-                                            <button
-                                                onClick={() => handlePrint(p)}
-                                                className="p-2 hover:bg-primary/20 rounded-lg text-foreground/40 hover:text-primary transition-all"
-                                                title="Re-print Receipt"
-                                            >
-                                                <Printer className="w-5 h-5" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
+                    <LedgerHistory
+                        payments={payments}
+                        student={selectedStudent}
+                        schoolSettings={schoolSettings}
+                    />
                 </div>
             </div>
         </div>

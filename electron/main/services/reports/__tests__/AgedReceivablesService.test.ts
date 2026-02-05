@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import Database from 'better-sqlite3-multiple-ciphers'
+import Database from 'better-sqlite3'
 import { AgedReceivablesService } from '../AgedReceivablesService'
 
 // Mock audit utilities
@@ -20,6 +20,7 @@ describe('AgedReceivablesService', () => {
         first_name TEXT NOT NULL,
         last_name TEXT NOT NULL,
         admission_number TEXT UNIQUE NOT NULL,
+        phone TEXT,
         grade TEXT
       );
 
@@ -72,7 +73,7 @@ describe('AgedReceivablesService', () => {
   })
 
   afterEach(() => {
-    db.close()
+    if (db) db.close()
   })
 
   describe('getAgedReceivables', () => {

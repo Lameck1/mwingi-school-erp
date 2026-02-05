@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import Database from 'better-sqlite3-multiple-ciphers'
+import Database from 'better-sqlite3'
 import { FeeProrationService } from '../FeeProrationService'
 
 // Mock audit utilities to avoid database initialization issues
@@ -88,7 +88,7 @@ describe('FeeProrationService', () => {
   })
 
   afterEach(() => {
-    db.close()
+    if (db) db.close()
   })
 
   describe('generateProRatedInvoice', () => {

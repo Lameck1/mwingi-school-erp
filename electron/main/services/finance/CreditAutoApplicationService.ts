@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3-multiple-ciphers'
+import Database from 'better-sqlite3'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 
@@ -79,7 +79,7 @@ class CreditRepository {
       ), 0) as balance
       FROM credit_transaction
       WHERE student_id = ?
-    `).get(studentId) as unknown
+    `).get(studentId) as { balance: number } | undefined
 
     return result?.balance || 0
   }
@@ -381,7 +381,7 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
   /**
    * Auto-apply credits (synchronous wrapper for allocateCreditsToInvoices)
    */
-  autoApplyCredits(studentId: number, userId?: number): any {
+  autoApplyCredits(studentId: number, userId?: number): { success: boolean; message: string; credits_applied?: number; remaining_credit?: number; invoices_affected?: number } {
     try {
       const creditRepo = new CreditRepository(this.db)
       const invoiceRepo = new InvoiceRepository(this.db)
@@ -389,7 +389,7 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
       // Get student's credit balance
       const creditResult = this.db.prepare(
         'SELECT amount FROM credit_transaction WHERE student_id = ? ORDER BY created_at DESC LIMIT 1'
-      ).get(studentId) as unknown
+      ).get(studentId) as { amount: number } | undefined
 
       const creditBalance = creditResult?.amount || 0
 
@@ -399,11 +399,11 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
 
       // Get outstanding invoices sorted by priority (due date, oldest first)
       const invoices = this.db.prepare(`
-        SELECT id, amount_due, amount_paid, due_date 
+        SELECT id, amount as amount_due, amount_paid, due_date 
         FROM fee_invoice 
-        WHERE student_id = ? AND (amount_paid < amount_due OR status = 'OUTSTANDING')
+        WHERE student_id = ? AND (amount_paid < amount OR status = 'OUTSTANDING')
         ORDER BY due_date ASC, id ASC
-      `).all(studentId) as unknown[]
+      `).all(studentId) as { id: number, amount_due: number, amount_paid: number, due_date: string }[]
 
       let remainingCredit = creditBalance
       let applicationsCount = 0
@@ -447,7 +447,7 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
   /**
    * Add a manual credit
    */
-  addCredit(studentId: number, amount: number, notes?: string, userId?: number): any {
+  addCredit(studentId: number, amount: number, notes?: string, userId?: number): { success: boolean; message: string; credit_id?: number } {
     if (amount < 0) {
       return { success: false, message: 'Credit amount must be positive' }
     }
@@ -480,9 +480,9 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
   /**
    * Reverse a credit transaction
    */
-  reverseCredit(creditId: number, reason?: string, userId?: number): any {
+  reverseCredit(creditId: number, reason?: string, userId?: number): { success: boolean; message: string; credit_id?: number } {
     try {
-      const credit = this.db.prepare('SELECT * FROM credit_transaction WHERE id = ?').get(creditId) as unknown
+      const credit = this.db.prepare('SELECT * FROM credit_transaction WHERE id = ?').get(creditId) as CreditTransaction | undefined
 
       if (!credit) {
         return { success: false, message: 'Credit transaction not found' }
@@ -517,7 +517,7 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
   getCreditBalance(studentId: number): number {
     const result = this.db.prepare(
       'SELECT SUM(amount) as total FROM credit_transaction WHERE student_id = ?'
-    ).get(studentId) as unknown
+    ).get(studentId) as { total: number } | undefined
     
     return result?.total || 0
   }
@@ -528,9 +528,9 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
   /**
    * Retrieve credit transactions history
    */
-  getTransactions(studentId: number): any[] {
+  getTransactions(studentId: number): CreditTransaction[] {
     return this.db.prepare(
       'SELECT * FROM credit_transaction WHERE student_id = ? ORDER BY created_at DESC'
-    ).all(studentId) as unknown[]
+    ).all(studentId) as CreditTransaction[]
   }
 }

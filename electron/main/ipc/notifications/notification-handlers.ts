@@ -1,6 +1,6 @@
 import { IpcMainInvokeEvent } from 'electron'
 import { ipcMain } from '../../electron-env'
-import { NotificationService, NotificationRequest } from '../../services/notifications/NotificationService'
+import { NotificationService, NotificationRequest, MessageTemplate } from '../../services/notifications/NotificationService'
 
 const service = new NotificationService()
 
@@ -23,7 +23,15 @@ export function registerNotificationHandlers(): void {
     ipcMain.handle('notifications:sendBulkFeeReminders', async (
         _event: IpcMainInvokeEvent,
         templateId: number,
-        defaulters: any[],
+        defaulters: Array<{
+            student_id: number;
+            student_name: string;
+            guardian_name: string;
+            guardian_phone: string;
+            admission_number: string;
+            class_name: string;
+            balance: number;
+        }>,
         userId: number
     ) => {
         return service.sendBulkFeeReminders(templateId, defaulters, userId)
@@ -40,12 +48,12 @@ export function registerNotificationHandlers(): void {
 
     ipcMain.handle('notifications:createTemplate', async (
         _event: IpcMainInvokeEvent,
-        template: any,
+        template: Omit<MessageTemplate, 'id' | 'is_active' | 'variables'>,
         userId: number
     ) => {
         return service.createTemplate(
-            template.name,
-            template.type,
+            template.template_name,
+            template.template_type,
             template.category,
             template.subject,
             template.body,
@@ -58,7 +66,14 @@ export function registerNotificationHandlers(): void {
     })
 
     // History
-    ipcMain.handle('notifications:getHistory', async (_event: IpcMainInvokeEvent, filters?: any) => {
+    ipcMain.handle('notifications:getHistory', async (_event: IpcMainInvokeEvent, filters?: {
+        recipientType?: string;
+        recipientId?: number;
+        channel?: string;
+        status?: string;
+        startDate?: string;
+        endDate?: string;
+    }) => {
         return service.getCommunicationHistory(filters)
     })
 }

@@ -24,6 +24,8 @@ import { registerDataImportHandlers } from './data/import-handlers'
 import { registerFixedAssetHandlers } from './finance/fixed-asset-handlers'
 import { registerHireHandlers } from './hire/hire-handlers'
 import { registerExemptionHandlers } from './exemption/exemption-handlers'
+import { registerMeritListHandlers } from './academic/merit-list-handlers'
+import { registerAwardsHandlers } from './academic/awards-handlers'
 
 export function registerAllIpcHandlers(): void {
     registerAuthHandlers()
@@ -52,6 +54,8 @@ export function registerAllIpcHandlers(): void {
     registerFixedAssetHandlers()
     registerHireHandlers()
     registerExemptionHandlers()
+    registerMeritListHandlers()
+    registerAwardsHandlers()
 }
 
 

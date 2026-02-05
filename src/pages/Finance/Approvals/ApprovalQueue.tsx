@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { formatCurrency } from '../../../utils/format';
 import { format } from 'date-fns';
 
 interface ApprovalRequest {
@@ -23,17 +24,13 @@ export default function ApprovalQueuePage() {
   const [selectedApproval, setSelectedApproval] = useState<ApprovalRequest | null>(null);
   const [reviewNotes, setReviewNotes] = useState<string>('');
 
-  useEffect(() => {
-    loadApprovals();
-  }, [filter]);
-
-  const loadApprovals = async () => {
+  const loadApprovals = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const result = await (window as unknown).electronAPI.getApprovalQueue(filter);
-      
+      const result = await window.electronAPI.getApprovalQueue(filter);
+
       if (result.success) {
         setApprovals(result.data);
       } else {
@@ -44,11 +41,15 @@ export default function ApprovalQueuePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
+
+  useEffect(() => {
+    loadApprovals();
+  }, [loadApprovals]);
 
   const handleApprove = async (approvalId: number) => {
     try {
-      const result = await (window as unknown).electronAPI.approveTransaction(
+      const result = await window.electronAPI.approveTransaction(
         approvalId,
         reviewNotes || 'Approved'
       );
@@ -58,7 +59,7 @@ export default function ApprovalQueuePage() {
         setSelectedApproval(null);
         setReviewNotes('');
       } else {
-        setError(result.message);
+        setError(result.message || 'Approval failed');
       }
     } catch (err) {
       setError((err as Error).message);
@@ -72,7 +73,7 @@ export default function ApprovalQueuePage() {
     }
 
     try {
-      const result = await (window as unknown).electronAPI.rejectTransaction(
+      const result = await window.electronAPI.rejectTransaction(
         approvalId,
         reviewNotes
       );
@@ -82,19 +83,15 @@ export default function ApprovalQueuePage() {
         setSelectedApproval(null);
         setReviewNotes('');
       } else {
-        setError(result.message);
+        setError(result.message || 'Rejection failed');
       }
     } catch (err) {
       setError((err as Error).message);
     }
   };
 
-  const formatAmount = (amount: number): string => {
-    return `Kes ${(amount / 100).toLocaleString('en-KE', { 
-      minimumFractionDigits: 2, 
-      maximumFractionDigits: 2 
-    })}`;
-  };
+
+
 
   const getStatusBadge = (status: string) => {
     const colors = {
@@ -184,7 +181,7 @@ export default function ApprovalQueuePage() {
                       <div className="text-xs text-gray-500">{approval.student_name}</div>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{formatAmount(approval.amount)}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900">{formatCurrency(approval.amount)}</td>
                   <td className="px-6 py-4 text-sm text-gray-900">{approval.rule_name}</td>
                   <td className="px-6 py-4 text-sm text-gray-900">
                     {approval.requested_by_name}
@@ -219,7 +216,7 @@ export default function ApprovalQueuePage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6">
             <h2 className="text-2xl font-bold mb-4">Review Approval Request</h2>
-            
+
             <div className="space-y-3 mb-6">
               <div>
                 <span className="font-medium">Entry Reference:</span> {selectedApproval.entry_ref}
@@ -231,7 +228,7 @@ export default function ApprovalQueuePage() {
                 <span className="font-medium">Description:</span> {selectedApproval.description}
               </div>
               <div>
-                <span className="font-medium">Amount:</span> {formatAmount(selectedApproval.amount)}
+                <span className="font-medium">Amount:</span> {formatCurrency(selectedApproval.amount)}
               </div>
               {selectedApproval.student_name && (
                 <div>

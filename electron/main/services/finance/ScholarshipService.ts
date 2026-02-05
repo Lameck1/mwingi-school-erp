@@ -165,7 +165,7 @@ class ScholarshipAllocationRepository {
     // Get scholarship details for expiry date
     const scholarship = db.prepare(`
       SELECT valid_to FROM scholarship WHERE id = ?
-    `).get(data.scholarship_id) as unknown
+    `).get(data.scholarship_id) as { valid_to: string } | undefined
 
     const result = db.prepare(`
       INSERT INTO student_scholarship (
@@ -231,7 +231,7 @@ class ScholarshipAllocationRepository {
     const result = db.prepare(`
       SELECT COUNT(*) as count FROM student_scholarship
       WHERE student_id = ? AND scholarship_id = ? AND status = 'ACTIVE'
-    `).get(studentId, scholarshipId) as unknown
+    `).get(studentId, scholarshipId) as { count: number } | undefined
 
     return (result?.count || 0) > 0
   }
@@ -402,6 +402,46 @@ class ScholarshipQueryService implements IScholarshipQueryService {
 // FACADE SERVICE (Composition, DIP)
 // ============================================================================
 
+interface LegacyScholarshipData {
+  name?: unknown
+  description?: unknown
+  scholarship_type?: unknown
+  type?: unknown
+  amount?: unknown
+  totalAmount?: unknown
+  total_amount?: unknown
+  percentage?: unknown
+  max_beneficiaries?: unknown
+  maxBeneficiaries?: unknown
+  eligibility_criteria?: unknown
+  eligibilityCriteria?: unknown
+  valid_from?: unknown
+  startDate?: unknown
+  validFrom?: unknown
+  valid_to?: unknown
+  endDate?: unknown
+  validTo?: unknown
+  sponsor_name?: unknown
+  sponsor_contact?: unknown
+  userId?: unknown
+  user_id?: unknown
+}
+
+interface LegacyAllocationData {
+  scholarship_id?: unknown
+  scholarshipId?: unknown
+  student_id?: unknown
+  studentId?: unknown
+  amount_allocated?: unknown
+  amount?: unknown
+  allocation_notes?: unknown
+  notes?: unknown
+  effective_date?: unknown
+  allocationDate?: unknown
+  userId?: unknown
+  user_id?: unknown
+}
+
 export class ScholarshipService 
   implements IScholarshipCreator, IScholarshipAllocator, IScholarshipValidator, IScholarshipQueryService {
   
@@ -425,7 +465,7 @@ export class ScholarshipService
   /**
    * Create new scholarship program
    */
-  async createScholarship(data: ScholarshipData | Record<string, unknown>, userId?: number): Promise<ScholarshipResult> {
+  async createScholarship(data: ScholarshipData | LegacyScholarshipData, userId?: number): Promise<ScholarshipResult> {
     const normalized = this.normalizeScholarshipData(data)
     const resolvedUserId = userId ?? this.extractLegacyUserId(data)
     if (resolvedUserId === undefined) {
@@ -441,7 +481,7 @@ export class ScholarshipService
   /**
    * Allocate scholarship to student
    */
-  async allocateScholarshipToStudent(allocationData: AllocationData | Record<string, unknown>, userId?: number): Promise<AllocationResult> {
+  async allocateScholarshipToStudent(allocationData: AllocationData | LegacyAllocationData, userId?: number): Promise<AllocationResult> {
     const normalized = this.normalizeAllocationData(allocationData)
     const resolvedUserId = userId ?? this.extractLegacyUserId(allocationData)
 
@@ -456,7 +496,7 @@ export class ScholarshipService
   }
 
   // Legacy alias used by older tests
-  async allocateScholarship(allocationData: AllocationData | Record<string, unknown>): Promise<AllocationResult & { allocationId?: number }> {
+  async allocateScholarship(allocationData: AllocationData | LegacyAllocationData): Promise<AllocationResult & { allocationId?: number }> {
     const result = await this.allocateScholarshipToStudent(allocationData)
     return {
       ...result,
@@ -570,8 +610,10 @@ export class ScholarshipService
     return { success: true, message: 'Scholarship allocation revoked' }
   }
 
-  private normalizeScholarshipData(data: ScholarshipData | Record<string, unknown>): ScholarshipData {
-    const legacy = data as Record<string, unknown>
+  private normalizeScholarshipData(data: ScholarshipData | LegacyScholarshipData): ScholarshipData {
+    // Cast to any for easier property access check, but we have strict types in the signature
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const legacy = data as any
 
     return {
       name: (legacy.name as string) || '',
@@ -609,8 +651,9 @@ export class ScholarshipService
     }
   }
 
-  private normalizeAllocationData(allocationData: AllocationData | Record<string, unknown>): AllocationData {
-    const legacy = allocationData as Record<string, unknown>
+  private normalizeAllocationData(allocationData: AllocationData | LegacyAllocationData): AllocationData {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const legacy = allocationData as any
 
     return {
       scholarship_id:
@@ -636,8 +679,9 @@ export class ScholarshipService
     }
   }
 
-  private extractLegacyUserId(data: Record<string, unknown> | ScholarshipData | AllocationData): number | undefined {
-    const legacy = data as Record<string, unknown>
+  private extractLegacyUserId(data: LegacyScholarshipData | LegacyAllocationData): number | undefined {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const legacy = data as any
     return (legacy.userId as number) ?? (legacy.user_id as number)
   }
 
@@ -657,7 +701,7 @@ export class ScholarshipService
         // Get student scholarship
         const allocation = db.prepare(`
           SELECT * FROM student_scholarship WHERE id = ?
-        `).get(studentScholarshipId) as unknown
+        `).get(studentScholarshipId) as StudentScholarship | undefined
 
         if (!allocation) {
           throw new Error('Scholarship allocation not found')

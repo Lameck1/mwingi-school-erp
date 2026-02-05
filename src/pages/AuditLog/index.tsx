@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Search, Loader2, History, Database, UserCheck, Activity } from 'lucide-react'
 import { AuditLogEntry } from '../../types/electron-api/AuditAPI'
 import { formatDateTime } from '../../utils/format'
@@ -10,9 +10,7 @@ export default function AuditLog() {
     const [loading, setLoading] = useState(true)
     const [filter, setFilter] = useState({ action: '', table: '', search: '' })
 
-    useEffect(() => { loadLogs() }, [])
-
-    const loadLogs = async () => {
+    const loadLogs = useCallback(async () => {
         setLoading(true)
         try {
             const data = await window.electronAPI.getAuditLog(200)
@@ -21,7 +19,9 @@ export default function AuditLog() {
             console.error('Failed to load audit logs:', error)
             showToast('Audit synchronization failed', 'error')
         } finally { setLoading(false) }
-    }
+    }, [showToast])
+
+    useEffect(() => { loadLogs() }, [loadLogs])
 
     const actionColors: Record<string, string> = {
         CREATE: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',

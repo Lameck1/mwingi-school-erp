@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react'
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { useAppStore } from '../../stores'
-import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { Download, AlertTriangle } from 'lucide-react'
 
 interface PerformanceSummary {
@@ -57,11 +57,7 @@ const ExamAnalytics = () => {
   const [subjectPerformance, setSubjectPerformance] = useState<SubjectPerformance[]>([])
   const [strugglingStudents, setStrugglingStudents] = useState<StrugglingStu[]>([])
 
-  useEffect(() => {
-    loadInitialData()
-  }, [currentAcademicYear, currentTerm])
-
-  const loadInitialData = async () => {
+  const loadInitialData = React.useCallback(async () => {
     try {
       const [examsData, streamsData] = await Promise.all([
         window.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
@@ -73,7 +69,11 @@ const ExamAnalytics = () => {
     } catch (error) {
       console.error('Failed to load initial data:', error)
     }
-  }
+  }, [currentAcademicYear, currentTerm])
+
+  useEffect(() => {
+    loadInitialData()
+  }, [loadInitialData])
 
   const handleAnalyze = async () => {
     if (!selectedExam || !selectedStream) {
@@ -274,7 +274,7 @@ const ExamAnalytics = () => {
                     <YAxis />
                     <Tooltip
                       contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '8px' }}
-                      formatter={(value) => value.toFixed(2)}
+                      formatter={(value: number) => value.toFixed(2)}
                     />
                     <Legend />
                     <Bar dataKey="mean_score" fill="#10b981" name="Mean Score" />
@@ -301,9 +301,8 @@ const ExamAnalytics = () => {
                         <td className="py-3">{subject.mean_score.toFixed(2)}</td>
                         <td className="py-3">{subject.pass_rate.toFixed(1)}%</td>
                         <td className="py-3">
-                          <span className={`text-xs font-semibold ${
-                            subject.difficulty_index > 50 ? 'text-red-400' : 'text-green-400'
-                          }`}>
+                          <span className={`text-xs font-semibold ${subject.difficulty_index > 50 ? 'text-red-400' : 'text-green-400'
+                            }`}>
                             {subject.difficulty_index.toFixed(1)}
                           </span>
                         </td>
@@ -331,9 +330,8 @@ const ExamAnalytics = () => {
                         <p className="font-semibold">{student.student_name}</p>
                         <p className="text-xs text-foreground/60">Adm: {student.admission_number}</p>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-                        student.average_score >= 40 ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'
-                      }`}>
+                      <span className={`px-3 py-1 rounded-full text-sm font-bold ${student.average_score >= 40 ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'
+                        }`}>
                         {student.average_score.toFixed(1)}
                       </span>
                     </div>

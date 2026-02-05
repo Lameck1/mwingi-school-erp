@@ -13,6 +13,18 @@ interface ImportDialogProps {
     title?: string
 }
 
+interface ImportResult {
+    success: boolean
+    totalRows: number
+    imported: number
+    skipped: number
+    errors: Array<{ row: number; message: string }>
+}
+
+interface ImportTemplate {
+    columns: Array<{ name: string; required: boolean }>
+}
+
 export function ImportDialog({
     isOpen,
     onClose,
@@ -22,7 +34,7 @@ export function ImportDialog({
 }: ImportDialogProps) {
     const [step, setStep] = useState<'UPLOAD' | 'REVIEW' | 'IMPORTING' | 'RESULT'>('UPLOAD')
     const [file, setFile] = useState<File | null>(null)
-    const [importResult, setImportResult] = useState<unknown>(null)
+    const [importResult, setImportResult] = useState<ImportResult | null>(null)
     const [error, setError] = useState<string | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -56,16 +68,12 @@ export function ImportDialog({
 
         setStep('IMPORTING')
         try {
-            // In Electron context, we need the file path, but browsers don't give it.
-            // So we use the FileReader API or send the file buffer?
-            // Since we are in Electron renderer, File object has 'path' property
-
             const config = {
                 entityType,
                 mappings: await window.electronAPI.getImportTemplate(entityType).then((t: unknown) =>
-                    t.columns.map((c: unknown) => ({
+                    (t as ImportTemplate).columns.map((c) => ({
                         sourceColumn: c.name,
-                        targetField: c.name.toLowerCase().replace(/\s+/g, '_'), // Naive mapping
+                        targetField: c.name.toLowerCase().replace(/\s+/g, '_'),
                         required: c.required
                     }))
                 ),
@@ -73,8 +81,8 @@ export function ImportDialog({
                 duplicateKey: entityType === 'STUDENT' ? 'admission_number' : 'id'
             }
 
-            const result = await window.electronAPI.importData((file as unknown).path, config, 1) // TODO: User ID
-            setImportResult(result)
+            const result = await window.electronAPI.importData((file as File & { path: string }).path, config, 1)
+            setImportResult(result as ImportResult)
             setStep('RESULT')
 
             if (result.success) {
@@ -107,6 +115,13 @@ export function ImportDialog({
                         <div
                             className="border-2 border-dashed border-white/10 rounded-xl p-10 text-center hover:border-primary/50 transition-colors cursor-pointer bg-white/5"
                             onClick={() => fileInputRef.current?.click()}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    fileInputRef.current?.click()
+                                }
+                            }}
+                            role="button"
+                            tabIndex={0}
                         >
                             <FileSpreadsheet className="w-12 h-12 mx-auto mb-4 text-primary" />
                             <p className="font-medium text-white mb-1">Click to upload CSV or Excel</p>
@@ -204,7 +219,7 @@ export function ImportDialog({
                                     Errors ({importResult.errors.length})
                                 </div>
                                 <div className="max-h-32 overflow-y-auto divide-y divide-red-500/10">
-                                    {importResult.errors.map((err: unknown, i: number) => (
+                                    {importResult.errors.map((err, i) => (
                                         <div key={i} className="px-4 py-2 text-xs text-red-300">
                                             Row {err.row}: {err.message}
                                         </div>

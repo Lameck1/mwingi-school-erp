@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Upload, ArrowRightLeft, CreditCard } from 'lucide-react'
 import { PageHeader } from '../../../components/patterns/PageHeader'
 import { formatCurrency } from '../../../utils/format'
@@ -10,26 +10,18 @@ export default function ReconcileAccount() {
     const [statements, setStatements] = useState<BankStatement[]>([])
     const [selectedStatement, setSelectedStatement] = useState<BankStatement | null>(null)
     const [lines, setLines] = useState<BankStatementLine[]>([])
-    const [unmatchedTransactions, setUnmatchedTransactions] = useState<any[]>([])
 
-    useEffect(() => {
-        loadAccounts()
-    }, [])
+    interface UnmatchedTransaction {
+        id: number
+        description: string
+        transaction_ref: string
+        transaction_date: string
+        amount: number
+        [key: string]: unknown
+    }
+    const [unmatchedTransactions, setUnmatchedTransactions] = useState<UnmatchedTransaction[]>([])
 
-    useEffect(() => {
-        if (selectedAccount) {
-            loadStatements(selectedAccount)
-        }
-    }, [selectedAccount])
-
-    useEffect(() => {
-        if (selectedStatement) {
-            loadStatementDetails(selectedStatement.id)
-            loadUnmatchedTransactions()
-        }
-    }, [selectedStatement])
-
-    const loadAccounts = async () => {
+    const loadAccounts = useCallback(async () => {
         try {
             const data = await window.electronAPI.getAccounts()
             setAccounts(data)
@@ -37,18 +29,18 @@ export default function ReconcileAccount() {
         } catch (error) {
             console.error('Failed to load accounts', error)
         }
-    }
+    }, [selectedAccount])
 
-    const loadStatements = async (accountId: number) => {
+    const loadStatements = useCallback(async (accountId: number) => {
         try {
             const data = await window.electronAPI.getStatements(accountId)
             setStatements(data)
         } catch (error) {
             console.error('Failed to load statements', error)
         }
-    }
+    }, [])
 
-    const loadStatementDetails = async (statementId: number) => {
+    const loadStatementDetails = useCallback(async (statementId: number) => {
         try {
             const result = await window.electronAPI.getStatementWithLines(statementId)
             if (result) {
@@ -57,9 +49,9 @@ export default function ReconcileAccount() {
         } catch (error) {
             console.error('Failed to load statement lines', error)
         }
-    }
+    }, [])
 
-    const loadUnmatchedTransactions = async () => {
+    const loadUnmatchedTransactions = useCallback(async () => {
         if (!selectedStatement) return
         try {
             const start = new Date(selectedStatement.statement_date)
@@ -77,7 +69,24 @@ export default function ReconcileAccount() {
         } catch (error) {
             console.error('Failed to load ledger transactions', error)
         }
-    }
+    }, [selectedStatement])
+
+    useEffect(() => {
+        loadAccounts()
+    }, [loadAccounts])
+
+    useEffect(() => {
+        if (selectedAccount) {
+            loadStatements(selectedAccount)
+        }
+    }, [selectedAccount, loadStatements])
+
+    useEffect(() => {
+        if (selectedStatement) {
+            loadStatementDetails(selectedStatement.id)
+            loadUnmatchedTransactions()
+        }
+    }, [selectedStatement, loadStatementDetails, loadUnmatchedTransactions])
 
     const handleMatch = async (lineId: number, transactionId: number) => {
         try {

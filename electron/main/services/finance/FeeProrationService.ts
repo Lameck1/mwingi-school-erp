@@ -1,6 +1,42 @@
-import Database from 'better-sqlite3-multiple-ciphers'
+import Database from 'better-sqlite3'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
+
+// ============================================================================
+// DATA STRUCTURES
+// ============================================================================
+
+export interface ProRationLogEntry {
+  id: number
+  invoice_id: number
+  student_id: number
+  full_amount: number
+  pro_rated_amount: number
+  discount_percentage: number
+  enrollment_date: string
+  term_start: string
+  term_end: string
+  days_in_term: number
+  days_enrolled: number
+  created_at: string
+  invoice_number?: string
+  description?: string
+}
+
+export interface ProrationDetail extends ProRationLogEntry {
+  invoice_number: string
+  invoice_date: string
+  invoice_type: string
+  original_amount: number
+  prorated_amount: number
+}
+
+export interface GenerateProRatedInvoiceInput {
+  studentId: number
+  enrollmentDate: string
+  grade: string
+  userId: number
+}
 
 // ============================================================================
 // SEGREGATED INTERFACES (ISP)
@@ -40,6 +76,22 @@ export interface InvoiceGenerationResult {
   pro_ration_details?: ProRationResult
 }
 
+export interface InvoiceTemplate {
+  id: number
+  student_id: number
+  amount: number
+  amount_paid: number
+  due_date: string
+  invoice_date: string
+  invoice_number: string
+  description: string
+  invoice_type: string
+  term_id: number
+  class_id: number
+  status: string
+  grade?: string // For template lookup
+}
+
 // ============================================================================
 // REPOSITORY LAYER (SRP)
 // ============================================================================
@@ -51,18 +103,18 @@ class InvoiceTemplateRepository {
     this.db = db || getDatabase()
   }
 
-  async getInvoiceTemplate(templateId: number): Promise<unknown> {
+  async getInvoiceTemplate(templateId: number): Promise<InvoiceTemplate | undefined> {
     const db = this.db
     return db.prepare(`
       SELECT * FROM fee_invoice WHERE id = ?
-    `).get(templateId)
+    `).get(templateId) as InvoiceTemplate | undefined
   }
 
   async getTermDates(termId: number): Promise<{ term_start: string; term_end: string } | null> {
     const db = this.db
     const result = db.prepare(`
       SELECT term_start, term_end FROM academic_term WHERE id = ?
-    `).get(termId) as unknown
+    `).get(termId) as { term_start: string; term_end: string } | undefined
 
     if (!result) return null
 
@@ -172,7 +224,7 @@ class ProRateCalculator implements IProRateCalculator {
 
     return {
       full_amount: fullAmount,
-      pro_rated_amount: Math.round(proRatedAmount * 100) / 100, // Round to 2 decimals
+      pro_rated_amount: Math.round(proRatedAmount), // Round to integer cents
       discount_percentage: Math.round(discountPercentage * 100) / 100,
       days_in_term: daysInTerm,
       days_enrolled: daysEnrolled,
@@ -329,7 +381,7 @@ class ProRatedInvoiceGenerator implements IProRatedInvoiceGenerator {
 
       return {
         success: true,
-        message: `Pro-rated invoice created: ${proRation.pro_rated_amount.toFixed(2)} KES (${proRation.discount_percentage.toFixed(1)}% discount)`,
+        message: `Pro-rated invoice created: ${(proRation.pro_rated_amount / 100).toFixed(2)} KES (${proRation.discount_percentage.toFixed(1)}% discount)`,
         invoice_id: invoiceId,
         pro_ration_details: proRation
       }
@@ -394,14 +446,14 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
    * Generate pro-rated invoice for mid-term enrollment
    */
   // Synchronous wrapper for test compatibility
-  generateProRatedInvoiceSync(data: unknown): any {
+  generateProRatedInvoiceSync(data: GenerateProRatedInvoiceInput): InvoiceGenerationResult {
     const db = this.db
     
     try {
       // Find invoice template for the grade
       const template = db.prepare(`
         SELECT * FROM invoice_template WHERE grade = ? LIMIT 1
-      `).get(data.grade) as unknown
+      `).get(data.grade) as { amount: number } | undefined
 
       if (!template) {
         return {
@@ -413,7 +465,7 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
       // Get term dates
       const term = db.prepare(`
         SELECT * FROM academic_term WHERE is_current = 1
-      `).get() as unknown
+      `).get() as { start_date: string, end_date: string } | undefined
 
       if (!term) {
         return {
@@ -465,7 +517,7 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
 
       return {
         success: true,
-        message: `Pro-rated invoice created: ${proratedAmount.toFixed(2)} KES (${prorationType.toFixed(1)}% of full fee)`,
+        message: `Pro-rated invoice created: ${(proratedAmount / 100).toFixed(2)} KES (${prorationType.toFixed(1)}% of full fee)`,
         invoice_id: Number(invoiceId)
       }
     } catch (error) {
@@ -477,7 +529,7 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
   }
 
   async generateProRatedInvoice(
-    studentIdOrData: number | any,
+    studentIdOrData: number | GenerateProRatedInvoiceInput,
     templateInvoiceId?: number,
     enrollmentDate?: string,
     userId?: number
@@ -495,7 +547,7 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
   /**
    * Get proration history for a student
    */
-  async getStudentProRationHistory(studentId: number): Promise<any[]> {
+  async getStudentProRationHistory(studentId: number): Promise<ProRationLogEntry[]> {
     const db = this.db
     return db.prepare(`
       SELECT 
@@ -506,13 +558,13 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
       LEFT JOIN fee_invoice fi ON pl.invoice_id = fi.id
       WHERE pl.student_id = ?
       ORDER BY pl.created_at DESC
-    `).all(studentId) as unknown[]
+    `).all(studentId) as ProRationLogEntry[]
   }
 
   /**
    * Get proration details for a student
    */
-  getProrationDetails(studentId: number): any {
+  getProrationDetails(studentId: number): ProrationDetail[] {
     const db = this.db
     const result = db.prepare(`
       SELECT 
@@ -527,7 +579,7 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
       LEFT JOIN pro_ration_log pl ON pl.invoice_id = fi.id
       WHERE fi.student_id = ? AND fi.is_prorated = 1
       ORDER BY fi.created_at DESC
-    `).all(studentId)
+    `).all(studentId) as ProrationDetail[]
     
     return result
   }
@@ -535,7 +587,7 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
   /**
    * Get proration history (alias for getStudentProRationHistory)
    */
-  getProrationHistory(studentId: number, startDate?: string, endDate?: string): any {
+  getProrationHistory(studentId: number, startDate?: string, endDate?: string): ProRationLogEntry[] {
     const db = this.db
     let query = `
       SELECT 
@@ -546,7 +598,7 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
       WHERE pl.student_id = ?
     `
     
-    const params: any[] = [studentId]
+    const params: (string | number)[] = [studentId]
     
     if (startDate && endDate) {
       query += ` AND pl.created_at BETWEEN ? AND ?`
@@ -555,7 +607,7 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
     
     query += ` ORDER BY pl.created_at DESC`
     
-    return db.prepare(query).all(...params)
+    return db.prepare(query).all(...params) as ProRationLogEntry[]
   }
 
   /**

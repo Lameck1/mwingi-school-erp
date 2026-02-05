@@ -75,10 +75,10 @@ export class GrantTrackingService {
     }
 
     async recordUtilization(
-        grantId: number, 
-        amount: number, 
-        description: string, 
-        glAccountCode: string | null, 
+        grantId: number,
+        amount: number,
+        description: string,
+        glAccountCode: string | null,
         utilizationDate: string,
         userId: number
     ): Promise<{ success: boolean, message?: string }> {
@@ -126,7 +126,7 @@ export class GrantTrackingService {
 
             transaction()
             logAudit(userId, 'UPDATE', 'government_grant', grantId, { utilization: amount }, { description })
-            
+
             return { success: true }
         } catch (error) {
             console.error('Error recording utilization:', error)
@@ -134,7 +134,7 @@ export class GrantTrackingService {
         }
     }
 
-    async getGrantSummary(grantId: number): Promise<{ success: boolean, data?: any }> {
+    async getGrantSummary(grantId: number): Promise<{ success: boolean, data?: unknown }> {
         try {
             const grant = this.db.prepare('SELECT * FROM government_grant WHERE id = ?').get(grantId) as Grant
             if (!grant) return { success: false, data: null }
@@ -162,10 +162,10 @@ export class GrantTrackingService {
         } else if (status === 'ACTIVE') {
             query += ' AND is_utilized = 0'
         }
-        
+
         // "EXPIRED" logic depends on fiscal year or specific date logic not explicitly in schema
         // Assuming active grants are those not fully utilized for now.
-        
+
         return this.db.prepare(query).all(...params) as Grant[]
     }
 
@@ -175,25 +175,25 @@ export class GrantTrackingService {
         // Roadmap says: "getExpiringGrants(daysThreshold) - Alert for grants expiring soon"
         // But schema only has `fiscal_year`.
         // We will assume fiscal year end is Dec 31st of that year.
-        
+
         const currentYear = new Date().getFullYear()
         // If current date is close to Dec 31st of the grant's fiscal year.
-        
+
         // Just return empty for now if no clear logic, or check logic:
         // Grants are usually per fiscal year.
-        
-        return [] 
+
+        return []
     }
 
     async generateNEMISExport(fiscalYear: number): Promise<string> {
         // Generate XML or CSV string for NEMIS
         const grants = this.db.prepare('SELECT * FROM government_grant WHERE fiscal_year = ?').all(fiscalYear) as Grant[]
-        
+
         if (grants.length === 0) return ''
 
         // Simple CSV format
         const header = 'GrantName,Type,Allocated,Received,NEMIS_Ref,Utilization%\n'
-        const rows = grants.map(g => 
+        const rows = grants.map(g =>
             `"${g.grant_name}","${g.grant_type}",${g.amount_allocated},${g.amount_received},"${g.nemis_reference_number || ''}",${g.utilization_percentage}`
         ).join('\n')
 
@@ -203,7 +203,7 @@ export class GrantTrackingService {
     async validateGrantCompliance(grantId: number): Promise<{ compliant: boolean, issues: string[] }> {
         const issues: string[] = []
         const grant = this.db.prepare('SELECT * FROM government_grant WHERE id = ?').get(grantId) as Grant
-        
+
         if (!grant) return { compliant: false, issues: ['Grant not found'] }
 
         if (!grant.nemis_reference_number) {
@@ -216,7 +216,7 @@ export class GrantTrackingService {
 
         // Check if utilization matches conditions (mock logic)
         if (grant.conditions && !grant.is_utilized) {
-             // potential issue if time passed?
+            // potential issue if time passed?
         }
 
         return { compliant: issues.length === 0, issues }

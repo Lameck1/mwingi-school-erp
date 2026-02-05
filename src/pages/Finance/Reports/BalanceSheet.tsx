@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
+import { formatCurrency } from '../../../utils/format';
+
+import { ElectronAPI } from '../../../types/electron-api';
 
 interface AccountBalance {
   account_code: string;
@@ -25,6 +28,7 @@ export default function BalanceSheetPage() {
 
   useEffect(() => {
     loadBalanceSheet();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadBalanceSheet = async () => {
@@ -32,8 +36,8 @@ export default function BalanceSheetPage() {
     setError(null);
 
     try {
-      const result = await (window as unknown).electronAPI.getBalanceSheet(asOfDate);
-      
+      const result = await (window as unknown as { electronAPI: ElectronAPI }).electronAPI.getBalanceSheet(asOfDate);
+
       if (result.success) {
         setBalanceSheet(result.data);
       } else {
@@ -44,10 +48,6 @@ export default function BalanceSheetPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatAmount = (amount: number): string => {
-    return `Kes ${(amount / 100).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   if (loading) {
@@ -106,12 +106,12 @@ export default function BalanceSheetPage() {
               {balanceSheet.assets.map((account) => (
                 <div key={account.account_code} className="flex justify-between py-2">
                   <span>{account.account_name}</span>
-                  <span>{formatAmount(account.balance)}</span>
+                  <span>{formatCurrency(account.balance)}</span>
                 </div>
               ))}
               <div className="flex justify-between py-3 border-t-2 font-bold">
                 <span>Total Assets</span>
-                <span>{formatAmount(balanceSheet.total_assets)}</span>
+                <span>{formatCurrency(balanceSheet.total_assets)}</span>
               </div>
             </div>
 
@@ -120,18 +120,18 @@ export default function BalanceSheetPage() {
               {balanceSheet.liabilities.map((account) => (
                 <div key={account.account_code} className="flex justify-between py-2">
                   <span>{account.account_name}</span>
-                  <span>{formatAmount(account.balance)}</span>
+                  <span>{formatCurrency(account.balance)}</span>
                 </div>
               ))}
               {balanceSheet.equity.map((account) => (
                 <div key={account.account_code} className="flex justify-between py-2">
                   <span>{account.account_name}</span>
-                  <span>{formatAmount(account.balance)}</span>
+                  <span>{formatCurrency(account.balance)}</span>
                 </div>
               ))}
               <div className="flex justify-between py-3 border-t-2 font-bold">
                 <span>Total</span>
-                <span>{formatAmount(balanceSheet.total_liabilities + balanceSheet.total_equity)}</span>
+                <span>{formatCurrency(balanceSheet.total_liabilities + balanceSheet.total_equity)}</span>
               </div>
             </div>
           </div>

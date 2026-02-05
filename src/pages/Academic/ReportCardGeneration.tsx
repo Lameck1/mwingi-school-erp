@@ -46,8 +46,13 @@ const ReportCardGeneration: React.FC = () => {
 
   const loadExams = async () => {
     try {
-      const examsData = await window.electronAPI.invoke('academic:getExams')
-      setExams(examsData || [])
+      // Changed to use typed getExams from AcademicAPI
+      const year = await window.electronAPI.getCurrentAcademicYear()
+      const term = await window.electronAPI.getCurrentTerm()
+      if (year && term) {
+        const examsData = await window.electronAPI.getAcademicExams(year.id, term.id)
+        setExams(examsData || [])
+      }
     } catch (error) {
       console.error('Failed to load exams:', error)
     }
@@ -55,8 +60,8 @@ const ReportCardGeneration: React.FC = () => {
 
   const loadStreams = async () => {
     try {
-      const streamsData = await window.electronAPI.invoke('academic:getStreams')
-      setStreams(streamsData || [])
+      const streamsData = await window.electronAPI.getStreams()
+      setStreams(streamsData.map(s => ({ id: s.id, name: s.stream_name })) || [])
     } catch (error) {
       console.error('Failed to load streams:', error)
     }
@@ -64,8 +69,15 @@ const ReportCardGeneration: React.FC = () => {
 
   const loadEmailTemplates = async () => {
     try {
-      const templates = await window.electronAPI.invoke('notifications:getEmailTemplates', { type: 'report_card' })
-      setEmailTemplates(templates || [])
+      const templates = await window.electronAPI.getNotificationTemplates()
+      // Filter for report card type if property exists, otherwise all
+      const rcTemplates = templates.filter(t => t.category === 'GENERAL' || t.template_name?.toLowerCase().includes('report'))
+      setEmailTemplates(rcTemplates.map(t => ({
+        id: String(t.id),
+        name: t.template_name,
+        subject: t.subject || '',
+        body: t.body
+      })) || [])
     } catch (error) {
       console.error('Failed to load email templates:', error)
     }
@@ -86,23 +98,23 @@ const ReportCardGeneration: React.FC = () => {
     })
 
     try {
-      // Get students for stream
-      const students = await window.electronAPI.invoke('students:getByStream', {
-        stream_id: selectedStream
-      })
+      // Get students for stream - using StudentAPI
+      const students = await window.electronAPI.getStudents({ stream_id: selectedStream, is_active: true })
 
       setProgress(prev => ({ ...prev, total: students.length }))
 
-      // Generate report cards
-      const results = await window.electronAPI.invoke('report-card:generateBatch', {
+      // Generate report cards - using new AcademicAPI method
+      const results = await window.electronAPI.generateBatchReportCards({
         exam_id: selectedExam,
         stream_id: selectedStream,
         on_progress: (data: unknown) => {
+          // Type assertion for progress data if needed, or update API type to include Progress type
+          const typedData = data as any;
           setProgress(prev => ({
             ...prev,
-            completed: data.completed,
-            current_student: data.current_student,
-            failed: data.failed
+            completed: typedData.completed,
+            current_student: typedData.current_student,
+            failed: typedData.failed
           }))
         }
       })
@@ -110,25 +122,18 @@ const ReportCardGeneration: React.FC = () => {
       // If email requested
       if (sendEmail) {
         setProgress(prev => ({ ...prev, status: 'emailing' }))
-        
-        await window.electronAPI.invoke('report-card:emailReports', {
+
+        await window.electronAPI.emailReportCards({
           exam_id: selectedExam,
           stream_id: selectedStream,
           template_id: selectedTemplate,
-          include_sms: sendSMS,
-          on_progress: (data: unknown) => {
-            setProgress(prev => ({
-              ...prev,
-              completed: data.completed,
-              current_student: data.current_student
-            }))
-          }
+          include_sms: sendSMS
         })
       }
 
       // If merge PDFs requested
       if (mergePDFs) {
-        await window.electronAPI.invoke('report-card:mergePDFs', {
+        await window.electronAPI.mergeReportCards({
           exam_id: selectedExam,
           stream_id: selectedStream,
           output_path: `ReportCards_${selectedExam}_${selectedStream}.pdf`
@@ -158,9 +163,9 @@ const ReportCardGeneration: React.FC = () => {
 
   const handleDownloadReportCards = async () => {
     try {
-      await window.electronAPI.invoke('report-card:downloadReports', {
-        exam_id: selectedExam,
-        stream_id: selectedStream,
+      await window.electronAPI.downloadReportCards({
+        exam_id: selectedExam!,
+        stream_id: selectedStream!,
         merge: mergePDFs
       })
       alert('Report cards downloaded successfully')
@@ -197,7 +202,7 @@ const ReportCardGeneration: React.FC = () => {
         {/* Selection Section */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
           <h2 className="text-lg font-semibold text-slate-900 mb-4">Select Report Card Parameters</h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Exam Selection */}
             <div>
@@ -312,7 +317,7 @@ const ReportCardGeneration: React.FC = () => {
               ) : (
                 <AlertCircle className="w-6 h-6 text-red-500" />
               )}
-              
+
               <div>
                 <h3 className="font-semibold text-slate-900">
                   {progress.status === 'generating' && 'Generating Report Cards...'}
@@ -416,8 +421,8 @@ const ReportCardGeneration: React.FC = () => {
         {/* Info Box */}
         <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-sm text-blue-800">
-            <strong>Note:</strong> Report cards will be generated for all students in the selected stream for the chosen exam. 
-            If email is enabled, parents will receive the report card as an attachment with parent portal access links. 
+            <strong>Note:</strong> Report cards will be generated for all students in the selected stream for the chosen exam.
+            If email is enabled, parents will receive the report card as an attachment with parent portal access links.
             All report cards are password-protected with the student's admission number.
           </p>
         </div>

@@ -162,4 +162,4 @@ ipcMain.handle('reports:getExpenseBreakdown', async (_event, startDate: string, 
   }
 });
 
-console.log('Financial reports IPC handlers registered');
+console.warn('Financial reports IPC handlers registered');

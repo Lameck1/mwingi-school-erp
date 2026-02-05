@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Download, Upload, CheckCircle, Loader2, Database, ShieldAlert, History, FileStack, HardDrive } from 'lucide-react'
 import { useToast } from '../../contexts/ToastContext'
 
@@ -9,19 +9,18 @@ export default function Backup() {
     const [result, setResult] = useState<{ type: 'success' | 'error', message: string } | null>(null)
     const [backups, setBackups] = useState<Array<{ filename: string; size: number; created_at: Date }>>([])
 
-    useEffect(() => {
-        loadBackups()
+    const loadBackups = useCallback(async () => {
+        try {
+            const data = await window.electronAPI.getBackupList()
+            setBackups(data)
+        } catch (error) {
+            console.error('Failed to load backups:', error)
+        }
     }, [])
 
-    const loadBackups = async () => {
-        try {
-            const list = await window.electronAPI.getBackupList()
-            setBackups(list)
-        } catch (e) {
-            console.error('Failed to load backups', e)
-            showToast('Failed to retrieve backup directory', 'error')
-        }
-    }
+    useEffect(() => {
+        loadBackups()
+    }, [loadBackups])
 
     const handleBackup = async () => {
         setBacking(true)

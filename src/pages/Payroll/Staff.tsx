@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
+import { formatCurrency } from '../../utils/format'
 import { Plus, UserCog, Edit, Trash2, ShieldCheck, Phone } from 'lucide-react'
 import { StaffMember } from '../../types/electron-api/StaffAPI'
 import { useToast } from '../../contexts/ToastContext'
@@ -10,9 +11,7 @@ export default function Staff() {
     const [loading, setLoading] = useState(true)
     const [showModal, setShowModal] = useState(false)
 
-    useEffect(() => { loadStaff() }, [])
-
-    const loadStaff = async () => {
+    const loadStaff = useCallback(async () => {
         try {
             const data = await window.electronAPI.getStaff()
             setStaff(data)
@@ -20,11 +19,12 @@ export default function Staff() {
             console.error('Failed to load staff:', error)
             showToast('Failed to synchronize staff directory', 'error')
         } finally { setLoading(false) }
-    }
+    }, [showToast])
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', minimumFractionDigits: 0 }).format(amount)
-    }
+    useEffect(() => { loadStaff() }, [loadStaff])
+
+
+
 
     return (
         <div className="space-y-8 pb-10">

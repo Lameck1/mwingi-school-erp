@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { useAppStore } from '../../stores'
@@ -55,11 +55,7 @@ const ReportCardAnalytics = () => {
   const [subjectPerformance, setSubjectPerformance] = useState<SubjectPerformance[]>([])
   const [termComparison, setTermComparison] = useState<TermComparison[]>([])
 
-  useEffect(() => {
-    loadInitialData()
-  }, [currentAcademicYear, currentTerm])
-
-  const loadInitialData = async () => {
+  const loadInitialData = useCallback(async () => {
     try {
       const [examsData, streamsData] = await Promise.all([
         window.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
@@ -71,7 +67,11 @@ const ReportCardAnalytics = () => {
     } catch (error) {
       console.error('Failed to load initial data:', error)
     }
-  }
+  }, [currentAcademicYear, currentTerm])
+
+  useEffect(() => {
+    loadInitialData()
+  }, [loadInitialData])
 
   const handleAnalyze = async () => {
     if (!selectedExam || !selectedStream) {
@@ -289,9 +289,8 @@ const ReportCardAnalytics = () => {
                           </span>
                         </td>
                         <td className="py-3 text-right">
-                          <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                            subject.difficulty_index > 50 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'
-                          }`}>
+                          <span className={`text-xs font-semibold px-2 py-1 rounded ${subject.difficulty_index > 50 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'
+                            }`}>
                             {subject.difficulty_index.toFixed(1)}
                           </span>
                         </td>

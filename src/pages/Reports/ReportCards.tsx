@@ -77,11 +77,7 @@ export default function ReportCards() {
         loadStreams()
     }, [])
 
-    useEffect(() => {
-        if (selectedStream && currentAcademicYear && currentTerm) {
-            loadStudents()
-        }
-    }, [selectedStream, currentAcademicYear, currentTerm])
+
 
     const loadStreams = async () => {
         try {
@@ -107,6 +103,12 @@ export default function ReportCards() {
         }
     }, [selectedStream, currentAcademicYear, currentTerm])
 
+    useEffect(() => {
+        if (selectedStream && currentAcademicYear && currentTerm) {
+            loadStudents()
+        }
+    }, [selectedStream, currentAcademicYear, currentTerm, loadStudents])
+
     const handlePreview = async (studentId: number) => {
         if (!currentAcademicYear || !currentTerm) return
         setGenerating(true)
@@ -115,7 +117,7 @@ export default function ReportCards() {
                 studentId, currentAcademicYear.id, currentTerm.id
             )
             if (data) {
-                setPreviewData(data)
+                setPreviewData(data as ReportCardData)
                 setShowPreview(true)
             } else {
                 alert('No report card data available for this student')

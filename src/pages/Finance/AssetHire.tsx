@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useAuthStore } from '../../stores'
 import { HireBooking, HireAsset, HireClient, HireStats } from '../../types/electron-api/HireAPI'
 import { printDocument } from '../../utils/print'
+import { formatCurrency, shillingsToCents } from '../../utils/format'
 
 type TabType = 'bookings' | 'clients' | 'assets'
 
@@ -98,7 +99,7 @@ export default function AssetHire() {
         const result = await window.electronAPI.createHireBooking({
             ...bookingForm,
             distance_km: bookingForm.distance_km ? parseFloat(bookingForm.distance_km) : undefined,
-            total_amount: Math.round(parseFloat(bookingForm.total_amount))
+            total_amount: shillingsToCents(bookingForm.total_amount)
         }, user.id)
 
         if (result.success) {
@@ -135,7 +136,7 @@ export default function AssetHire() {
             selectedBooking.id,
             {
                 ...paymentForm,
-                amount: Math.round(parseFloat(paymentForm.amount))
+                amount: shillingsToCents(paymentForm.amount)
             },
             user.id
         )
@@ -183,7 +184,7 @@ export default function AssetHire() {
                 description: `Asset Hire: ${booking.asset_name}`,
                 amountInWords: `${numberToWords(latestPayment.amount)} Shillings Only`
             },
-            schoolSettings: settings || {}
+            schoolSettings: (settings || {}) as Record<string, unknown>
         })
     }
 
@@ -260,15 +261,15 @@ export default function AssetHire() {
                     </div>
                     <div className="bg-white p-4 rounded-lg shadow border-l-4 border-green-500">
                         <div className="text-sm text-gray-500">Total Income</div>
-                        <div className="text-2xl font-bold">KES {stats.totalIncome.toLocaleString()}</div>
+                        <div className="text-2xl font-bold">{formatCurrency(stats.totalIncome)}</div>
                     </div>
                     <div className="bg-white p-4 rounded-lg shadow border-l-4 border-orange-500">
                         <div className="text-sm text-gray-500">Pending Amount</div>
-                        <div className="text-2xl font-bold">KES {stats.pendingAmount.toLocaleString()}</div>
+                        <div className="text-2xl font-bold">{formatCurrency(stats.pendingAmount)}</div>
                     </div>
                     <div className="bg-white p-4 rounded-lg shadow border-l-4 border-purple-500">
                         <div className="text-sm text-gray-500">This Month</div>
-                        <div className="text-2xl font-bold">KES {stats.thisMonth.toLocaleString()}</div>
+                        <div className="text-2xl font-bold">{formatCurrency(stats.thisMonth)}</div>
                     </div>
                 </div>
             )}
@@ -340,9 +341,9 @@ export default function AssetHire() {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">{booking.client_name}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">{booking.asset_name}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">{new Date(booking.hire_date).toLocaleDateString()}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm">KES {booking.total_amount.toLocaleString()}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm">{formatCurrency(booking.total_amount)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">
-                                        KES {(booking.balance || 0).toLocaleString()}
+                                        {formatCurrency(booking.balance || 0)}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(booking.status)}`}>
@@ -426,7 +427,7 @@ export default function AssetHire() {
                                 <tr key={asset.id}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">{asset.asset_name}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">{asset.asset_type}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm">KES {(asset.default_rate || 0).toLocaleString()}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm">{formatCurrency(asset.default_rate || 0)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">{asset.rate_type || 'MANUAL'}</td>
                                 </tr>
                             ))}

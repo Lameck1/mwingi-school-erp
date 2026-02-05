@@ -3,11 +3,14 @@ import { logAudit } from '../../database/utils/audit'
 
 export interface InventoryItem {
     id: number
+    item_code: string
     item_name: string
     category: string
+    category_id: number
     unit_of_measure: string
-    quantity_in_stock: number
+    current_stock: number
     reorder_level: number
+    unit_cost: number
     unit_price: number
     supplier_id: number | null
     description: string | null
@@ -30,10 +33,12 @@ export interface StockTransaction {
 }
 
 export interface CreateInventoryItemData {
+    item_code: string
     item_name: string
-    category: string
+    category_id: number
     unit_of_measure: string
     reorder_level: number
+    unit_cost: number
     unit_price: number
     supplier_id?: number
     description?: string
@@ -41,8 +46,48 @@ export interface CreateInventoryItemData {
 
 export interface InventoryFilters {
     category?: string
+    category_id?: number
     search?: string
     low_stock?: boolean
+}
+
+export interface StockMovementHistory extends StockTransaction {
+    recorded_by_name: string | null
+}
+
+export interface InventoryCategory {
+    id: number
+    category_name: string
+    description: string | null
+    is_active: boolean
+}
+
+export interface Supplier {
+    id: number
+    supplier_name: string
+    contact_person: string | null
+    email: string | null
+    phone: string | null
+    address: string | null
+    is_active: boolean
+}
+
+interface InventoryItemRow {
+    id: number;
+    item_code: string;
+    item_name: string;
+    category_name: string;
+    category_id: number;
+    unit_of_measure: string;
+    current_stock: number;
+    reorder_level: number;
+    unit_cost: number;
+    unit_price: number;
+    supplier_id: number | null;
+    description: string | null;
+    is_active: number;
+    created_at: string;
+    updated_at: string;
 }
 
 export class InventoryService extends BaseService<InventoryItem, CreateInventoryItemData, Partial<CreateInventoryItemData>, InventoryFilters> {
@@ -58,22 +103,27 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
     }
 
     protected mapRowToEntity(row: unknown): InventoryItem {
+        const r = row as InventoryItemRow
         return {
-            id: row.id,
-            item_code: row.item_code,
-            item_name: row.item_name,
-            category_name: row.category_name,
-            category_id: row.category_id,
-            unit_of_measure: row.unit_of_measure,
-            current_stock: row.current_stock,
-            reorder_level: row.reorder_level,
-            unit_cost: row.unit_cost,
-            is_active: Boolean(row.is_active),
-            created_at: row.created_at
-        } as unknown
+            id: r.id,
+            item_code: r.item_code,
+            item_name: r.item_name,
+            category: r.category_name,
+            category_id: r.category_id,
+            unit_of_measure: r.unit_of_measure,
+            current_stock: r.current_stock,
+            reorder_level: r.reorder_level,
+            unit_cost: r.unit_cost,
+            unit_price: r.unit_price,
+            supplier_id: r.supplier_id,
+            description: r.description,
+            is_active: Boolean(r.is_active),
+            created_at: r.created_at,
+            updated_at: r.updated_at
+        }
     }
 
-    protected validateCreate(data: unknown): string[] | null {
+    protected validateCreate(data: CreateInventoryItemData): string[] | null {
         const errors: string[] = []
         if (!data.item_name) errors.push('Item name is required')
         if (!data.item_code) errors.push('Item code is required')
@@ -82,11 +132,11 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
         return errors.length > 0 ? errors : null
     }
 
-    protected async validateUpdate(id: number, data: unknown): Promise<string[] | null> {
+    protected async validateUpdate(id: number, data: Partial<CreateInventoryItemData>): Promise<string[] | null> {
         return null
     }
 
-    protected executeCreate(data: unknown): { lastInsertRowid: number | bigint } {
+    protected executeCreate(data: CreateInventoryItemData): { lastInsertRowid: number | bigint } {
         return this.db.prepare(`
             INSERT INTO inventory_item (
                 item_code, item_name, category_id, unit_of_measure, reorder_level, unit_cost
@@ -97,9 +147,9 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
         )
     }
 
-    protected executeUpdate(id: number, data: unknown): void {
+    protected executeUpdate(id: number, data: Partial<CreateInventoryItemData>): void {
         const sets: string[] = []
-        const params: any[] = []
+        const params: unknown[] = []
 
         if (data.item_name) { sets.push('item_name = ?'); params.push(data.item_name) }
         if (data.item_code) { sets.push('item_code = ?'); params.push(data.item_code) }
@@ -114,27 +164,28 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
         }
     }
 
-    protected applyFilters(filters: unknown, conditions: string[], params: any[]): void {
-        if (filters.category_id) {
+    protected applyFilters(filters: unknown, conditions: string[], params: unknown[]): void {
+        const f = filters as InventoryFilters
+        if (f.category_id) {
             conditions.push('category_id = ?')
-            params.push(filters.category_id)
+            params.push(f.category_id)
         }
-        if (filters.search) {
+        if (f.search) {
             conditions.push('(item_name LIKE ? OR item_code LIKE ?)')
-            params.push(`%${filters.search}%`, `%${filters.search}%`)
+            params.push(`%${f.search}%`, `%${f.search}%`)
         }
-        if (filters.low_stock) {
+        if (f.low_stock) {
             conditions.push('current_stock <= reorder_level')
         }
     }
 
     // Custom Methods
 
-    async adjustStock(itemId: number, quantity: number, type: 'IN' | 'OUT' | 'ADJUSTMENT', userId: number, notes?: string): Promise<{ success: boolean; error?: string }> {
+    async adjustStock(itemId: number, quantity: number, type: 'IN' | 'OUT' | 'ADJUSTMENT', userId: number, notes?: string, unitCost?: number): Promise<{ success: boolean; error?: string }> {
         const item = await this.findById(itemId)
         if (!item) return { success: false, error: 'Item not found' }
 
-        const current_stock = (item as unknown).current_stock
+        const current_stock = item.current_stock
         let change = 0
         let finalQty = 0
 
@@ -148,16 +199,27 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
 
         if (finalQty < 0) return { success: false, error: 'Insufficient stock' }
 
+        // Use provided unit cost for IN/ADJUSTMENT, otherwise fallback to item's current cost
+        // For OUT, we typically use the item's current cost (FIFO/LIFO/Avg not strictly implemented here, assuming standard cost)
+        const movementCost = (type === 'IN' && unitCost !== undefined) ? unitCost : item.unit_cost
+
         this.db.transaction(() => {
+            // Update stock level
             this.db.prepare('UPDATE inventory_item SET current_stock = ? WHERE id = ?')
                 .run(finalQty, itemId)
+            
+            // If it's an IN movement with a new cost, update the item's unit cost (Last Price)
+            if (type === 'IN' && unitCost !== undefined && unitCost > 0) {
+                 this.db.prepare('UPDATE inventory_item SET unit_cost = ? WHERE id = ?')
+                .run(unitCost, itemId)
+            }
 
             this.db.prepare(`
                 INSERT INTO stock_movement (
                     item_id, movement_type, quantity, unit_cost, 
                     description, movement_date, recorded_by_user_id
                 ) VALUES (?, ?, ?, ?, ?, CURRENT_DATE, ?)
-            `).run(itemId, type, Math.abs(change), (item as unknown).unit_cost, notes || null, userId)
+            `).run(itemId, type, Math.abs(change), movementCost, notes || null, userId)
         })()
 
         logAudit(userId, 'STOCK_UPDATE', 'inventory_item', itemId, { quantity: current_stock }, { quantity: finalQty })
@@ -165,29 +227,30 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
         return { success: true }
     }
 
-    async getHistory(itemId: number): Promise<any[]> {
+    async getHistory(itemId: number): Promise<StockMovementHistory[]> {
         return this.db.prepare(`
             SELECT sm.*, u.full_name as recorded_by_name
             FROM stock_movement sm
             LEFT JOIN user u ON sm.recorded_by_user_id = u.id
             WHERE sm.item_id = ? 
             ORDER BY sm.created_at DESC
-        `).all(itemId) as unknown[]
+        `).all(itemId) as StockMovementHistory[]
     }
 
-    async getLowStock(): Promise<any[]> {
-        return this.db.prepare(`
+    async getLowStock(): Promise<InventoryItem[]> {
+        const rows = this.db.prepare(`
             ${this.buildSelectQuery()}
             WHERE i.current_stock <= i.reorder_level AND i.is_active = 1
-        `).all() as unknown[]
+        `).all() as InventoryItemRow[]
+        return rows.map(row => this.mapRowToEntity(row))
     }
 
-    async getCategories(): Promise<any[]> {
-        return this.db.prepare('SELECT * FROM inventory_category WHERE is_active = 1').all() as unknown[]
+    async getCategories(): Promise<InventoryCategory[]> {
+        return this.db.prepare('SELECT * FROM inventory_category WHERE is_active = 1').all() as InventoryCategory[]
     }
 
-    async getSuppliers(): Promise<any[]> {
-        return this.db.prepare('SELECT * FROM supplier WHERE is_active = 1').all() as unknown[]
+    async getSuppliers(): Promise<Supplier[]> {
+        return this.db.prepare('SELECT * FROM supplier WHERE is_active = 1').all() as Supplier[]
     }
 }
 

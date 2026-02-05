@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
     Plus, Search, Filter
 } from 'lucide-react'
@@ -33,21 +33,21 @@ export default function AssetRegister() {
         { id: 4, name: 'Land & Buildings' }
     ]
 
-    useEffect(() => {
-        loadAssets()
-    }, [])
-
-    const loadAssets = async () => {
+    const loadAssets = useCallback(async (searchQuery: string) => {
         setLoading(true)
         try {
-            const data = await window.electronAPI.getAssets({ search })
+            const data = await window.electronAPI.getAssets({ search: searchQuery })
             setAssets(data)
         } catch (error) {
             console.error('Failed to load assets', error)
         } finally {
             setLoading(false)
         }
-    }
+    }, [])
+
+    useEffect(() => {
+        loadAssets('')
+    }, [loadAssets])
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -68,7 +68,7 @@ export default function AssetRegister() {
                     serial_number: '',
                     location: ''
                 })
-                loadAssets()
+                loadAssets(search)
             } else {
                 alert('Failed to create asset: ' + result.errors?.join(', '))
             }
@@ -101,7 +101,7 @@ export default function AssetRegister() {
                         type="text"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && loadAssets()}
+                        onKeyDown={(e) => e.key === 'Enter' && loadAssets(search)}
                         placeholder="Search assets..."
                         className="input pl-11 bg-secondary/30"
                     />
