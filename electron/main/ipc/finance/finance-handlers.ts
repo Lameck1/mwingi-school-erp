@@ -3,17 +3,18 @@ import { ipcMain } from '../../electron-env'
 import { getDatabase } from '../../database/index'
 import { logAudit } from '../../database/utils/audit'
 import { CashFlowService } from '../../services/finance/CashFlowService'
-import { PaymentData, PaymentResult, TransactionData, TransactionFilters, InvoiceData, InvoiceItem, FeeStructureItemData } from './types'
+import { PaymentData, PaymentResult, TransactionData, TransactionFilters, InvoiceData, InvoiceItem, FeeStructureItemData, FeeInvoiceDB, FeeInvoiceWithDetails, FeeStructureWithDetails, InvoiceItemCreation } from './types'
 import { validateAmount, validateId, validateDate, sanitizeString } from '../../utils/validation'
 import { ExemptionService } from '../../services/finance/ExemptionService'
-import { fixCurrencyScale } from '../../database/migrations/009_fix_currency_scale'
 import { CreditAutoApplicationService } from '../../services/finance/CreditAutoApplicationService'
 import { FeeProrationService } from '../../services/finance/FeeProrationService'
-import { ScholarshipService } from '../../services/finance/ScholarshipService'
+import { ScholarshipService, ScholarshipData, AllocationData } from '../../services/finance/ScholarshipService'
+import { PaymentService } from '../../services/finance/PaymentService'
 
 export function registerFinanceHandlers(): void {
     const db = getDatabase()
     const exemptionService = new ExemptionService()
+    const paymentService = new PaymentService(db)
 
     // Cash Flow & Forecasting
     ipcMain.handle('finance:getCashFlow', async (_event: IpcMainInvokeEvent, startDate: string, endDate: string) => {
@@ -33,80 +34,40 @@ export function registerFinanceHandlers(): void {
         const vStudent = validateId(data.student_id, 'Student')
         if (!vStudent.success) return { success: false, message: vStudent.error! }
 
-        const amountCents = Math.round(vAmount.data! * 100)
+        const amountCents = vAmount.data!
         const description = sanitizeString(data.description) || 'Tuition Fee Payment'
         const paymentRef = sanitizeString(data.payment_reference)
 
-        return db.transaction(() => {
-            const txnRef = `TXN-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Date.now()).slice(-6)}`
-            const rcpNum = `RCP-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Date.now()).slice(-6)}`
+        try {
+            const result = await paymentService.recordPayment({
+                student_id: data.student_id,
+                amount: amountCents,
+                transaction_date: data.transaction_date,
+                payment_method: data.payment_method,
+                payment_reference: paymentRef,
+                description,
+                recorded_by_user_id: userId,
+                invoice_id: data.invoice_id,
+                term_id: data.term_id || 0, // Ensure term_id is passed, default to 0 if missing (should be validated upstream)
+                amount_in_words: data.amount_in_words
+            })
 
-            const txnStmt = db.prepare(`INSERT INTO ledger_transaction (
-      transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit,
-      student_id, payment_method, payment_reference, description, term_id, recorded_by_user_id, invoice_id
-    ) VALUES (?, ?, 'FEE_PAYMENT', (SELECT id FROM transaction_category WHERE category_name = 'School Fees'), ?, 'CREDIT', ?, ?, ?, ?, ?, ?, ?)`)
-
-            const txnResult = txnStmt.run(
-                txnRef, data.transaction_date, amountCents, data.student_id,
-                data.payment_method, paymentRef, description,
-                data.term_id, userId, data.invoice_id || null
-            )
-
-            logAudit(userId, 'CREATE', 'ledger_transaction', txnResult.lastInsertRowid as number, null, { ...data, amount: amountCents })
-
-            const rcpStmt = db.prepare(`INSERT INTO receipt (
-      receipt_number, transaction_id, receipt_date, student_id, amount,
-      amount_in_words, payment_method, payment_reference, created_by_user_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-
-            rcpStmt.run(rcpNum, txnResult.lastInsertRowid, data.transaction_date, data.student_id,
-                amountCents, data.amount_in_words || '', data.payment_method, paymentRef, userId)
-
-            let remainingAmount = amountCents
-
-            if (data.invoice_id) {
-                const inv = db.prepare('SELECT total_amount, amount_paid FROM fee_invoice WHERE id = ?').get(data.invoice_id) as { total_amount: number; amount_paid: number } | undefined
-                if (inv) {
-                    db.prepare(`UPDATE fee_invoice SET amount_paid = amount_paid + ?, 
-                        status = CASE WHEN amount_paid + ? >= total_amount THEN 'PAID' ELSE 'PARTIAL' END 
-                        WHERE id = ?`).run(amountCents, amountCents, data.invoice_id)
+            if (result.success) {
+                return {
+                    success: true,
+                    transactionRef: result.transactionRef!,
+                    receiptNumber: result.receiptNumber!
                 }
             } else {
-                const pendingInvoices = db.prepare(`
-                    SELECT id, total_amount, amount_paid 
-                    FROM fee_invoice 
-                    WHERE student_id = ? AND status != 'PAID'
-                    ORDER BY invoice_date ASC
-                `).all(data.student_id) as Array<{ id: number; total_amount: number; amount_paid: number }>
-
-                const updateInvStmt = db.prepare(`
-                    UPDATE fee_invoice 
-                    SET amount_paid = amount_paid + ?, 
-                        status = CASE WHEN amount_paid + ? >= total_amount THEN 'PAID' ELSE 'PARTIAL' END 
-                    WHERE id = ?
-                `)
-
-                for (const inv of pendingInvoices) {
-                    if (remainingAmount <= 0) break
-
-                    const outstanding = inv.total_amount - (inv.amount_paid || 0)
-                    const payAmount = Math.min(remainingAmount, outstanding)
-
-                    updateInvStmt.run(payAmount, payAmount, inv.id)
-                    remainingAmount -= payAmount
-                }
-
-                if (remainingAmount > 0) {
-                    try {
-                        db.prepare('UPDATE student SET credit_balance = COALESCE(credit_balance, 0) + ? WHERE id = ?').run(remainingAmount, data.student_id)
-                    } catch (e) {
-                        console.error('Failed to update credit balance:', e)
-                    }
+                return {
+                    success: false,
+                    message: result.message
                 }
             }
-
-            return { success: true, transactionRef: txnRef, receiptNumber: rcpNum }
-        })()
+        } catch (error) {
+            console.error('Payment processing error:', error)
+            return { success: false, message: error instanceof Error ? error.message : 'Unknown payment error' }
+        }
     })
 
     ipcMain.handle('invoice:getItems', async (_event: IpcMainInvokeEvent, invoiceId: number) => {
@@ -115,11 +76,11 @@ export function registerFinanceHandlers(): void {
             FROM invoice_item ii
             JOIN fee_category fc ON ii.fee_category_id = fc.id
             WHERE ii.invoice_id = ?
-        `).all(invoiceId) as any[]
+        `).all(invoiceId) as InvoiceItem[]
 
         return items.map(item => ({
             ...item,
-            amount: item.amount / 100
+            amount: item.amount
         }))
     })
 
@@ -127,11 +88,11 @@ export function registerFinanceHandlers(): void {
         const payments = db.prepare(`SELECT lt.*, r.receipt_number FROM ledger_transaction lt
       LEFT JOIN receipt r ON lt.id = r.transaction_id
       WHERE lt.student_id = ? AND lt.transaction_type = 'FEE_PAYMENT' AND lt.is_voided = 0
-      ORDER BY lt.transaction_date DESC`).all(studentId) as any[]
+      ORDER BY lt.transaction_date DESC`).all(studentId) as (TransactionData & { receipt_number: string, id: number })[]
 
         return payments.map(p => ({
             ...p,
-            amount: p.amount / 100
+            amount: p.amount
         }))
     })
 
@@ -140,7 +101,7 @@ export function registerFinanceHandlers(): void {
             // 1. Get current credit balance
             const student = db.prepare('SELECT credit_balance FROM student WHERE id = ?').get(data.studentId) as { credit_balance: number }
             const currentCredit = student.credit_balance || 0
-            const amountCents = Math.round(data.amount * 100)
+            const amountCents = data.amount
 
             if (currentCredit < amountCents) {
                 return { success: false, message: 'Insufficient credit balance' }
@@ -176,8 +137,8 @@ export function registerFinanceHandlers(): void {
     ipcMain.handle('invoice:create', async (_event: IpcMainInvokeEvent, data: InvoiceData, items: InvoiceItem[], userId: number) => {
         return db.transaction(() => {
             const invNum = `INV-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Date.now()).slice(-6)}`
-            // Convert items to cents
-            const itemsInCents = items.map(i => ({ ...i, amount: Math.round(i.amount * 100) }))
+            // Items are expected to be in cents
+            const itemsInCents = items.map(i => ({ ...i, amount: i.amount }))
             const totalCents = itemsInCents.reduce((sum: number, item) => sum + item.amount, 0)
 
             const invStmt = db.prepare(`INSERT INTO fee_invoice (
@@ -198,13 +159,8 @@ export function registerFinanceHandlers(): void {
     })
 
     ipcMain.handle('invoice:getByStudent', async (_event: IpcMainInvokeEvent, studentId: number) => {
-        const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = ? ORDER BY invoice_date DESC').all(studentId) as any[]
-        return invoices.map(inv => ({
-            ...inv,
-            total_amount: inv.total_amount / 100,
-            amount_paid: inv.amount_paid / 100,
-            balance: (inv.total_amount - inv.amount_paid) / 100
-        }))
+        const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = ? ORDER BY invoice_date DESC').all(studentId) as FeeInvoiceDB[]
+        return invoices
     })
 
     ipcMain.handle('invoice:getAll', async (_event: IpcMainInvokeEvent) => {
@@ -216,13 +172,13 @@ export function registerFinanceHandlers(): void {
             JOIN student s ON fi.student_id = s.id
             JOIN term t ON fi.term_id = t.id
             ORDER BY fi.invoice_date DESC
-        `).all() as any[]
+        `).all() as FeeInvoiceWithDetails[]
 
         return invoices.map(inv => ({
             ...inv,
-            total_amount: inv.total_amount / 100,
-            amount_paid: inv.amount_paid / 100,
-            balance: (inv.total_amount - inv.amount_paid) / 100
+            total_amount: inv.total_amount,
+            amount_paid: inv.amount_paid,
+            balance: (inv.total_amount - inv.amount_paid)
         }))
     })
 
@@ -245,12 +201,9 @@ export function registerFinanceHandlers(): void {
             JOIN fee_category fc ON fs.fee_category_id = fc.id
             JOIN stream s ON fs.stream_id = s.id
             WHERE fs.academic_year_id = ? AND fs.term_id = ?
-        `).all(academicYearId, termId) as any[]
+        `).all(academicYearId, termId) as FeeStructureWithDetails[]
 
-        return structure.map(s => ({
-            ...s,
-            amount: s.amount / 100
-        }))
+        return structure
     })
 
     ipcMain.handle('fee:saveStructure', async (_event: IpcMainInvokeEvent, data: FeeStructureItemData[], academicYearId: number, termId: number) => {
@@ -263,7 +216,7 @@ export function registerFinanceHandlers(): void {
         const transaction = db.transaction((items: FeeStructureItemData[]) => {
             deleteStmt.run(academicYearId, termId)
             for (const item of items) {
-                insertStmt.run(academicYearId, termId, item.stream_id, item.student_type, item.fee_category_id, Math.round(item.amount * 100))
+                insertStmt.run(academicYearId, termId, item.stream_id, item.student_type, item.fee_category_id, item.amount)
             }
         })
 
@@ -337,7 +290,7 @@ export function registerFinanceHandlers(): void {
                 const exemptions = exemptionService.getStudentExemptions(enrollment.student_id, academicYearId, termId)
 
                 let invoiceTotal = 0
-                const invoiceItems: any[] = []
+                const invoiceItems: InvoiceItemCreation[] = []
 
                 for (const fee of fees) {
                     const originalAmount = fee.amount
@@ -397,17 +350,6 @@ export function registerFinanceHandlers(): void {
             return { success: false, message: errorMessage }
         }
     })
-    ipcMain.handle('finance:fixCurrency', async (_event: IpcMainInvokeEvent, userId: number) => {
-        try {
-            fixCurrencyScale(db)
-            logAudit(userId, 'UPDATE', 'SYSTEM', 0, null, { action: 'FIX_CURRENCY_SCALE' })
-            return { success: true, message: 'Currency scale correction applied successfully.' }
-        } catch (error) {
-            console.error('Manual currency fix failed:', error)
-            return { success: false, message: error instanceof Error ? error.message : 'Unknown error during fix' }
-        }
-    })
-
     // ======== PHASE 3: CREDIT AUTO-APPLICATION ========
     const creditService = new CreditAutoApplicationService()
 
@@ -498,7 +440,7 @@ export function registerFinanceHandlers(): void {
     // ======== PHASE 3: SCHOLARSHIPS ========
     const scholarshipService = new ScholarshipService()
 
-    ipcMain.handle('finance:createScholarship', async (_event: IpcMainInvokeEvent, data: any, userId: number) => {
+    ipcMain.handle('finance:createScholarship', async (_event: IpcMainInvokeEvent, data: ScholarshipData, userId: number) => {
         try {
             return await scholarshipService.createScholarship(data, userId)
         } catch (error) {
@@ -506,7 +448,7 @@ export function registerFinanceHandlers(): void {
         }
     })
 
-    ipcMain.handle('finance:allocateScholarship', async (_event: IpcMainInvokeEvent, allocationData: any, userId: number) => {
+    ipcMain.handle('finance:allocateScholarship', async (_event: IpcMainInvokeEvent, allocationData: AllocationData, userId: number) => {
         try {
             return await scholarshipService.allocateScholarshipToStudent(allocationData, userId)
         } catch (error) {

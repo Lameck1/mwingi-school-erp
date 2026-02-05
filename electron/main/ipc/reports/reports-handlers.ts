@@ -18,7 +18,9 @@ interface TransactionRow {
 }
 
 export function registerReportsHandlers(): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = new Proxy({} as any, {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         get: (_target, prop) => (getDatabase() as any)[prop]
     });
 
@@ -37,7 +39,7 @@ export function registerReportsHandlers(): void {
         LEFT JOIN stream st ON e.stream_id = st.id
         WHERE fi.status != 'PAID' AND fi.status != 'CANCELLED'`
 
-        const params: any[] = []
+        const params: (number | string)[] = []
         if (termId) {
             query += ` AND fi.term_id = ?`
             params.push(termId)
@@ -81,29 +83,54 @@ export function registerReportsHandlers(): void {
         const student = db.prepare('SELECT * FROM student WHERE id = ?').get(studentId)
         if (!student) return { success: false, error: 'Student not found' }
 
-        const transactions = db.prepare(`
+        // UNION ALL to get both Invoices (charges) and Transactions (payments)
+        // We use standardized column names for the union
+        const items = db.prepare(`
             SELECT 
-                lt.transaction_date, lt.transaction_type, lt.amount, lt.debit_credit,
-                lt.description, lt.payment_method, r.receipt_number,
-                fi.invoice_number, t.term_name
+                invoice_date as date, 
+                'DEBIT' as dc, 
+                total_amount as amount, 
+                'Invoice: ' || invoice_number as description,
+                invoice_number as ref
+            FROM fee_invoice 
+            WHERE student_id = ?
+            
+            UNION ALL
+            
+            SELECT 
+                lt.transaction_date as date, 
+                lt.debit_credit as dc, 
+                lt.amount as amount, 
+                lt.description,
+                r.receipt_number as ref
             FROM ledger_transaction lt
             LEFT JOIN receipt r ON lt.id = r.transaction_id
-            LEFT JOIN fee_invoice fi ON lt.invoice_id = fi.id
-            LEFT JOIN term t ON lt.term_id = t.id
             WHERE lt.student_id = ? AND lt.is_voided = 0
-            ORDER BY lt.transaction_date DESC
-        `).all(studentId) as TransactionRow[]
+            
+            ORDER BY date ASC
+        `).all(studentId, studentId) as any[]
 
-        const openingBalance = 0 // TODO: Calculate opening balance from previous periods
-
+        const openingBalance = 0
         let runningBalance = openingBalance
-        const ledger = transactions.map((tx) => {
-            const amount = tx.debit_credit === 'DEBIT' ? -tx.amount : tx.amount
-            runningBalance += amount
-            return { ...tx, amount, runningBalance }
+
+        const ledger = items.map((item) => {
+            // Standard accounting: Debit increases what you owe, Credit decreases it.
+            // For the balance calculation:
+            const signedAmount = item.dc === 'DEBIT' ? item.amount : -item.amount
+            runningBalance += signedAmount
+
+            return {
+                transaction_date: item.date,
+                debit_credit: item.dc,
+                // We keep original positive amount for extraction in UI columns
+                amount: item.amount,
+                description: item.description,
+                ref: item.ref,
+                runningBalance
+            }
         })
 
-        return { student, openingBalance, ledger, closingBalance: runningBalance }
+        return { student, openingBalance, ledger: ledger.reverse(), closingBalance: runningBalance }
     })
 
     ipcMain.handle('report:attendance', async (_event: IpcMainInvokeEvent, startDate: string, endDate: string, streamId?: number) => {
@@ -273,7 +300,11 @@ export function registerReportsHandlers(): void {
     // ======== PHASE 3: NEMIS EXPORT ========
     const nemisService = new NEMISExportService()
 
-    ipcMain.handle('reports:extractStudentData', async (_event: IpcMainInvokeEvent, filters?: any) => {
+    ipcMain.handle('reports:extractStudentData', async (_event: IpcMainInvokeEvent, filters?: {
+        academicYear?: string;
+        streamId?: number;
+        status?: string
+    }) => {
         try {
             return await nemisService.extractStudentData(filters)
         } catch (error) {
@@ -297,6 +328,7 @@ export function registerReportsHandlers(): void {
         }
     })
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ipcMain.handle('reports:createNEMISExport', async (_event: IpcMainInvokeEvent, exportConfig: any, userId: number) => {
         try {
             return await nemisService.createExport(exportConfig, userId)
@@ -313,6 +345,7 @@ export function registerReportsHandlers(): void {
         }
     })
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ipcMain.handle('reports:validateNEMISStudentData', async (_event: IpcMainInvokeEvent, student: any) => {
         try {
             return nemisService.validateStudentData(student)

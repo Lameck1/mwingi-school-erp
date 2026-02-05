@@ -12,19 +12,43 @@
  * @param amount - The amount to format (in whole currency units)
  * @returns Formatted currency string (e.g., "KES 34,000.00")
  */
+/**
+ * Format a number as Kenyan Shillings (KES) currency
+ * @param amount - The amount to format (in whole currency units)
+ * @returns Formatted currency string (e.g., "KES 34,000.00")
+ */
 export function formatCurrency(amount: number | null | undefined): string {
     if (amount === null || amount === undefined || isNaN(Number(amount))) {
         return 'KES 0.00'
     }
 
-    // Amount is already in whole currency units (not cents)
-    const displayAmount = Number(amount)
+    const displayAmount = centsToShillings(amount)
 
     return new Intl.NumberFormat('en-KE', {
         style: 'currency',
         currency: 'KES',
         minimumFractionDigits: 2,
     }).format(displayAmount)
+}
+
+/**
+ * Convert database cents to whole shillings
+ * @param cents - Amount in cents
+ * @returns Amount in shillings
+ */
+export function centsToShillings(cents: number | string | null | undefined): number {
+    if (cents === null || cents === undefined) return 0
+    return Number(cents) / 100
+}
+
+/**
+ * Convert whole shillings to database cents
+ * @param shillings - Amount in shillings
+ * @returns Amount in cents (rounded to integer)
+ */
+export function shillingsToCents(shillings: number | string | null | undefined): number {
+    if (shillings === null || shillings === undefined) return 0
+    return Math.round(Number(shillings) * 100)
 }
 
 /**

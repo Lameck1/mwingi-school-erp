@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Plus, Package, AlertTriangle, Search, ArrowUpRight, ArrowDownLeft, X, Loader2 } from 'lucide-react'
 import { useAuthStore } from '../../stores'
+import { formatCurrency, shillingsToCents, centsToShillings } from '../../utils/format'
 import { InventoryItem, InventoryCategory, Supplier } from '../../types/electron-api/InventoryAPI'
 
 export default function Inventory() {
@@ -56,7 +57,7 @@ export default function Inventory() {
                 category_id: Number(newItem.category_id),
                 unit_of_measure: newItem.unit_of_measure,
                 reorder_level: newItem.reorder_level,
-                unit_cost: newItem.unit_cost
+                unit_cost: shillingsToCents(newItem.unit_cost)
             })
             setShowAddModal(false)
             setNewItem({
@@ -80,7 +81,7 @@ export default function Inventory() {
                 item_id: selectedItem.id,
                 movement_type: stockAction,
                 quantity: stockMovement.quantity,
-                unit_cost: stockMovement.unit_cost,
+                unit_cost: shillingsToCents(stockMovement.unit_cost),
                 reference_number: stockMovement.reference_number,
                 description: stockMovement.description,
                 supplier_id: stockMovement.supplier_id ? Number(stockMovement.supplier_id) : undefined,
@@ -97,13 +98,12 @@ export default function Inventory() {
     const openStockModal = (item: InventoryItem, action: 'IN' | 'OUT') => {
         setSelectedItem(item)
         setStockAction(action)
-        setStockMovement(prev => ({ ...prev, unit_cost: item.unit_cost }))
+        setStockMovement(prev => ({ ...prev, unit_cost: centsToShillings(item.unit_cost) }))
         setShowStockModal(true)
     }
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', minimumFractionDigits: 0 }).format(amount)
-    }
+
+
 
     const filteredItems = items.filter(i =>
         i.item_name.toLowerCase().includes(search.toLowerCase()) ||

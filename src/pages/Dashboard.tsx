@@ -196,7 +196,7 @@ export default function Dashboard() {
                                     tickLine={false}
                                     tick={{ fill: 'currentColor', fontSize: 11 }}
                                     className="text-foreground/40"
-                                    tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
+                                    tickFormatter={(value) => `${(value / 100000).toFixed(0)}K`}
                                 />
                                 <Tooltip
                                     cursor={{ fill: 'currentColor', opacity: 0.05 }}

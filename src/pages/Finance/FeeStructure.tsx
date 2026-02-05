@@ -3,6 +3,7 @@ import { Save, Plus, Loader2 } from 'lucide-react'
 import { useToast } from '../../contexts/ToastContext'
 import { AcademicYear, Term, Stream } from '../../types/electron-api/AcademicAPI'
 import { FeeCategory, FeeStructureCreateData } from '../../types/electron-api/FinanceAPI'
+import { centsToShillings, shillingsToCents } from '../../utils/format'
 
 interface FeeStructureItem {
     stream_id?: number
@@ -82,7 +83,8 @@ export default function FeeStructure() {
 
                     if (streamId && studentType && categoryId && amount !== undefined) {
                         const key = `${streamId}-${studentType}-${categoryId}`
-                        map[key] = amount
+                        // Convert cents from DB to shillings for UI display
+                        map[key] = centsToShillings(amount)
                     }
                 })
                 setStructure(map)
@@ -122,7 +124,8 @@ export default function FeeStructure() {
                         stream_id: Number(streamId),
                         student_type: studentType,
                         fee_category_id: Number(categoryId),
-                        amount,
+                        // Convert shillings from UI back to cents for DB storage
+                        amount: shillingsToCents(amount),
                         academic_year_id: Number(selectedYear),
                         term_id: Number(selectedTerm)
                     })

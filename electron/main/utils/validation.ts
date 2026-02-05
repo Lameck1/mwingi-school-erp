@@ -14,8 +14,8 @@ export const validateAmount = (amount: unknown): ValidationResult<number> => {
     if (isNaN(num) || num < 0) {
         return { success: false, error: 'Invalid amount. Must be a positive number.' }
     }
-    // Convert to cents (integer) for internal handling
-    return { success: true, data: Math.round(num * 100) }
+    // Amount is already in cents from frontend - just validate and round
+    return { success: true, data: Math.round(num) }
 }
 
 export const formatFromCents = (cents: number): number => {

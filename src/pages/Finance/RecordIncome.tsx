@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { shillingsToCents } from '../../utils/format'
 import { useAuthStore } from '../../stores'
 import { Plus, Check, Loader2, ArrowRightCircle, Wallet, Tag, CreditCard, FileText, Calendar } from 'lucide-react'
 import { useToast } from '../../contexts/ToastContext'
@@ -67,7 +68,7 @@ export default function RecordIncome() {
         try {
             await window.electronAPI.createTransaction({
                 transaction_date: formData.transaction_date,
-                amount: Math.round(parseFloat(formData.amount)), // Whole currency units
+                amount: shillingsToCents(formData.amount), // Whole currency units
                 category_id: parseInt(formData.category_id),
                 reference: formData.payment_reference,
                 description: formData.description

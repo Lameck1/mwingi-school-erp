@@ -27,21 +27,24 @@ export interface IPaymentQueryService {
 export interface PaymentData {
   student_id: number
   amount: number
-  payment_date: string
+  transaction_date: string // Renamed from payment_date to match handler
   payment_method: string
-  reference: string
+  payment_reference: string // Renamed from reference
   description?: string
-  recorded_by: number
+  recorded_by_user_id: number // Renamed from recorded_by
   invoice_id?: number
   cheque_number?: string
   bank_name?: string
   amount_in_words?: string
+  term_id: number
 }
 
 export interface PaymentResult {
   success: boolean
   message: string
   transaction_id?: number
+  transactionRef?: string
+  receiptNumber?: string
   approval_request_id?: number
   requires_approval?: boolean
 }
@@ -109,22 +112,23 @@ class PaymentTransactionRepository {
     const result = db.prepare(`
       INSERT INTO ledger_transaction (
         student_id, transaction_type, amount, transaction_date, description,
-        payment_method, reference, recorded_by, cheque_number, bank_name,
-        is_approved, approval_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        payment_method, payment_reference, recorded_by_user_id, cheque_number, bank_name,
+        is_approved, approval_status, term_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       data.student_id,
       'CREDIT',
       data.amount,
-      data.payment_date,
-      data.description || `Payment received: ${data.reference}`,
+      data.transaction_date,
+      data.description || `Payment received: ${data.payment_reference}`,
       data.payment_method,
-      data.reference,
-      data.recorded_by,
+      data.payment_reference,
+      data.recorded_by_user_id,
       data.cheque_number || null,
       data.bank_name || null,
       1,
-      'APPROVED'
+      'APPROVED',
+      data.term_id
     )
     return result.lastInsertRowid as number
   }
@@ -286,35 +290,93 @@ class InvoiceValidator implements IPaymentValidator {
 
 class PaymentProcessor {
   private db: Database.Database
-  private transactionRepo: PaymentTransactionRepository
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
-    this.transactionRepo = new PaymentTransactionRepository(this.db)
   }
 
-  async processPayment(data: PaymentData): Promise<number> {
-    const student = await this.transactionRepo.getStudentById(data.student_id)
+  async processPayment(data: PaymentData): Promise<{ transactionId: number; transactionRef: string; receiptNumber: string }> {
+    const db = this.db
 
-    if (!student) {
-      throw new Error(`Student with ID ${data.student_id} not found`)
+    // 1. Transaction & Receipt Refs
+    const txnRef = `TXN-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Date.now()).slice(-6)}`
+    const rcpNum = `RCP-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Date.now()).slice(-6)}`
+    const description = data.description || 'Tuition Fee Payment'
+
+    // 2. Insert Transaction
+    const txnStmt = db.prepare(`INSERT INTO ledger_transaction (
+      transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit,
+      student_id, payment_method, payment_reference, description, term_id, recorded_by_user_id, invoice_id
+    ) VALUES (?, ?, 'FEE_PAYMENT', (SELECT id FROM transaction_category WHERE category_name = 'School Fees'), ?, 'CREDIT', ?, ?, ?, ?, ?, ?, ?)`)
+
+    const txnResult = txnStmt.run(
+      txnRef, data.transaction_date, data.amount, data.student_id,
+      data.payment_method, data.payment_reference, description,
+      data.term_id, data.recorded_by_user_id, data.invoice_id || null
+    )
+    const transactionId = txnResult.lastInsertRowid as number
+
+    // 3. Create Receipt
+    const rcpStmt = db.prepare(`INSERT INTO receipt (
+      receipt_number, transaction_id, receipt_date, student_id, amount,
+      amount_in_words, payment_method, payment_reference, created_by_user_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+
+    rcpStmt.run(rcpNum, transactionId, data.transaction_date, data.student_id,
+      data.amount, data.amount_in_words || '', data.payment_method, data.payment_reference, data.recorded_by_user_id)
+
+    // 4. Update Invoices
+    let remainingAmount = data.amount
+
+    if (data.invoice_id) {
+      const inv = db.prepare('SELECT total_amount, amount_paid FROM fee_invoice WHERE id = ?').get(data.invoice_id) as { total_amount: number; amount_paid: number } | undefined
+      if (inv) {
+        db.prepare(`UPDATE fee_invoice SET amount_paid = amount_paid + ?, 
+                status = CASE WHEN amount_paid + ? >= total_amount THEN 'PAID' ELSE 'PARTIAL' END 
+                WHERE id = ?`).run(data.amount, data.amount, data.invoice_id)
+      }
+    } else {
+      const pendingInvoices = db.prepare(`
+            SELECT id, total_amount, amount_paid 
+            FROM fee_invoice 
+            WHERE student_id = ? AND status != 'PAID'
+            ORDER BY invoice_date ASC
+        `).all(data.student_id) as Array<{ id: number; total_amount: number; amount_paid: number }>
+
+      const updateInvStmt = db.prepare(`
+            UPDATE fee_invoice 
+            SET amount_paid = amount_paid + ?, 
+                status = CASE WHEN amount_paid + ? >= total_amount THEN 'PAID' ELSE 'PARTIAL' END 
+            WHERE id = ?
+        `)
+
+      for (const inv of pendingInvoices) {
+        if (remainingAmount <= 0) break
+
+        const outstanding = inv.total_amount - (inv.amount_paid || 0)
+        const payAmount = Math.min(remainingAmount, outstanding)
+
+        updateInvStmt.run(payAmount, payAmount, inv.id)
+        remainingAmount -= payAmount
+      }
+
+      // 5. Update Credit Balance (if any remaining)
+      if (remainingAmount > 0) {
+        db.prepare('UPDATE student SET credit_balance = COALESCE(credit_balance, 0) + ? WHERE id = ?').run(remainingAmount, data.student_id)
+      }
     }
 
-    const newCreditBalance = (student.credit_balance || 0) + data.amount
-    const transactionId = await this.transactionRepo.createTransaction(data)
-
-    await this.transactionRepo.updateStudentBalance(data.student_id, newCreditBalance)
-
+    // 6. Audit Log
     logAudit(
-      data.recorded_by,
+      data.recorded_by_user_id,
       'CREATE',
       'ledger_transaction',
       transactionId,
       null,
-      { amount: data.amount, student_id: data.student_id, payment_method: data.payment_method }
+      { amount: data.amount, student_id: data.student_id, payment_method: data.payment_method, txnRef, rcpNum }
     )
 
-    return transactionId
+    return { transactionId, transactionRef: txnRef, receiptNumber: rcpNum }
   }
 }
 
@@ -451,12 +513,14 @@ export class PaymentService implements IPaymentRecorder, IPaymentVoidProcessor, 
         }
       }
 
-      const transactionId = await this.processor.processPayment(data)
+      const result = await this.processor.processPayment(data)
 
       return {
         success: true,
         message: `Payment recorded successfully`,
-        transaction_id: transactionId
+        transaction_id: result.transactionId,
+        transactionRef: result.transactionRef,
+        receiptNumber: result.receiptNumber
       }
     } catch (error) {
       throw new Error(`Failed to record payment: ${(error as Error).message}`)

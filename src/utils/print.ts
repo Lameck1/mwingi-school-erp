@@ -1,4 +1,5 @@
 
+import { formatCurrency } from './format'
 
 interface PrintOptions {
   title: string
@@ -27,6 +28,8 @@ export function printDocument(options: PrintOptions): void {
   printWindow.focus()
 }
 
+
+
 function generatePrintHTML(
   template: string,
   data: Record<string, unknown>,
@@ -34,10 +37,10 @@ function generatePrintHTML(
   title: string,
   orientation: string
 ) {
-  const schoolName = settings?.schoolName || 'Mwingi Adventist School'
-  const schoolAddress = settings?.address || 'P.O Box 123, Mwingi'
-  const schoolPhone = settings?.phone || '0700 000 000'
-  const schoolEmail = settings?.email || 'info@mwingischool.ac.ke'
+  const schoolName = (settings?.['schoolName'] as string) || 'Mwingi Adventist School'
+  const schoolAddress = (settings?.['address'] as string) || 'P.O Box 123, Mwingi'
+  const schoolPhone = (settings?.['phone'] as string) || '0700 000 000'
+  const schoolEmail = (settings?.['email'] as string) || 'info@mwingischool.ac.ke'
 
   const css = `
     @page { size: A4 ${orientation}; margin: 10mm; }
@@ -79,9 +82,13 @@ function generatePrintHTML(
         </div>
         <div class="meta-box">
           <div class="meta-label">Statement Summary</div>
-          <div class="meta-value">Date: ${new Date().toLocaleDateString()}</div>
-          <div>Opening: ${(data.openingBalance as number || 0).toLocaleString()}</div>
-          <div style="font-size: 14px; margin-top: 5px;">Closing: ${(data.closingBalance as number || 0).toLocaleString()}</div>
+          <div>Opening: ${formatCurrency(data.openingBalance as number || 0)}</div>
+          <div style="margin-top: 5px; font-weight: bold;">
+            ${(data.closingBalance as number) < 0
+        ? `Credit Surplus: <span style="color: #10b981">${formatCurrency(Math.abs(data.closingBalance as number))} (CR)</span>`
+        : `Balance Due: <span style="color: #f59e0b">${formatCurrency(data.closingBalance as number)}</span>`
+      }
+          </div>
         </div>
       </div>
 
@@ -97,16 +104,25 @@ function generatePrintHTML(
           </tr>
         </thead>
         <tbody>
-          ${ledger.map((row: unknown) => `
-            <tr>
-              <td>${new Date(row.date).toLocaleDateString()}</td>
-              <td>${row.ref || '-'}</td>
-              <td>${row.description}</td>
-              <td style="text-align: right">${row.debit > 0 ? (row.debit || 0).toLocaleString() : '-'}</td>
-              <td style="text-align: right">${row.credit > 0 ? (row.credit || 0).toLocaleString() : '-'}</td>
-              <td style="text-align: right">${(row.running_balance || 0).toLocaleString()}</td>
-            </tr>
-          `).join('')}
+          ${(ledger as any[]).map((row) => {
+        const isDebit = row.debit_credit === 'DEBIT'
+        const debit = isDebit ? row.amount : 0
+        const credit = !isDebit ? row.amount : 0
+        const date = row.transaction_date || row.date
+        const ref = row.receipt_number || row.invoice_number || row.ref || '-'
+        const balance = row.runningBalance || row.running_balance || 0
+
+        return `
+              <tr>
+                <td>${date ? new Date(date).toLocaleDateString() : 'Invalid Date'}</td>
+                <td>${ref}</td>
+                <td>${row.description}</td>
+                <td style="text-align: right">${debit > 0 ? formatCurrency(debit) : '-'}</td>
+                <td style="text-align: right">${credit > 0 ? formatCurrency(credit) : '-'}</td>
+                <td style="text-align: right">${formatCurrency(balance)}</td>
+              </tr>
+            `
+      }).join('')}
         </tbody>
       </table>
       
@@ -134,7 +150,7 @@ function generatePrintHTML(
       <div style="background: #f8fafc; padding: 20px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
         <div style="font-size: 14px; text-align: center;">Amount Received</div>
         <div style="font-size: 24px; font-weight: bold; text-align: center; margin: 10px 0;">
-          KES ${(data.amount as number).toLocaleString()}
+          ${formatCurrency(data.amount as number)}
         </div>
         <div style="text-align: center; font-style: italic; color: #64748b;">
           ${data.amountInWords}

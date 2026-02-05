@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { shillingsToCents } from '../../utils/format'
 import { useAuthStore } from '../../stores'
 import { TransactionCategory } from '../../types/electron-api/FinanceAPI'
 import { Plus, Check, Loader2, ArrowLeftCircle, Receipt, Tag, CreditCard, FileText, Calendar } from 'lucide-react'
@@ -75,7 +76,7 @@ export default function RecordExpense() {
         try {
             await window.electronAPI.createTransaction({
                 transaction_date: formData.transaction_date,
-                amount: Math.round(parseFloat(formData.amount)), // Whole currency units
+                amount: shillingsToCents(formData.amount), // Whole currency units
                 category_id: parseInt(formData.category_id),
                 reference: formData.payment_reference,
                 description: formData.description

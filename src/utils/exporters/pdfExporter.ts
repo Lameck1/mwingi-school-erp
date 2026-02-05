@@ -229,7 +229,7 @@ function formatValue(value: unknown, format?: PDFColumn['format']): string {
 
     switch (format) {
         case 'currency': {
-            const amount = Number(value)
+            const amount = Number(value) / 100  // Convert cents to shillings
             return `KES ${amount.toLocaleString('en-KE', { minimumFractionDigits: 2 })}`
         }
         case 'number':
