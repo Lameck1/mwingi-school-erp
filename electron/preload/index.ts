@@ -352,4 +352,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Reconciliation
   runReconciliation: (userId: number) => ipcRenderer.invoke('reconciliation:runAll', userId),
   getReconciliationHistory: (limit?: number) => ipcRenderer.invoke('reconciliation:getHistory', limit),
+
+  // CBC Strands
+  getCBCStrands: () => ipcRenderer.invoke('cbc:getStrands'),
+  getActiveCBCStrands: () => ipcRenderer.invoke('cbc:getActiveStrands'),
+  linkFeeCategoryToStrand: (feeCategoryId: number, strandId: number, allocationPercentage: number, userId: number) =>
+    ipcRenderer.invoke('cbc:linkFeeCategory', feeCategoryId, strandId, allocationPercentage, userId),
+
+  // JSS Transitions
+  initiateJSSTransition: (data: unknown) => ipcRenderer.invoke('jss:initiateTransition', data),
+  bulkJSSTransition: (data: unknown) => ipcRenderer.invoke('jss:bulkTransition', data),
+  getJSSEligibleStudents: (fromGrade: number, fiscalYear: number) => ipcRenderer.invoke('jss:getEligibleStudents', fromGrade, fiscalYear),
+  getJSSFeeStructures: (fiscalYear: number) => ipcRenderer.invoke('jss:getFeeStructures', fiscalYear),
+
+  // Budget Enforcement
+  setBudgetAllocation: (glAccountCode: string, fiscalYear: number, allocatedAmount: number, department: string | null, userId: number) =>
+    ipcRenderer.invoke('budget:setAllocation', glAccountCode, fiscalYear, allocatedAmount, department, userId),
+  validateBudgetTransaction: (glAccountCode: string, amount: number, fiscalYear: number, department?: string | null) =>
+    ipcRenderer.invoke('budget:validateTransaction', glAccountCode, amount, fiscalYear, department),
 })
