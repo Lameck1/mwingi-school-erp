@@ -40,7 +40,7 @@ function createWindow() {
             preload: path.join(__dirname, '../preload/index.cjs'),
             nodeIntegration: false,
             contextIsolation: true,
-            sandbox: false,
+            sandbox: true,
         },
         show: false,
         titleBarStyle: 'default',

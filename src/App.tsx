@@ -42,8 +42,26 @@ import SubjectMeritLists from './pages/Academic/SubjectMeritLists'
 import MostImproved from './pages/Academic/MostImproved'
 import AwardsManagement from './pages/Academic/AwardsManagement'
 import ExamScheduler from './pages/Academic/ExamScheduler'
+import ReportCardGeneration from './pages/Academic/ReportCardGeneration'
 import AssetHire from './pages/Finance/AssetHire'
 import FeeExemptions from './pages/Finance/FeeExemptions'
+import { GLAccountManagement } from './pages/Finance/Settings/GLAccountManagement'
+import { OpeningBalanceImport } from './pages/Finance/Settings/OpeningBalanceImport'
+import BoardingProfitability from './pages/Operations/Boarding/BoardingProfitability'
+import TransportRouteManagement from './pages/Operations/Transport/TransportRouteManagement'
+import StudentCostAnalysis from './pages/Finance/StudentCost/StudentCostAnalysis'
+import GrantTracking from './pages/Finance/Grants/GrantTracking'
+import ReconcileAccount from './pages/Finance/Reconciliation/ReconcileAccount'
+import ApprovalQueue from './pages/Finance/Approvals/ApprovalQueue'
+import AssetRegister from './pages/Finance/FixedAssets/AssetRegister'
+import Depreciation from './pages/Finance/FixedAssets/Depreciation'
+import BalanceSheet from './pages/Finance/Reports/BalanceSheet'
+import ProfitAndLoss from './pages/Finance/Reports/ProfitAndLoss'
+import TrialBalance from './pages/Finance/Reports/TrialBalance'
+import CBCStrandManagement from './pages/Finance/CBC/CBCStrandManagement'
+import JSSTransition from './pages/Finance/CBC/JSSTransition'
+import Integrations from './pages/Settings/Integrations'
+import MessageTemplates from './pages/Settings/MessageTemplates'
 import { OfflineIndicator } from './components/feedback/OfflineIndicator'
 
 import { ToastProvider } from './contexts/ToastContext'
@@ -52,7 +70,18 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
     const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
-    return isAuthenticated ? <>{children}</> : <Navigate to="/login" />
+    const checkSession = useAuthStore((state) => state.checkSession)
+    const touchSession = useAuthStore((state) => state.touchSession)
+
+    // Check session validity on every route render
+    const sessionValid = isAuthenticated && checkSession()
+
+    // Touch session on navigation (keep-alive)
+    React.useEffect(() => {
+        if (sessionValid) touchSession()
+    })
+
+    return sessionValid ? <>{children}</> : <Navigate to="/login" />
 }
 
 export default function App() {
@@ -112,6 +141,25 @@ export default function App() {
                             <Route path="academic/schedule" element={<ExamScheduler />} />
                             <Route path="asset-hire" element={<AssetHire />} />
                             <Route path="fee-exemptions" element={<FeeExemptions />} />
+                            {/* Orphaned pages now routed (audit fix) */}
+                            <Route path="academic/report-card-generation" element={<ReportCardGeneration />} />
+                            <Route path="finance/gl-accounts" element={<GLAccountManagement />} />
+                            <Route path="finance/opening-balances" element={<OpeningBalanceImport />} />
+                            <Route path="finance/balance-sheet" element={<BalanceSheet />} />
+                            <Route path="finance/profit-and-loss" element={<ProfitAndLoss />} />
+                            <Route path="finance/trial-balance" element={<TrialBalance />} />
+                            <Route path="finance/fixed-assets" element={<AssetRegister />} />
+                            <Route path="finance/depreciation" element={<Depreciation />} />
+                            <Route path="finance/reconciliation" element={<ReconcileAccount />} />
+                            <Route path="finance/transaction-approvals" element={<ApprovalQueue />} />
+                            <Route path="finance/grants" element={<GrantTracking />} />
+                            <Route path="finance/student-cost" element={<StudentCostAnalysis />} />
+                            <Route path="finance/cbc-strands" element={<CBCStrandManagement />} />
+                            <Route path="finance/jss-transition" element={<JSSTransition />} />
+                            <Route path="operations/boarding" element={<BoardingProfitability />} />
+                            <Route path="operations/transport" element={<TransportRouteManagement />} />
+                            <Route path="settings/integrations" element={<Integrations />} />
+                            <Route path="settings/message-templates" element={<MessageTemplates />} />
                         </Route>
                     </Routes>
                 </HashRouter>
