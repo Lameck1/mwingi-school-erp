@@ -1,5 +1,8 @@
 import { IpcMainInvokeEvent } from 'electron'
-import { ipcMain, bcrypt } from '../../electron-env'
+import { ipcMain } from '../../electron-env'
+import { createRequire } from 'node:module'
+const require = createRequire(import.meta.url)
+const bcrypt = require('bcryptjs')
 import { getDatabase } from '../../database/index'
 import { logAudit } from '../../database/utils/audit'
 

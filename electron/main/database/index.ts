@@ -42,15 +42,21 @@ export async function initializeDatabase(): Promise<void> {
     const { getEncryptionKey } = await import('./security')
     const key = getEncryptionKey()
 
+    // Helper to safely set encryption key using hex prefix (avoids SQL injection)
+    const applyKey = (d: typeof db, k: string) => {
+        try {
+            // Use x'' hex literal syntax to avoid string interpolation vulnerabilities
+            d!.pragma(`key="x'${k}'"`)
+        } catch (e) {
+            console.warn('Failed to set encryption key (driver might not support it):', e)
+        }
+    }
+
     // Helper to open and test
     const openAndTest = (p: string, k?: string) => {
         const d = new DatabaseClass(p)
         if (k) {
-            try {
-                d.pragma(`key='${k}'`)
-            } catch (e) {
-                console.warn('Failed to set encryption key (driver might not support it):', e)
-            }
+            applyKey(d, k)
         }
         // Test valid access
         d.prepare('SELECT count(*) FROM sqlite_master').get()
@@ -88,9 +94,9 @@ export async function initializeDatabase(): Promise<void> {
 
             if (key) {
                 console.error('Database is unencrypted. Encrypting now...')
-                // Encrypt it!
+                // Encrypt using hex prefix to avoid injection
                 try {
-                    db!.pragma(`rekey='${key}'`)
+                    db!.pragma(`rekey="x'${key}'"`)
                     console.error('Encryption complete. Verifying...')
                 } catch (e) {
                     console.warn('Rekey failed (driver might not support encryption). Skipping encryption.', e)
@@ -118,7 +124,7 @@ export async function initializeDatabase(): Promise<void> {
                 // Re-apply key if available (and supported)
                 if (key) {
                      try {
-                        db!.pragma(`key='${key}'`)
+                        db!.pragma(`key="x'${key}'"`)
                     } catch (e) {
                          // ignore if fallback driver
                     }

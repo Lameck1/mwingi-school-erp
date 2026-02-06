@@ -1,5 +1,5 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores'
 import Login from './pages/Login'
 import Layout from './components/Layout'
@@ -48,6 +48,7 @@ import { OfflineIndicator } from './components/feedback/OfflineIndicator'
 
 import { ToastProvider } from './contexts/ToastContext'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
     const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
@@ -56,10 +57,11 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
     return (
+        <ErrorBoundary>
         <ThemeProvider>
             <ToastProvider>
                 <OfflineIndicator />
-                <BrowserRouter>
+                <HashRouter>
                     <Routes>
                         <Route path="/login" element={<Login />} />
                         <Route path="/" element={
@@ -95,7 +97,6 @@ export default function App() {
                             <Route path="budget" element={<BudgetList />} />
                             <Route path="budget/new" element={<CreateBudget />} />
                             <Route path="budget/:id" element={<BudgetDetails />} />
-                            <Route path="budget/:id" element={<BudgetDetails />} />
                             <Route path="cash-flow" element={<CashFlow />} />
                             <Route path="bank-accounts" element={<BankAccounts />} />
                             <Route path="approvals" element={<Approvals />} />
@@ -113,8 +114,9 @@ export default function App() {
                             <Route path="fee-exemptions" element={<FeeExemptions />} />
                         </Route>
                     </Routes>
-                </BrowserRouter>
+                </HashRouter>
             </ToastProvider>
         </ThemeProvider>
+        </ErrorBoundary>
     )
 }

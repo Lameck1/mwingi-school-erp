@@ -269,4 +269,87 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportExamTimetableToPDF: (data: unknown) => ipcRenderer.invoke('schedule:exportPDF', data),
   getExams: (filters?: unknown) => ipcRenderer.invoke('academic:getExamsList', filters),
 
+  // === Missing preload bridges added during audit ===
+
+  // Financial Reports (reports/financial-reports-handlers)
+  getBalanceSheet: (asOfDate: string) => ipcRenderer.invoke('reports:getBalanceSheet', asOfDate),
+  getProfitAndLoss: (startDate: string, endDate: string) => ipcRenderer.invoke('reports:getProfitAndLoss', startDate, endDate),
+  getTrialBalance: (startDate: string, endDate: string) => ipcRenderer.invoke('reports:getTrialBalance', startDate, endDate),
+  getComparativeProfitAndLoss: (currentStart: string, currentEnd: string, priorStart: string, priorEnd: string) =>
+    ipcRenderer.invoke('reports:getComparativeProfitAndLoss', currentStart, currentEnd, priorStart, priorEnd),
+
+  // Transaction Approvals (finance/approval-handlers)
+  getApprovalQueue: (filter: string) => ipcRenderer.invoke('approvals:getQueue', filter),
+  approveTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) =>
+    ipcRenderer.invoke('approvals:approve', approvalId, reviewNotes, reviewerUserId),
+  rejectTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) =>
+    ipcRenderer.invoke('approvals:reject', approvalId, reviewNotes, reviewerUserId),
+
+  // Fixed Assets (finance/fixed-asset-handlers)
+  getAssets: (filters?: unknown) => ipcRenderer.invoke('asset:getAll', filters),
+  getAsset: (id: number) => ipcRenderer.invoke('asset:getById', id),
+  createAsset: (data: unknown, userId: number) => ipcRenderer.invoke('asset:create', data, userId),
+  updateAsset: (id: number, data: unknown, userId: number) => ipcRenderer.invoke('asset:update', id, data, userId),
+  runDepreciation: (assetId: number, periodId: number, userId: number) => ipcRenderer.invoke('asset:runDepreciation', assetId, periodId, userId),
+
+  // GL Accounts (finance/gl-account-handlers)
+  getGLAccounts: (filters?: unknown) => ipcRenderer.invoke('gl:get-accounts', filters),
+  getGLAccount: (id: number) => ipcRenderer.invoke('gl:get-account', id),
+  createGLAccount: (data: unknown, userId: number) => ipcRenderer.invoke('gl:create-account', data, userId),
+  updateGLAccount: (id: number, data: unknown, userId: number) => ipcRenderer.invoke('gl:update-account', id, data, userId),
+  deleteGLAccount: (id: number, userId: number) => ipcRenderer.invoke('gl:delete-account', id, userId),
+
+  // Bank Reconciliation (overrides for clearer naming)
+  getAccounts: () => ipcRenderer.invoke('bank:getAccounts'),
+  getStatements: (bankAccountId?: number) => ipcRenderer.invoke('bank:getStatements', bankAccountId),
+  getStatementWithLines: (statementId: number) => ipcRenderer.invoke('bank:getStatementWithLines', statementId),
+  matchTransaction: (lineId: number, transactionId: number) => ipcRenderer.invoke('bank:matchTransaction', lineId, transactionId),
+
+  // Operations - Boarding
+  getBoardingFacilities: () => ipcRenderer.invoke('operations:boarding:getAllFacilities'),
+  getActiveBoardingFacilities: () => ipcRenderer.invoke('operations:boarding:getActiveFacilities'),
+  recordBoardingExpense: (params: unknown) => ipcRenderer.invoke('operations:boarding:recordExpense', params),
+
+  // Operations - Transport
+  getTransportRoutes: () => ipcRenderer.invoke('operations:transport:getAllRoutes'),
+  getActiveTransportRoutes: () => ipcRenderer.invoke('operations:transport:getActiveRoutes'),
+  createTransportRoute: (params: unknown) => ipcRenderer.invoke('operations:transport:createRoute', params),
+  recordTransportExpense: (params: unknown) => ipcRenderer.invoke('operations:transport:recordExpense', params),
+
+  // Exam Analysis
+  getSubjectAnalysis: (subjectId: number, examId: number) => ipcRenderer.invoke('exam-analysis:getSubjectAnalysis', subjectId, examId),
+  analyzeAllSubjects: (examId: number) => ipcRenderer.invoke('exam-analysis:analyzeAllSubjects', examId),
+
+  // Performance Analysis
+  getPerformanceSummary: (filters: unknown) => ipcRenderer.invoke('exam-analysis:analyzeAllSubjects', filters),
+  getGradeDistribution: (filters: unknown) => ipcRenderer.invoke('report-card-analytics:getGradeDistribution', filters),
+  getSubjectPerformance: (filters: unknown) => ipcRenderer.invoke('report-card-analytics:getSubjectPerformance', filters),
+  getStrugglingStudents: (filters: unknown) => ipcRenderer.invoke('exam-analysis:getStruggling', filters),
+  getTermComparison: (filters: unknown) => ipcRenderer.invoke('report-card-analytics:getTermComparison', filters),
+  getSubjectDifficulty: (filters: unknown) => ipcRenderer.invoke('report-card-analytics:getSubjectDifficulty', filters),
+  exportAnalyticsToPDF: (data: unknown) => ipcRenderer.invoke('export:pdf', data),
+  exportReportCardAnalyticsToPDF: (data: unknown) => ipcRenderer.invoke('export:pdf', data),
+
+  // Grants and Student Cost
+  getGrantsByStatus: (status: string) => ipcRenderer.invoke('operations:grants:getByStatus', status),
+  createGrant: (data: unknown, userId: number) => ipcRenderer.invoke('operations:grants:create', data, userId),
+  recordGrantUtilization: (grantId: number, amount: number, description: string, glAccountCode: string, utilizationDate: string, userId: number) =>
+    ipcRenderer.invoke('operations:grants:recordUtilization', grantId, amount, description, glAccountCode, utilizationDate, userId),
+  generateNEMISExport: (fiscalYear: number) => ipcRenderer.invoke('operations:grants:generateNEMISExport', fiscalYear),
+
+  // Student Cost Analysis
+  calculateStudentCost: (studentId: number, termId: number, academicYearId: number) =>
+    ipcRenderer.invoke('operations:studentCost:calculate', studentId, termId, academicYearId),
+  getStudentCostVsRevenue: (studentId: number, termId: number) =>
+    ipcRenderer.invoke('operations:studentCost:getVsRevenue', studentId, termId),
+
+  // Opening Balances
+  importStudentOpeningBalances: (balances: unknown, academicYearId: number, importSource: string, userId: number) =>
+    ipcRenderer.invoke('opening-balance:import-student', balances, academicYearId, importSource, userId),
+  importGLOpeningBalances: (balances: unknown, userId: number) =>
+    ipcRenderer.invoke('opening-balance:import-gl', balances, userId),
+
+  // Reconciliation
+  runReconciliation: (userId: number) => ipcRenderer.invoke('reconciliation:runAll', userId),
+  getReconciliationHistory: (limit?: number) => ipcRenderer.invoke('reconciliation:getHistory', limit),
 })

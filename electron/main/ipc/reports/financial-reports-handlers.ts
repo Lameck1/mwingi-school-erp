@@ -5,7 +5,8 @@ import { OpeningBalanceService } from '../../services/accounting/OpeningBalanceS
 
 /**
  * IPC Handlers for Financial Reports
- * 
+ * Refactored: wrapped in registration function to prevent side-effects at import time
+ *
  * Provides access to:
  * - Balance Sheet
  * - Profit & Loss Statement
@@ -13,153 +14,153 @@ import { OpeningBalanceService } from '../../services/accounting/OpeningBalanceS
  * - General Ledger
  */
 
-const journalService = new DoubleEntryJournalService();
-const plService = new ProfitAndLossService();
-const obService = new OpeningBalanceService();
+export function registerFinancialReportsHandlers(): void {
+  const journalService = new DoubleEntryJournalService();
+  const plService = new ProfitAndLossService();
+  const obService = new OpeningBalanceService();
 
-// ============================================================================
-// BALANCE SHEET
-// ============================================================================
+  // ============================================================================
+  // BALANCE SHEET
+  // ============================================================================
 
-ipcMain.handle('reports:getBalanceSheet', async (_event, asOfDate: string) => {
-  try {
-    const balanceSheet = await journalService.getBalanceSheet(asOfDate);
-    return {
-      success: true,
-      data: balanceSheet
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: `Failed to generate balance sheet: ${(error as Error).message}`
-    };
-  }
-});
-
-// ============================================================================
-// PROFIT & LOSS STATEMENT
-// ============================================================================
-
-ipcMain.handle('reports:getProfitAndLoss', async (_event, startDate: string, endDate: string) => {
-  try {
-    const profitAndLoss = await plService.generateProfitAndLoss(startDate, endDate);
-    return {
-      success: true,
-      data: profitAndLoss
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: `Failed to generate P&L: ${(error as Error).message}`
-    };
-  }
-});
-
-ipcMain.handle(
-  'reports:getComparativeProfitAndLoss',
-  async (_event, currentStart: string, currentEnd: string, priorStart: string, priorEnd: string) => {
+  ipcMain.handle('reports:getBalanceSheet', async (_event, asOfDate: string) => {
     try {
-      const comparative = await plService.generateComparativeProfitAndLoss(
-        currentStart,
-        currentEnd,
-        priorStart,
-        priorEnd
-      );
+      const balanceSheet = await journalService.getBalanceSheet(asOfDate);
       return {
         success: true,
-        data: comparative
+        data: balanceSheet
       };
     } catch (error) {
       return {
         success: false,
-        message: `Failed to generate comparative P&L: ${(error as Error).message}`
+        message: `Failed to generate balance sheet: ${(error as Error).message}`
       };
     }
-  }
-);
+  });
 
-// ============================================================================
-// TRIAL BALANCE
-// ============================================================================
+  // ============================================================================
+  // PROFIT & LOSS STATEMENT
+  // ============================================================================
 
-ipcMain.handle('reports:getTrialBalance', async (_event, startDate: string, endDate: string) => {
-  try {
-    const trialBalance = await journalService.getTrialBalance(startDate, endDate);
-    return {
-      success: true,
-      data: trialBalance
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: `Failed to generate trial balance: ${(error as Error).message}`
-    };
-  }
-});
-
-// ============================================================================
-// STUDENT LEDGER
-// ============================================================================
-
-ipcMain.handle(
-  'reports:getStudentLedger',
-  async (_event, studentId: number, academicYearId: number, startDate: string, endDate: string) => {
+  ipcMain.handle('reports:getProfitAndLoss', async (_event, startDate: string, endDate: string) => {
     try {
-      const studentLedger = await obService.getStudentLedger(
-        studentId,
-        academicYearId,
-        startDate,
-        endDate
-      );
+      const profitAndLoss = await plService.generateProfitAndLoss(startDate, endDate);
       return {
         success: true,
-        data: studentLedger
+        data: profitAndLoss
       };
     } catch (error) {
       return {
         success: false,
-        message: `Failed to generate student ledger: ${(error as Error).message}`
+        message: `Failed to generate P&L: ${(error as Error).message}`
       };
     }
-  }
-);
+  });
 
-// ============================================================================
-// REVENUE BREAKDOWN
-// ============================================================================
+  ipcMain.handle(
+    'reports:getComparativeProfitAndLoss',
+    async (_event, currentStart: string, currentEnd: string, priorStart: string, priorEnd: string) => {
+      try {
+        const comparative = await plService.generateComparativeProfitAndLoss(
+          currentStart,
+          currentEnd,
+          priorStart,
+          priorEnd
+        );
+        return {
+          success: true,
+          data: comparative
+        };
+      } catch (error) {
+        return {
+          success: false,
+          message: `Failed to generate comparative P&L: ${(error as Error).message}`
+        };
+      }
+    }
+  );
 
-ipcMain.handle('reports:getRevenueBreakdown', async (_event, startDate: string, endDate: string) => {
-  try {
-    const breakdown = await plService.getRevenueBreakdown(startDate, endDate);
-    return {
-      success: true,
-      data: breakdown
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: `Failed to get revenue breakdown: ${(error as Error).message}`
-    };
-  }
-});
+  // ============================================================================
+  // TRIAL BALANCE
+  // ============================================================================
 
-// ============================================================================
-// EXPENSE BREAKDOWN
-// ============================================================================
+  ipcMain.handle('reports:getTrialBalance', async (_event, startDate: string, endDate: string) => {
+    try {
+      const trialBalance = await journalService.getTrialBalance(startDate, endDate);
+      return {
+        success: true,
+        data: trialBalance
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Failed to generate trial balance: ${(error as Error).message}`
+      };
+    }
+  });
 
-ipcMain.handle('reports:getExpenseBreakdown', async (_event, startDate: string, endDate: string) => {
-  try {
-    const breakdown = await plService.getExpenseBreakdown(startDate, endDate);
-    return {
-      success: true,
-      data: breakdown
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: `Failed to get expense breakdown: ${(error as Error).message}`
-    };
-  }
-});
+  // ============================================================================
+  // STUDENT LEDGER
+  // ============================================================================
 
-console.warn('Financial reports IPC handlers registered');
+  ipcMain.handle(
+    'reports:getStudentLedger',
+    async (_event, studentId: number, academicYearId: number, startDate: string, endDate: string) => {
+      try {
+        const studentLedger = await obService.getStudentLedger(
+          studentId,
+          academicYearId,
+          startDate,
+          endDate
+        );
+        return {
+          success: true,
+          data: studentLedger
+        };
+      } catch (error) {
+        return {
+          success: false,
+          message: `Failed to generate student ledger: ${(error as Error).message}`
+        };
+      }
+    }
+  );
+
+  // ============================================================================
+  // REVENUE BREAKDOWN
+  // ============================================================================
+
+  ipcMain.handle('reports:getRevenueBreakdown', async (_event, startDate: string, endDate: string) => {
+    try {
+      const breakdown = await plService.getRevenueBreakdown(startDate, endDate);
+      return {
+        success: true,
+        data: breakdown
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Failed to get revenue breakdown: ${(error as Error).message}`
+      };
+    }
+  });
+
+  // ============================================================================
+  // EXPENSE BREAKDOWN
+  // ============================================================================
+
+  ipcMain.handle('reports:getExpenseBreakdown', async (_event, startDate: string, endDate: string) => {
+    try {
+      const breakdown = await plService.getExpenseBreakdown(startDate, endDate);
+      return {
+        success: true,
+        data: breakdown
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Failed to get expense breakdown: ${(error as Error).message}`
+      };
+    }
+  });
+}

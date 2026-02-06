@@ -26,6 +26,19 @@ import { registerHireHandlers } from './hire/hire-handlers'
 import { registerExemptionHandlers } from './exemption/exemption-handlers'
 import { registerMeritListHandlers } from './academic/merit-list-handlers'
 import { registerAwardsHandlers } from './academic/awards-handlers'
+// Previously unregistered handler modules (audit fix)
+import { registerGLAccountHandlers } from './finance/gl-account-handlers'
+import { registerOpeningBalanceHandlers } from './finance/opening-balance-handlers'
+import { registerReconciliationAndBudgetHandlers } from './finance/reconciliation-budget-handlers'
+import { registerExamAnalysisHandlers } from './academic/exam-analysis-handlers'
+import { registerPerformanceAnalysisHandlers } from './academic/performance-analysis-handlers'
+import { registerReportCardAnalyticsHandlers } from './academic/report-card-analytics-handlers'
+import { registerCBCHandlers } from './academic/cbc-handlers'
+import { registerJSSHandlers } from './academic/jss-handlers'
+import { registerOperationsHandlers } from './operations/operations-handlers'
+import { registerCbcOperationsHandlers } from './operations/cbc-operations-handlers'
+import { registerFinanceApprovalHandlers } from './finance/approval-handlers'
+import { registerFinancialReportsHandlers } from './reports/financial-reports-handlers'
 
 export function registerAllIpcHandlers(): void {
     registerAuthHandlers()
@@ -56,6 +69,19 @@ export function registerAllIpcHandlers(): void {
     registerExemptionHandlers()
     registerMeritListHandlers()
     registerAwardsHandlers()
+    // Previously unregistered handlers (audit fix)
+    registerGLAccountHandlers()
+    registerOpeningBalanceHandlers()
+    registerReconciliationAndBudgetHandlers()
+    registerExamAnalysisHandlers()
+    registerPerformanceAnalysisHandlers()
+    registerReportCardAnalyticsHandlers()
+    registerCBCHandlers()
+    registerJSSHandlers()
+    registerOperationsHandlers()
+    registerCbcOperationsHandlers()
+    registerFinanceApprovalHandlers()
+    registerFinancialReportsHandlers()
 }
 
 
