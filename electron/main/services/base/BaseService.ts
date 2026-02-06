@@ -2,8 +2,6 @@ import { Database } from 'better-sqlite3'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 import { IReadable, IWritable, IAuditable, AuditEntry } from './interfaces/IService'
-import * as fs from 'fs'
-import * as path from 'path'
 
 /**
  * Abstract base service implementing common CRUD operations.
@@ -52,21 +50,8 @@ export abstract class BaseService<T, C, U = Partial<C>, F = Record<string, unkno
         const primaryKey = this.getPrimaryKey()
         const query = `${this.buildSelectQuery()} WHERE ${prefix}${primaryKey} = ?${this.getGroupBy()}`
 
-        try {
-            const logMsg = `[${new Date().toISOString()}] ${this.constructor.name}.findById(${id}) | Table: ${this.getTableName()} | Alias: ${this.getTableAlias()} | Prefix: ${prefix} | Query: ${query}\n`
-            fs.appendFileSync('sql_debug.log', logMsg)
-        } catch (e) { /* ignore */ }
-
-        try {
-            const row = this.db.prepare(query).get(id)
-            return row ? this.mapRowToEntity(row) : null
-        } catch (error: unknown) {
-            try {
-                const errorMsg = `[${new Date().toISOString()}] ERROR in ${this.constructor.name}: ${error.message} | Query: ${query}\n`
-                fs.appendFileSync('sql_debug.log', errorMsg)
-            } catch (e) { /* ignore */ }
-            throw error
-        }
+        const row = this.db.prepare(query).get(id)
+        return row ? this.mapRowToEntity(row) : null
     }
 
     async findAll(filters?: F): Promise<T[]> {

@@ -28,7 +28,7 @@ export default function PayrollRun() {
     const loadHistory = async () => {
         setLoadingHistory(true)
         try {
-            const api = (window as unknown as { electronAPI: ElectronAPI }).electronAPI
+            const api = window.electronAPI
             const data = await api.getPayrollHistory()
             setHistory(data)
         } catch (err) {
@@ -42,7 +42,7 @@ export default function PayrollRun() {
         setRunning(true)
         setError('')
         try {
-            const api = (window as unknown as { electronAPI: ElectronAPI }).electronAPI
+            const api = window.electronAPI
             const response = await api.getPayrollDetails(periodId)
             if (response.success) {
                 setPayrollData(response.results || [])
@@ -72,7 +72,7 @@ export default function PayrollRun() {
                 setError('User not authenticated')
                 return
             }
-            const api = (window as unknown as { electronAPI: ElectronAPI }).electronAPI
+            const api = window.electronAPI
             const result = await api.runPayroll(month, year, user.id)
             if (result.success) {
                 setPayrollData(result.results || [])
@@ -340,7 +340,7 @@ export default function PayrollRun() {
         }
 
         try {
-            const api = (window as unknown as { electronAPI: ElectronAPI }).electronAPI
+            const api = window.electronAPI
             const message = `Salary Notification: Your salary for ${selectedPeriod?.period_name} has been processed. Net Pay: KES ${staff.net_salary}. Thank you.`
             const result = await api.sendSMS({
                 to: staff.phone,
@@ -370,7 +370,7 @@ export default function PayrollRun() {
         setNotifying(true)
         let sent = 0
         let failed = 0
-        const api = (window as unknown as { electronAPI: ElectronAPI }).electronAPI
+        const api = window.electronAPI
 
         for (const staff of payrollData) {
             if (!staff.phone) {

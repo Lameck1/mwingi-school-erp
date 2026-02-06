@@ -18,6 +18,7 @@ import type { HireAPI } from './HireAPI'
 import type { ExemptionAPI } from './ExemptionAPI'
 import type { ApprovalAPI } from './ApprovalAPI'
 import type { NotificationAPI } from './NotificationAPI'
+import type { JSSAPI } from './JSSAPI'
 
 export * from './AuthAPI'
 export * from './SettingsAPI'
@@ -43,6 +44,7 @@ export * from './NotificationAPI'
 
 import type { OperationsAPI } from './OperationsAPI'
 export * from './OperationsAPI'
+export * from './JSSAPI'
 
 // Combined interface for backward compatibility
 export interface ElectronAPI
@@ -67,7 +69,8 @@ export interface ElectronAPI
   ExemptionAPI,
   ApprovalAPI,
   NotificationAPI,
-  OperationsAPI {
+  OperationsAPI,
+  JSSAPI {
   // Data Import/Export (General)
   downloadImportTemplate: (entityType: string) => Promise<{ success: boolean; filePath: string }>
   getImportTemplate: (entityType: string) => Promise<{ columns: { name: string; required: boolean }[] }>

@@ -32,58 +32,19 @@ export const GLAccountManagement: React.FC = () => {
   const loadAccounts = async () => {
     setLoading(true);
     try {
-      // TODO: Replace with actual IPC call
-      const mockAccounts: GLAccount[] = [
-        {
-          code: '1010',
-          name: 'Cash on Hand',
-          type: 'ASSET',
-          isActive: true,
-          description: 'Physical cash in school safe',
-          currentBalance: 50000,
-        },
-        {
-          code: '1020',
-          name: 'Bank Account - KCB',
-          type: 'ASSET',
-          isActive: true,
-          description: 'Main operating bank account',
-          currentBalance: 2500000,
-        },
-        {
-          code: '1100',
-          name: 'Accounts Receivable',
-          type: 'ASSET',
-          isActive: true,
-          description: 'Student fees receivable',
-          currentBalance: 1500000,
-        },
-        {
-          code: '2100',
-          name: 'Salary Payable',
-          type: 'LIABILITY',
-          isActive: true,
-          description: 'Accrued salaries not yet paid',
-          currentBalance: 500000,
-        },
-        {
-          code: '4010',
-          name: 'Tuition Revenue',
-          type: 'REVENUE',
-          isActive: true,
-          description: 'Revenue from tuition fees',
-          currentBalance: 5000000,
-        },
-        {
-          code: '5010',
-          name: 'Teaching Salaries',
-          type: 'EXPENSE',
-          isActive: true,
-          description: 'Salaries for teaching staff',
-          currentBalance: 3000000,
-        },
-      ];
-      setAccounts(mockAccounts);
+      const data = await window.electronAPI.getGLAccounts(
+        filterType !== 'ALL' ? { type: filterType } : undefined
+      );
+      // Map backend response to local interface
+      const mapped: GLAccount[] = (data || []).map((a: Record<string, unknown>) => ({
+        code: a.code as string || a.account_code as string || '',
+        name: a.name as string || a.account_name as string || '',
+        type: (a.type as string || a.account_type as string || 'ASSET') as GLAccount['type'],
+        isActive: a.isActive !== undefined ? Boolean(a.isActive) : Boolean(a.is_active ?? true),
+        description: (a.description as string) || '',
+        currentBalance: Number(a.currentBalance ?? a.balance ?? 0),
+      }));
+      setAccounts(mapped);
     } catch (error) {
       console.error('Failed to load accounts:', error);
     } finally {

@@ -40,7 +40,7 @@ function createWindow() {
             preload: path.join(__dirname, '../preload/index.cjs'),
             nodeIntegration: false,
             contextIsolation: true,
-            sandbox: false,
+            sandbox: true,
         },
         show: false,
         titleBarStyle: 'default',
@@ -131,12 +131,7 @@ app.on('window-all-closed', () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (process as any).on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason)
-    // In production, you might want to gracefully exit or restart
 });
-
-
-
-
 
 
 

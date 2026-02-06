@@ -54,7 +54,7 @@ export default function ScheduledReports() {
     const loadSchedules = async () => {
         setLoading(true)
         try {
-            const data = await (window.electronAPI as unknown).getScheduledReports()
+            const data = await window.electronAPI.getScheduledReports()
             setSchedules(data)
         } catch (error) {
             console.error('Failed to load schedules:', error)
@@ -73,9 +73,9 @@ export default function ScheduledReports() {
         setSaving(true)
         try {
             if (editingSchedule.id) {
-                await (window.electronAPI as unknown).updateScheduledReport(editingSchedule.id, editingSchedule, user.id)
+                await window.electronAPI.updateScheduledReport(editingSchedule.id, editingSchedule, user.id)
             } else {
-                await (window.electronAPI as unknown).createScheduledReport(editingSchedule, user.id)
+                await window.electronAPI.createScheduledReport(editingSchedule, user.id)
             }
             setShowModal(false)
             loadSchedules()
@@ -90,7 +90,7 @@ export default function ScheduledReports() {
         if (!confirm('Are you sure you want to delete this schedule?')) return
 
         try {
-            await (window.electronAPI as unknown).deleteScheduledReport(id, user!.id)
+            await window.electronAPI.deleteScheduledReport(id, user!.id)
             loadSchedules()
         } catch (error) {
             alert('Failed to delete schedule')

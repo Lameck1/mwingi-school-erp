@@ -36,7 +36,7 @@ export default function BalanceSheetPage() {
     setError(null);
 
     try {
-      const result = await (window as unknown as { electronAPI: ElectronAPI }).electronAPI.getBalanceSheet(asOfDate);
+      const result = await window.electronAPI.getBalanceSheet(asOfDate);
 
       if (result.success) {
         setBalanceSheet(result.data);
