@@ -34,8 +34,9 @@ export const OpeningBalanceImport: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // TODO: Parse CSV/Excel file
-    // For now, mock data
+    // TODO: Integrate csv-parse library for real file parsing.
+    // csv-parse is already in devDependencies. Wire up file reader here.
+    // Stubbed data below for layout testing only.
     const mockData: ImportedBalance[] = [
       {
         type: 'STUDENT',
