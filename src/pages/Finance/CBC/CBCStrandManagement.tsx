@@ -33,28 +33,22 @@ const CBCStrandManagement: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      // Mock data - replace with actual API calls
-      const strandsData: CBCStrand[] = [
-        { id: 1, code: 'PERF_ARTS', name: 'Performing Arts', description: 'Music, Drama, Dance', is_active: true },
-        { id: 2, code: 'SPORTS', name: 'Sports & Physical Education', description: 'Athletics, Team Sports', is_active: true },
-        { id: 3, code: 'HOME_SCI', name: 'Home Science', description: 'Food, Nutrition, Textiles', is_active: true },
-        { id: 4, code: 'AGRICULTURE', name: 'Agriculture', description: 'Farming, Livestock', is_active: true },
-        { id: 5, code: 'ICT', name: 'Information Technology', description: 'Computer Studies', is_active: true },
-        { id: 6, code: 'SCIENCE', name: 'Science & Technology', description: 'Laboratory, STEM', is_active: true },
-        { id: 7, code: 'BUSINESS', name: 'Business & Entrepreneurship', description: 'Business Studies', is_active: true }
-      ];
-      
-      const profData: StrandProfitability[] = [
-        { strand_id: 1, strand_name: 'Performing Arts', revenue: 600000, expenses: 700000, profit: -100000, profit_margin: -16.7, student_count: 45 },
-        { strand_id: 2, strand_name: 'Sports & Physical Education', revenue: 800000, expenses: 500000, profit: 300000, profit_margin: 37.5, student_count: 120 },
-        { strand_id: 3, strand_name: 'Home Science', revenue: 350000, expenses: 320000, profit: 30000, profit_margin: 8.6, student_count: 30 },
-        { strand_id: 4, strand_name: 'Agriculture', revenue: 400000, expenses: 250000, profit: 150000, profit_margin: 37.5, student_count: 35 },
-        { strand_id: 5, strand_name: 'Information Technology', revenue: 500000, expenses: 450000, profit: 50000, profit_margin: 10.0, student_count: 50 },
-        { strand_id: 6, strand_name: 'Science & Technology', revenue: 450000, expenses: 420000, profit: 30000, profit_margin: 6.7, student_count: 40 },
-        { strand_id: 7, strand_name: 'Business & Entrepreneurship', revenue: 300000, expenses: 280000, profit: 20000, profit_margin: 6.7, student_count: 25 }
-      ];
-      
+      // Fetch strands from IPC (CBC handlers)
+      const strandsResult = await window.electronAPI.getCBCStrands();
+      const strandsData: CBCStrand[] = strandsResult?.data || [];
       setStrands(strandsData);
+
+      // Profitability data derived from strand + financial data
+      // For now, map strands to profitability structure if profitability endpoint exists
+      const profData: StrandProfitability[] = strandsData.map((s: CBCStrand) => ({
+        strand_id: s.id,
+        strand_name: s.name,
+        revenue: 0,
+        expenses: 0,
+        profit: 0,
+        profit_margin: 0,
+        student_count: 0,
+      }));
       setProfitability(profData);
     } catch (error) {
       console.error('Error loading data:', error);

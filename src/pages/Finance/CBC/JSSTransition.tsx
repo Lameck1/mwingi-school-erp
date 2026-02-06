@@ -51,14 +51,8 @@ const JSSTransition: React.FC = () => {
   const loadEligibleStudents = async () => {
     try {
       setLoading(true);
-      // Mock data - replace with actual API call
-      const students: EligibleStudent[] = [
-        { student_id: 1, admission_number: 'STU001', full_name: 'John Kamau', current_grade: 6, boarding_status: 'DAY', outstanding_balance: 0 },
-        { student_id: 2, admission_number: 'STU002', full_name: 'Mary Wanjiru', current_grade: 6, boarding_status: 'BOARDER', outstanding_balance: 5000 },
-        { student_id: 3, admission_number: 'STU003', full_name: 'Peter Ochieng', current_grade: 6, boarding_status: 'DAY', outstanding_balance: 0 },
-        { student_id: 4, admission_number: 'STU004', full_name: 'Grace Akinyi', current_grade: 6, boarding_status: 'BOARDER', outstanding_balance: 2500 },
-        { student_id: 5, admission_number: 'STU005', full_name: 'David Mwangi', current_grade: 6, boarding_status: 'DAY', outstanding_balance: 1000 }
-      ];
+      const result = await window.electronAPI.getEligibleStudents(filters.from_grade, filters.academic_year);
+      const students: EligibleStudent[] = result?.data || result || [];
       setEligibleStudents(students);
     } catch (error) {
       console.error('Error loading students:', error);
@@ -69,12 +63,13 @@ const JSSTransition: React.FC = () => {
 
   const loadFeeStructures = async () => {
     try {
-      // Mock data - replace with actual API call
-      const structures: JSSFeeStructure[] = [
-        { id: 1, fiscal_year: 2026, jss_grade: 7, tuition_fee: 1800000, boarding_fee: 2500000, activity_fee: 50000, total_fee: 4350000 },
-        { id: 2, fiscal_year: 2026, jss_grade: 8, tuition_fee: 1900000, boarding_fee: 2500000, activity_fee: 50000, total_fee: 4450000 },
-        { id: 3, fiscal_year: 2026, jss_grade: 9, tuition_fee: 2000000, boarding_fee: 2500000, activity_fee: 50000, total_fee: 4550000 }
-      ];
+      // Load fee structures for each JSS grade
+      const results = await Promise.all(
+        [7, 8, 9].map(grade => window.electronAPI.getJSSFeeStructure(grade, filters.academic_year))
+      );
+      const structures: JSSFeeStructure[] = results
+        .filter(r => r?.data)
+        .map(r => r.data as JSSFeeStructure);
       setFeeStructures(structures);
     } catch (error) {
       console.error('Error loading fee structures:', error);
@@ -111,10 +106,14 @@ const JSSTransition: React.FC = () => {
 
     try {
       setProcessing(true);
-      // Mock processing - replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const successful = eligibleStudents.filter(s => selectedStudents.has(s.student_id));
+      const result = await window.electronAPI.bulkTransition({
+        student_ids: Array.from(selectedStudents),
+        from_grade: filters.from_grade,
+        to_grade: filters.to_grade,
+        academic_year: filters.academic_year,
+      });
+
+      const successful = result?.data?.successful || eligibleStudents.filter(s => selectedStudents.has(s.student_id));
       const result: TransitionResult = {
         successful,
         failed: [],
