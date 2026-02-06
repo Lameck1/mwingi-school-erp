@@ -34,42 +34,62 @@ export const OpeningBalanceImport: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // TODO: Integrate csv-parse library for real file parsing.
-    // csv-parse is already in devDependencies. Wire up file reader here.
-    // Stubbed data below for layout testing only.
-    const mockData: ImportedBalance[] = [
-      {
-        type: 'STUDENT',
-        identifier: 'STU001',
-        name: 'John Doe',
-        amount: 50000,
-        debitCredit: 'DEBIT',
-      },
-      {
-        type: 'STUDENT',
-        identifier: 'STU002',
-        name: 'Jane Smith',
-        amount: 30000,
-        debitCredit: 'DEBIT',
-      },
-      {
-        type: 'GL_ACCOUNT',
-        identifier: '1100',
-        name: 'Accounts Receivable',
-        amount: 80000,
-        debitCredit: 'DEBIT',
-      },
-      {
-        type: 'GL_ACCOUNT',
-        identifier: '3000',
-        name: 'Retained Earnings',
-        amount: 80000,
-        debitCredit: 'CREDIT',
-      },
-    ];
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result as string;
+        if (!text) return;
 
-    setBalances(mockData);
-    setVerified(false);
+        const lines = text.split('\n').filter(line => line.trim());
+        if (lines.length < 2) {
+          alert('CSV file must have a header row and at least one data row');
+          return;
+        }
+
+        // Parse header to detect columns
+        const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+        const typeIdx = header.findIndex(h => h === 'type');
+        const idIdx = header.findIndex(h => h === 'identifier' || h === 'id' || h === 'code');
+        const nameIdx = header.findIndex(h => h === 'name');
+        const amountIdx = header.findIndex(h => h === 'amount');
+        const dcIdx = header.findIndex(h => h === 'debit_credit' || h === 'debitcredit' || h === 'dc');
+
+        if (typeIdx === -1 || idIdx === -1 || amountIdx === -1) {
+          alert('CSV must have columns: type, identifier, amount (and optionally: name, debit_credit)');
+          return;
+        }
+
+        const parsed: ImportedBalance[] = [];
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(',').map(c => c.trim());
+          if (cols.length < Math.max(typeIdx, idIdx, amountIdx) + 1) continue;
+
+          const type = cols[typeIdx].toUpperCase() as 'STUDENT' | 'GL_ACCOUNT';
+          const amount = parseFloat(cols[amountIdx]);
+          if (isNaN(amount) || amount <= 0) continue;
+
+          parsed.push({
+            type: type === 'GL_ACCOUNT' ? 'GL_ACCOUNT' : 'STUDENT',
+            identifier: cols[idIdx],
+            name: nameIdx >= 0 ? cols[nameIdx] : cols[idIdx],
+            amount,
+            debitCredit: dcIdx >= 0 && cols[dcIdx].toUpperCase().startsWith('C') ? 'CREDIT' : 'DEBIT',
+          });
+        }
+
+        if (parsed.length === 0) {
+          alert('No valid rows found in CSV file');
+          return;
+        }
+
+        setBalances(parsed);
+        setVerified(false);
+      } catch (err) {
+        console.error('CSV parse error:', err);
+        alert('Failed to parse CSV file. Ensure it is a valid CSV format.');
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleAddBalance = () => {
@@ -127,8 +147,23 @@ export const OpeningBalanceImport: React.FC = () => {
 
     setImporting(true);
     try {
-      // TODO: Call IPC handler to import balances
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Split balances by type and call appropriate IPC handlers
+      const studentBalances = balances
+        .filter(b => b.type === 'STUDENT')
+        .map(b => ({ student_identifier: b.identifier, amount: b.amount, debit_credit: b.debitCredit }));
+
+      const glBalances = balances
+        .filter(b => b.type === 'GL_ACCOUNT')
+        .map(b => ({ account_code: b.identifier, amount: b.amount, debit_credit: b.debitCredit }));
+
+      if (studentBalances.length > 0) {
+        // academicYearId=1 and importSource='manual' as defaults - should be user-configurable
+        await window.electronAPI.importStudentOpeningBalances(studentBalances, 1, 'csv_import', 1);
+      }
+      if (glBalances.length > 0) {
+        await window.electronAPI.importGLOpeningBalances(glBalances, 1);
+      }
+
       alert('Opening balances imported successfully!');
       setBalances([]);
       setVerified(false);
