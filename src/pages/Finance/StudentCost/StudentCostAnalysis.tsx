@@ -20,7 +20,7 @@ export default function StudentCostAnalysis() {
 
     const loadStudents = useCallback(async () => {
         try {
-            const data = await (window.electronAPI as unknown as ElectronAPI).getStudents({ is_active: true })
+            const data = await window.electronAPI.getStudents({ is_active: true })
             setStudents(data)
         } catch (error) {
             console.error(error)
@@ -33,10 +33,10 @@ export default function StudentCostAnalysis() {
             const termId = 1 // Default to Term 1 for now
             const academicYearId = 2026 // Default to 2026 for now
 
-            const breakdown = await (window.electronAPI as unknown as ElectronAPI).calculateStudentCost(studentId, termId, academicYearId)
+            const breakdown = await window.electronAPI.calculateStudentCost(studentId, termId, academicYearId)
             setCostData(breakdown)
 
-            const vsRevenue = await (window.electronAPI as unknown as ElectronAPI).getStudentCostVsRevenue(studentId, termId)
+            const vsRevenue = await window.electronAPI.getStudentCostVsRevenue(studentId, termId)
             setCostVsRevenue(vsRevenue)
         } catch (error) {
             console.error(error)

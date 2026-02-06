@@ -52,7 +52,7 @@ export default function GrantTracking() {
     const loadData = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await (window.electronAPI as unknown as ElectronAPI).getGrantsByStatus(filterStatus)
+            const data = await window.electronAPI.getGrantsByStatus(filterStatus)
             setGrants(data)
         } catch (error) {
             console.error(error)
@@ -69,7 +69,7 @@ export default function GrantTracking() {
     const handleCreateGrant = async (e: React.FormEvent) => {
         e.preventDefault()
         try {
-            await (window.electronAPI as unknown as ElectronAPI).createGrant({
+            await window.electronAPI.createGrant({
                 ...createForm,
                 amount_allocated: parseFloat(createForm.amount_allocated),
                 amount_received: parseFloat(createForm.amount_received)
@@ -87,7 +87,7 @@ export default function GrantTracking() {
         e.preventDefault()
         if (!selectedGrant) return
         try {
-            const result = await (window.electronAPI as unknown as ElectronAPI).recordGrantUtilization(
+            const result = await window.electronAPI.recordGrantUtilization(
                 selectedGrant.id,
                 parseFloat(utilizationForm.amount),
                 utilizationForm.description,
@@ -112,7 +112,7 @@ export default function GrantTracking() {
 
     const handleExportNEMIS = async () => {
         try {
-            const csv = await (window.electronAPI as unknown as ElectronAPI).generateNEMISExport(new Date().getFullYear())
+            const csv = await window.electronAPI.generateNEMISExport(new Date().getFullYear())
             const blob = new Blob([csv], { type: 'text/csv' })
             const url = window.URL.createObjectURL(blob)
             const a = document.createElement('a')
