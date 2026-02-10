@@ -73,7 +73,7 @@ export async function exportToPDF(options: PDFExportOptions): Promise<void> {
 
     // Table Rows
     const rowHeight = 7
-    yPosition = renderTableRows(doc, data, columns, columnWidths, {
+    renderTableRows(doc, data, columns, columnWidths, {
         margin, contentWidth, pageWidth, pageHeight, rowHeight, showPageNumbers, yPosition
     })
 

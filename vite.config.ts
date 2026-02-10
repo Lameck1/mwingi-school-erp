@@ -63,7 +63,7 @@ export default defineConfig({
             },
             output: {
                 manualChunks(id) {
-                    if (!id.includes('node_modules')) { return undefined }
+                    if (!id.includes('node_modules')) { return }
                     
                     // Map module patterns to chunk names for code splitting
                     const chunkPatterns: Array<[string[], string]> = [

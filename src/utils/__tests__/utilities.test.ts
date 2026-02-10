@@ -196,7 +196,7 @@ describe('GPA Calculation Utilities', () => {
     it('should handle perfect marks', () => {
       const marks = [100, 100, 100]
       const gpa = calculateGPA(marks)
-      expect(gpa).toBe(4.0)
+      expect(gpa).toBe(4)
     })
 
     it('should handle minimum marks', () => {
@@ -220,8 +220,8 @@ describe('GPA Calculation Utilities', () => {
         { mark: 80, weight: 1 }
       ]
       const gpa = calculateWeightedGPA(subjects)
-      expect(gpa).toBeGreaterThan(3.0)
-      expect(gpa).toBeLessThan(4.0)
+      expect(gpa).toBeGreaterThan(3)
+      expect(gpa).toBeLessThan(4)
     })
 
     it('should handle equal weights', () => {
@@ -256,12 +256,12 @@ describe('GPA Calculation Utilities', () => {
   describe('Grade Assignment from GPA', () => {
     it('should assign grade A for high GPA', () => {
       expect(getGradeFromGPA(3.8)).toBe('A')
-      expect(getGradeFromGPA(4.0)).toBe('A')
+      expect(getGradeFromGPA(4)).toBe('A')
     })
 
     it('should assign grade B for good GPA', () => {
       expect(getGradeFromGPA(3.2)).toBe('B')
-      expect(getGradeFromGPA(3.0)).toBe('B')
+      expect(getGradeFromGPA(3)).toBe('B')
     })
 
     it('should assign grade C for average GPA', () => {
