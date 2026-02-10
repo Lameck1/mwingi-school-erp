@@ -1,74 +1,29 @@
+import { getDefaultMessageTemplates } from './notification-default-templates'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 
-export interface NotificationProvider {
-    type: 'SMS' | 'EMAIL'
-    name: string
-    config: Record<string, string>
-    isActive: boolean
-}
+const UNKNOWN_ERROR = 'Unknown error'
+const API_REQUEST_FAILED = 'API request failed'
+const SMS_PROVIDER_UNSUPPORTED = 'Unsupported SMS provider'
+const EMAIL_PROVIDER_UNSUPPORTED = 'Unsupported email provider'
+export type {
+    CommunicationLog,
+    EmailProviderConfig,
+    MessageTemplate,
+    NotificationProvider,
+    NotificationRequest,
+    NotificationResult,
+    SMSProviderConfig
+} from './notification-types'
 
-export interface MessageTemplate {
-    id: number
-    template_name: string
-    template_type: 'SMS' | 'EMAIL'
-    category: 'FEE_REMINDER' | 'PAYMENT_RECEIPT' | 'ATTENDANCE' | 'GENERAL' | 'PAYSLIP'
-    subject: string | null
-    body: string
-    variables: string[] // Extracted from {{variable}} patterns
-    is_active: boolean
-}
-
-export interface NotificationRequest {
-    recipientType: 'STUDENT' | 'STAFF' | 'GUARDIAN'
-    recipientId: number
-    templateId?: number
-    channel: 'SMS' | 'EMAIL'
-    to: string // Phone or email
-    subject?: string
-    message: string
-    variables?: Record<string, string>
-}
-
-export interface NotificationResult {
-    success: boolean
-    messageId?: string
-    error?: string
-    provider?: string
-}
-
-export interface SMSProviderConfig {
-    provider: 'AFRICASTALKING' | 'TWILIO' | 'NEXMO' | 'CUSTOM'
-    apiKey: string
-    apiSecret?: string
-    senderId?: string
-    baseUrl?: string
-}
-
-export interface EmailProviderConfig {
-    provider: 'SMTP' | 'SENDGRID' | 'MAILGUN'
-    host?: string
-    port?: number
-    user?: string
-    password?: string
-    apiKey?: string
-    fromEmail: string
-    fromName: string
-}
-
-export interface CommunicationLog {
-    id: number
-    recipient_type: string
-    recipient_id: number
-    message_type: string
-    subject: string | null
-    message_body: string
-    status: string
-    error_message: string | null
-    sent_by_user_id: number
-    created_at: string
-    sent_by_name?: string
-}
+import type {
+    CommunicationLog,
+    EmailProviderConfig,
+    MessageTemplate,
+    NotificationRequest,
+    NotificationResult,
+    SMSProviderConfig
+} from './notification-types'
 
 export class NotificationService {
     private get db() { return getDatabase() }
@@ -80,7 +35,7 @@ export class NotificationService {
     }
 
     private loadConfig(): void {
-        if (this.isConfigLoaded) return
+        if (this.isConfigLoaded) {return}
         try {
             const settings = this.db.prepare('SELECT * FROM settings LIMIT 1').get() as Record<string, string> | undefined
 
@@ -148,7 +103,7 @@ export class NotificationService {
 
             return result
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+            const errorMessage = error instanceof Error ? error.message : UNKNOWN_ERROR
 
             this.logCommunication({
                 recipientType: request.recipientType,
@@ -181,8 +136,27 @@ export class NotificationService {
                 return this.sendAfricasTalking(normalizedPhone, message)
             case 'TWILIO':
                 return this.sendTwilio(normalizedPhone, message)
-            default:
-                return { success: false, error: 'Unsupported SMS provider' }
+            case 'NEXMO':
+            case 'CUSTOM':
+                return { success: false, error: SMS_PROVIDER_UNSUPPORTED }
+        }
+    }
+
+    private buildAfricasTalkingResult(data: Record<string, unknown>): NotificationResult {
+        const recipients = (data.SMSMessageData as { Recipients?: Array<{ status?: string; messageId?: string }> } | undefined)?.Recipients
+        const firstRecipient = recipients?.[0]
+        if (firstRecipient?.status === 'Success') {
+            return {
+                success: true,
+                messageId: firstRecipient.messageId,
+                provider: 'AFRICASTALKING'
+            }
+        }
+
+        return {
+            success: false,
+            error: firstRecipient?.status || UNKNOWN_ERROR,
+            provider: 'AFRICASTALKING'
         }
     }
 
@@ -205,25 +179,12 @@ export class NotificationService {
                 })
             })
 
-            const data = await response.json()
-
-            if (data.SMSMessageData?.Recipients?.[0]?.status === 'Success') {
-                return {
-                    success: true,
-                    messageId: data.SMSMessageData.Recipients[0].messageId,
-                    provider: 'AFRICASTALKING'
-                }
-            }
-
-            return {
-                success: false,
-                error: data.SMSMessageData?.Recipients?.[0]?.status || 'Unknown error',
-                provider: 'AFRICASTALKING'
-            }
+            const data = await response.json() as Record<string, unknown>
+            return this.buildAfricasTalkingResult(data)
         } catch (error) {
             return {
                 success: false,
-                error: error instanceof Error ? error.message : 'API request failed',
+                error: error instanceof Error ? error.message : API_REQUEST_FAILED,
                 provider: 'AFRICASTALKING'
             }
         }
@@ -257,11 +218,11 @@ export class NotificationService {
                 return { success: true, messageId: data.sid, provider: 'TWILIO' }
             }
 
-            return { success: false, error: data.message || 'Unknown error', provider: 'TWILIO' }
+            return { success: false, error: data.message || UNKNOWN_ERROR, provider: 'TWILIO' }
         } catch (error) {
             return {
                 success: false,
-                error: error instanceof Error ? error.message : 'API request failed',
+                error: error instanceof Error ? error.message : API_REQUEST_FAILED,
                 provider: 'TWILIO'
             }
         }
@@ -280,8 +241,8 @@ export class NotificationService {
                 return this.sendSendGrid(to, subject, body)
             case 'SMTP':
                 return this.sendSMTP(to, subject, body)
-            default:
-                return { success: false, error: 'Unsupported email provider' }
+            case 'MAILGUN':
+                return { success: false, error: EMAIL_PROVIDER_UNSUPPORTED }
         }
     }
 
@@ -308,11 +269,11 @@ export class NotificationService {
             }
 
             const data = await response.json()
-            return { success: false, error: data.errors?.[0]?.message || 'Unknown error', provider: 'SENDGRID' }
+            return { success: false, error: data.errors?.[0]?.message || UNKNOWN_ERROR, provider: 'SENDGRID' }
         } catch (error) {
             return {
                 success: false,
-                error: error instanceof Error ? error.message : 'API request failed',
+                error: error instanceof Error ? error.message : API_REQUEST_FAILED,
                 provider: 'SENDGRID'
             }
         }
@@ -354,9 +315,9 @@ export class NotificationService {
     /**
      * Process template with variables
      */
-    private processTemplate(template: string, variables: Record<string, string>): string {
+    private processTemplate(template: string, variables: Partial<Record<string, string>>): string {
         return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-            return variables[key] !== undefined ? variables[key] : match
+            return variables[key] ?? match
         })
     }
 
@@ -438,15 +399,18 @@ export class NotificationService {
      * Create template
      */
     createTemplate(
-        name: string,
-        type: 'SMS' | 'EMAIL',
-        category: MessageTemplate['category'],
-        subject: string | null,
-        body: string,
-        userId: number
+        input: {
+            name: string
+            type: 'SMS' | 'EMAIL'
+            category: MessageTemplate['category']
+            subject: string | null
+            body: string
+            userId: number
+        }
     ): { success: boolean; id?: number; errors?: string[] } {
-        if (!name?.trim()) return { success: false, errors: ['Template name is required'] }
-        if (!body?.trim()) return { success: false, errors: ['Template body is required'] }
+        const { name, type, category, subject, body, userId } = input
+        if (!name.trim()) {return { success: false, errors: ['Template name is required'] }}
+        if (!body.trim()) {return { success: false, errors: ['Template body is required'] }}
 
         // Extract variables from body
         const variableMatches = body.match(/\{\{(\w+)\}\}/g) || []
@@ -466,57 +430,7 @@ export class NotificationService {
      * Get default templates for seeding
      */
     getDefaultTemplates(): Array<Omit<MessageTemplate, 'id' | 'variables' | 'is_active'>> {
-        return [
-            {
-                template_name: 'Fee Reminder',
-                template_type: 'SMS',
-                category: 'FEE_REMINDER',
-                subject: null,
-                body: 'Dear {{guardian_name}}, this is a reminder that {{student_name}} has an outstanding fee balance of KES {{balance}}. Please settle at your earliest convenience. Thank you.'
-            },
-            {
-                template_name: 'Payment Confirmation',
-                template_type: 'SMS',
-                category: 'PAYMENT_RECEIPT',
-                subject: null,
-                body: 'Payment Received: KES {{amount}} for {{student_name}}. Receipt No: {{receipt_number}}. New Balance: KES {{balance}}. Thank you for your payment.'
-            },
-            {
-                template_name: 'Absence Notification',
-                template_type: 'SMS',
-                category: 'ATTENDANCE',
-                subject: null,
-                body: 'Dear {{guardian_name}}, this is to inform you that {{student_name}} was absent from school on {{date}}. Please contact the school for any concerns.'
-            },
-            {
-                template_name: 'Fee Reminder Email',
-                template_type: 'EMAIL',
-                category: 'FEE_REMINDER',
-                subject: 'Fee Payment Reminder - {{student_name}}',
-                body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #1e40af;">Fee Payment Reminder</h2>
-            <p>Dear {{guardian_name}},</p>
-            <p>This is a reminder that <strong>{{student_name}}</strong> has an outstanding fee balance.</p>
-            <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-              <p style="margin: 0;"><strong>Student:</strong> {{student_name}}</p>
-              <p style="margin: 10px 0 0;"><strong>Admission No:</strong> {{admission_number}}</p>
-              <p style="margin: 10px 0 0;"><strong>Class:</strong> {{class_name}}</p>
-              <p style="margin: 10px 0 0;"><strong>Outstanding Balance:</strong> <span style="color: #dc2626; font-size: 18px;">KES {{balance}}</span></p>
-            </div>
-            <p>Please arrange for payment at your earliest convenience.</p>
-            <p>Thank you for your continued support.</p>
-            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
-            <p style="color: #6b7280; font-size: 12px;">{{school_name}}<br>{{school_address}}</p>
-          </div>`
-            },
-            {
-                template_name: 'Payslip Notification',
-                template_type: 'SMS',
-                category: 'PAYSLIP',
-                subject: null,
-                body: 'Salary Notification: Your salary for {{period}} has been processed. Net Pay: KES {{net_salary}}. Thank you.'
-            }
-        ]
+        return getDefaultMessageTemplates()
     }
 
     // ==================== Bulk Operations ====================
@@ -613,7 +527,7 @@ export class NotificationService {
             query += ' AND cl.status = ?'
             params.push(filters.status)
         }
-        if (filters?.startDate && filters?.endDate) {
+        if (filters.startDate && filters.endDate) {
             query += ' AND DATE(cl.created_at) BETWEEN ? AND ?'
             params.push(filters.startDate, filters.endDate)
         }
@@ -623,4 +537,3 @@ export class NotificationService {
         return this.db.prepare(query).all(...params) as CommunicationLog[]
     }
 }
-

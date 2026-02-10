@@ -1,6 +1,8 @@
-import Database from 'better-sqlite3'
+
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
+
+import type Database from 'better-sqlite3'
 
 // ============================================================================
 // SEGREGATED INTERFACES (ISP)
@@ -79,6 +81,12 @@ export interface Discrepancy {
   invoice_balance: number
   difference: number
 }
+
+const isCreditTransaction = (transactionType: string): boolean =>
+  transactionType === 'CREDIT' || transactionType === 'PAYMENT'
+
+const isDebitTransaction = (transactionType: string): boolean =>
+  transactionType === 'DEBIT' || transactionType === 'CHARGE' || transactionType === 'REVERSAL'
 
 // ============================================================================
 // REPOSITORY LAYER (SRP)
@@ -226,13 +234,10 @@ class LedgerGenerator implements ILedgerGenerator {
       let debit = 0
       let credit = 0
 
-      if (transaction.transaction_type === 'CREDIT' || transaction.transaction_type === 'PAYMENT') {
+      if (isCreditTransaction(transaction.transaction_type)) {
         credit = transaction.amount || 0
         runningBalance += credit
-      } else if (transaction.transaction_type === 'DEBIT' || transaction.transaction_type === 'CHARGE') {
-        debit = transaction.amount || 0
-        runningBalance -= debit
-      } else if (transaction.transaction_type === 'REVERSAL') {
+      } else if (isDebitTransaction(transaction.transaction_type)) {
         debit = transaction.amount || 0
         runningBalance -= debit
       }
@@ -312,8 +317,16 @@ class LedgerValidator implements ILedgerValidator {
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
-    this.repo = new StudentLedgerRepository(this.db)
-    this.balanceCalc = new OpeningBalanceCalculator(this.db)
+    this.repo = this.createRepository()
+    this.balanceCalc = this.createOpeningBalanceCalculator()
+  }
+
+  private createRepository(): StudentLedgerRepository {
+    return new StudentLedgerRepository(this.db)
+  }
+
+  private createOpeningBalanceCalculator(): OpeningBalanceCalculator {
+    return new OpeningBalanceCalculator(this.db)
   }
 
   async verifyOpeningBalance(studentId: number, periodStart: string): Promise<VerificationResult> {

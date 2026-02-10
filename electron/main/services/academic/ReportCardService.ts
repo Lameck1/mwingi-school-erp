@@ -1,5 +1,5 @@
-import { getDatabase } from '../../database'
 import { AttendanceService } from './AttendanceService'
+import { getDatabase } from '../../database'
 
 export interface Subject {
     id: number
@@ -88,14 +88,73 @@ interface ReportCardSummaryRow {
 export class ReportCardService {
     private get db() { return getDatabase() }
     private attendanceService = new AttendanceService()
+    private subjectColumnCache: { nameColumn: 'name' | 'subject_name'; codeColumn: 'code' | 'subject_code' } | null = null
+
+    private tableExists(tableName: string): boolean {
+        const row = this.db
+            .prepare(`SELECT 1 as found FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1`)
+            .get(tableName) as { found?: number } | undefined
+        return row?.found === 1
+    }
+
+    private resolveSubjectColumns(forceRefresh: boolean = false): { nameColumn: 'name' | 'subject_name'; codeColumn: 'code' | 'subject_code' } {
+        if (!forceRefresh && this.subjectColumnCache) {
+            return this.subjectColumnCache
+        }
+
+        const columns = this.db.prepare(`PRAGMA table_info(subject)`).all() as Array<{ name: string }>
+        const columnNames = new Set(columns.map((column) => column.name))
+
+        let nameColumn: 'name' | 'subject_name' | null = null
+        if (columnNames.has('name')) {
+            nameColumn = 'name'
+        } else if (columnNames.has('subject_name')) {
+            nameColumn = 'subject_name'
+        }
+
+        let codeColumn: 'code' | 'subject_code' | null = null
+        if (columnNames.has('code')) {
+            codeColumn = 'code'
+        } else if (columnNames.has('subject_code')) {
+            codeColumn = 'subject_code'
+        }
+
+        if (!nameColumn || !codeColumn) {
+            throw new Error('Subject schema mismatch: required subject name/code columns are missing')
+        }
+
+        this.subjectColumnCache = { nameColumn, codeColumn }
+        return this.subjectColumnCache
+    }
 
     /**
      * Get all subjects
      */
     async getSubjects(): Promise<Subject[]> {
-        return this.db.prepare(`
-      SELECT id, subject_name, subject_code FROM subject WHERE is_active = 1 ORDER BY subject_name
-    `).all() as Subject[]
+        const querySubjects = (nameColumn: 'name' | 'subject_name', codeColumn: 'code' | 'subject_code'): Subject[] =>
+            this.db.prepare(`
+              SELECT id, ${nameColumn} as subject_name, ${codeColumn} as subject_code
+              FROM subject
+              WHERE COALESCE(is_active, 1) = 1
+              ORDER BY ${nameColumn}
+            `).all() as Subject[]
+
+        const { nameColumn, codeColumn } = this.resolveSubjectColumns()
+
+        try {
+            return querySubjects(nameColumn, codeColumn)
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            const isColumnError = message.includes('no such column')
+            if (!isColumnError) {
+                throw error
+            }
+
+            // Schema may have changed after cache warm-up; refresh and retry once.
+            this.subjectColumnCache = null
+            const refreshed = this.resolveSubjectColumns(true)
+            return querySubjects(refreshed.nameColumn, refreshed.codeColumn)
+        }
     }
 
     /**
@@ -106,6 +165,27 @@ export class ReportCardService {
         academicYearId: number,
         termId: number
     ): Promise<Grade[]> {
+        if (!this.tableExists('grade')) {
+            return this.db.prepare(`
+                SELECT
+                  er.student_id,
+                  er.subject_id,
+                  CASE
+                    WHEN lower(e.exam_name) LIKE '%cat 1%' OR lower(e.exam_name) LIKE '%cat1%' THEN 'CAT1'
+                    WHEN lower(e.exam_name) LIKE '%cat 2%' OR lower(e.exam_name) LIKE '%cat2%' THEN 'CAT2'
+                    WHEN lower(e.exam_name) LIKE '%mid%' THEN 'MIDTERM'
+                    ELSE 'FINAL'
+                  END as exam_type,
+                  COALESCE(er.score, 0) as score,
+                  100 as max_score,
+                  e.term_id,
+                  e.academic_year_id
+                FROM exam_result er
+                JOIN exam e ON er.exam_id = e.id
+                WHERE er.student_id = ? AND e.academic_year_id = ? AND e.term_id = ?
+            `).all(studentId, academicYearId, termId) as Grade[]
+        }
+
         return this.db.prepare(`
       SELECT * FROM grade 
       WHERE student_id = ? AND academic_year_id = ? AND term_id = ?
@@ -115,12 +195,7 @@ export class ReportCardService {
     /**
      * Generate a complete report card for a student
      */
-    async generateReportCard(
-        studentId: number,
-        academicYearId: number,
-        termId: number
-    ): Promise<ReportCardData | null> {
-        // Get student info
+    private getStudentInfo(studentId: number, academicYearId: number, termId: number): StudentInfoResult | null {
         const student = this.db.prepare(`
       SELECT s.id, s.admission_number, s.first_name, s.last_name, st.stream_name
       FROM student s
@@ -128,54 +203,46 @@ export class ReportCardService {
       LEFT JOIN stream st ON e.stream_id = st.id
       WHERE s.id = ?
     `).get(academicYearId, termId, studentId) as StudentInfoResult | undefined
+        return student || null
+    }
 
-        if (!student) return null
-
-        // Get academic year and term info
-        const yearInfo = this.db.prepare(`SELECT year_name FROM academic_year WHERE id = ?`).get(academicYearId) as { year_name: string }
-        const termInfo = this.db.prepare(`SELECT term_name FROM term WHERE id = ?`).get(termId) as { term_name: string }
-
-        // Get all subjects
-        const subjects = await this.getSubjects()
-
-        // Get all grades for this student
-        const grades = await this.getStudentGrades(studentId, academicYearId, termId)
-        const gradeMap = new Map<string, Grade>()
-        grades.forEach(g => {
-            gradeMap.set(`${g.subject_id}-${g.exam_type}`, g)
-        })
-
-        // Fetch dynamic grading scale for curriculum (Defaulting to 8-4-4 for now, can be refined per student level)
+    private getDynamicGradeResolver(): (score: number) => { grade: string; remarks: string } {
         const gradingScale = this.db.prepare('SELECT * FROM grading_scale WHERE curriculum = ?').all('8-4-4') as GradingScaleRow[]
-        const getDynamicGrade = (score: number) => {
-            const row = gradingScale.find(gs => score >= gs.min_score && score <= gs.max_score)
+        return (score: number) => {
+            const row = gradingScale.find(scale => score >= scale.min_score && score <= scale.max_score)
             return { grade: row?.grade || 'F', remarks: row?.remarks || 'Poor' }
         }
+    }
 
-        // Build grade rows
-        const gradeRows = subjects.map(subject => {
-            // Updated to use the new exam_result table
-            const results = this.db.prepare(`
-                SELECT er.score, er.competency_level, e.weight
+    private getSubjectExamResults(studentId: number, subjectId: number, termId: number): ExamResultRow[] {
+        return this.db.prepare(`
+                SELECT er.score, er.competency_level, 1 as weight
                 FROM exam_result er
                 JOIN exam e ON er.exam_id = e.id
                 WHERE er.student_id = ? AND er.subject_id = ? AND e.term_id = ?
-            `).all(studentId, subject.id, termId) as ExamResultRow[]
+            `).all(studentId, subjectId, termId) as ExamResultRow[]
+    }
 
-            if (results.length === 0) return null
+    private buildGradeRows(
+        subjects: Subject[],
+        studentId: number,
+        termId: number,
+        resolveGrade: (score: number) => { grade: string; remarks: string }
+    ): ReportCardData['grades'] {
+        return subjects.map(subject => {
+            const results = this.getSubjectExamResults(studentId, subject.id, termId)
+            if (results.length === 0) {return null}
 
-            // Calculate weighted average
-            let totalWeight = 0
-            let weightedSum = 0
-            results.forEach(r => {
-                const score = r.score !== null ? r.score : (r.competency_level * 25)
-                weightedSum += score * r.weight
-                totalWeight += r.weight
-            })
+            const totals = results.reduce((acc, result) => {
+                const score = result.score !== null ? result.score : (result.competency_level * 25)
+                return {
+                    weightedSum: acc.weightedSum + (score * result.weight),
+                    totalWeight: acc.totalWeight + result.weight
+                }
+            }, { weightedSum: 0, totalWeight: 0 })
 
-            const average = totalWeight > 0 ? weightedSum / totalWeight : 0
-            const { grade, remarks } = getDynamicGrade(average)
-
+            const average = totals.totalWeight > 0 ? totals.weightedSum / totals.totalWeight : 0
+            const { grade, remarks } = resolveGrade(average)
             return {
                 subject_name: subject.subject_name,
                 subject_code: subject.subject_code,
@@ -187,28 +254,84 @@ export class ReportCardService {
                 grade_letter: grade,
                 remarks
             }
-        }).filter(g => g !== null) as ReportCardData['grades']
+        }).filter(Boolean) as ReportCardData['grades']
+    }
 
-        // Get attendance
+    private getClassSize(studentId: number, academicYearId: number, termId: number): number {
+        const result = this.db.prepare(`
+            SELECT COUNT(*) as count FROM enrollment 
+            WHERE stream_id = (SELECT stream_id FROM enrollment WHERE student_id = ? AND academic_year_id = ? AND term_id = ?)
+            AND academic_year_id = ? AND term_id = ? AND status = 'ACTIVE'
+        `).get(studentId, academicYearId, termId, academicYearId, termId) as { count: number }
+
+        return result.count || 0
+    }
+
+    private calculateRoundedScoreMetrics(gradeRows: ReportCardData['grades']): { totalMarks: number; overallAverage: number } {
+        const totalMarks = gradeRows.reduce((sum, row) => sum + row.average, 0)
+        const average = gradeRows.length > 0 ? totalMarks / gradeRows.length : 0
+        return {
+            totalMarks: Math.round(totalMarks * 10) / 10,
+            overallAverage: Math.round(average * 10) / 10
+        }
+    }
+
+    private resolveSummaryGrade(
+        summary: ReportCardSummaryRow | undefined,
+        rawAverage: number,
+        resolveGrade: (score: number) => { grade: string; remarks: string }
+    ): string {
+        return summary?.mean_grade ?? resolveGrade(rawAverage).grade
+    }
+
+    private resolveTeacherRemarks(summary: ReportCardSummaryRow | undefined, rawAverage: number): string {
+        return summary?.class_teacher_remarks ?? this.getOverallRemarks(rawAverage)
+    }
+
+    private buildSummary(
+        summary: ReportCardSummaryRow | undefined,
+        gradeRows: ReportCardData['grades'],
+        classSize: number,
+        resolveGrade: (score: number) => { grade: string; remarks: string }
+    ): ReportCardData['summary'] {
+        const rawAverage = gradeRows.length > 0
+            ? gradeRows.reduce((sum, row) => sum + row.average, 0) / gradeRows.length
+            : 0
+        const { totalMarks, overallAverage } = this.calculateRoundedScoreMetrics(gradeRows)
+
+        return {
+            total_marks: summary?.total_marks ?? totalMarks,
+            average: summary?.mean_score ?? overallAverage,
+            grade: this.resolveSummaryGrade(summary, rawAverage, resolveGrade),
+            position: summary?.class_position ?? null,
+            class_size: classSize,
+            teacher_remarks: this.resolveTeacherRemarks(summary, rawAverage),
+            principal_remarks: summary?.principal_remarks ?? ''
+        }
+    }
+
+    async generateReportCard(
+        studentId: number,
+        academicYearId: number,
+        termId: number
+    ): Promise<ReportCardData | null> {
+        const student = this.getStudentInfo(studentId, academicYearId, termId)
+
+        if (!student) {return null}
+
+        const yearInfo = this.db.prepare(`SELECT year_name FROM academic_year WHERE id = ?`).get(academicYearId) as { year_name: string }
+        const termInfo = this.db.prepare(`SELECT term_name FROM term WHERE id = ?`).get(termId) as { term_name: string }
+        const subjects = await this.getSubjects()
+        const resolveGrade = this.getDynamicGradeResolver()
+        const gradeRows = this.buildGradeRows(subjects, studentId, termId, resolveGrade)
+
         const attendance = await this.attendanceService.getStudentAttendanceSummary(studentId, academicYearId, termId)
-
-        // Calculate fallbacks if summary doesn't exist
-        const totalMarks = gradeRows.reduce((sum, g) => sum + g.average, 0)
-        const overallAverage = gradeRows.length > 0 ? totalMarks / gradeRows.length : 0
-
-        // Fetch overall summary (position, total)
         const summary = this.db.prepare(`
             SELECT * FROM report_card_summary 
             WHERE student_id = ? AND exam_id IN (SELECT id FROM exam WHERE term_id = ?)
             ORDER BY id DESC LIMIT 1
         `).get(studentId, termId) as ReportCardSummaryRow | undefined
-
-        // Calculate class size
-        const { count: classSize } = this.db.prepare(`
-            SELECT COUNT(*) as count FROM enrollment 
-            WHERE stream_id = (SELECT stream_id FROM enrollment WHERE student_id = ? AND academic_year_id = ? AND term_id = ?)
-            AND academic_year_id = ? AND term_id = ? AND status = 'ACTIVE'
-        `).get(studentId, academicYearId, termId, academicYearId, termId) as { count: number }
+        const classSize = this.getClassSize(studentId, academicYearId, termId)
 
         return {
             student: {
@@ -218,8 +341,8 @@ export class ReportCardService {
                 last_name: student.last_name,
                 stream_name: student.stream_name || 'N/A'
             },
-            academic_year: yearInfo?.year_name || '',
-            term: termInfo?.term_name || '',
+            academic_year: yearInfo.year_name || '',
+            term: termInfo.term_name || '',
             grades: gradeRows,
             attendance: {
                 total_days: attendance.total_days,
@@ -227,15 +350,7 @@ export class ReportCardService {
                 absent: attendance.absent,
                 attendance_rate: attendance.attendance_rate
             },
-            summary: {
-                total_marks: summary?.total_marks || Math.round(totalMarks * 10) / 10,
-                average: summary?.mean_score || Math.round(overallAverage * 10) / 10,
-                grade: summary?.mean_grade || getDynamicGrade(overallAverage).grade,
-                position: summary?.class_position || null,
-                class_size: classSize || 0,
-                teacher_remarks: summary?.class_teacher_remarks || this.getOverallRemarks(overallAverage),
-                principal_remarks: summary?.principal_remarks || ''
-            }
+            summary: this.buildSummary(summary, gradeRows, classSize, resolveGrade)
         }
     }
 
@@ -263,10 +378,10 @@ export class ReportCardService {
     }
 
     private getOverallRemarks(average: number): string {
-        if (average >= 80) return 'Outstanding performance. Keep up the excellent work!'
-        if (average >= 70) return 'Very good performance. Continue working hard.'
-        if (average >= 60) return 'Good effort. There is room for improvement.'
-        if (average >= 50) return 'Fair performance. More effort needed.'
+        if (average >= 80) {return 'Outstanding performance. Keep up the excellent work!'}
+        if (average >= 70) {return 'Very good performance. Continue working hard.'}
+        if (average >= 60) {return 'Good effort. There is room for improvement.'}
+        if (average >= 50) {return 'Fair performance. More effort needed.'}
         return 'Needs significant improvement. Please seek additional support.'
     }
 }

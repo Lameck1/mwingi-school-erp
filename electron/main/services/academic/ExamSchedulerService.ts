@@ -1,5 +1,12 @@
 import { getDatabase } from '../../database'
 
+const UNKNOWN_ERROR = 'Unknown error'
+
+const toMinutes = (time: string): number => {
+  const [hours, minutes] = time.split(':').map(Number)
+  return hours * 60 + minutes
+}
+
 interface ExamSlot {
   id?: number
   exam_id: number
@@ -47,6 +54,67 @@ interface TimetableResult {
 }
 
 class ExamSchedulerService {
+  private findBestVenue(
+    requiredCapacity: number,
+    venueCapacities: Map<number, number>,
+    allocatedCapacity: Map<number, number>
+  ): number | null {
+    let bestVenue: number | null = null
+    let bestUtilization = Infinity
+
+    for (const [venueId, capacity] of Array.from(venueCapacities)) {
+      if (capacity < requiredCapacity) {
+        continue
+      }
+
+      const currentUsage = allocatedCapacity.get(venueId) || 0
+      const utilization = currentUsage + requiredCapacity
+      if (utilization <= capacity && utilization < bestUtilization) {
+        bestVenue = venueId
+        bestUtilization = utilization
+      }
+    }
+
+    return bestVenue
+  }
+
+  private getSubjectName(subjectId: number): string {
+    const db = getDatabase()
+    return (db.prepare('SELECT name FROM subjects WHERE id = ?').get(subjectId) as { name?: string } | undefined)?.name || 'Unknown'
+  }
+
+  private pickLeastLoadedStaff(staffLoads: Map<number, number>, fallbackStaffId: number): { staffId: number; load: number } {
+    let minStaff = fallbackStaffId
+    let minLoad = Infinity
+    for (const [staffId, load] of Array.from(staffLoads)) {
+      if (load < minLoad) {
+        minLoad = load
+        minStaff = staffId
+      }
+    }
+    return { staffId: minStaff, load: minLoad }
+  }
+
+  private appendClashEntries(
+    clashReport: ClashReport[],
+    reportedStudents: Set<number>,
+    clashingStudents: Array<{ id: number; name: string }>,
+    subjects: [string, string],
+    timeOverlap: string
+  ): void {
+    const [subjectOne, subjectTwo] = subjects
+    const unreportedStudents = clashingStudents.filter(student => !reportedStudents.has(student.id))
+    for (const student of unreportedStudents) {
+      clashReport.push({
+        student_id: student.id,
+        student_name: student.name,
+        clashing_subjects: [subjectOne, subjectTwo],
+        time_overlap: timeOverlap
+      })
+      reportedStudents.add(student.id)
+    }
+  }
+
   /**
    * Generate exam timetable with venue allocation and clash detection
    */
@@ -73,10 +141,8 @@ class ExamSchedulerService {
         VALUES (?, ?, ?, ?, ?, ?)
       `)
 
-      const insertedSlots: Array<{ id: number; subject_id: number; venue_id: number }> = []
-
       for (const slot of slots) {
-        const result = insertStmt.run(
+        insertStmt.run(
           examId,
           slot.subject_id,
           slot.start_time,
@@ -84,11 +150,6 @@ class ExamSchedulerService {
           slot.venue_id,
           slot.max_capacity
         )
-        insertedSlots.push({
-          id: result.lastInsertRowid as number,
-          subject_id: slot.subject_id,
-          venue_id: slot.venue_id
-        })
       }
 
       // Detect clashes
@@ -108,7 +169,7 @@ class ExamSchedulerService {
       }
     } catch (error) {
       console.error('Error generating timetable:', error)
-      throw new Error(`Failed to generate timetable: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      throw new Error(`Failed to generate timetable: ${error instanceof Error ? error.message : UNKNOWN_ERROR}`)
     }
   }
 
@@ -156,21 +217,7 @@ class ExamSchedulerService {
       for (const slot of slots) {
         const requiredCapacity = studentsBySubject.get(slot.subject_id) || 0
 
-        // Find best venue (first-fit decreasing)
-        let bestVenue: number | null = null
-        let bestUtilization = Infinity
-
-        for (const [venueId, capacity] of Array.from(venueCapacities)) {
-          if (capacity >= requiredCapacity) {
-            const currentUsage = allocatedCapacity.get(venueId) || 0
-            const utilization = currentUsage + requiredCapacity
-            
-            if (utilization <= capacity && utilization < bestUtilization) {
-              bestVenue = venueId
-              bestUtilization = utilization
-            }
-          }
-        }
+        const bestVenue = this.findBestVenue(requiredCapacity, venueCapacities, allocatedCapacity)
 
         if (bestVenue !== null) {
           const currentUsage = allocatedCapacity.get(bestVenue) || 0
@@ -192,7 +239,7 @@ class ExamSchedulerService {
       return allocations
     } catch (error) {
       console.error('Error allocating venues:', error)
-      throw new Error(`Failed to allocate venues: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      throw new Error(`Failed to allocate venues: ${error instanceof Error ? error.message : UNKNOWN_ERROR}`)
     }
   }
 
@@ -242,30 +289,15 @@ class ExamSchedulerService {
               `)
               .all(slot1.subject_id, slot2.subject_id) as Array<{ id: number; name: string }>
 
-            // Get subject names
-            const subj1 = (
-              db.prepare('SELECT name FROM subjects WHERE id = ?').get(slot1.subject_id) as {
-                name: string
-              }
-            )?.name
-
-            const subj2 = (
-              db.prepare('SELECT name FROM subjects WHERE id = ?').get(slot2.subject_id) as {
-                name: string
-              }
-            )?.name
-
-            for (const student of clashingStudents) {
-              if (!reportedStudents.has(student.id)) {
-                clashReport.push({
-                  student_id: student.id,
-                  student_name: student.name,
-                  clashing_subjects: [subj1 || 'Unknown', subj2 || 'Unknown'],
-                  time_overlap: `${slot1.start_time} - ${slot2.end_time}`
-                })
-                reportedStudents.add(student.id)
-              }
-            }
+            const subj1 = this.getSubjectName(slot1.subject_id)
+            const subj2 = this.getSubjectName(slot2.subject_id)
+            this.appendClashEntries(
+              clashReport,
+              reportedStudents,
+              clashingStudents,
+              [subj1, subj2],
+              `${slot1.start_time} - ${slot2.end_time}`
+            )
           }
         }
       }
@@ -273,7 +305,7 @@ class ExamSchedulerService {
       return clashReport
     } catch (error) {
       console.error('Error detecting clashes:', error)
-      throw new Error(`Failed to detect clashes: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      throw new Error(`Failed to detect clashes: ${error instanceof Error ? error.message : UNKNOWN_ERROR}`)
     }
   }
 
@@ -317,16 +349,7 @@ class ExamSchedulerService {
 
       for (const slot of slots) {
         for (let i = 0; i < invigilatorsPerSlot; i++) {
-          // Find staff with lowest load
-          let minStaff = availableStaff[0].id
-          let minLoad = Infinity
-
-          for (const [staffId, load] of Array.from(staffLoads)) {
-            if (load < minLoad) {
-              minLoad = load
-              minStaff = staffId
-            }
-          }
+          const { staffId: minStaff, load: minLoad } = this.pickLeastLoadedStaff(staffLoads, availableStaff[0].id)
 
           // Assign this staff to slot
           db.prepare(`
@@ -354,7 +377,7 @@ class ExamSchedulerService {
       return assignments
     } catch (error) {
       console.error('Error assigning invigilators:', error)
-      throw new Error(`Failed to assign invigilators: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      throw new Error(`Failed to assign invigilators: ${error instanceof Error ? error.message : UNKNOWN_ERROR}`)
     }
   }
 
@@ -402,7 +425,7 @@ class ExamSchedulerService {
       }
     } catch (error) {
       console.error('Error getting timetable stats:', error)
-      throw new Error(`Failed to get timetable stats: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      throw new Error(`Failed to get timetable stats: ${error instanceof Error ? error.message : UNKNOWN_ERROR}`)
     }
   }
 
@@ -478,7 +501,7 @@ class ExamSchedulerService {
       return Buffer.from(html)
     } catch (error) {
       console.error('Error exporting to PDF:', error)
-      throw new Error(`Failed to export to PDF: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      throw new Error(`Failed to export to PDF: ${error instanceof Error ? error.message : UNKNOWN_ERROR}`)
     }
   }
 
@@ -486,11 +509,6 @@ class ExamSchedulerService {
    * Check if two time slots overlap
    */
   private timesOverlap(start1: string, end1: string, start2: string, end2: string): boolean {
-    const toMinutes = (time: string) => {
-      const [hours, minutes] = time.split(':').map(Number)
-      return hours * 60 + minutes
-    }
-
     const s1 = toMinutes(start1)
     const e1 = toMinutes(end1)
     const s2 = toMinutes(start2)

@@ -1,7 +1,9 @@
-import Database from 'better-sqlite3-multiple-ciphers';
+
+import { DoubleEntryJournalService } from './DoubleEntryJournalService';
 import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
-import { DoubleEntryJournalService } from './DoubleEntryJournalService';
+
+import type Database from 'better-sqlite3-multiple-ciphers';
 
 /**
  * Opening Balance Service
@@ -45,6 +47,87 @@ export class OpeningBalanceService {
    * Import opening balances for students
    * Creates journal entries: Debit: Student Receivable, Credit: Opening Balance Equity
    */
+  private insertStudentOpeningBalance(
+    balance: StudentOpeningBalance,
+    academicYearId: number,
+    importSource: string,
+    userId: number
+  ): void {
+    this.db.prepare(`
+            INSERT INTO opening_balance (
+              academic_year_id, student_id,
+              debit_amount, credit_amount,
+              description, imported_from, imported_by_user_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          `).run(
+      academicYearId,
+      balance.student_id,
+      balance.balance_type === 'DEBIT' ? balance.opening_balance : 0,
+      balance.balance_type === 'CREDIT' ? balance.opening_balance : 0,
+      `Opening balance for ${balance.student_name} (${balance.admission_number})`,
+      importSource,
+      userId
+    );
+  }
+
+  private createOpeningBalanceJournalEntry(balance: StudentOpeningBalance, userId: number): void {
+    if (balance.opening_balance <= 0) {
+      return;
+    }
+
+    const entryDate = new Date().toISOString().split('T')[0];
+    if (balance.balance_type === 'DEBIT') {
+      void this.journalService.createJournalEntry({
+        entry_date: entryDate,
+        entry_type: 'OPENING_BALANCE',
+        description: `Opening balance - ${balance.student_name}`,
+        student_id: balance.student_id,
+        created_by_user_id: userId,
+        lines: [
+          {
+            gl_account_code: '1100',
+            debit_amount: balance.opening_balance,
+            credit_amount: 0,
+            description: 'Student opening balance'
+          },
+          {
+            gl_account_code: '3020',
+            debit_amount: 0,
+            credit_amount: balance.opening_balance,
+            description: 'Opening balance equity'
+          }
+        ]
+      }).catch((error) => {
+        console.error('Failed to create opening balance journal entry:', error);
+      });
+      return;
+    }
+
+    void this.journalService.createJournalEntry({
+      entry_date: entryDate,
+      entry_type: 'OPENING_BALANCE',
+      description: `Opening credit balance - ${balance.student_name}`,
+      student_id: balance.student_id,
+      created_by_user_id: userId,
+      lines: [
+        {
+          gl_account_code: '2020',
+          debit_amount: 0,
+          credit_amount: balance.opening_balance,
+          description: 'Student credit balance'
+        },
+        {
+          gl_account_code: '3020',
+          debit_amount: balance.opening_balance,
+          credit_amount: 0,
+          description: 'Opening balance equity'
+        }
+      ]
+    }).catch((error) => {
+      console.error('Failed to create opening credit journal entry:', error);
+    });
+  }
+
   async importStudentOpeningBalances(
     balances: StudentOpeningBalance[],
     academicYearId: number,
@@ -56,73 +139,8 @@ export class OpeningBalanceService {
 
       const importTxn = this.db.transaction(() => {
         for (const balance of balances) {
-          // Insert into opening_balance table
-          const result = this.db.prepare(`
-            INSERT INTO opening_balance (
-              academic_year_id, student_id,
-              debit_amount, credit_amount,
-              description, imported_from, imported_by_user_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            academicYearId,
-            balance.student_id,
-            balance.balance_type === 'DEBIT' ? balance.opening_balance : 0,
-            balance.balance_type === 'CREDIT' ? balance.opening_balance : 0,
-            `Opening balance for ${balance.student_name} (${balance.admission_number})`,
-            importSource,
-            userId
-          );
-
-          // Create journal entry only for debit balances (students owe money)
-          if (balance.balance_type === 'DEBIT' && balance.opening_balance > 0) {
-            this.journalService.createJournalEntry({
-              entry_date: new Date().toISOString().split('T')[0],
-              entry_type: 'OPENING_BALANCE',
-              description: `Opening balance - ${balance.student_name}`,
-              student_id: balance.student_id,
-              created_by_user_id: userId,
-              lines: [
-                {
-                  gl_account_code: '1100', // Accounts Receivable - Students
-                  debit_amount: balance.opening_balance,
-                  credit_amount: 0,
-                  description: 'Student opening balance'
-                },
-                {
-                  gl_account_code: '3020', // Retained Earnings
-                  debit_amount: 0,
-                  credit_amount: balance.opening_balance,
-                  description: 'Opening balance equity'
-                }
-              ]
-            });
-          }
-
-          // For credit balances (students have overpayments)
-          if (balance.balance_type === 'CREDIT' && balance.opening_balance > 0) {
-            this.journalService.createJournalEntry({
-              entry_date: new Date().toISOString().split('T')[0],
-              entry_type: 'OPENING_BALANCE',
-              description: `Opening credit balance - ${balance.student_name}`,
-              student_id: balance.student_id,
-              created_by_user_id: userId,
-              lines: [
-                {
-                  gl_account_code: '2020', // Student Credit Balances (Liability)
-                  debit_amount: 0,
-                  credit_amount: balance.opening_balance,
-                  description: 'Student credit balance'
-                },
-                {
-                  gl_account_code: '3020', // Retained Earnings
-                  debit_amount: balance.opening_balance,
-                  credit_amount: 0,
-                  description: 'Opening balance equity'
-                }
-              ]
-            });
-          }
-
+          this.insertStudentOpeningBalance(balance, academicYearId, importSource, userId);
+          this.createOpeningBalanceJournalEntry(balance, userId);
           importedCount++;
         }
 

@@ -1,5 +1,6 @@
-import * as ExcelJS from 'exceljs'
 import { parse } from 'csv-parse/sync'
+import * as ExcelJS from 'exceljs'
+
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 
@@ -100,7 +101,7 @@ export class DataImportService {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await workbook.xlsx.load(buffer as any)
         const worksheet = workbook.getWorksheet(1)
-        if (!worksheet) return []
+        if (!worksheet) {return []}
 
         const rows: Record<string, unknown>[] = []
         const headerRow = worksheet.getRow(1)
@@ -111,20 +112,18 @@ export class DataImportService {
         })
 
         worksheet.eachRow((row, rowNumber) => {
-            if (rowNumber === 1) return // Skip header
+            if (rowNumber === 1) {return} // Skip header
 
             const rowData: Record<string, unknown> = {}
-            let hasData = false
 
             row.eachCell((cell, colNumber) => {
                 const header = headers[colNumber]
                 if (header) {
                     rowData[header] = cell.value === null ? undefined : cell.value
-                    hasData = true
                 }
             })
 
-            if (hasData) {
+            if (Object.keys(rowData).length > 0) {
                 rows.push(rowData)
             }
         })
@@ -135,11 +134,100 @@ export class DataImportService {
     /**
      * Process import with validation and insertion
      */
-    private async processImport(
+    private validateRequiredColumns(
+        sourceColumns: string[],
+        mappings: ImportMapping[]
+    ): ImportError[] {
+        const errors: ImportError[] = []
+        for (const mapping of mappings) {
+            if (mapping.required && !sourceColumns.some(col => col.trim() === mapping.sourceColumn)) {
+                errors.push({
+                    row: 0,
+                    field: mapping.sourceColumn,
+                    message: `Required column "${mapping.sourceColumn}" not found in file`
+                })
+            }
+        }
+
+        return errors
+    }
+
+    private mapAndValidateRow(
+        sourceRow: Record<string, unknown>,
+        config: ImportConfig
+    ): { mappedRow: Record<string, unknown>; rowErrors: string[] } {
+        let mappedRow: Record<string, unknown> = {}
+        const rowErrors: string[] = []
+
+        for (const mapping of config.mappings) {
+            const sourceValue = this.resolveSourceValue(sourceRow, mapping.sourceColumn)
+            const transformed = this.applyMappingTransform(mapping, sourceValue)
+            if (transformed.error) {
+                rowErrors.push(transformed.error)
+                continue
+            }
+
+            const value = transformed.value
+            rowErrors.push(...this.collectMappingErrors(mapping, value))
+
+            mappedRow[mapping.targetField] = value
+        }
+
+        if (config.preProcess) {
+            mappedRow = config.preProcess(mappedRow)
+        }
+
+        if (config.validate) {
+            rowErrors.push(...config.validate(mappedRow))
+        }
+
+        return { mappedRow, rowErrors }
+    }
+
+    private resolveSourceValue(sourceRow: Record<string, unknown>, sourceColumn: string): unknown {
+        const sourceKey = Object.keys(sourceRow).find(
+            key => key.trim().toLowerCase() === sourceColumn.toLowerCase()
+        )
+        return sourceKey ? sourceRow[sourceKey] : undefined
+    }
+
+    private applyMappingTransform(
+        mapping: ImportMapping,
+        value: unknown
+    ): { value: unknown; error?: string } {
+        if (!mapping.transform || value === undefined) {
+            return { value }
+        }
+
+        try {
+            return { value: mapping.transform(value) }
+        } catch {
+            return { value, error: `Transform failed for ${mapping.sourceColumn}` }
+        }
+    }
+
+    private collectMappingErrors(mapping: ImportMapping, value: unknown): string[] {
+        const errors: string[] = []
+
+        if (mapping.validation) {
+            const validationError = mapping.validation(value)
+            if (validationError) {
+                errors.push(validationError)
+            }
+        }
+
+        if (mapping.required && (value === undefined || value === null || String(value).trim() === '')) {
+            errors.push(`${mapping.sourceColumn} is required`)
+        }
+
+        return errors
+    }
+
+    private processImport(
         rows: Record<string, unknown>[],
         config: ImportConfig,
         userId: number
-    ): Promise<ImportResult> {
+    ): ImportResult {
         const result: ImportResult = {
             success: true,
             totalRows: rows.length,
@@ -154,78 +242,21 @@ export class DataImportService {
             return result
         }
 
-        // Validate column mappings
         const sourceColumns = Object.keys(rows[0])
-        for (const mapping of config.mappings) {
-            if (mapping.required && !sourceColumns.some(col => col.trim() === mapping.sourceColumn)) {
-                result.errors.push({
-                    row: 0,
-                    field: mapping.sourceColumn,
-                    message: `Required column "${mapping.sourceColumn}" not found in file`
-                })
-            }
-        }
+        result.errors.push(...this.validateRequiredColumns(sourceColumns, config.mappings))
 
         if (result.errors.length > 0) {
             result.success = false
             return result
         }
 
-        // Process rows
         this.db.transaction(() => {
             for (let i = 0; i < rows.length; i++) {
                 const rowNum = i + 2 // +2 for 1-based index + header row
                 const sourceRow = rows[i]
 
                 try {
-                    // Map source to target
-                    let mappedRow: Record<string, unknown> = {}
-                    const rowErrors: string[] = []
-
-                    for (const mapping of config.mappings) {
-                        // Case insensitive column matching
-                        const sourceKey = Object.keys(sourceRow).find(
-                            k => k.trim().toLowerCase() === mapping.sourceColumn.toLowerCase()
-                        )
-
-                        let value = sourceKey ? sourceRow[sourceKey] : undefined
-
-                        // Apply transform
-                        if (mapping.transform && value !== undefined) {
-                            try {
-                                value = mapping.transform(value)
-                            } catch (e) {
-                                rowErrors.push(`Transform failed for ${mapping.sourceColumn}`)
-                                continue
-                            }
-                        }
-
-                        // Validate
-                        if (mapping.validation) {
-                            const validationError = mapping.validation(value)
-                            if (validationError) {
-                                rowErrors.push(validationError)
-                            }
-                        }
-
-                        // Check required
-                        if (mapping.required && (value === undefined || value === null || String(value).trim() === '')) {
-                            rowErrors.push(`${mapping.sourceColumn} is required`)
-                        }
-
-                        mappedRow[mapping.targetField] = value
-                    }
-
-                    // Apply pre-processing
-                    if (config.preProcess) {
-                        mappedRow = config.preProcess(mappedRow)
-                    }
-
-                    // Custom validation
-                    if (config.validate) {
-                        const customErrors = config.validate(mappedRow)
-                        rowErrors.push(...customErrors)
-                    }
+                    const { mappedRow, rowErrors } = this.mapAndValidateRow(sourceRow, config)
 
                     if (rowErrors.length > 0) {
                         result.errors.push({
@@ -237,7 +268,6 @@ export class DataImportService {
                         continue
                     }
 
-                    // Check duplicates
                     if (config.skipDuplicates && config.duplicateKey) {
                         const exists = this.checkDuplicate(config.entityType, config.duplicateKey, mappedRow[config.duplicateKey])
                         if (exists) {
@@ -246,7 +276,6 @@ export class DataImportService {
                         }
                     }
 
-                    // Insert record
                     this.insertRecord(config.entityType, mappedRow, userId)
                     result.imported++
 
@@ -261,7 +290,6 @@ export class DataImportService {
             }
         })()
 
-        // Log the import
         logAudit(userId, 'IMPORT', config.entityType.toLowerCase(), null, null, {
             total_rows: result.totalRows,
             imported: result.imported,
@@ -285,15 +313,13 @@ export class DataImportService {
     /**
      * Insert a record
      */
-    private insertRecord(entityType: string, data: Record<string, unknown>, userId: number): void {
-        switch (entityType) {
-            case 'STUDENT':
-                this.insertStudent(data)
-                break
-            // Add other types as needed
-            default:
-                throw new Error(`Unsupported entity type: ${entityType}`)
+    private insertRecord(entityType: string, data: Record<string, unknown>, _userId: number): void {
+        if (entityType === 'STUDENT') {
+            this.insertStudent(data)
+            return
         }
+
+        throw new Error(`Unsupported entity type: ${entityType}`)
     }
 
     private insertStudent(data: Record<string, unknown>): void {
@@ -336,42 +362,40 @@ export class DataImportService {
         columns: Array<{ name: string; required: boolean; description: string; example: string }>
         sampleData: Record<string, string>[]
     } {
-        switch (entityType) {
-            case 'STUDENT':
-                return {
-                    columns: [
-                        { name: 'Admission Number', required: true, description: 'Unique admission number', example: 'ADM001' },
-                        { name: 'First Name', required: true, description: 'Student first name', example: 'John' },
-                        { name: 'Middle Name', required: false, description: 'Student middle name', example: 'Mwangi' },
-                        { name: 'Last Name', required: true, description: 'Student last name', example: 'Kamau' },
-                        { name: 'Date of Birth', required: true, description: 'Date of birth (YYYY-MM-DD)', example: '2010-05-15' },
-                        { name: 'Gender', required: true, description: 'MALE or FEMALE', example: 'MALE' },
-                        { name: 'Student Type', required: true, description: 'BOARDER or DAY_SCHOLAR', example: 'DAY_SCHOLAR' },
-                        { name: 'Guardian Name', required: true, description: 'Parent/Guardian name', example: 'Jane Kamau' },
-                        { name: 'Guardian Phone', required: true, description: 'Guardian phone number', example: '0712345678' },
-                        { name: 'Guardian Email', required: false, description: 'Guardian email', example: 'jane@email.com' },
-                        { name: 'Address', required: false, description: 'Home address', example: 'Nairobi, Kenya' },
-                    ],
-                    sampleData: [
-                        {
-                            'Admission Number': 'ADM001',
-                            'First Name': 'John',
-                            'Middle Name': 'Mwangi',
-                            'Last Name': 'Kamau',
-                            'Date of Birth': '2010-05-15',
-                            'Gender': 'MALE',
-                            'Student Type': 'DAY_SCHOLAR',
-                            'Guardian Name': 'Jane Kamau',
-                            'Guardian Phone': '0712345678',
-                            'Guardian Email': 'jane@email.com',
-                            'Address': 'Nairobi'
-                        }
-                    ]
-                }
-
-            default:
-                return { columns: [], sampleData: [] }
+        if (entityType === 'STUDENT') {
+            return {
+                columns: [
+                    { name: 'Admission Number', required: true, description: 'Unique admission number', example: 'ADM001' },
+                    { name: 'First Name', required: true, description: 'Student first name', example: 'John' },
+                    { name: 'Middle Name', required: false, description: 'Student middle name', example: 'Mwangi' },
+                    { name: 'Last Name', required: true, description: 'Student last name', example: 'Kamau' },
+                    { name: 'Date of Birth', required: true, description: 'Date of birth (YYYY-MM-DD)', example: '2010-05-15' },
+                    { name: 'Gender', required: true, description: 'MALE or FEMALE', example: 'MALE' },
+                    { name: 'Student Type', required: true, description: 'BOARDER or DAY_SCHOLAR', example: 'DAY_SCHOLAR' },
+                    { name: 'Guardian Name', required: true, description: 'Parent/Guardian name', example: 'Jane Kamau' },
+                    { name: 'Guardian Phone', required: true, description: 'Guardian phone number', example: '0712345678' },
+                    { name: 'Guardian Email', required: false, description: 'Guardian email', example: 'jane@email.com' },
+                    { name: 'Address', required: false, description: 'Home address', example: 'Nairobi, Kenya' }
+                ],
+                sampleData: [
+                    {
+                        'Admission Number': 'ADM001',
+                        'First Name': 'John',
+                        'Middle Name': 'Mwangi',
+                        'Last Name': 'Kamau',
+                        'Date of Birth': '2010-05-15',
+                        'Gender': 'MALE',
+                        'Student Type': 'DAY_SCHOLAR',
+                        'Guardian Name': 'Jane Kamau',
+                        'Guardian Phone': '0712345678',
+                        'Guardian Email': 'jane@email.com',
+                        'Address': 'Nairobi'
+                    }
+                ]
+            }
         }
+
+        return { columns: [], sampleData: [] }
     }
 
     /**
@@ -428,4 +452,3 @@ export class DataImportService {
 }
 
 export const dataImportService = new DataImportService()
-

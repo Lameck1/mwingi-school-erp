@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import type Database from 'better-sqlite3';
 
 export interface CBCStrand {
   id: number;
@@ -56,9 +56,10 @@ export interface StudentActivityParticipation {
   activity_name: string;
   start_date: string;
   end_date?: string;
-  participation_level: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
+  participation_level: 'PRIMARY' | 'SECONDARY' | 'INTEREST';
   is_active: boolean;
   created_at: string;
+  updated_at?: string;
 }
 
 /**
@@ -109,7 +110,8 @@ export class CBCStrandService {
       SELECT * FROM cbc_strand
       WHERE id = ?
     `);
-    return (stmt.get(strandId) as CBCStrand) || null;
+    const strand = stmt.get(strandId) as CBCStrand | undefined;
+    return strand ?? null;
   }
 
   /**
@@ -128,7 +130,7 @@ export class CBCStrandService {
   }): number {
     const stmt = this.db.prepare(`
       INSERT INTO cbc_strand_expense (
-        strand_id, expense_date, description, gl_account_code,
+        cbc_strand_id, expense_date, description, gl_account_code,
         amount_cents, term, fiscal_year, receipt_number, created_by
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
@@ -158,7 +160,7 @@ export class CBCStrandService {
   ): StrandExpense[] {
     let sql = `
       SELECT * FROM cbc_strand_expense
-      WHERE strand_id = ? AND fiscal_year = ?
+      WHERE cbc_strand_id = ? AND fiscal_year = ?
     `;
     const params: unknown[] = [strandId, fiscalYear];
 
@@ -184,21 +186,22 @@ export class CBCStrandService {
       SELECT 
         cs.id as strand_id,
         cs.name as strand_name,
-        i.fiscal_year,
-        i.term,
-        COUNT(DISTINCT i.student_id) as student_count,
-        SUM(il.amount_cents) as total_fees_cents,
-        AVG(il.amount_cents) as avg_fee_per_student_cents
+        CAST(strftime('%Y', fi.invoice_date) AS INTEGER) as fiscal_year,
+        t.term_number as term,
+        COUNT(DISTINCT fi.student_id) as student_count,
+        SUM(ii.amount) as total_fees_cents,
+        AVG(ii.amount) as avg_fee_per_student_cents
       FROM cbc_strand cs
-      JOIN fee_category_strand fcs ON cs.id = fcs.strand_id
-      JOIN invoice_line il ON fcs.fee_category_id = il.fee_category_id
-      JOIN invoice i ON il.invoice_id = i.id
-      WHERE i.fiscal_year = ?
+      JOIN fee_category_strand fcs ON cs.id = fcs.cbc_strand_id
+      JOIN invoice_item ii ON fcs.fee_category_id = ii.fee_category_id
+      JOIN fee_invoice fi ON ii.invoice_id = fi.id
+      LEFT JOIN term t ON fi.term_id = t.id
+      WHERE CAST(strftime('%Y', fi.invoice_date) AS INTEGER) = ?
     `;
     const params: unknown[] = [fiscalYear];
 
     if (term !== undefined) {
-      sql += ' AND i.term = ?';
+      sql += ' AND t.term_number = ?';
       params.push(term);
     }
 
@@ -264,7 +267,7 @@ export class CBCStrandService {
   ): number {
     const stmt = this.db.prepare(`
       INSERT INTO fee_category_strand (
-        fee_category_id, strand_id, allocation_percentage, created_by
+        fee_category_id, cbc_strand_id, allocation_percentage, created_by
       ) VALUES (?, ?, ?, ?)
     `);
 
@@ -280,17 +283,21 @@ export class CBCStrandService {
     strand_id: number;
     activity_name: string;
     start_date: string;
-    participation_level: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
+    academic_year: number;
+    term: number;
+    participation_level: 'PRIMARY' | 'SECONDARY' | 'INTEREST';
   }): number {
     const stmt = this.db.prepare(`
       INSERT INTO student_activity_participation (
-        student_id, strand_id, activity_name, start_date, participation_level
-      ) VALUES (?, ?, ?, ?, ?)
+        student_id, cbc_strand_id, academic_year, term, activity_name, start_date, participation_level
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = stmt.run(
       data.student_id,
       data.strand_id,
+      data.academic_year,
+      data.term,
       data.activity_name,
       data.start_date,
       data.participation_level
@@ -325,7 +332,7 @@ export class CBCStrandService {
       SELECT 
         sap.*
       FROM student_activity_participation sap
-      WHERE sap.strand_id = ?
+      WHERE sap.cbc_strand_id = ?
     `;
 
     if (activeOnly) {

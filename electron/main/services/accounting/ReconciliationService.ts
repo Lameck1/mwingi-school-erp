@@ -1,5 +1,14 @@
-import { getDatabase } from '../../database/index';
+import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
+
+type ReconciliationStatus = 'PASS' | 'FAIL' | 'WARNING';
+
+const CHECK_STUDENT_CREDIT = 'Student Credit Balance Verification';
+const CHECK_TRIAL_BALANCE = 'Trial Balance Verification';
+const CHECK_ORPHANED_TRANSACTIONS = 'Orphaned Transactions Check';
+const CHECK_INVOICE_PAYMENTS = 'Invoice Payment Verification';
+const CHECK_ABNORMAL_BALANCES = 'Abnormal Balance Detection';
+const CHECK_LEDGER_LINKAGE = 'Ledger-Journal Linkage Check';
 
 /**
  * ReconciliationService
@@ -17,7 +26,7 @@ import { logAudit } from '../../database/utils/audit';
 
 export interface ReconciliationResult {
   check_name: string;
-  status: 'PASS' | 'FAIL' | 'WARNING';
+  status: ReconciliationStatus;
   message: string;
   variance?: number;
   details?: unknown;
@@ -25,7 +34,7 @@ export interface ReconciliationResult {
 
 export interface ReconciliationReport {
   run_date: string;
-  overall_status: 'PASS' | 'FAIL' | 'WARNING';
+  overall_status: ReconciliationStatus;
   checks: ReconciliationResult[];
   summary: {
     total_checks: number;
@@ -37,6 +46,18 @@ export interface ReconciliationReport {
 
 export class ReconciliationService {
   private db = getDatabase();
+
+  private resolveOverallStatus(summary: ReconciliationReport['summary']): ReconciliationStatus {
+    if (summary.failed > 0) {
+      return 'FAIL';
+    }
+
+    if (summary.warnings > 0) {
+      return 'WARNING';
+    }
+
+    return 'PASS';
+  }
 
   /**
    * Run all reconciliation checks
@@ -60,10 +81,7 @@ export class ReconciliationService {
       warnings: checks.filter(c => c.status === 'WARNING').length,
     };
 
-    const overall_status =
-      summary.failed > 0 ? 'FAIL' :
-        summary.warnings > 0 ? 'WARNING' :
-          'PASS';
+    const overall_status = this.resolveOverallStatus(summary);
 
     const report: ReconciliationReport = {
       run_date: new Date().toISOString(),
@@ -103,7 +121,7 @@ export class ReconciliationService {
 
       if (discrepancies.length === 0) {
         return {
-          check_name: 'Student Credit Balance Verification',
+          check_name: CHECK_STUDENT_CREDIT,
           status: 'PASS',
           message: `All ${students.length} student balances match ledger transactions.`,
         };
@@ -114,7 +132,7 @@ export class ReconciliationService {
       );
 
       return {
-        check_name: 'Student Credit Balance Verification',
+        check_name: CHECK_STUDENT_CREDIT,
         status: 'FAIL',
         message: `${discrepancies.length} students have balance discrepancies.`,
         variance: totalVariance,
@@ -127,7 +145,7 @@ export class ReconciliationService {
       };
     } catch (error: unknown) {
       return {
-        check_name: 'Student Credit Balance Verification',
+        check_name: CHECK_STUDENT_CREDIT,
         status: 'FAIL',
         message: `Error during check: ${(error as Error).message}`,
       };
@@ -150,7 +168,7 @@ export class ReconciliationService {
 
       if (!result) {
         return {
-          check_name: 'Trial Balance Verification',
+          check_name: CHECK_TRIAL_BALANCE,
           status: 'WARNING',
           message: 'No posted journal entries found.',
         };
@@ -160,14 +178,14 @@ export class ReconciliationService {
 
       if (variance < 1) { // Tolerance of 1 cent
         return {
-          check_name: 'Trial Balance Verification',
+          check_name: CHECK_TRIAL_BALANCE,
           status: 'PASS',
           message: `Books are balanced. Debits = Credits = ${result.total_debits} cents`,
         };
       }
 
       return {
-        check_name: 'Trial Balance Verification',
+        check_name: CHECK_TRIAL_BALANCE,
         status: 'FAIL',
         message: 'Trial Balance is OUT OF BALANCE!',
         variance,
@@ -179,7 +197,7 @@ export class ReconciliationService {
       };
     } catch (error: unknown) {
       return {
-        check_name: 'Trial Balance Verification',
+        check_name: CHECK_TRIAL_BALANCE,
         status: 'FAIL',
         message: `Error during check: ${(error as Error).message}`,
       };
@@ -200,14 +218,14 @@ export class ReconciliationService {
 
       if (!orphaned || orphaned.count === 0) {
         return {
-          check_name: 'Orphaned Transactions Check',
+          check_name: CHECK_ORPHANED_TRANSACTIONS,
           status: 'PASS',
           message: 'No orphaned transactions found.',
         };
       }
 
       return {
-        check_name: 'Orphaned Transactions Check',
+        check_name: CHECK_ORPHANED_TRANSACTIONS,
         status: orphaned.count > 10 ? 'FAIL' : 'WARNING',
         message: `Found ${orphaned.count} transactions without student linkage.`,
         details: {
@@ -217,7 +235,7 @@ export class ReconciliationService {
       };
     } catch (error: unknown) {
       return {
-        check_name: 'Orphaned Transactions Check',
+        check_name: CHECK_ORPHANED_TRANSACTIONS,
         status: 'FAIL',
         message: `Error during check: ${(error as Error).message}`,
       };
@@ -246,14 +264,14 @@ export class ReconciliationService {
 
       if (discrepancies.length === 0) {
         return {
-          check_name: 'Invoice Payment Verification',
+          check_name: CHECK_INVOICE_PAYMENTS,
           status: 'PASS',
           message: 'All invoice payment totals match transactions.',
         };
       }
 
       return {
-        check_name: 'Invoice Payment Verification',
+        check_name: CHECK_INVOICE_PAYMENTS,
         status: 'FAIL',
         message: `${discrepancies.length} invoices have payment mismatches.`,
         details: discrepancies.map(d => ({
@@ -265,7 +283,7 @@ export class ReconciliationService {
       };
     } catch (error: unknown) {
       return {
-        check_name: 'Invoice Payment Verification',
+        check_name: CHECK_INVOICE_PAYMENTS,
         status: 'FAIL',
         message: `Error during check: ${(error as Error).message}`,
       };
@@ -319,21 +337,21 @@ export class ReconciliationService {
 
       if (abnormal.length === 0) {
         return {
-          check_name: 'Abnormal Balance Detection',
+          check_name: CHECK_ABNORMAL_BALANCES,
           status: 'PASS',
           message: 'No abnormal GL account balances detected.',
         };
       }
 
       return {
-        check_name: 'Abnormal Balance Detection',
+        check_name: CHECK_ABNORMAL_BALANCES,
         status: 'WARNING',
         message: `Found ${abnormal.length} GL accounts with unexpected negative balances.`,
         details: abnormal,
       };
     } catch (error: unknown) {
       return {
-        check_name: 'Abnormal Balance Detection',
+        check_name: CHECK_ABNORMAL_BALANCES,
         status: 'FAIL',
         message: `Error during check: ${(error as Error).message}`,
       };
@@ -354,14 +372,14 @@ export class ReconciliationService {
 
       if (!unlinked || unlinked.count === 0) {
         return {
-          check_name: 'Ledger-Journal Linkage Check',
+          check_name: CHECK_LEDGER_LINKAGE,
           status: 'PASS',
           message: 'All recent legacy transactions are linked to journal entries.',
         };
       }
 
       return {
-        check_name: 'Ledger-Journal Linkage Check',
+        check_name: CHECK_LEDGER_LINKAGE,
         status: 'WARNING',
         message: `${unlinked.count} recent transactions not linked to journal entries.`,
         details: {
@@ -369,10 +387,10 @@ export class ReconciliationService {
           note: 'This may be normal if PaymentIntegrationService is not yet active.',
         },
       };
-    } catch (error: unknown) {
+    } catch {
       // If journal_entry_id column doesn't exist yet, this is expected
       return {
-        check_name: 'Ledger-Journal Linkage Check',
+        check_name: CHECK_LEDGER_LINKAGE,
         status: 'WARNING',
         message: 'Legacy-to-Journal linkage not yet implemented.',
       };
@@ -424,7 +442,7 @@ export class ReconciliationService {
         LIMIT ?
       `).all(limit) as Array<{
         reconciliation_date: string;
-        overall_status: 'PASS' | 'FAIL' | 'WARNING';
+        overall_status: ReconciliationStatus;
         total_checks: number;
         passed_checks: number;
         failed_checks: number;
@@ -457,3 +475,4 @@ export class ReconciliationService {
     return history.length > 0 ? history[0] : null;
   }
 }
+

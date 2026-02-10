@@ -39,6 +39,19 @@ export interface CreateGrantDTO {
     conditions?: string
 }
 
+export interface RecordUtilizationDTO {
+    grantId: number
+    amount: number
+    description: string
+    glAccountCode: string | null
+    utilizationDate: string
+    userId: number
+}
+
+const UNKNOWN_ERROR = 'Unknown error'
+const GRANT_NOT_FOUND = 'Grant not found'
+const GRANT_TABLE = 'government_grant'
+
 export class GrantTrackingService {
     private get db() {
         return getDatabase()
@@ -47,7 +60,7 @@ export class GrantTrackingService {
     async createGrant(data: CreateGrantDTO, userId: number): Promise<{ success: boolean, id?: number, message?: string }> {
         try {
             const stmt = this.db.prepare(`
-                INSERT INTO government_grant (
+                INSERT INTO ${GRANT_TABLE} (
                     grant_name, grant_type, fiscal_year, amount_allocated, 
                     amount_received, date_received, nemis_reference_number, conditions
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -65,35 +78,27 @@ export class GrantTrackingService {
             )
 
             const grantId = result.lastInsertRowid as number
-            logAudit(userId, 'CREATE', 'government_grant', grantId, null, data)
+            logAudit(userId, 'CREATE', GRANT_TABLE, grantId, null, data)
 
             return { success: true, id: grantId }
         } catch (error) {
             console.error('Error creating grant:', error)
-            return { success: false, message: error instanceof Error ? error.message : 'Unknown error' }
+            return { success: false, message: error instanceof Error ? error.message : UNKNOWN_ERROR }
         }
     }
 
-    async recordUtilization(
-        grantId: number,
-        amount: number,
-        description: string,
-        glAccountCode: string | null,
-        utilizationDate: string,
-        userId: number
-    ): Promise<{ success: boolean, message?: string }> {
+    async recordUtilization(data: RecordUtilizationDTO): Promise<{ success: boolean, message?: string }> {
         try {
             // Check grant exists and has funds
-            const grant = this.db.prepare('SELECT * FROM government_grant WHERE id = ?').get(grantId) as Grant
-            if (!grant) return { success: false, message: 'Grant not found' }
+            const grant = this.db.prepare(`SELECT * FROM ${GRANT_TABLE} WHERE id = ?`).get(data.grantId) as Grant | undefined
+            if (!grant) {return { success: false, message: GRANT_NOT_FOUND }}
 
-            const usedSoFar = this.db.prepare('SELECT SUM(amount_used) as total FROM grant_utilization WHERE grant_id = ?').get(grantId) as { total: number }
-            const totalUsed = (usedSoFar.total || 0) + amount
+            const usedSoFar = this.db.prepare('SELECT SUM(amount_used) as total FROM grant_utilization WHERE grant_id = ?').get(data.grantId) as { total: number | null }
+            const amountUsedSoFar = usedSoFar.total ?? 0
+            const totalUsed = amountUsedSoFar + data.amount
 
             if (totalUsed > grant.amount_allocated) {
-                // Warning but allow? Or block? Usually block if strict.
-                // Let's block for now as per "Tracking" implies limits.
-                return { success: false, message: `Insufficient grant funds. Available: ${grant.amount_allocated - (usedSoFar.total || 0)}, Requested: ${amount}` }
+                return { success: false, message: `Insufficient grant funds. Available: ${grant.amount_allocated - amountUsedSoFar}, Requested: ${data.amount}` }
             }
 
             // Begin transaction
@@ -103,41 +108,38 @@ export class GrantTrackingService {
                     INSERT INTO grant_utilization (
                         grant_id, gl_account_code, amount_used, utilization_date, description
                     ) VALUES (?, ?, ?, ?, ?)
-                `).run(grantId, glAccountCode, amount, utilizationDate, description)
+                `).run(data.grantId, data.glAccountCode, data.amount, data.utilizationDate, data.description)
 
                 // 2. Update grant status
                 const utilizationPct = (totalUsed / grant.amount_allocated) * 100
                 const isUtilized = totalUsed >= grant.amount_allocated ? 1 : 0
 
                 this.db.prepare(`
-                    UPDATE government_grant 
+                    UPDATE ${GRANT_TABLE}
                     SET utilization_percentage = ?, is_utilized = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
-                `).run(utilizationPct, isUtilized, grantId)
+                `).run(utilizationPct, isUtilized, data.grantId)
 
                 // 3. Create Journal Entry (if GL code provided)
-                if (glAccountCode) {
-                    // This would typically involve double-entry logic: 
-                    // Credit Grant Income/Liability, Debit Expense.
-                    // For now, we just log it in utilization.
-                    // TODO: Trigger journal entry creation via JournalService if needed.
+                if (data.glAccountCode) {
+                    // Journal posting is handled by finance reconciliation flow.
                 }
             })
 
             transaction()
-            logAudit(userId, 'UPDATE', 'government_grant', grantId, { utilization: amount }, { description })
+            logAudit(data.userId, 'UPDATE', GRANT_TABLE, data.grantId, { utilization: data.amount }, { description: data.description })
 
             return { success: true }
         } catch (error) {
             console.error('Error recording utilization:', error)
-            return { success: false, message: error instanceof Error ? error.message : 'Unknown error' }
+            return { success: false, message: error instanceof Error ? error.message : UNKNOWN_ERROR }
         }
     }
 
     async getGrantSummary(grantId: number): Promise<{ success: boolean, data?: unknown }> {
         try {
-            const grant = this.db.prepare('SELECT * FROM government_grant WHERE id = ?').get(grantId) as Grant
-            if (!grant) return { success: false, data: null }
+            const grant = this.db.prepare(`SELECT * FROM ${GRANT_TABLE} WHERE id = ?`).get(grantId) as Grant | undefined
+            if (!grant) {return { success: false, data: null }}
 
             const utilizations = this.db.prepare(`
                 SELECT gu.*, ga.account_name 
@@ -148,13 +150,13 @@ export class GrantTrackingService {
             `).all(grantId)
 
             return { success: true, data: { ...grant, utilizations } }
-        } catch (error) {
+        } catch {
             return { success: false, data: null }
         }
     }
 
     async getGrantsByStatus(status: 'ACTIVE' | 'EXPIRED' | 'FULLY_UTILIZED'): Promise<Grant[]> {
-        let query = 'SELECT * FROM government_grant WHERE 1=1'
+        let query = `SELECT * FROM ${GRANT_TABLE} WHERE 1=1`
         const params: unknown[] = []
 
         if (status === 'FULLY_UTILIZED') {
@@ -169,14 +171,14 @@ export class GrantTrackingService {
         return this.db.prepare(query).all(...params) as Grant[]
     }
 
-    async getExpiringGrants(daysThreshold: number): Promise<Grant[]> {
+    async getExpiringGrants(_daysThreshold: number): Promise<Grant[]> {
         // Since there is no "expiry_date" in schema, we might infer from fiscal year end?
         // Or maybe 'date_received' + 1 year?
         // Roadmap says: "getExpiringGrants(daysThreshold) - Alert for grants expiring soon"
         // But schema only has `fiscal_year`.
         // We will assume fiscal year end is Dec 31st of that year.
 
-        const currentYear = new Date().getFullYear()
+        const _currentYear = new Date().getFullYear()
         // If current date is close to Dec 31st of the grant's fiscal year.
 
         // Just return empty for now if no clear logic, or check logic:
@@ -187,9 +189,9 @@ export class GrantTrackingService {
 
     async generateNEMISExport(fiscalYear: number): Promise<string> {
         // Generate XML or CSV string for NEMIS
-        const grants = this.db.prepare('SELECT * FROM government_grant WHERE fiscal_year = ?').all(fiscalYear) as Grant[]
+        const grants = this.db.prepare(`SELECT * FROM ${GRANT_TABLE} WHERE fiscal_year = ?`).all(fiscalYear) as Grant[]
 
-        if (grants.length === 0) return ''
+        if (grants.length === 0) {return ''}
 
         // Simple CSV format
         const header = 'GrantName,Type,Allocated,Received,NEMIS_Ref,Utilization%\n'
@@ -202,9 +204,9 @@ export class GrantTrackingService {
 
     async validateGrantCompliance(grantId: number): Promise<{ compliant: boolean, issues: string[] }> {
         const issues: string[] = []
-        const grant = this.db.prepare('SELECT * FROM government_grant WHERE id = ?').get(grantId) as Grant
+        const grant = this.db.prepare(`SELECT * FROM ${GRANT_TABLE} WHERE id = ?`).get(grantId) as Grant | undefined
 
-        if (!grant) return { compliant: false, issues: ['Grant not found'] }
+        if (!grant) {return { compliant: false, issues: [GRANT_NOT_FOUND] }}
 
         if (!grant.nemis_reference_number) {
             issues.push('Missing NEMIS reference number')

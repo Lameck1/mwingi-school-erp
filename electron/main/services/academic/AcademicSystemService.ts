@@ -42,6 +42,23 @@ export interface Subject {
     code: string
     curriculum: string
     is_active: number
+    is_compulsory?: number
+}
+
+export interface SubjectCreateData {
+    code: string
+    name: string
+    curriculum: string
+    is_compulsory?: boolean
+    is_active?: boolean
+}
+
+export interface SubjectUpdateData {
+    code?: string
+    name?: string
+    curriculum?: string
+    is_compulsory?: boolean
+    is_active?: boolean
 }
 
 export interface Exam {
@@ -75,6 +92,91 @@ export class AcademicSystemService {
     // ==================== Subject Management ====================
     async getAllSubjects(): Promise<Subject[]> {
         return this.db.prepare('SELECT * FROM subject WHERE is_active = 1 ORDER BY curriculum, name').all() as Subject[]
+    }
+
+    async getAllSubjectsAdmin(): Promise<Subject[]> {
+        return this.db.prepare('SELECT * FROM subject ORDER BY curriculum, name').all() as Subject[]
+    }
+
+    async createSubject(data: SubjectCreateData, userId: number): Promise<{ success: boolean; id: number }> {
+        const code = data.code.trim().toUpperCase()
+        const name = data.name.trim()
+        const curriculum = data.curriculum.trim()
+
+        if (!code || !name || !curriculum) {
+            throw new Error('Subject code, name, and curriculum are required')
+        }
+
+        const duplicate = this.db.prepare('SELECT id FROM subject WHERE code = ?').get(code) as { id: number } | undefined
+        if (duplicate) {
+            throw new Error(`Subject code already exists: ${code}`)
+        }
+
+        const result = this.db.prepare(`
+            INSERT INTO subject (code, name, curriculum, is_compulsory, is_active)
+            VALUES (?, ?, ?, ?, ?)
+        `).run(
+            code,
+            name,
+            curriculum,
+            data.is_compulsory ? 1 : 0,
+            data.is_active === false ? 0 : 1
+        )
+
+        logAudit(userId, 'CREATE_SUBJECT', 'subject', Number(result.lastInsertRowid), null, {
+            code, name, curriculum, is_compulsory: data.is_compulsory ?? false, is_active: data.is_active ?? true
+        })
+
+        return { success: true, id: Number(result.lastInsertRowid) }
+    }
+
+    async updateSubject(id: number, data: SubjectUpdateData, userId: number): Promise<{ success: boolean }> {
+        const subject = this.db.prepare('SELECT * FROM subject WHERE id = ?').get(id) as Subject | undefined
+        if (!subject) {
+            throw new Error('Subject not found')
+        }
+
+        const code = data.code?.trim().toUpperCase()
+        if (code) {
+            const duplicate = this.db.prepare('SELECT id FROM subject WHERE code = ? AND id != ?').get(code, id) as { id: number } | undefined
+            if (duplicate) {
+                throw new Error(`Subject code already exists: ${code}`)
+            }
+        }
+
+        const compulsoryFlag = this.toNullableBooleanFlag(data.is_compulsory)
+        const activeFlag = this.toNullableBooleanFlag(data.is_active)
+
+        this.db.prepare(`
+            UPDATE subject SET
+              code = COALESCE(?, code),
+              name = COALESCE(?, name),
+              curriculum = COALESCE(?, curriculum),
+              is_compulsory = COALESCE(?, is_compulsory),
+              is_active = COALESCE(?, is_active)
+            WHERE id = ?
+        `).run(
+            code ?? null,
+            data.name?.trim() ?? null,
+            data.curriculum?.trim() ?? null,
+            compulsoryFlag,
+            activeFlag,
+            id
+        )
+
+        logAudit(userId, 'UPDATE_SUBJECT', 'subject', id, subject, data)
+        return { success: true }
+    }
+
+    async setSubjectActive(id: number, isActive: boolean, userId: number): Promise<{ success: boolean }> {
+        const subject = this.db.prepare('SELECT * FROM subject WHERE id = ?').get(id) as Subject | undefined
+        if (!subject) {
+            throw new Error('Subject not found')
+        }
+
+        this.db.prepare('UPDATE subject SET is_active = ? WHERE id = ?').run(isActive ? 1 : 0, id)
+        logAudit(userId, isActive ? 'ACTIVATE_SUBJECT' : 'DEACTIVATE_SUBJECT', 'subject', id, { is_active: subject.is_active }, { is_active: isActive })
+        return { success: true }
     }
 
     // ==================== Exam Management ====================
@@ -153,16 +255,16 @@ export class AcademicSystemService {
     }
 
     private async checkTermOpen(termId: number): Promise<void> {
-        const term = this.db.prepare('SELECT status FROM term WHERE id = ?').get(termId) as { status: string }
-        if (term && term.status === 'CLOSED') {
+        const term = this.db.prepare('SELECT status FROM term WHERE id = ?').get(termId) as { status: string } | undefined
+        if (term?.status === 'CLOSED') {
             throw new Error('Term is CLOSED for editing. Mutating records is not allowed.')
         }
     }
 
     private async verifyAccess(subjectId: number, streamId: number, userId: number): Promise<boolean> {
-        const user = this.db.prepare('SELECT role FROM user WHERE id = ?').get(userId) as { role: string }
-        if (!user) return false
-        if (user.role === 'ADMIN') return true
+        const user = this.db.prepare('SELECT role FROM user WHERE id = ?').get(userId) as { role: string } | undefined
+        if (!user) {return false}
+        if (user.role === 'ADMIN') {return true}
 
         // Check allocation
         const allocation = this.db.prepare(`
@@ -178,12 +280,15 @@ export class AcademicSystemService {
     // ==================== Results Management ====================
     async saveResults(examId: number, results: Omit<ExamResult, 'id' | 'exam_id'>[], userId: number): Promise<void> {
         // Fetch termId from exam
-        const exam = this.db.prepare('SELECT term_id FROM exam WHERE id = ?').get(examId) as { term_id: number }
-        if (exam) await this.checkTermOpen(exam.term_id)
+        const exam = this.db.prepare('SELECT term_id FROM exam WHERE id = ?').get(examId) as { term_id: number } | undefined
+        if (!exam) {
+            throw new Error('Exam not found')
+        }
+        await this.checkTermOpen(exam.term_id)
 
         // SECURITY: Verify access for the first entry (assuming batch is for same class/subject)
         if (results.length > 0) {
-            const canAccess = await this.verifyAccess(results[0].subject_id, 0, userId) // streamId check needs refinement
+            const _canAccess = await this.verifyAccess(results[0].subject_id, 0, userId) // streamId check needs refinement
             // ... strict check here
         }
 
@@ -199,6 +304,13 @@ export class AcademicSystemService {
         })
 
         transaction(results)
+    }
+
+    private toNullableBooleanFlag(value: boolean | undefined): 0 | 1 | null {
+        if (value === undefined) {
+            return null
+        }
+        return value ? 1 : 0
     }
 
     /**
@@ -223,7 +335,7 @@ export class AcademicSystemService {
                 WHERE er.exam_id = ? AND er.student_id = ?
             `).all(examId, student_id) as ExamResultWithCurriculum[]
 
-            if (results.length === 0) continue
+            if (results.length === 0) {continue}
 
             // Strategy: For 8-4-4 use score. For CBC/ECDE use (competency_level / 4) * 100 to normalize to a percentage
             let totalWeightedScore = 0
@@ -274,4 +386,3 @@ export class AcademicSystemService {
         logAudit(userId, 'PROCESS_RESULTS', 'report_card_summary', 0, null, { examId })
     }
 }
-

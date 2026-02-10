@@ -1,5 +1,5 @@
-import { BaseService } from '../base/BaseService'
 import { logAudit } from '../../database/utils/audit'
+import { BaseService } from '../base/BaseService'
 
 export interface InventoryItem {
     id: number
@@ -72,6 +72,21 @@ export interface Supplier {
     is_active: boolean
 }
 
+type AdjustStockArgs = [
+    itemId: number,
+    quantity: number,
+    type: 'IN' | 'OUT' | 'ADJUSTMENT',
+    userId: number,
+    notes?: string,
+    unitCost?: number
+]
+
+interface StockComputation {
+    currentStock: number
+    finalQty: number
+    change: number
+}
+
 interface InventoryItemRow {
     id: number;
     item_code: string;
@@ -125,25 +140,27 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
 
     protected validateCreate(data: CreateInventoryItemData): string[] | null {
         const errors: string[] = []
-        if (!data.item_name) errors.push('Item name is required')
-        if (!data.item_code) errors.push('Item code is required')
-        if (!data.category_id) errors.push('Category is required')
-        if (!data.unit_of_measure) errors.push('Unit of measure is required')
+        if (!data.item_name) {errors.push('Item name is required')}
+        if (!data.item_code) {errors.push('Item code is required')}
+        if (!data.category_id) {errors.push('Category is required')}
+        if (!data.unit_of_measure) {errors.push('Unit of measure is required')}
         return errors.length > 0 ? errors : null
     }
 
-    protected async validateUpdate(id: number, data: Partial<CreateInventoryItemData>): Promise<string[] | null> {
+    protected async validateUpdate(_id: number, _data: Partial<CreateInventoryItemData>): Promise<string[] | null> {
         return null
     }
 
     protected executeCreate(data: CreateInventoryItemData): { lastInsertRowid: number | bigint } {
         return this.db.prepare(`
             INSERT INTO inventory_item (
-                item_code, item_name, category_id, unit_of_measure, reorder_level, unit_cost
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                item_code, item_name, category_id, unit_of_measure, reorder_level, unit_cost,
+                unit_price, supplier_id, description, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         `).run(
             data.item_code, data.item_name, data.category_id,
-            data.unit_of_measure, data.reorder_level || 0, data.unit_cost || 0
+            data.unit_of_measure, data.reorder_level || 0, data.unit_cost || 0,
+            data.unit_price || 0, data.supplier_id || null, data.description || null
         )
     }
 
@@ -151,16 +168,36 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
         const sets: string[] = []
         const params: unknown[] = []
 
-        if (data.item_name) { sets.push('item_name = ?'); params.push(data.item_name) }
-        if (data.item_code) { sets.push('item_code = ?'); params.push(data.item_code) }
-        if (data.category_id) { sets.push('category_id = ?'); params.push(data.category_id) }
-        if (data.unit_of_measure) { sets.push('unit_of_measure = ?'); params.push(data.unit_of_measure) }
-        if (data.reorder_level !== undefined) { sets.push('reorder_level = ?'); params.push(data.reorder_level) }
-        if (data.unit_cost !== undefined) { sets.push('unit_cost = ?'); params.push(data.unit_cost) }
+        const assign = (column: string, value: unknown): void => {
+            sets.push(`${column} = ?`)
+            params.push(value)
+        }
+
+        const assignIfPresent = (column: string, value: unknown): void => {
+            if (value !== undefined && value !== null && value !== '') {
+                assign(column, value)
+            }
+        }
+
+        const assignIfDefined = (column: string, value: unknown): void => {
+            if (value !== undefined) {
+                assign(column, value)
+            }
+        }
+
+        assignIfPresent('item_name', data.item_name)
+        assignIfPresent('item_code', data.item_code)
+        assignIfPresent('category_id', data.category_id)
+        assignIfPresent('unit_of_measure', data.unit_of_measure)
+        assignIfDefined('reorder_level', data.reorder_level)
+        assignIfDefined('unit_cost', data.unit_cost)
+        assignIfDefined('unit_price', data.unit_price)
+        assignIfDefined('supplier_id', data.supplier_id)
+        assignIfDefined('description', data.description)
 
         if (sets.length > 0) {
             params.push(id)
-            this.db.prepare(`UPDATE inventory_item SET ${sets.join(', ')} WHERE id = ?`).run(...params)
+            this.db.prepare(`UPDATE inventory_item SET ${sets.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...params)
         }
     }
 
@@ -181,23 +218,32 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
 
     // Custom Methods
 
-    async adjustStock(itemId: number, quantity: number, type: 'IN' | 'OUT' | 'ADJUSTMENT', userId: number, notes?: string, unitCost?: number): Promise<{ success: boolean; error?: string }> {
-        const item = await this.findById(itemId)
-        if (!item) return { success: false, error: 'Item not found' }
-
-        const current_stock = item.current_stock
-        let change = 0
-        let finalQty = 0
+    private computeStockLevels(item: InventoryItem, quantity: number, type: 'IN' | 'OUT' | 'ADJUSTMENT'): StockComputation {
+        const currentStock = item.current_stock
 
         if (type === 'ADJUSTMENT') {
-            finalQty = quantity
-            change = finalQty - current_stock
-        } else {
-            change = type === 'OUT' ? -quantity : quantity
-            finalQty = current_stock + change
+            return {
+                currentStock,
+                finalQty: quantity,
+                change: quantity - currentStock
+            }
         }
 
-        if (finalQty < 0) return { success: false, error: 'Insufficient stock' }
+        const change = type === 'OUT' ? -quantity : quantity
+        return {
+            currentStock,
+            finalQty: currentStock + change,
+            change
+        }
+    }
+
+    async adjustStock(...[itemId, quantity, type, userId, notes, unitCost]: AdjustStockArgs): Promise<{ success: boolean; error?: string }> {
+        const item = await this.findById(itemId)
+        if (!item) {return { success: false, error: 'Item not found' }}
+
+        const { currentStock, finalQty, change } = this.computeStockLevels(item, quantity, type)
+
+        if (finalQty < 0) {return { success: false, error: 'Insufficient stock' }}
 
         // Use provided unit cost for IN/ADJUSTMENT, otherwise fallback to item's current cost
         // For OUT, we typically use the item's current cost (FIFO/LIFO/Avg not strictly implemented here, assuming standard cost)
@@ -222,7 +268,7 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
             `).run(itemId, type, Math.abs(change), movementCost, notes || null, userId)
         })()
 
-        logAudit(userId, 'STOCK_UPDATE', 'inventory_item', itemId, { quantity: current_stock }, { quantity: finalQty })
+        logAudit(userId, 'STOCK_UPDATE', 'inventory_item', itemId, { quantity: currentStock }, { quantity: finalQty })
 
         return { success: true }
     }
@@ -253,4 +299,3 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
         return this.db.prepare('SELECT * FROM supplier WHERE is_active = 1').all() as Supplier[]
     }
 }
-

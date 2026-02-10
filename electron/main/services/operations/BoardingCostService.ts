@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import type Database from 'better-sqlite3';
 
 interface BoardingFacility {
   id: number;
@@ -199,28 +199,33 @@ export class BoardingCostService {
     fiscalYear: number,
     term?: number
   ): number {
-    // Get boarding fee revenue from fee categories linked to this facility
-    // This would typically be fee category with type 'BOARDING'
+    // Calculate total boarding revenue from invoices, then allocate by occupancy share
     let query = `
-      SELECT COALESCE(SUM(lt.amount), 0) as total_revenue
-      FROM ledger_transaction lt
-      INNER JOIN student s ON lt.student_id = s.id
-      WHERE s.boarding_status = 'BOARDER'
-        AND s.current_dormitory = (SELECT name FROM boarding_facility WHERE id = ?)
-        AND lt.transaction_type = 'INVOICE'
-        AND lt.description LIKE '%boarding%'
-        AND strftime('%Y', lt.transaction_date) = ?
+      SELECT COALESCE(SUM(ii.amount), 0) as total_revenue
+      FROM fee_invoice fi
+      JOIN invoice_item ii ON fi.id = ii.invoice_id
+      JOIN fee_category fc ON ii.fee_category_id = fc.id
+      LEFT JOIN term t ON fi.term_id = t.id
+      WHERE LOWER(fc.category_name) LIKE '%boarding%'
+        AND CAST(strftime('%Y', fi.invoice_date) AS INTEGER) = ?
     `;
 
-    const params: unknown[] = [facilityId, fiscalYear.toString()];
+    const params: unknown[] = [fiscalYear];
 
     if (term) {
-      query += ` AND lt.term = ?`;
+      query += ` AND t.term_number = ?`;
       params.push(term);
     }
 
     const result = this.db.prepare(query).get(...params) as RevenueResult | undefined;
-    return result?.total_revenue || 0;
+    const totalRevenue = result?.total_revenue || 0;
+
+    const facility = this.db.prepare(`SELECT current_occupancy FROM boarding_facility WHERE id = ?`).get(facilityId) as { current_occupancy: number } | undefined;
+    const totalOccupancyRow = this.db.prepare(`SELECT COALESCE(SUM(current_occupancy), 0) as total FROM boarding_facility WHERE is_active = 1`).get() as { total: number };
+    const totalOccupancy = totalOccupancyRow.total || 0;
+
+    if (!facility || totalOccupancy <= 0) {return 0;}
+    return Math.round((totalRevenue * facility.current_occupancy) / totalOccupancy);
   }
 
   /**
@@ -234,7 +239,7 @@ export class BoardingCostService {
     // Get facility details
     const facility = this.db.prepare(`
       SELECT * FROM boarding_facility WHERE id = ?
-    `).get(facilityId) as BoardingFacility;
+    `).get(facilityId) as BoardingFacility | undefined;
 
     if (!facility) {
       throw new Error(`Boarding facility ${facilityId} not found`);
@@ -374,4 +379,3 @@ export class BoardingCostService {
 }
 
 export default BoardingCostService;
-

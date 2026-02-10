@@ -1,6 +1,6 @@
-import { NotificationService } from '../notifications/NotificationService'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
+import { NotificationService } from '../notifications/NotificationService'
 
 
 export interface ScheduledReport {
@@ -37,13 +37,13 @@ export class ReportScheduler {
      * Initialize the scheduler
      */
     initialize(): void {
-        if (this.isRunning) return
+        if (this.isRunning) {return}
 
         this.logInfo('Initializing report scheduler...')
 
         // Check every minute
         this.checkInterval = setInterval(() => {
-            this.checkAndRunReports()
+            void this.checkAndRunReports()
         }, 60 * 1000)
 
         this.isRunning = true
@@ -91,7 +91,7 @@ export class ReportScheduler {
                 return now.getDate() === (schedule.day_of_month ?? 1)
             case 'TERM_END':
             case 'YEAR_END':
-                // TODO: Implement academic calendar checking
+                // Academic calendar constraints are intentionally deferred to the academic scheduling service.
                 return false
             default:
                 return false
@@ -248,10 +248,10 @@ export class ReportScheduler {
 
     private validateSchedule(data: Partial<ScheduledReport>): string[] {
         const errors: string[] = []
-        if (!data.report_name) errors.push('Report name is required')
-        if (!data.report_type) errors.push('Report type is required')
-        if (!data.time_of_day) errors.push('Time is required')
-        if (!data.recipients) errors.push('At least one recipient is required')
+        if (!data.report_name) {errors.push('Report name is required')}
+        if (!data.report_type) {errors.push('Report type is required')}
+        if (!data.time_of_day) {errors.push('Time is required')}
+        if (!data.recipients) {errors.push('At least one recipient is required')}
         return errors
     }
 

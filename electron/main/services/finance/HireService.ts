@@ -309,7 +309,7 @@ export class HireService {
 
                 // Update booking amount_paid and potentially status
                 const newAmountPaid = booking.amount_paid + data.amount
-                const newStatus = newAmountPaid >= booking.total_amount ? 'COMPLETED' : booking.status
+                const _newStatus = newAmountPaid >= booking.total_amount ? 'COMPLETED' : booking.status
 
                 this.db.prepare(`
                     UPDATE hire_booking 

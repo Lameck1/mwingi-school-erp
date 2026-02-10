@@ -1,5 +1,5 @@
-import { BaseService } from '../base/BaseService'
 import { logAudit } from '../../database/utils/audit'
+import { BaseService } from '../base/BaseService'
 
 export interface FixedAsset {
     id: number
@@ -69,19 +69,43 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
 
     protected validateCreate(data: CreateAssetData): string[] | null {
         const errors: string[] = []
-        if (!data.asset_name) errors.push('Asset name is required')
-        if (!data.category_id) errors.push('Category is required')
-        if (!data.acquisition_date) errors.push('Acquisition date is required')
-        if (data.acquisition_cost < 0) errors.push('Cost cannot be negative')
+        if (!data.asset_name) {errors.push('Asset name is required')}
+        if (!data.category_id) {errors.push('Category is required')}
+        if (!data.acquisition_date) {errors.push('Acquisition date is required')}
+        if (data.acquisition_cost < 0) {errors.push('Cost cannot be negative')}
         return errors.length > 0 ? errors : null
     }
 
-    protected async validateUpdate(id: number, data: UpdateAssetData): Promise<string[] | null> {
+    protected async validateUpdate(_id: number, _data: UpdateAssetData): Promise<string[] | null> {
         return null
     }
 
+    async create(data: CreateAssetData, userId: number): Promise<{ success: boolean; id: number; errors?: string[] }> {
+        const errors = this.validateCreate(data)
+        if (errors) {
+            return { success: false, id: 0, errors }
+        }
+
+        try {
+            const result = this.executeCreateWithUser(data, userId)
+            const id = result.lastInsertRowid as number
+            logAudit(userId, 'CREATE', this.getTableName(), id, null, data)
+            return { success: true, id }
+        } catch (error) {
+            return {
+                success: false,
+                id: 0,
+                errors: [error instanceof Error ? error.message : 'Unknown error']
+            }
+        }
+    }
+
     protected executeCreate(data: CreateAssetData): { lastInsertRowid: number | bigint } {
-        // Auto-generate asset code if not provided
+        // Fallback (BaseService) - should not be used directly
+        return this.executeCreateWithUser(data, 0)
+    }
+
+    private executeCreateWithUser(data: CreateAssetData, userId: number): { lastInsertRowid: number | bigint } {
         const assetCode = data.asset_code || `AST-${Date.now().toString().slice(-6)}`
 
         return this.db.prepare(`
@@ -94,9 +118,9 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
         `).run(
             assetCode, data.asset_name, data.category_id, data.description || null,
             data.serial_number || null, data.location || null, data.acquisition_date,
-            data.acquisition_cost, data.acquisition_cost, // Initial current value = cost
+            data.acquisition_cost, data.acquisition_cost,
             data.supplier_id || null, data.warranty_expiry || null,
-            1 // TODO: Pass user ID
+            userId
         )
     }
 
@@ -135,8 +159,8 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
 
     async runDepreciation(assetId: number, periodId: number, userId: number): Promise<{ success: boolean; error?: string }> {
         const asset = await this.findById(assetId)
-        if (!asset) return { success: false, error: 'Asset not found' }
-        if (asset.current_value <= 0) return { success: false, error: 'Asset already fully depreciated' }
+        if (!asset) {return { success: false, error: 'Asset not found' }}
+        if (asset.current_value <= 0) {return { success: false, error: 'Asset already fully depreciated' }}
 
         // Simple Straight Line Depreciation (10% default for now)
         // In real app, fetch rate from category

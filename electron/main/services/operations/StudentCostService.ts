@@ -21,7 +21,9 @@ interface StudentEnrollmentInfo {
     id: number
     student_type: string
     stream_id: number
-    [key: string]: unknown // For other student fields
+    academic_year_id: number
+    term_id: number
+    [key: string]: unknown
 }
 
 interface StudentRouteAssignment {
@@ -29,7 +31,15 @@ interface StudentRouteAssignment {
     student_id: number
     route_id: number
     is_active: number
-    // Add other fields as necessary
+}
+
+interface SnapshotCosts {
+    teachingCost: number
+    facilitiesCost: number
+    activitiesOverhead: number
+    administrationCost: number
+    overheadCost: number
+    otherOverhead: number
 }
 
 export class StudentCostService {
@@ -37,61 +47,164 @@ export class StudentCostService {
         return getDatabase()
     }
 
-    async calculateStudentCost(studentId: number, termId: number, academicYearId: number): Promise<StudentCost> {
-        // 1. Get student details (boarding status, transport usage, activities)
+    private getAcademicYearValue(academicYearId: number): number {
+        const row = this.db.prepare('SELECT year_name FROM academic_year WHERE id = ?').get(academicYearId) as { year_name?: string } | undefined
+        const year = row?.year_name ? parseInt(row.year_name, 10) : Number.NaN
+        return Number.isFinite(year) ? year : new Date().getFullYear()
+    }
+
+    private getTermNumber(termId: number): number {
+        const row = this.db.prepare('SELECT term_number FROM term WHERE id = ?').get(termId) as { term_number?: number } | undefined
+        return row?.term_number ?? 1
+    }
+
+    private getStudentEnrollmentInfo(studentId: number, termId: number, academicYearId: number): StudentEnrollmentInfo {
         const student = this.db.prepare(`
-            SELECT s.*, e.stream_id, e.student_type 
+            SELECT s.*, e.stream_id, e.student_type
             FROM student s
             JOIN enrollment e ON s.id = e.student_id
             WHERE s.id = ? AND e.term_id = ? AND e.academic_year_id = ?
         `).get(studentId, termId, academicYearId) as StudentEnrollmentInfo | undefined
 
-        if (!student) throw new Error('Student not found or not enrolled in this term')
+        if (!student) {
+            throw new Error('Student not found or not enrolled in this term')
+        }
 
-        // 2. Calculate Boarding Cost (if boarder)
-        let boardingCost = 0
-        if (student.student_type === 'BOARDER') {
-            // Get average boarding cost per student from BoardingCostService logic
-            // For now, we query the boarding_expense table and divide by total boarders
-            const totalBoardingExpense = this.db.prepare(`
-                SELECT SUM(amount) as total FROM boarding_expense 
-                WHERE expense_date BETWEEN ? AND ? -- Term dates need to be fetched
-             `).get('2026-01-01', '2026-04-01') as { total: number } // Mock dates
+        return student
+    }
 
-            // In real impl, we'd get term dates first.
-            // Simplified: Get snapshot if available
-            const snapshot = this.db.prepare(`
-                SELECT * FROM student_cost_snapshot 
-                WHERE academic_year = ? AND term = ?
-             `).get(2026, 1) as { [key: string]: unknown } | undefined // Mock IDs
+    private getBoardingCost(
+        student: StudentEnrollmentInfo,
+        fiscalYear: number,
+        termNumber: number,
+        academicYearId: number,
+        termId: number
+    ): number {
+        if (student.student_type !== 'BOARDER') {
+            return 0
+        }
 
-            if (snapshot) {
-                boardingCost = 2500000 // Mock from snapshot logic (25,000.00)
+        const totalBoardingExpenseRow = this.db.prepare(`
+            SELECT COALESCE(SUM(amount_cents), 0) as total
+            FROM boarding_expense
+            WHERE fiscal_year = ? AND term = ?
+        `).get(fiscalYear, termNumber) as { total: number }
+
+        const boarderCountRow = this.db.prepare(`
+            SELECT COUNT(*) as count
+            FROM enrollment
+            WHERE academic_year_id = ? AND term_id = ? AND student_type = 'BOARDER' AND status = 'ACTIVE'
+        `).get(academicYearId, termId) as { count: number }
+
+        const boarderCount = boarderCountRow.count || 0
+        if (boarderCount <= 0) {
+            return 0
+        }
+
+        return Math.round((totalBoardingExpenseRow.total || 0) / boarderCount)
+    }
+
+    private getTransportCost(studentId: number, fiscalYear: number, termNumber: number): number {
+        const transportAssignment = this.db.prepare(`
+            SELECT * FROM student_route_assignment
+            WHERE student_id = ? AND academic_year = ? AND term = ? AND is_active = 1
+        `).get(studentId, fiscalYear, termNumber) as StudentRouteAssignment | undefined
+
+        if (!transportAssignment) {
+            return 0
+        }
+
+        const totalRouteExpenseRow = this.db.prepare(`
+            SELECT COALESCE(SUM(amount_cents), 0) as total
+            FROM transport_route_expense
+            WHERE route_id = ? AND fiscal_year = ? AND term = ?
+        `).get(transportAssignment.route_id, fiscalYear, termNumber) as { total: number }
+
+        const routeStudentCountRow = this.db.prepare(`
+            SELECT COUNT(*) as count
+            FROM student_route_assignment
+            WHERE route_id = ? AND academic_year = ? AND term = ? AND is_active = 1
+        `).get(transportAssignment.route_id, fiscalYear, termNumber) as { count: number }
+
+        const routeCount = routeStudentCountRow.count || 0
+        if (routeCount <= 0) {
+            return 0
+        }
+
+        return Math.round((totalRouteExpenseRow.total || 0) / routeCount)
+    }
+
+    private getActivityCost(studentId: number, fiscalYear: number, termNumber: number): number {
+        const participations = this.db.prepare(`
+            SELECT cbc_strand_id
+            FROM student_activity_participation
+            WHERE student_id = ? AND academic_year = ? AND term = ? AND is_active = 1
+        `).all(studentId, fiscalYear, termNumber) as { cbc_strand_id: number }[]
+
+        let activityCost = 0
+
+        for (const participation of participations) {
+            const totalStrandExpenseRow = this.db.prepare(`
+                SELECT COALESCE(SUM(amount_cents), 0) as total
+                FROM cbc_strand_expense
+                WHERE cbc_strand_id = ? AND fiscal_year = ? AND term = ?
+            `).get(participation.cbc_strand_id, fiscalYear, termNumber) as { total: number }
+
+            const strandStudentCountRow = this.db.prepare(`
+                SELECT COUNT(*) as count
+                FROM student_activity_participation
+                WHERE cbc_strand_id = ? AND academic_year = ? AND term = ? AND is_active = 1
+            `).get(participation.cbc_strand_id, fiscalYear, termNumber) as { count: number }
+
+            const strandCount = strandStudentCountRow.count || 0
+            if (strandCount > 0) {
+                activityCost += Math.round((totalStrandExpenseRow.total || 0) / strandCount)
             }
         }
 
-        // 3. Calculate Transport Cost (if uses transport)
-        let transportCost = 0
-        const transportAssignment = this.db.prepare(`
-            SELECT * FROM student_route_assignment 
-            WHERE student_id = ? AND is_active = 1
-        `).get(studentId) as StudentRouteAssignment | undefined
+        return activityCost
+    }
 
-        if (transportAssignment) {
-            // Get specific route cost per student
-            // Simplified logic
-            transportCost = 1500000 // 15,000.00
+    private getSnapshotCosts(fiscalYear: number, termNumber: number): SnapshotCosts {
+        const snapshot = this.db.prepare(`
+            SELECT * FROM student_cost_snapshot
+            WHERE academic_year = ? AND term = ?
+        `).get(fiscalYear, termNumber) as {
+            cost_per_student: number
+            teaching_cost_per_student: number
+            facilities_cost_per_student: number
+            activities_cost_per_student: number
+            administration_cost_per_student: number
+        } | undefined
+
+        const teachingCost = snapshot?.teaching_cost_per_student || 0
+        const facilitiesCost = snapshot?.facilities_cost_per_student || 0
+        const activitiesOverhead = snapshot?.activities_cost_per_student || 0
+        const administrationCost = snapshot?.administration_cost_per_student || 0
+        const overheadCost = snapshot?.cost_per_student || (teachingCost + facilitiesCost + activitiesOverhead + administrationCost)
+        const otherOverhead = Math.max(0, overheadCost - (teachingCost + facilitiesCost + activitiesOverhead + administrationCost))
+
+        return {
+            teachingCost,
+            facilitiesCost,
+            activitiesOverhead,
+            administrationCost,
+            overheadCost,
+            otherOverhead
         }
+    }
 
-        // 4. Activity Cost (CBC Strands)
-        // Get strands student participates in
-        const activityCost = 0
-        // ... logic to sum strand expenses / students in strand
+    async calculateStudentCost(studentId: number, termId: number, academicYearId: number): Promise<StudentCost> {
+        const student = this.getStudentEnrollmentInfo(studentId, termId, academicYearId)
+        const fiscalYear = this.getAcademicYearValue(academicYearId)
+        const termNumber = this.getTermNumber(termId)
 
-        // 5. General Admin/Tuition Cost (Overhead / Total Students)
-        const overheadCost = 1000000 // Mock (10,000.00)
+        const boardingCost = this.getBoardingCost(student, fiscalYear, termNumber, academicYearId, termId)
+        const transportCost = this.getTransportCost(studentId, fiscalYear, termNumber)
+        const activityCost = this.getActivityCost(studentId, fiscalYear, termNumber)
+        const snapshotCosts = this.getSnapshotCosts(fiscalYear, termNumber)
 
-        const total = boardingCost + transportCost + activityCost + overheadCost
+        const total = boardingCost + transportCost + activityCost + snapshotCosts.overheadCost
 
         return {
             student_id: studentId,
@@ -99,42 +212,36 @@ export class StudentCostService {
             academic_year_id: academicYearId,
             total_cost: total,
             breakdown: {
-                tuition_share: overheadCost * 0.4,
+                tuition_share: snapshotCosts.teachingCost,
                 boarding_share: boardingCost,
                 transport_share: transportCost,
-                activity_share: activityCost,
-                admin_share: overheadCost * 0.6,
-                other_share: 0
+                activity_share: activityCost + snapshotCosts.activitiesOverhead,
+                admin_share: snapshotCosts.administrationCost,
+                other_share: snapshotCosts.facilitiesCost + snapshotCosts.otherOverhead
             }
         }
     }
 
     async getCostBreakdown(studentId: number, termId: number): Promise<CostBreakdown> {
-        // Implementation would call calculateStudentCost
-        // Mocking for now as calculateStudentCost needs proper Term date logic
-        return {
-            tuition_share: 500000,
-            boarding_share: 1500000,
-            transport_share: 800000,
-            activity_share: 200000,
-            admin_share: 300000,
-            other_share: 100000
+        const term = this.db.prepare('SELECT academic_year_id FROM term WHERE id = ?').get(termId) as { academic_year_id: number } | undefined
+        if (!term) {
+            throw new Error('Term not found')
         }
+
+        const cost = await this.calculateStudentCost(studentId, termId, term.academic_year_id)
+        return cost.breakdown
     }
 
     async getCostVsRevenue(studentId: number, termId: number): Promise<{ cost: number, revenue: number, subsidy: number }> {
-        // 1. Get Cost
-        const cost = (await this.getCostBreakdown(studentId, termId))
+        const cost = await this.getCostBreakdown(studentId, termId)
         const totalCost = Object.values(cost).reduce((a, b) => a + b, 0)
 
-        // 2. Get Revenue (Fees Billed/Paid)
-        // Check invoice for this term
         const invoice = this.db.prepare(`
-            SELECT total_amount FROM fee_invoice 
+            SELECT total_amount FROM fee_invoice
             WHERE student_id = ? AND term_id = ?
         `).get(studentId, termId) as { total_amount: number } | undefined
 
-        const revenue = (invoice?.total_amount || 0)
+        const revenue = invoice?.total_amount || 0
 
         return {
             cost: totalCost,
@@ -143,16 +250,33 @@ export class StudentCostService {
         }
     }
 
-    async getAverageCostPerStudent(grade: number, termId: number): Promise<number> {
-        // Query snapshot or calculate aggregate
-        return 3500000 // Mock (35,000.00)
+    async getAverageCostPerStudent(_grade: number, termId: number): Promise<number> {
+        const term = this.db.prepare('SELECT academic_year_id FROM term WHERE id = ?').get(termId) as { academic_year_id: number } | undefined
+        if (!term) {
+            return 0
+        }
+
+        const fiscalYear = this.getAcademicYearValue(term.academic_year_id)
+        const termNumber = this.getTermNumber(termId)
+        const snapshot = this.db.prepare(`
+            SELECT cost_per_student FROM student_cost_snapshot
+            WHERE academic_year = ? AND term = ?
+        `).get(fiscalYear, termNumber) as { cost_per_student: number } | undefined
+
+        return snapshot?.cost_per_student || 0
     }
 
-    async getCostTrendAnalysis(studentId: number, periods: number): Promise<unknown[]> {
-        return [
-            { period: 'Term 1 2025', cost: 3200000 },
-            { period: 'Term 2 2025', cost: 3400000 },
-            { period: 'Term 3 2025', cost: 3300000 },
-        ]
+    async getCostTrendAnalysis(_studentId: number, periods: number): Promise<unknown[]> {
+        const rows = this.db.prepare(`
+            SELECT academic_year, term, cost_per_student
+            FROM student_cost_snapshot
+            ORDER BY academic_year DESC, term DESC
+            LIMIT ?
+        `).all(periods) as { academic_year: number; term: number; cost_per_student: number }[]
+
+        return rows.map((row) => ({
+            period: `Term ${row.term} ${row.academic_year}`,
+            cost: row.cost_per_student
+        }))
     }
 }

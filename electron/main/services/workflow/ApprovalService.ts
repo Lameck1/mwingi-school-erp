@@ -28,6 +28,9 @@ export interface ApprovalWorkflow {
 }
 
 export class ApprovalService {
+    private static readonly UNKNOWN_ERROR_MESSAGE = 'Unknown error'
+    private static readonly REQUEST_NOT_FOUND_MESSAGE = 'Approval request not found'
+
     private get db() { return getDatabase() }
 
     // ===== WORKFLOWS =====
@@ -46,7 +49,7 @@ export class ApprovalService {
 
     // ===== APPROVAL REQUESTS =====
 
-    async getPendingApprovals(userId?: number): Promise<ApprovalRequest[]> {
+    async getPendingApprovals(_userId?: number): Promise<ApprovalRequest[]> {
         const query = `
       SELECT ar.*, 
              aw.workflow_name,
@@ -137,7 +140,7 @@ export class ApprovalService {
 
             return { success: true, id: result.lastInsertRowid as number }
         } catch (error) {
-            return { success: false, errors: [error instanceof Error ? error.message : 'Unknown error'] }
+            return { success: false, errors: [error instanceof Error ? error.message : ApprovalService.UNKNOWN_ERROR_MESSAGE] }
         }
     }
 
@@ -146,7 +149,7 @@ export class ApprovalService {
             const request = this.db.prepare(`SELECT * FROM approval_request WHERE id = ?`).get(requestId) as ApprovalRequest | null
 
             if (!request) {
-                return { success: false, errors: ['Approval request not found'] }
+                return { success: false, errors: [ApprovalService.REQUEST_NOT_FOUND_MESSAGE] }
             }
 
             if (request.status !== 'PENDING') {
@@ -173,7 +176,7 @@ export class ApprovalService {
 
             return { success: true }
         } catch (error) {
-            return { success: false, errors: [error instanceof Error ? error.message : 'Unknown error'] }
+            return { success: false, errors: [error instanceof Error ? error.message : ApprovalService.UNKNOWN_ERROR_MESSAGE] }
         }
     }
 
@@ -182,7 +185,7 @@ export class ApprovalService {
             const request = this.db.prepare(`SELECT * FROM approval_request WHERE id = ?`).get(requestId) as ApprovalRequest | null
 
             if (!request) {
-                return { success: false, errors: ['Approval request not found'] }
+                return { success: false, errors: [ApprovalService.REQUEST_NOT_FOUND_MESSAGE] }
             }
 
             if (request.status !== 'PENDING') {
@@ -209,7 +212,7 @@ export class ApprovalService {
 
             return { success: true }
         } catch (error) {
-            return { success: false, errors: [error instanceof Error ? error.message : 'Unknown error'] }
+            return { success: false, errors: [error instanceof Error ? error.message : ApprovalService.UNKNOWN_ERROR_MESSAGE] }
         }
     }
 
@@ -218,7 +221,7 @@ export class ApprovalService {
             const request = this.db.prepare(`SELECT * FROM approval_request WHERE id = ?`).get(requestId) as ApprovalRequest | null
 
             if (!request) {
-                return { success: false, errors: ['Approval request not found'] }
+                return { success: false, errors: [ApprovalService.REQUEST_NOT_FOUND_MESSAGE] }
             }
 
             if (request.status !== 'PENDING') {
@@ -242,7 +245,7 @@ export class ApprovalService {
 
             return { success: true }
         } catch (error) {
-            return { success: false, errors: [error instanceof Error ? error.message : 'Unknown error'] }
+            return { success: false, errors: [error instanceof Error ? error.message : ApprovalService.UNKNOWN_ERROR_MESSAGE] }
         }
     }
 

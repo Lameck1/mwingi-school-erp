@@ -11,9 +11,11 @@
  * 4. Tracks payment status in both systems
  */
 
-import { getDatabase } from '../../database/index';
-import { PayrollJournalService, PayrollPeriod } from './PayrollJournalService';
+import { PayrollJournalService, type PayrollPeriod } from './PayrollJournalService';
+import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
+
+const SELECT_PAYROLL_PERIOD_BY_ID = SELECT_PAYROLL_PERIOD_BY_ID;
 
 export interface PayrollRecordWithStaff {
   id: number;
@@ -96,7 +98,7 @@ export class PayrollIntegrationService {
     try {
       // Check if payroll period is approved
       const period = this.db
-        .prepare('SELECT * FROM payroll_period WHERE id = ?')
+        .prepare(SELECT_PAYROLL_PERIOD_BY_ID)
         .get(periodId) as PayrollPeriod | undefined;
 
       if (!period) {
@@ -175,7 +177,7 @@ export class PayrollIntegrationService {
     try {
       // Check if payroll is posted to GL
       const period = this.db
-        .prepare('SELECT * FROM payroll_period WHERE id = ?')
+        .prepare(SELECT_PAYROLL_PERIOD_BY_ID)
         .get(periodId) as PayrollPeriod | undefined;
 
       if (!period || !period.gl_posted) {
@@ -248,7 +250,7 @@ export class PayrollIntegrationService {
     try {
       // Verify payroll is paid
       const period = this.db
-        .prepare('SELECT * FROM payroll_period WHERE id = ?')
+        .prepare(SELECT_PAYROLL_PERIOD_BY_ID)
         .get(periodId) as PayrollPeriod | undefined;
 
       if (!period || period.status !== 'PAID') {
@@ -311,7 +313,7 @@ export class PayrollIntegrationService {
    */
   getPayrollSummaryWithGLStatus(periodId: number): PayrollSummaryResult | null {
     const period = this.db
-      .prepare('SELECT * FROM payroll_period WHERE id = ?')
+      .prepare(SELECT_PAYROLL_PERIOD_BY_ID)
       .get(periodId) as PayrollPeriod | undefined;
 
     if (!period) {
@@ -391,7 +393,7 @@ export class PayrollIntegrationService {
       this.db.exec(`
         ALTER TABLE payroll ADD COLUMN gl_posted INTEGER DEFAULT 0;
       `);
-    } catch (e) {
+    } catch {
       // Column already exists
     }
 
@@ -399,7 +401,7 @@ export class PayrollIntegrationService {
       this.db.exec(`
         ALTER TABLE payroll ADD COLUMN gl_posted_date TEXT;
       `);
-    } catch (e) {
+    } catch {
       // Column already exists
     }
 
@@ -407,7 +409,7 @@ export class PayrollIntegrationService {
       this.db.exec(`
         ALTER TABLE payroll ADD COLUMN payment_status TEXT DEFAULT 'PENDING';
       `);
-    } catch (e) {
+    } catch {
       // Column already exists
     }
 
@@ -415,7 +417,7 @@ export class PayrollIntegrationService {
       this.db.exec(`
         ALTER TABLE payroll ADD COLUMN payment_date TEXT;
       `);
-    } catch (e) {
+    } catch {
       // Column already exists
     }
 
@@ -423,9 +425,10 @@ export class PayrollIntegrationService {
       this.db.exec(`
         ALTER TABLE payroll_period ADD COLUMN gl_posted INTEGER DEFAULT 0;
       `);
-    } catch (e) {
+    } catch {
       // Column already exists
     }
   }
 }
+
 

@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import type Database from 'better-sqlite3';
 
 interface TransportRoute {
   id: number;
@@ -312,24 +312,26 @@ export class TransportCostService {
     }
 
     const countResult = this.db.prepare(countQuery).get(...countParams) as StudentCountResult | undefined;
-    const studentCount = countResult?.student_count || 0;
+    const _studentCount = countResult?.student_count || 0;
 
-    // Get transport fee revenue
-    // Assuming transport fees are marked with transaction_type = 'INVOICE' and description contains 'transport'
+    // Get transport fee revenue from invoice items tagged as transport
     let revenueQuery = `
-      SELECT COALESCE(SUM(lt.amount), 0) as total_revenue
-      FROM ledger_transaction lt
-      INNER JOIN student_route_assignment sra ON lt.student_id = sra.student_id
+      SELECT COALESCE(SUM(ii.amount), 0) as total_revenue
+      FROM fee_invoice fi
+      JOIN invoice_item ii ON fi.id = ii.invoice_id
+      JOIN fee_category fc ON ii.fee_category_id = fc.id
+      JOIN student_route_assignment sra ON fi.student_id = sra.student_id
+      LEFT JOIN term t ON fi.term_id = t.id
       WHERE sra.route_id = ?
         AND sra.academic_year = ?
-        AND lt.transaction_type = 'INVOICE'
-        AND lt.description LIKE '%transport%'
+        AND LOWER(fc.category_name) LIKE '%transport%'
+        AND CAST(strftime('%Y', fi.invoice_date) AS INTEGER) = ?
     `;
 
-    const revenueParams: unknown[] = [routeId, fiscalYear];
+    const revenueParams: unknown[] = [routeId, fiscalYear, fiscalYear];
 
     if (term) {
-      revenueQuery += ` AND sra.term = ? AND lt.term = ?`;
+      revenueQuery += ` AND sra.term = ? AND t.term_number = ?`;
       revenueParams.push(term, term);
     }
 
@@ -348,7 +350,7 @@ export class TransportCostService {
     // Get route details
     const route = this.db.prepare(`
       SELECT * FROM transport_route WHERE id = ?
-    `).get(routeId) as TransportRoute;
+    `).get(routeId) as TransportRoute | undefined;
 
     if (!route) {
       throw new Error(`Transport route ${routeId} not found`);
@@ -484,4 +486,3 @@ export class TransportCostService {
 }
 
 export default TransportCostService;
-

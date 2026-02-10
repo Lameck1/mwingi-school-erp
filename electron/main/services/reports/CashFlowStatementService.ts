@@ -1,5 +1,7 @@
-import Database from 'better-sqlite3'
 import { getDatabase } from '../../database'
+
+import type Database from 'better-sqlite3'
+
 
 // ============================================================================
 // SEGREGATED INTERFACES (ISP)
@@ -17,8 +19,10 @@ export interface IFinancingActivitiesCalculator {
   getFinancingActivities(startDate: string, endDate: string): Promise<FinancingActivitiesResult>
 }
 
+export type LiquidityStatus = 'STRONG' | 'ADEQUATE' | 'TIGHT' | 'CRITICAL'
+
 export interface ILiquidityAnalyzer {
-  assessLiquidityStatus(closingBalance: number, avgMonthlyExpenses?: number): 'STRONG' | 'ADEQUATE' | 'TIGHT' | 'CRITICAL'
+  assessLiquidityStatus(closingBalance: number, avgMonthlyExpenses?: number): LiquidityStatus
 }
 
 export interface ICashFlowForecaster {
@@ -73,7 +77,7 @@ export interface CashFlowStatement {
   closing_cash_balance: number
   cash_forecast_30_days: number
   cash_forecast_60_days: number
-  liquidity_status: 'STRONG' | 'ADEQUATE' | 'TIGHT' | 'CRITICAL'
+  liquidity_status: LiquidityStatus
 }
 
 interface LedgerTransactionResult {
@@ -257,7 +261,7 @@ class InvestingActivitiesCalculator implements IInvestingActivitiesCalculator {
     assetTransactions.forEach((trans: AssetTransactionResult) => {
       if (trans.transaction_type === 'PURCHASE') {
         assetPurchases += trans.amount || 0
-      } else if (trans.transaction_type === 'SALE') {
+      } else {
         assetSales += trans.amount || 0
       }
     })
@@ -297,7 +301,7 @@ class FinancingActivitiesCalculator implements IFinancingActivitiesCalculator {
         loansReceived += trans.amount || 0
       } else if (trans.transaction_type === 'REPAYMENT') {
         loanRepayments += trans.amount || 0
-      } else if (trans.transaction_type === 'GRANT') {
+      } else {
         grantReceived += trans.amount || 0
       }
     })
@@ -326,12 +330,12 @@ class LiquidityAnalyzer implements ILiquidityAnalyzer {
     this.repo = new CashFlowRepository(this.db)
   }
 
-  async getStatus(closingBalance: number): Promise<'STRONG' | 'ADEQUATE' | 'TIGHT' | 'CRITICAL'> {
+  async getStatus(closingBalance: number): Promise<LiquidityStatus> {
     const avgMonthlyExpenses = await this.repo.getAverageMonthlyExpenses()
     return this.assessLiquidityStatus(closingBalance, avgMonthlyExpenses)
   }
 
-  assessLiquidityStatus(closingBalance: number, avgMonthlyExpenses: number = 0): 'STRONG' | 'ADEQUATE' | 'TIGHT' | 'CRITICAL' {
+  assessLiquidityStatus(closingBalance: number, avgMonthlyExpenses: number = 0): LiquidityStatus {
     // Determine liquidity status based on available months of expenses
     if (closingBalance >= avgMonthlyExpenses * 3) {
       return 'STRONG' // 3+ months of expenses available
@@ -394,8 +398,8 @@ class CashFlowForecaster implements ICashFlowForecaster {
 
       // Confidence decreases over time
       let confidence: 'HIGH' | 'MEDIUM' | 'LOW' = 'HIGH'
-      if (i > 30) confidence = 'MEDIUM'
-      if (i > 45) confidence = 'LOW'
+      if (i > 30) {confidence = 'MEDIUM'}
+      if (i > 45) {confidence = 'LOW'}
 
       forecasts.push({
         forecast_date: forecastDate.toISOString().split('T')[0],
