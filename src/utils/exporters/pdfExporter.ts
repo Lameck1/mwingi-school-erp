@@ -60,34 +60,74 @@ export async function exportToPDF(options: PDFExportOptions): Promise<void> {
     let yPosition = margin
 
     // School Header
-    if (schoolInfo) {
-        doc.setFontSize(16)
-        doc.setFont('helvetica', 'bold')
-        doc.text(schoolInfo.name, pageWidth / 2, yPosition, { align: 'center' })
-        yPosition += 6
-
-        if (schoolInfo.address) {
-            doc.setFontSize(9)
-            doc.setFont('helvetica', 'normal')
-            doc.text(schoolInfo.address, pageWidth / 2, yPosition, { align: 'center' })
-            yPosition += 4
-        }
-
-        if (schoolInfo.phone || schoolInfo.email) {
-            const contact = [schoolInfo.phone, schoolInfo.email].filter(Boolean).join(' | ')
-            doc.setFontSize(8)
-            doc.text(contact, pageWidth / 2, yPosition, { align: 'center' })
-            yPosition += 4
-        }
-
-        // Divider line
-        yPosition += 2
-        doc.setDrawColor(200, 200, 200)
-        doc.line(margin, yPosition, pageWidth - margin, yPosition)
-        yPosition += 8
-    }
+    yPosition = renderSchoolHeader(doc, schoolInfo, pageWidth, yPosition, margin)
 
     // Report Title
+    yPosition = renderReportTitle(doc, title, subtitle, pageWidth, yPosition)
+
+    // Calculate column widths
+    const columnWidths = calculateColumnWidths(columns, contentWidth)
+
+    // Table Header
+    yPosition = renderTableHeader(doc, columns, columnWidths, margin, contentWidth, yPosition)
+
+    // Table Rows
+    const rowHeight = 7
+    yPosition = renderTableRows(doc, data, columns, columnWidths, {
+        margin, contentWidth, pageWidth, pageHeight, rowHeight, showPageNumbers, yPosition
+    })
+
+    // Footer
+    renderFooter(doc, footerText, margin, pageHeight, pageWidth, showPageNumbers)
+
+    // Save
+    doc.save(`${filename}.pdf`)
+}
+
+function renderSchoolHeader(
+    doc: jsPDF,
+    schoolInfo: PDFExportOptions['schoolInfo'],
+    pageWidth: number,
+    yPosition: number,
+    margin: number
+): number {
+    if (!schoolInfo) { return yPosition }
+
+    doc.setFontSize(16)
+    doc.setFont('helvetica', 'bold')
+    doc.text(schoolInfo.name, pageWidth / 2, yPosition, { align: 'center' })
+    yPosition += 6
+
+    if (schoolInfo.address) {
+        doc.setFontSize(9)
+        doc.setFont('helvetica', 'normal')
+        doc.text(schoolInfo.address, pageWidth / 2, yPosition, { align: 'center' })
+        yPosition += 4
+    }
+
+    if (schoolInfo.phone || schoolInfo.email) {
+        const contact = [schoolInfo.phone, schoolInfo.email].filter(Boolean).join(' | ')
+        doc.setFontSize(8)
+        doc.text(contact, pageWidth / 2, yPosition, { align: 'center' })
+        yPosition += 4
+    }
+
+    // Divider line
+    yPosition += 2
+    doc.setDrawColor(200, 200, 200)
+    doc.line(margin, yPosition, pageWidth - margin, yPosition)
+    yPosition += 8
+
+    return yPosition
+}
+
+function renderReportTitle(
+    doc: jsPDF,
+    title: string,
+    subtitle: string | undefined,
+    pageWidth: number,
+    yPosition: number
+): number {
     doc.setFontSize(14)
     doc.setFont('helvetica', 'bold')
     doc.text(title, pageWidth / 2, yPosition, { align: 'center' })
@@ -108,17 +148,28 @@ export async function exportToPDF(options: PDFExportOptions): Promise<void> {
     yPosition += 10
     doc.setTextColor(0, 0, 0)
 
-    // Calculate column widths
+    return yPosition
+}
+
+function calculateColumnWidths(columns: PDFColumn[], contentWidth: number): number[] {
     const totalDefinedWidth = columns.reduce((sum, col) => sum + (col.width || 0), 0)
     const remainingColumns = columns.filter(col => !col.width).length
     const defaultWidth = remainingColumns > 0
         ? (contentWidth - totalDefinedWidth) / remainingColumns
         : contentWidth / columns.length
 
-    const columnWidths = columns.map(col => col.width || defaultWidth)
+    return columns.map(col => col.width || defaultWidth)
+}
 
-    // Table Header
-    doc.setFillColor(45, 55, 72) // Dark blue-gray
+function renderTableHeader(
+    doc: jsPDF,
+    columns: PDFColumn[],
+    columnWidths: number[],
+    margin: number,
+    contentWidth: number,
+    yPosition: number
+): number {
+    doc.setFillColor(45, 55, 72)
     doc.rect(margin, yPosition, contentWidth, 8, 'F')
 
     doc.setFontSize(9)
@@ -130,40 +181,41 @@ export async function exportToPDF(options: PDFExportOptions): Promise<void> {
         doc.text(col.header, xPosition, yPosition + 5.5)
         xPosition += columnWidths[i]
     })
-    yPosition += 10
-    doc.setTextColor(0, 0, 0)
 
-    // Table Rows
+    doc.setTextColor(0, 0, 0)
+    return yPosition + 10
+}
+
+interface TableRenderContext {
+    margin: number
+    contentWidth: number
+    pageWidth: number
+    pageHeight: number
+    rowHeight: number
+    showPageNumbers: boolean
+    yPosition: number
+}
+
+function renderTableRows(
+    doc: jsPDF,
+    data: Record<string, unknown>[],
+    columns: PDFColumn[],
+    columnWidths: number[],
+    ctx: TableRenderContext
+): number {
     doc.setFontSize(8)
     doc.setFont('helvetica', 'normal')
 
-    const rowHeight = 7
+    let { yPosition } = ctx
     let isAlternate = false
 
     for (const row of data) {
         // Check for page break
-        if (yPosition + rowHeight > pageHeight - 20) {
-            // Add page number to current page
-            if (showPageNumbers) {
-                addPageNumber(doc, pageWidth, pageHeight)
-            }
-
+        if (yPosition + ctx.rowHeight > ctx.pageHeight - 20) {
+            if (ctx.showPageNumbers) { addPageNumber(doc, ctx.pageWidth, ctx.pageHeight) }
             doc.addPage()
-            yPosition = margin
-
-            // Re-add table header on new page
-            doc.setFillColor(45, 55, 72)
-            doc.rect(margin, yPosition, contentWidth, 8, 'F')
-            doc.setFont('helvetica', 'bold')
-            doc.setTextColor(255, 255, 255)
-
-            xPosition = margin + 2
-            columns.forEach((col, i) => {
-                doc.text(col.header, xPosition, yPosition + 5.5)
-                xPosition += columnWidths[i]
-            })
-            yPosition += 10
-            doc.setTextColor(0, 0, 0)
+            yPosition = ctx.margin
+            yPosition = renderTableHeader(doc, columns, columnWidths, ctx.margin, ctx.contentWidth, yPosition)
             doc.setFont('helvetica', 'normal')
             isAlternate = false
         }
@@ -171,49 +223,65 @@ export async function exportToPDF(options: PDFExportOptions): Promise<void> {
         // Alternate row background
         if (isAlternate) {
             doc.setFillColor(248, 250, 252)
-            doc.rect(margin, yPosition, contentWidth, rowHeight, 'F')
+            doc.rect(ctx.margin, yPosition, ctx.contentWidth, ctx.rowHeight, 'F')
         }
         isAlternate = !isAlternate
 
         // Row border
         doc.setDrawColor(230, 230, 230)
-        doc.line(margin, yPosition + rowHeight, pageWidth - margin, yPosition + rowHeight)
+        doc.line(ctx.margin, yPosition + ctx.rowHeight, ctx.pageWidth - ctx.margin, yPosition + ctx.rowHeight)
 
         // Cell values
-        xPosition = margin + 2
-        columns.forEach((col, i) => {
-            const value = formatValue(row[col.key], col.format)
-            let textX = xPosition
-            if (col.align === 'right') {
-                textX = xPosition + columnWidths[i] - 4
-            } else if (col.align === 'center') {
-                textX = xPosition + columnWidths[i] / 2
-            }
-
-            doc.text(value, textX, yPosition + 5, {
-                align: col.align || 'left',
-                maxWidth: columnWidths[i] - 4
-            })
-            xPosition += columnWidths[i]
-        })
-
-        yPosition += rowHeight
+        renderRowCells(doc, row, columns, columnWidths, ctx.margin, yPosition)
+        yPosition += ctx.rowHeight
     }
 
-    // Footer
+    return yPosition
+}
+
+function renderRowCells(
+    doc: jsPDF,
+    row: Record<string, unknown>,
+    columns: PDFColumn[],
+    columnWidths: number[],
+    margin: number,
+    yPosition: number
+): void {
+    let xPosition = margin + 2
+    columns.forEach((col, i) => {
+        const value = formatValue(row[col.key], col.format)
+        let textX = xPosition
+        if (col.align === 'right') {
+            textX = xPosition + columnWidths[i] - 4
+        } else if (col.align === 'center') {
+            textX = xPosition + columnWidths[i] / 2
+        }
+
+        doc.text(value, textX, yPosition + 5, {
+            align: col.align || 'left',
+            maxWidth: columnWidths[i] - 4
+        })
+        xPosition += columnWidths[i]
+    })
+}
+
+function renderFooter(
+    doc: jsPDF,
+    footerText: string | undefined,
+    margin: number,
+    pageHeight: number,
+    pageWidth: number,
+    showPageNumbers: boolean
+): void {
     if (footerText) {
         doc.setFontSize(8)
         doc.setTextColor(100, 100, 100)
         doc.text(footerText, margin, pageHeight - 10)
     }
 
-    // Page number on last page
     if (showPageNumbers) {
         addPageNumber(doc, pageWidth, pageHeight)
     }
-
-    // Save
-    doc.save(`${filename}.pdf`)
 }
 
 function addPageNumber(doc: jsPDF, pageWidth: number, pageHeight: number): void {

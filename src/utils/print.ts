@@ -47,10 +47,10 @@ function getHeadStylesHtml(): string {
 
 function escapeHtmlAttribute(value: string): string {
   return value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
 }
 
 function buildHtmlDocument(params: {
@@ -238,7 +238,7 @@ function generatePrintHTML(
         const isDebit = row.debit_credit === 'DEBIT'
         const amount = Number(row.amount ?? 0)
         const debit = isDebit ? amount : 0
-        const credit = !isDebit ? amount : 0
+        const credit = isDebit ? 0 : amount
         const date = row.transaction_date || row.date
         const ref = row.receipt_number || row.invoice_number || row.ref || '-'
         const balance = row.runningBalance || row.running_balance || 0

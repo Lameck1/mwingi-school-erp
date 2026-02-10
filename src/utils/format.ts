@@ -31,7 +31,7 @@ export function formatCurrency(amount?: number | null): string {
     }).format(displayAmount)
 
     // Normalize currency label to "Ksh" for UI consistency
-    return formatted.replace('KES', 'Ksh').replace('KSh', 'Ksh').replace(/\u00A0/g, ' ')
+    return formatted.replaceAll('KES', 'Ksh').replaceAll('KSh', 'Ksh').replaceAll('\u00A0', ' ')
 }
 
 /**
@@ -72,7 +72,7 @@ export function formatDate(dateString?: string | Date | null): string {
     if (!dateString) {return 'N/A'}
 
     const date = new Date(dateString)
-    if (isNaN(date.getTime())) {return 'N/A'}
+    if (Number.isNaN(date.getTime())) {return 'N/A'}
 
     return date.toLocaleDateString('en-US', {
         year: 'numeric',
@@ -90,7 +90,7 @@ export function formatDateTime(dateString?: string | Date | null): string {
     if (!dateString) {return 'N/A'}
 
     const date = new Date(dateString)
-    if (isNaN(date.getTime())) {return 'N/A'}
+    if (Number.isNaN(date.getTime())) {return 'N/A'}
 
     return date.toLocaleString('en-US', {
         year: 'numeric',

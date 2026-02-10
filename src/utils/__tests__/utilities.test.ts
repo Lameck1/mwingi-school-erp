@@ -159,7 +159,7 @@ describe('GPA Calculation Utilities', () => {
     const sum = marks.reduce((a, b) => a + b, 0)
     const average = sum / marks.length
     // Convert to 4.0 scale
-    return (average / maxMark) * 4.0
+    return (average / maxMark) * 4
   }
 
   const calculateWeightedGPA = (
@@ -169,7 +169,7 @@ describe('GPA Calculation Utilities', () => {
     if (subjects.length === 0) {return 0}
     const totalWeight = subjects.reduce((sum, s) => sum + s.weight, 0)
     const weightedSum = subjects.reduce((sum, s) => sum + (s.mark * s.weight) / maxMark, 0)
-    return (weightedSum / totalWeight) * 4.0
+    return (weightedSum / totalWeight) * 4
   }
 
   const getGradeFromGPA = (gpa: number): string => {

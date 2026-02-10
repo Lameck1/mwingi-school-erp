@@ -63,23 +63,28 @@ export default defineConfig({
             },
             output: {
                 manualChunks(id) {
-                    if (id.includes('node_modules')) {
-                        if (id.includes('react-dom')) {return 'react'}
-                        if (id.includes('/react/') || id.includes('\\react\\')) {return 'react'}
-                        if (id.includes('scheduler')) {return 'react'}
-                        if (id.includes('use-sync-external-store')) {return 'react'}
-                        if (id.includes('react-is')) {return 'react'}
-                        if (id.includes('react-router')) {return 'router'}
-                        if (id.includes('date-fns')) {return 'date-fns'}
-                        if (id.includes('cmdk')) {return 'cmdk'}
-                        if (id.includes('zustand')) {return 'zustand'}
-                        if (id.includes('lucide-react')) {return 'icons'}
-                        if (id.includes('@tanstack')) {return 'table'}
-                        if (id.includes('recharts')) {return 'recharts'}
-                        if (id.includes('jspdf') || id.includes('pdf-lib')) {return 'pdf'}
-                        if (id.includes('html2canvas')) {return 'html2canvas'}
-                        return 'vendor'
+                    if (!id.includes('node_modules')) { return undefined }
+                    
+                    // Map module patterns to chunk names for code splitting
+                    const chunkPatterns: Array<[string[], string]> = [
+                        [['react-dom', '/react/', '\\react\\', 'scheduler', 'use-sync-external-store', 'react-is'], 'react'],
+                        [['react-router'], 'router'],
+                        [['date-fns'], 'date-fns'],
+                        [['cmdk'], 'cmdk'],
+                        [['zustand'], 'zustand'],
+                        [['lucide-react'], 'icons'],
+                        [['@tanstack'], 'table'],
+                        [['recharts'], 'recharts'],
+                        [['jspdf', 'pdf-lib'], 'pdf'],
+                        [['html2canvas'], 'html2canvas'],
+                    ]
+                    
+                    for (const [patterns, chunkName] of chunkPatterns) {
+                        if (patterns.some(pattern => id.includes(pattern))) {
+                            return chunkName
+                        }
                     }
+                    return 'vendor'
                 },
             },
         },

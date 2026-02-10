@@ -83,8 +83,8 @@ export default function StudentForm() {
         setSaving(true)
 
         try {
-            if (isEdit) {
-                await globalThis.electronAPI.updateStudent(Number.parseInt(id!, 10), {
+            if (isEdit && id) {
+                await globalThis.electronAPI.updateStudent(Number.parseInt(id, 10), {
                     ...formData,
                     stream_id: Number.parseInt(formData.stream_id, 10)
                 })
