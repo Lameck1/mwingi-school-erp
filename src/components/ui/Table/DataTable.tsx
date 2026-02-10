@@ -67,7 +67,7 @@ function filterAndSortRows<T extends { id: number | string }>(
             } else if (typeof value === 'object') {
                 strValue = JSON.stringify(value)
             } else {
-                strValue = String(value)
+                strValue = typeof value === 'string' ? value : JSON.stringify(value)
             }
             return strValue.toLowerCase().includes(term)
         }))
@@ -424,7 +424,7 @@ function DataTableGrid<T extends { id: number | string }>({
                                 } else if (typeof value === 'object') {
                                     displayValue = JSON.stringify(value)
                                 } else {
-                                    displayValue = String(value)
+                                    displayValue = typeof value === 'string' ? value : JSON.stringify(value)
                                 }
                                 return (
                                     <td key={String(column.key)} className={`${cellPadding} text-sm text-foreground/70 ${getAlignmentClass(column.align)}`}>

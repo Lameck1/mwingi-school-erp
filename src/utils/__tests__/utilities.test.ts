@@ -174,9 +174,9 @@ describe('GPA Calculation Utilities', () => {
 
   const getGradeFromGPA = (gpa: number): string => {
     if (gpa >= 3.5) {return 'A'}
-    if (gpa >= 3.0) {return 'B'}
+    if (gpa >= 3) {return 'B'}
     if (gpa >= 2.5) {return 'C'}
-    if (gpa >= 2.0) {return 'D'}
+    if (gpa >= 2) {return 'D'}
     return 'E'
   }
 
