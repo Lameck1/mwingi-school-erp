@@ -1,10 +1,11 @@
 
+import { Download } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
+
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { useAppStore } from '../../stores'
-import { Download } from 'lucide-react'
-import { SubjectDifficulty } from '../../types/electron-api/AcademicAPI'
+import { type SubjectDifficulty, type SubjectMeritListRow } from '../../types/electron-api/AcademicAPI'
 
 interface SubjectRanking {
   position: number
@@ -13,6 +14,28 @@ interface SubjectRanking {
   marks: number
   percentage: number
   grade: string
+}
+
+const scoreToGrade = (score: number): string => {
+  if (score >= 80) {return 'A'}
+  if (score >= 75) {return 'A-'}
+  if (score >= 70) {return 'B+'}
+  if (score >= 65) {return 'B'}
+  if (score >= 60) {return 'B-'}
+  if (score >= 55) {return 'C+'}
+  if (score >= 50) {return 'C'}
+  if (score >= 45) {return 'C-'}
+  return 'E'
+}
+
+const getMarksBadgeColor = (marks: number): string => {
+  if (marks >= 80) {
+    return '#10b981'
+  }
+  if (marks >= 60) {
+    return '#3b82f6'
+  }
+  return '#ef4444'
 }
 
 
@@ -34,9 +57,9 @@ const SubjectMeritLists = () => {
   const loadInitialData = useCallback(async () => {
     try {
       const [examsData, streamsData, subjectsData] = await Promise.all([
-        window.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
-        window.electronAPI.getStreams(),
-        window.electronAPI.getAcademicSubjects()
+        globalThis.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
+        globalThis.electronAPI.getStreams(),
+        globalThis.electronAPI.getAcademicSubjects()
       ])
 
       setExams(examsData || [])
@@ -48,7 +71,7 @@ const SubjectMeritLists = () => {
   }, [currentAcademicYear, currentTerm])
 
   useEffect(() => {
-    loadInitialData()
+    loadInitialData().catch((err: unknown) => console.error('Failed to load initial data:', err))
   }, [loadInitialData])
 
   const handleGenerateMeritList = async () => {
@@ -60,19 +83,23 @@ const SubjectMeritLists = () => {
     setLoading(true)
     try {
       const [rankings_, difficulty_] = await Promise.all([
-        window.electronAPI.getSubjectMeritList({
+        globalThis.electronAPI.getSubjectMeritList({
           examId: selectedExam,
           subjectId: selectedSubject,
           streamId: selectedStream
         }),
-        window.electronAPI.getSubjectDifficulty({
+        globalThis.electronAPI.getSubjectDifficulty({
           examId: selectedExam,
           subjectId: selectedSubject,
           streamId: selectedStream
         })
       ])
 
-      setRankings(rankings_ || [])
+      const scored = (rankings_ || []).map((row: SubjectMeritListRow) => ({
+        ...row,
+        grade: scoreToGrade(row.marks)
+      }))
+      setRankings(scored)
       setDifficulty(difficulty_)
     } catch (error) {
       console.error('Failed to generate merit list:', error)
@@ -102,11 +129,65 @@ const SubjectMeritLists = () => {
     ].map(row => row.join(',')).join('\n')
 
     const blob = new Blob([csvContent], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
+    const url = globalThis.URL.createObjectURL(blob)
+    const a = globalThis.document.createElement('a')
     a.href = url
     a.download = `${subjectName}_Merit_List.csv`
     a.click()
+  }
+
+  const renderRankingsContent = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center h-64 text-foreground/40">
+          <p>Loading...</p>
+        </div>
+      )
+    }
+
+    if (rankings.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 text-foreground/40">
+          <p>Select exam, subject, and stream to view rankings</p>
+        </div>
+      )
+    }
+
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b border-white/10">
+              <th className="pb-4 pt-2 font-bold text-foreground/60">Position</th>
+              <th className="pb-4 pt-2 font-bold text-foreground/60">Admission No</th>
+              <th className="pb-4 pt-2 font-bold text-foreground/60">Student Name</th>
+              <th className="pb-4 pt-2 font-bold text-foreground/60">Marks</th>
+              <th className="pb-4 pt-2 font-bold text-foreground/60">Percentage</th>
+              <th className="pb-4 pt-2 font-bold text-foreground/60">Grade</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {rankings.map((row) => (
+              <tr key={`${row.admission_number}-${row.position}`} className="hover:bg-white/[0.02]">
+                <td className="py-4 pr-4 font-semibold">{row.position}</td>
+                <td className="py-4 pr-4">{row.admission_number}</td>
+                <td className="py-4 pr-4">{row.student_name}</td>
+                <td className="py-4 pr-4">{row.marks}</td>
+                <td className="py-4 pr-4">{row.percentage.toFixed(1)}%</td>
+                <td className="py-4 pr-4">
+                  <span className="px-2 py-1 rounded text-sm font-semibold" style={{
+                    backgroundColor: getMarksBadgeColor(row.marks),
+                    color: 'white'
+                  }}>
+                    {row.grade}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
   }
 
   return (
@@ -194,49 +275,7 @@ const SubjectMeritLists = () => {
       )}
 
       <div className="premium-card min-h-[400px]">
-        {loading ? (
-          <div className="flex items-center justify-center h-64 text-foreground/40">
-            <p>Loading...</p>
-          </div>
-        ) : rankings.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-foreground/40">
-            <p>Select exam, subject, and stream to view rankings</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className="pb-4 pt-2 font-bold text-foreground/60">Position</th>
-                  <th className="pb-4 pt-2 font-bold text-foreground/60">Admission No</th>
-                  <th className="pb-4 pt-2 font-bold text-foreground/60">Student Name</th>
-                  <th className="pb-4 pt-2 font-bold text-foreground/60">Marks</th>
-                  <th className="pb-4 pt-2 font-bold text-foreground/60">Percentage</th>
-                  <th className="pb-4 pt-2 font-bold text-foreground/60">Grade</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {rankings.map((row) => (
-                  <tr key={`${row.admission_number}-${row.position}`} className="hover:bg-white/[0.02]">
-                    <td className="py-4 pr-4 font-semibold">{row.position}</td>
-                    <td className="py-4 pr-4">{row.admission_number}</td>
-                    <td className="py-4 pr-4">{row.student_name}</td>
-                    <td className="py-4 pr-4">{row.marks}</td>
-                    <td className="py-4 pr-4">{row.percentage.toFixed(1)}%</td>
-                    <td className="py-4 pr-4">
-                      <span className="px-2 py-1 rounded text-sm font-semibold" style={{
-                        backgroundColor: row.marks >= 80 ? '#10b981' : row.marks >= 60 ? '#3b82f6' : '#ef4444',
-                        color: 'white'
-                      }}>
-                        {row.grade}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {renderRankingsContent()}
       </div>
     </div>
   )

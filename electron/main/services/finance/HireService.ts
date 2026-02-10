@@ -64,7 +64,7 @@ export interface HirePayment {
 }
 
 export class HireService {
-    private db = getDatabase()
+    private readonly db = getDatabase()
 
     // ========== CLIENTS ==========
     getClients(filters?: { search?: string; isActive?: boolean }): HireClient[] {
@@ -278,9 +278,11 @@ export class HireService {
 
     // ========== PAYMENTS ==========
     recordPayment(bookingId: number, data: Partial<HirePayment>, userId: number): { success: boolean; receipt_number?: string; errors?: string[] } {
-        if (!data.amount || !data.payment_method || !data.payment_date) {
+        if (data.amount == null || !data.payment_method || !data.payment_date) {
             return { success: false, errors: ['Amount, payment method, and date are required'] }
         }
+
+        const amount = data.amount
 
         const booking = this.getBookingById(bookingId)
         if (!booking) {
@@ -288,7 +290,7 @@ export class HireService {
         }
 
         const balance = booking.total_amount - booking.amount_paid
-        if (data.amount > balance) {
+        if (amount > balance) {
             return { success: false, errors: ['Payment amount exceeds outstanding balance'] }
         }
 
@@ -303,13 +305,13 @@ export class HireService {
                         payment_reference, payment_date, notes, recorded_by_user_id
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 `).run(
-                    bookingId, receiptNumber, data.amount, data.payment_method,
+                    bookingId, receiptNumber, amount, data.payment_method,
                     data.payment_reference, data.payment_date, data.notes, userId
                 )
 
                 // Update booking amount_paid and potentially status
-                const newAmountPaid = booking.amount_paid + data.amount
-                const newStatus = newAmountPaid >= booking.total_amount ? 'COMPLETED' : booking.status
+                const newAmountPaid = booking.amount_paid + amount
+                const _newStatus = newAmountPaid >= booking.total_amount ? 'COMPLETED' : booking.status
 
                 this.db.prepare(`
                     UPDATE hire_booking 
@@ -327,7 +329,7 @@ export class HireService {
                         description, recorded_by_user_id
                     ) VALUES (?, ?, ?, ?, ?, 'INCOME', ?, 'CREDIT', ?, ?)
                 `).run(
-                    receiptNumber, data.amount, data.payment_method, data.payment_reference,
+                    receiptNumber, amount, data.payment_method, data.payment_reference,
                     data.payment_date, catId?.id || 1, `Asset Hire: ${booking.asset_name}`, userId
                 )
             })()

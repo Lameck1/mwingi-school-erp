@@ -1,3 +1,5 @@
+import type { ReportCardStudentEntry } from './ReportsAPI'
+
 export interface Student {
   id: number
   admission_number: string
@@ -58,15 +60,6 @@ export interface AttendanceEntry {
   notes?: string
 }
 
-export interface ReportCardStudent {
-  student_id: number
-  student_name: string
-  admission_number: string
-  stream_name: string
-  average_score?: number
-  rank?: number
-}
-
 export interface StudentAPI {
   getStudents(filters?: StudentFilters): Promise<Student[]>
   getStudentById(id: number): Promise<Student>
@@ -78,5 +71,5 @@ export interface StudentAPI {
   getAttendanceByDate(streamId: number, date: string, yearId: number, termId: number): Promise<AttendanceRecord[]>
   markAttendance(entries: AttendanceEntry[], streamId: number, date: string, yearId: number, termId: number, userId: number): Promise<{ success: boolean; marked: number; errors?: string[] }>
   // Reports
-  getStudentsForReportCards(streamId: number, yearId: number, termId: number): Promise<ReportCardStudent[]>
+  getStudentsForReportCards(streamId: number, yearId: number, termId: number): Promise<ReportCardStudentEntry[]>
 }

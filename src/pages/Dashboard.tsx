@@ -1,19 +1,20 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { useAppStore } from '../stores'
-import { Tooltip as UITooltip } from '../components/ui/Tooltip'
-import { FeeCollectionItem } from '../types/electron-api/ReportsAPI'
-import { AuditLogEntry } from '../types/electron-api/AuditAPI'
 import {
     Users, Wallet, UserCog,
     CreditCard, UserPlus, FileText, AlertCircle,
     BarChart3, Shield
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     PieChart, Pie, Cell
 } from 'recharts'
-import { formatCurrency, formatDateTime } from '../utils/format'
+
+import { Tooltip as UITooltip } from '../components/ui/Tooltip'
+import { useAppStore } from '../stores'
+import { type AuditLogEntry } from '../types/electron-api/AuditAPI'
+import { type FeeCollectionItem } from '../types/electron-api/ReportsAPI'
+import { formatCurrencyFromCents, formatDateTime } from '../utils/format'
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#334155', '#ec4899']
 
@@ -31,19 +32,19 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        loadDashboardData()
+        void loadDashboardData()
     }, [])
 
     const loadDashboardData = async () => {
         try {
             const [data, feeData, categoryData, logs] = await Promise.all([
-                window.electronAPI.getDashboardData(),
-                window.electronAPI.getFeeCollectionReport(
+                globalThis.electronAPI.getDashboardData(),
+                globalThis.electronAPI.getFeeCollectionReport(
                     new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
                     new Date().toISOString().slice(0, 10)
                 ),
-                window.electronAPI.getFeeCategoryBreakdown(),
-                window.electronAPI.getAuditLog(6)
+                globalThis.electronAPI.getFeeCategoryBreakdown(),
+                globalThis.electronAPI.getAuditLog(6)
             ])
 
             setDashboardData(data)
@@ -54,7 +55,7 @@ export default function Dashboard() {
             if (Array.isArray(feeData)) {
                 feeData.forEach((item: FeeCollectionItem) => {
                     const date = new Date(item.payment_date)
-                    if (isNaN(date.getTime())) return // Skip invalid dates
+                    if (Number.isNaN(date.getTime())) {return} // Skip invalid dates
 
                     const month = date.toLocaleDateString('en-US', { month: 'short' })
                     const amount = Number(item.amount) || 0
@@ -83,13 +84,13 @@ export default function Dashboard() {
         },
         {
             label: 'Fees Collected',
-            value: formatCurrency(dashboardData?.feeCollected || 0),
+            value: formatCurrencyFromCents(dashboardData?.feeCollected || 0),
             icon: Wallet,
             color: 'from-emerald-500/20 to-teal-500/20 text-emerald-400',
         },
         {
             label: 'Outstanding Total',
-            value: formatCurrency(dashboardData?.outstandingBalance || 0),
+            value: formatCurrencyFromCents(dashboardData?.outstandingBalance || 0),
             icon: AlertCircle,
             color: 'from-amber-500/20 to-orange-500/20 text-amber-400',
         },
@@ -145,8 +146,8 @@ export default function Dashboard() {
 
             {/* High-Impact Stat Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-                {stats.map((stat, index) => (
-                    <div key={index} className="stat-card group">
+                {stats.map((stat) => (
+                    <div key={stat.label} className="stat-card group">
                         <div className="flex items-start justify-between relative z-10">
                             <div>
                                 <p className="stat-card-label">{stat.label}</p>
@@ -207,7 +208,7 @@ export default function Dashboard() {
                                         boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
                                     }}
                                     itemStyle={{ color: 'var(--primary)', fontSize: '12px', fontWeight: 'bold' }}
-                                    formatter={(value: number) => [formatCurrency(value), 'Revenue']}
+                                    formatter={(value: number) => [formatCurrencyFromCents(value), 'Revenue']}
                                 />
                                 <Bar dataKey="total" fill="url(#barGradient)" radius={[6, 6, 0, 0]} />
                             </BarChart>
@@ -266,7 +267,7 @@ export default function Dashboard() {
                         </p>
                         <div className="mt-8 space-y-3">
                             {feeCategories.slice(0, 4).map((cat, i) => (
-                                <div key={i} className="flex items-center justify-between text-[11px]">
+                                <div key={cat.name} className="flex items-center justify-between text-[11px]">
                                     <div className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
                                         <span className="text-foreground/70">{cat.name}</span>
@@ -288,14 +289,14 @@ export default function Dashboard() {
                                     dataKey="value"
                                     stroke="none"
                                 >
-                                    {feeCategories.map((_, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    {feeCategories.map((cat, index) => (
+                                        <Cell key={cat.name} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
                                 <Tooltip
                                     contentStyle={{ backgroundColor: 'var(--popover)', border: '1px solid var(--border)', borderRadius: '12px' }}
                                     itemStyle={{ color: 'var(--foreground)' }}
-                                    formatter={(value: number) => [formatCurrency(value), 'Allocation']}
+                                    formatter={(value: number) => [formatCurrencyFromCents(value), 'Allocation']}
                                 />
                             </PieChart>
                         </ResponsiveContainer>

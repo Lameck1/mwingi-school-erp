@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
 import { Download, Upload, CheckCircle, Loader2, Database, ShieldAlert, History, FileStack, HardDrive } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+
 import { useToast } from '../../contexts/ToastContext'
 
 export default function Backup() {
@@ -11,7 +12,7 @@ export default function Backup() {
 
     const loadBackups = useCallback(async () => {
         try {
-            const data = await window.electronAPI.getBackupList()
+            const data = await globalThis.electronAPI.getBackupList()
             setBackups(data)
         } catch (error) {
             console.error('Failed to load backups:', error)
@@ -19,21 +20,21 @@ export default function Backup() {
     }, [])
 
     useEffect(() => {
-        loadBackups()
+        loadBackups().catch((err: unknown) => console.error('Failed to load backups:', err))
     }, [loadBackups])
 
     const handleBackup = async () => {
         setBacking(true)
         setResult(null)
         try {
-            const res = await window.electronAPI.createBackup()
+            const res = await globalThis.electronAPI.createBackup()
             if (res.cancelled) {
                 setResult(null)
             } else if (res.success) {
                 const msg = `Snapshot synchronized to storage path: ${res.path}`
                 setResult({ type: 'success', message: msg })
                 showToast('Database snapshot established', 'success')
-                loadBackups()
+                loadBackups().catch((err: unknown) => console.error('Failed to reload backups:', err))
             } else {
                 setResult({ type: 'error', message: 'Synchronization sequence failed' })
                 showToast('Backup orchestration failed', 'error')
@@ -46,7 +47,7 @@ export default function Backup() {
     }
 
     const handleRestore = async (filename?: string) => {
-        if (!confirm('CRITICAL: This will overwrite all active environmental data. This action is irreversible. Proceed?')) return
+        if (!confirm('CRITICAL: This will overwrite all active environmental data. This action is irreversible. Proceed?')) {return}
 
         if (!filename) {
             showToast('Identify a source artifact for restoration', 'error')
@@ -56,7 +57,7 @@ export default function Backup() {
         setRestoring(true)
         setResult(null)
         try {
-            const res = await window.electronAPI.restoreBackup(filename)
+            const res = await globalThis.electronAPI.restoreBackup(filename)
             if (res.cancelled) {
                 setResult(null)
             } else if (res.success) {
@@ -70,7 +71,7 @@ export default function Backup() {
             const msg = error instanceof Error ? error.message : 'Critical restoration failure'
             setResult({ type: 'error', message: msg })
             showToast('Restoration orchestration failed', 'error')
-        } finally { setBacking(false) }
+        } finally { setRestoring(false) }
     }
 
     return (

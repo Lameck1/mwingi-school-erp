@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import type Database from 'better-sqlite3';
 
 export interface GradeTransition {
   id: number;
@@ -45,12 +45,13 @@ export interface TransitionSummary {
 
 export interface StudentTransitionStatus {
   student_id: number;
-  student_name: string;
+  admission_number: string;
+  full_name: string;
   current_grade: number;
   eligible_for_transition: boolean;
   transition_to_grade: number;
   outstanding_balance_cents: number;
-  current_boarding_status: 'BOARDER' | 'DAY_SCHOLAR';
+  boarding_status: 'BOARDER' | 'DAY_SCHOLAR';
   recommended_fee_structure: JSSFeeStructure | null;
 }
 
@@ -65,7 +66,7 @@ export interface StudentTransitionStatus {
  * - Generate transition reports
  */
 export class JSSTransitionService {
-  private db: Database.Database;
+  private readonly db: Database.Database;
 
   constructor(db: Database.Database) {
     this.db = db;
@@ -85,7 +86,8 @@ export class JSSTransitionService {
       LIMIT 1
     `);
 
-    return (stmt.get(grade, fiscalYear) as JSSFeeStructure) || null;
+    const feeStructure = stmt.get(grade, fiscalYear) as JSSFeeStructure | undefined;
+    return feeStructure ?? null;
   }
 
   /**
@@ -113,14 +115,7 @@ export class JSSTransitionService {
     transition_notes?: string;
     processed_by: number;
   }): number {
-    // Validate transition
-    if (data.to_grade !== data.from_grade + 1) {
-      throw new Error('Invalid transition: Can only promote to next grade');
-    }
-
-    if (data.to_grade < 7 || data.to_grade > 9) {
-      throw new Error('JSS transitions are for grades 7-9 only');
-    }
+    this.validateTransition(data.from_grade, data.to_grade);
 
     // Get current fiscal year from transition date
     const transitionYear = new Date(data.transition_date).getFullYear();
@@ -157,26 +152,51 @@ export class JSSTransitionService {
 
     const transitionId = result.lastInsertRowid as number;
 
-    // Update student's grade in student table
-    const updateStmt = this.db.prepare(`
-      UPDATE student
-      SET grade = ?, updated_at = datetime('now')
-      WHERE id = ?
-    `);
-    updateStmt.run(data.to_grade, data.student_id);
+    // Update student's enrollment stream to match new grade if possible
+    const currentEnrollment = this.db.prepare(`
+      SELECT e.id as enrollment_id, e.stream_id, e.student_type, s.is_active
+      FROM enrollment e
+      JOIN student s ON e.student_id = s.id
+      WHERE e.student_id = ? AND e.status = 'ACTIVE'
+      ORDER BY e.enrollment_date DESC
+      LIMIT 1
+    `).get(data.student_id) as { enrollment_id: number; stream_id: number; student_type: string; is_active: number } | undefined;
+
+    if (currentEnrollment) {
+      const targetStream = this.db.prepare(`
+        SELECT id FROM stream WHERE level_order = ? AND is_active = 1 ORDER BY id LIMIT 1
+      `).get(data.to_grade) as { id: number } | undefined;
+
+      const newStreamId = targetStream?.id ?? currentEnrollment.stream_id;
+
+      this.db.prepare(`
+        UPDATE enrollment
+        SET stream_id = ?, updated_at = datetime('now')
+        WHERE id = ?
+      `).run(newStreamId, currentEnrollment.enrollment_id);
+    }
 
     // Update boarding status if changed
     if (data.boarding_status_change && data.boarding_status_change !== 'NO_CHANGE') {
       const newStatus = data.boarding_status_change === 'TO_BOARDER' ? 'BOARDER' : 'DAY_SCHOLAR';
-      const boardingStmt = this.db.prepare(`
+      this.db.prepare(`
         UPDATE student
-        SET boarding_status = ?, updated_at = datetime('now')
+        SET student_type = ?, updated_at = datetime('now')
         WHERE id = ?
-      `);
-      boardingStmt.run(newStatus, data.student_id);
+      `).run(newStatus, data.student_id);
     }
 
     return transitionId;
+  }
+
+  private validateTransition(fromGrade: number, toGrade: number): void {
+    if (toGrade !== fromGrade + 1) {
+      throw new Error('Invalid transition: Can only promote to next grade');
+    }
+
+    if (toGrade < 7 || toGrade > 9) {
+      throw new Error('JSS transitions are for grades 7-9 only');
+    }
   }
 
   /**
@@ -185,18 +205,12 @@ export class JSSTransitionService {
   private getStudentOutstandingBalance(studentId: number): number {
     const stmt = this.db.prepare(`
       SELECT 
-        COALESCE(SUM(il.amount_cents), 0) - 
-        COALESCE((
-          SELECT SUM(amount_cents) 
-          FROM ledger_transaction 
-          WHERE student_id = ? AND debit_credit = 'CREDIT'
-        ), 0) as balance
-      FROM invoice i
-      JOIN invoice_line il ON i.id = il.invoice_id
-      WHERE i.student_id = ?
+        COALESCE(SUM(total_amount - amount_paid), 0) as balance
+      FROM fee_invoice
+      WHERE student_id = ?
     `);
 
-    const result = stmt.get(studentId, studentId) as { balance: number };
+    const result = stmt.get(studentId) as { balance: number };
     return result.balance;
   }
 
@@ -217,17 +231,21 @@ export class JSSTransitionService {
     const stmt = this.db.prepare(`
       SELECT 
         s.id as student_id,
-        s.first_name || ' ' || s.last_name as student_name,
-        s.grade as current_grade,
-        s.boarding_status as current_boarding_status
+        s.admission_number as admission_number,
+        s.first_name || ' ' || s.last_name as full_name,
+        st.level_order as current_grade,
+        COALESCE(e.student_type, s.student_type) as current_boarding_status
       FROM student s
-      WHERE s.grade = ? AND s.status = 'ACTIVE'
+      JOIN enrollment e ON s.id = e.student_id
+      JOIN stream st ON e.stream_id = st.id
+      WHERE st.level_order = ? AND e.status = 'ACTIVE' AND s.is_active = 1
       ORDER BY s.last_name, s.first_name
     `);
 
     interface EligibleStudentResult {
       student_id: number;
-      student_name: string;
+      admission_number: string;
+      full_name: string;
       current_grade: number;
       current_boarding_status: 'BOARDER' | 'DAY_SCHOLAR';
     }
@@ -237,12 +255,13 @@ export class JSSTransitionService {
 
     return students.map(student => ({
       student_id: student.student_id,
-      student_name: student.student_name,
+      admission_number: student.admission_number,
+      full_name: student.full_name,
       current_grade: student.current_grade,
       eligible_for_transition: true,
       transition_to_grade: toGrade,
       outstanding_balance_cents: this.getStudentOutstandingBalance(student.student_id),
-      current_boarding_status: student.current_boarding_status,
+      boarding_status: student.current_boarding_status,
       recommended_fee_structure: feeStructure,
     }));
   }
@@ -265,7 +284,7 @@ export class JSSTransitionService {
 
     for (const studentId of data.student_ids) {
       try {
-        const transitionId = this.processStudentTransition({
+        const _transitionId = this.processStudentTransition({
           student_id: studentId,
           from_grade: data.from_grade,
           to_grade: data.to_grade,
@@ -423,4 +442,3 @@ export class JSSTransitionService {
     return total;
   }
 }
-

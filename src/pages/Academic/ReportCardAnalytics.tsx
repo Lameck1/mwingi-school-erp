@@ -1,10 +1,12 @@
 
+import { Download, TrendingUp } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { useAppStore } from '../../stores'
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
-import { Download, TrendingUp } from 'lucide-react'
+import { exportToPDF } from '../../utils/exporters'
 
 interface PerformanceSummary {
   mean_score: number
@@ -57,9 +59,9 @@ const ReportCardAnalytics = () => {
 
   const loadInitialData = useCallback(async () => {
     try {
-      const [examsData, streamsData] = await Promise.all([
-        window.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
-        window.electronAPI.getStreams()
+        const [examsData, streamsData] = await Promise.all([
+        globalThis.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
+        globalThis.electronAPI.getStreams()
       ])
 
       setExams(examsData || [])
@@ -70,7 +72,7 @@ const ReportCardAnalytics = () => {
   }, [currentAcademicYear, currentTerm])
 
   useEffect(() => {
-    loadInitialData()
+    loadInitialData().catch((err: unknown) => console.error('Failed to load initial data:', err))
   }, [loadInitialData])
 
   const handleAnalyze = async () => {
@@ -82,19 +84,19 @@ const ReportCardAnalytics = () => {
     setLoading(true)
     try {
       const [summary, grades, subjects, comparison] = await Promise.all([
-        window.electronAPI.getPerformanceSummary({
+        globalThis.electronAPI.getPerformanceSummary({
           examId: selectedExam,
           streamId: selectedStream
         }),
-        window.electronAPI.getGradeDistribution({
+        globalThis.electronAPI.getGradeDistribution({
           examId: selectedExam,
           streamId: selectedStream
         }),
-        window.electronAPI.getSubjectPerformance({
+        globalThis.electronAPI.getSubjectPerformance({
           examId: selectedExam,
           streamId: selectedStream
         }),
-        window.electronAPI.getTermComparison({
+        globalThis.electronAPI.getTermComparison({
           examId: selectedExam,
           streamId: selectedStream
         })
@@ -119,11 +121,24 @@ const ReportCardAnalytics = () => {
     }
 
     try {
-      await window.electronAPI.exportReportCardAnalyticsToPDF({
-        examId: selectedExam,
-        summary: performanceSummary,
-        grades: gradeDistribution,
-        subjects: subjectPerformance
+      await exportToPDF({
+        filename: `report-card-analytics-${selectedExam}-${selectedStream}`,
+        title: 'Report Card Analytics - Subject Performance',
+        subtitle: `Mean: ${performanceSummary.mean_score.toFixed(2)} | Pass Rate: ${performanceSummary.pass_rate.toFixed(1)}% | Students: ${performanceSummary.total_students}`,
+        columns: [
+          { key: 'subject_name', header: 'Subject', width: 70 },
+          { key: 'mean_score', header: 'Mean Score', width: 30, align: 'right' },
+          { key: 'pass_rate', header: 'Pass Rate', width: 30, align: 'right' },
+          { key: 'difficulty_index', header: 'Difficulty', width: 30, align: 'right' },
+          { key: 'discrimination_index', header: 'Discrimination', width: 35, align: 'right' }
+        ],
+        data: subjectPerformance.map((s) => ({
+          subject_name: s.subject_name,
+          mean_score: s.mean_score.toFixed(2),
+          pass_rate: `${s.pass_rate.toFixed(1)}%`,
+          difficulty_index: s.difficulty_index.toFixed(2),
+          discrimination_index: s.discrimination_index.toFixed(2)
+        }))
       })
     } catch (error) {
       console.error('Failed to export:', error)
@@ -220,7 +235,7 @@ const ReportCardAnalytics = () => {
                 <h3 className="text-lg font-semibold mb-4">Grade Distribution</h3>
                 <div className="space-y-3">
                   {gradeDistribution.map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between">
+                    <div key={item.grade} className="flex items-center justify-between">
                       <span className="font-medium w-12">{item.grade}</span>
                       <div className="flex-1 mx-4">
                         <div className="w-full h-3 rounded-full bg-white/10 overflow-hidden">
@@ -244,8 +259,8 @@ const ReportCardAnalytics = () => {
               <div className="premium-card">
                 <h3 className="text-lg font-semibold mb-4">Subject Performance</h3>
                 <div className="space-y-2">
-                  {subjectPerformance.slice(0, 5).map((subject, idx) => (
-                    <div key={idx} className="p-3 rounded-lg bg-white/5">
+                  {subjectPerformance.slice(0, 5).map((subject) => (
+                    <div key={subject.subject_name} className="p-3 rounded-lg bg-white/5">
                       <div className="flex justify-between mb-1">
                         <span className="font-medium text-sm">{subject.subject_name}</span>
                         <span className="text-sm font-bold text-blue-400">{subject.mean_score.toFixed(1)}</span>
@@ -279,8 +294,8 @@ const ReportCardAnalytics = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {subjectPerformance.map((subject, idx) => (
-                      <tr key={idx} className="hover:bg-white/[0.02]">
+                    {subjectPerformance.map((subject) => (
+                      <tr key={subject.subject_name} className="hover:bg-white/[0.02]">
                         <td className="py-3 font-medium">{subject.subject_name}</td>
                         <td className="py-3 text-right font-bold">{subject.mean_score.toFixed(1)}</td>
                         <td className="py-3 text-right">

@@ -43,7 +43,29 @@ export interface BankStatementLine {
     matched_transaction_id?: number
 }
 
+export interface UnmatchedTransaction {
+    id: number
+    description: string
+    transaction_ref: string
+    transaction_date: string
+    amount: number
+    [key: string]: unknown
+}
+
 export interface BankReconciliationAPI {
+    // Aliases exposed in preload
+    getBankAccounts: () => Promise<BankAccount[]>
+    getBankAccountById: (id: number) => Promise<BankAccount | null>
+    createBankAccount: (data: unknown) => Promise<{ success: boolean; id?: number; errors?: string[] }>
+    getBankStatements: (bankAccountId?: number) => Promise<BankStatement[]>
+    getBankStatementWithLines: (statementId: number) => Promise<{ statement: BankStatement; lines: BankStatementLine[] } | null>
+    createBankStatement: (bankAccountId: number, statementDate: string, openingBalance: number, closingBalance: number, reference?: string) => Promise<{ success: boolean; id?: number; errors?: string[] }>
+    matchBankTransaction: (lineId: number, transactionId: number) => Promise<{ success: boolean }>
+    unmatchBankTransaction: (lineId: number) => Promise<{ success: boolean }>
+    getUnmatchedTransactions: (startDate: string, endDate: string) => Promise<UnmatchedTransaction[]>
+    markStatementReconciled: (statementId: number, userId: number) => Promise<{ success: boolean }>
+
+    // Canonical names
     getAccounts: () => Promise<BankAccount[]>
     getAccountById: (id: number) => Promise<BankAccount | null>
     createAccount: (data: unknown) => Promise<{ success: boolean; id?: number; errors?: string[] }>
@@ -53,7 +75,6 @@ export interface BankReconciliationAPI {
     addStatementLine: (statementId: number, line: unknown) => Promise<{ success: boolean; id?: number }>
     matchTransaction: (lineId: number, transactionId: number) => Promise<{ success: boolean }>
     unmatchTransaction: (lineId: number) => Promise<{ success: boolean }>
-    getUnmatchedTransactions: (startDate: string, endDate: string) => Promise<unknown[]>
     markReconciled: (statementId: number, userId: number) => Promise<{ success: boolean }>
 }
 

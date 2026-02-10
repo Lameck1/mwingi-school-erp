@@ -1,6 +1,9 @@
-import Database from 'better-sqlite3-multiple-ciphers'
+
 import { getDatabase } from '../../database'
-import { logAudit } from '../../database/utils/audit'
+
+import type Database from 'better-sqlite3'
+
+const FINANCIAL_PERIOD_NOT_FOUND = 'Financial period not found'
 
 export interface FinancialPeriod {
   id: number
@@ -25,7 +28,7 @@ export interface TransactionAllowanceResult {
 }
 
 export class PeriodLockingService {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -38,7 +41,7 @@ export class PeriodLockingService {
       `).get(periodId) as FinancialPeriod | undefined
 
       if (!period) {
-        return { success: false, message: 'Financial period not found' }
+        return { success: false, message: FINANCIAL_PERIOD_NOT_FOUND }
       }
 
       if (period.status === 'LOCKED') {
@@ -82,7 +85,7 @@ export class PeriodLockingService {
       `).get(periodId) as FinancialPeriod | undefined
 
       if (!period) {
-        return { success: false, message: 'Financial period not found' }
+        return { success: false, message: FINANCIAL_PERIOD_NOT_FOUND }
       }
 
       if (period.status === 'OPEN') {
@@ -93,7 +96,7 @@ export class PeriodLockingService {
         return { success: false, message: `Period is closed and cannot be unlocked` }
       }
 
-      const now = new Date().toISOString()
+      const _now = new Date().toISOString()
       this.db.prepare(`
         UPDATE financial_period
         SET status = 'OPEN', locked_by = NULL, locked_at = NULL
@@ -126,7 +129,7 @@ export class PeriodLockingService {
       `).get(periodId) as FinancialPeriod | undefined
 
       if (!period) {
-        return { success: false, message: 'Financial period not found' }
+        return { success: false, message: FINANCIAL_PERIOD_NOT_FOUND }
       }
 
       if (period.status === 'CLOSED') {
@@ -202,7 +205,7 @@ export class PeriodLockingService {
         SELECT * FROM financial_period
         WHERE ? BETWEEN start_date AND end_date
       `).get(date) as FinancialPeriod | null
-    } catch (error) {
+    } catch {
       return null
     }
   }
@@ -220,7 +223,7 @@ export class PeriodLockingService {
         SELECT * FROM financial_period
         ORDER BY start_date DESC
       `).all() as FinancialPeriod[]
-    } catch (error) {
+    } catch {
       return []
     }
   }

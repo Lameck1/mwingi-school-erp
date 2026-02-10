@@ -1,6 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import Database from 'better-sqlite3'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
 import { AgedReceivablesService } from '../AgedReceivablesService'
+
+type DbRow = Record<string, any>
 
 // Mock audit utilities
 vi.mock('../../../database/utils/audit', () => ({
@@ -73,7 +76,7 @@ describe('AgedReceivablesService', () => {
   })
 
   afterEach(() => {
-    if (db) db.close()
+    if (db) {db.close()}
   })
 
   describe('getAgedReceivables', () => {
@@ -91,30 +94,30 @@ describe('AgedReceivablesService', () => {
     })
 
     it('should include outstanding invoices', () => {
-      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE status = ?').all('OUTSTANDING') as unknown[]
+      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE status = ?').all('OUTSTANDING') as DbRow[]
       expect(invoices.length).toBeGreaterThan(0)
     })
 
     it('should handle student details', () => {
-      const student = db.prepare('SELECT * FROM student WHERE admission_number = ?').get('STU-001') as unknown
+      const student = db.prepare('SELECT * FROM student WHERE admission_number = ?').get('STU-001') as DbRow
       expect(student).toBeDefined()
       expect(student.first_name).toBe('John')
     })
 
     it('should calculate days overdue correctly', () => {
-      const invoice = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-002') as unknown
+      const invoice = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-002') as DbRow
       expect(invoice).toBeDefined()
       expect(invoice.due_date).toBe('2025-12-15')
     })
 
     it('should handle partially paid invoices', () => {
-      const invoice = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-006') as unknown
+      const invoice = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-006') as DbRow
       expect(invoice.amount_paid).toBe(30000)
       expect(invoice.amount - invoice.amount_paid).toBe(40000)
     })
 
     it('should calculate outstanding balance correctly', () => {
-      const invoices = db.prepare('SELECT SUM(amount - amount_paid) as total FROM fee_invoice WHERE status = ?').get('OUTSTANDING') as unknown
+      const invoices = db.prepare('SELECT SUM(amount - amount_paid) as total FROM fee_invoice WHERE status = ?').get('OUTSTANDING') as DbRow
       expect(invoices.total).toBeGreaterThan(0)
     })
   })
@@ -124,7 +127,7 @@ describe('AgedReceivablesService', () => {
       const invoices = db.prepare(`
         SELECT * FROM fee_invoice 
         WHERE status = 'OUTSTANDING' AND due_date < '2026-02-02'
-      `).all() as unknown[]
+      `).all() as DbRow[]
       
       expect(invoices.length).toBeGreaterThan(0)
     })
@@ -134,7 +137,7 @@ describe('AgedReceivablesService', () => {
         SELECT * FROM fee_invoice 
         WHERE status = 'OUTSTANDING'
         ORDER BY due_date ASC
-      `).all() as unknown[]
+      `).all() as DbRow[]
       
       const firstDue = new Date(invoices[0].due_date).getTime()
       const lastDue = new Date(invoices[invoices.length - 1].due_date).getTime()
@@ -147,7 +150,7 @@ describe('AgedReceivablesService', () => {
         WHERE status = 'OUTSTANDING'
         ORDER BY due_date ASC
         LIMIT 1
-      `).get() as unknown
+      `).get() as DbRow
       
       expect(oldestInvoice.invoice_number).toBe('INV-005')
     })
@@ -160,13 +163,13 @@ describe('AgedReceivablesService', () => {
         FROM fee_invoice fi
         JOIN student s ON fi.student_id = s.id
         WHERE fi.status = 'OUTSTANDING' AND fi.due_date < '2026-02-02'
-      `).all() as unknown[]
+      `).all() as DbRow[]
 
       expect(overdue.length).toBeGreaterThan(0)
     })
 
     it('should include student contact information', () => {
-      const students = db.prepare('SELECT * FROM student').all() as unknown[]
+      const students = db.prepare('SELECT * FROM student').all() as DbRow[]
       expect(students.length).toBe(3)
       expect(students[0]).toHaveProperty('admission_number')
     })
@@ -178,7 +181,7 @@ describe('AgedReceivablesService', () => {
         JOIN fee_invoice fi ON s.id = fi.student_id
         WHERE fi.status = 'OUTSTANDING' AND fi.due_date < '2026-02-02'
         GROUP BY s.id
-      `).all() as unknown[]
+      `).all() as DbRow[]
 
       expect(studentOverdue.length).toBeGreaterThan(0)
     })
@@ -187,7 +190,7 @@ describe('AgedReceivablesService', () => {
       const student1Overdue = db.prepare(`
         SELECT COUNT(*) as count FROM fee_invoice 
         WHERE student_id = 1 AND status = 'OUTSTANDING' AND due_date < '2026-02-02'
-      `).get() as unknown
+      `).get() as DbRow
 
       expect(student1Overdue.count).toBeGreaterThanOrEqual(1)
     })
@@ -198,7 +201,7 @@ describe('AgedReceivablesService', () => {
         WHERE status = 'OUTSTANDING' AND due_date < '2026-02-02'
         ORDER BY due_date ASC
         LIMIT 1
-      `).get() as unknown
+      `).get() as DbRow
 
       expect(oldestOverdue).toBeDefined()
       expect(oldestOverdue.due_date).toBe('2025-09-15')
@@ -207,16 +210,16 @@ describe('AgedReceivablesService', () => {
 
   describe('analyzeCollectionEffectiveness', () => {
     it('should calculate collection metrics', () => {
-      const total = db.prepare('SELECT SUM(amount) as total FROM fee_invoice').get() as unknown
-      const paid = db.prepare('SELECT SUM(amount_paid) as total FROM fee_invoice').get() as unknown
+      const total = db.prepare('SELECT SUM(amount) as total FROM fee_invoice').get() as DbRow
+      const paid = db.prepare('SELECT SUM(amount_paid) as total FROM fee_invoice').get() as DbRow
       
       expect(total.total).toBeGreaterThan(0)
       expect(paid.total).toBeGreaterThanOrEqual(0)
     })
 
     it('should calculate collection rate', () => {
-      const total = db.prepare('SELECT SUM(amount) as total FROM fee_invoice').get() as unknown
-      const paid = db.prepare('SELECT SUM(amount_paid) as total FROM fee_invoice').get() as unknown
+      const total = db.prepare('SELECT SUM(amount) as total FROM fee_invoice').get() as DbRow
+      const paid = db.prepare('SELECT SUM(amount_paid) as total FROM fee_invoice').get() as DbRow
       
       const rate = (paid.total / total.total) * 100
       expect(rate).toBeGreaterThanOrEqual(0)
@@ -227,7 +230,7 @@ describe('AgedReceivablesService', () => {
       const overdue = db.prepare(`
         SELECT COUNT(*) as count FROM fee_invoice 
         WHERE status = 'OUTSTANDING' AND due_date < '2026-02-02'
-      `).get() as unknown
+      `).get() as DbRow
 
       expect(overdue.count).toBeGreaterThanOrEqual(0)
     })
@@ -237,7 +240,7 @@ describe('AgedReceivablesService', () => {
     it('should handle no receivables', () => {
       db.exec(`UPDATE fee_invoice SET amount_paid = amount, status = 'PAID'`)
 
-      const result = db.prepare('SELECT COUNT(*) as count FROM fee_invoice WHERE status = ?').get('OUTSTANDING') as unknown
+      const result = db.prepare('SELECT COUNT(*) as count FROM fee_invoice WHERE status = ?').get('OUTSTANDING') as DbRow
       expect(result.count).toBe(0)
     })
 
@@ -245,7 +248,7 @@ describe('AgedReceivablesService', () => {
       const futureOverdue = db.prepare(`
         SELECT COUNT(*) as count FROM fee_invoice 
         WHERE status = 'OUTSTANDING' AND due_date < '2027-01-01'
-      `).get() as unknown
+      `).get() as DbRow
 
       expect(futureOverdue.count).toBeGreaterThanOrEqual(5)
     })
@@ -253,7 +256,7 @@ describe('AgedReceivablesService', () => {
     it('should handle negative balances gracefully', () => {
       db.exec(`UPDATE fee_invoice SET amount_paid = amount + 10000 WHERE id = 1`)
 
-      const overpaid = db.prepare('SELECT * FROM fee_invoice WHERE id = 1').get() as unknown
+      const overpaid = db.prepare('SELECT * FROM fee_invoice WHERE id = 1').get() as DbRow
       expect(overpaid.amount_paid).toBeGreaterThan(overpaid.amount)
     })
   })

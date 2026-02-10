@@ -1,6 +1,8 @@
-import { ipcMain } from 'electron';
-import { getDatabase } from '../../database/index';
-import { logAudit } from '../../database/utils/audit';
+import { getDatabase } from '../../database';
+import { ipcMain } from '../../electron-env';
+import { NotificationService } from '../../services/notifications/NotificationService';
+
+import type { IpcMainInvokeEvent } from 'electron';
 
 export function registerMessageHandlers(): void {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -15,7 +17,7 @@ export function registerMessageHandlers(): void {
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ipcMain.handle('message:saveTemplate', async (_, template: any) => {
+    ipcMain.handle('message:saveTemplate', async (_event: IpcMainInvokeEvent, template: any) => {
         if (template.id) {
             db.prepare(`UPDATE message_template SET 
         template_name = ?, template_type = ?, subject = ?, body = ?, placeholders = ? 
@@ -38,7 +40,7 @@ export function registerMessageHandlers(): void {
     });
 
     // ======== SENDING SMS ========
-    ipcMain.handle('message:sendSms', async (event, options: { to: string, message: string, recipientId?: number, recipientType?: string, userId: number }) => {
+    ipcMain.handle('message:sendSms', async (_event: IpcMainInvokeEvent, options: { to: string, message: string, recipientId?: number, recipientType?: string, userId: number }) => {
         const settings = db.prepare('SELECT sms_api_key, sms_api_secret, sms_sender_id FROM school_settings WHERE id = 1').get() as { sms_api_key: string; sms_api_secret: string; sms_sender_id: string } | undefined;
 
         // Create log entry as PENDING
@@ -77,8 +79,23 @@ export function registerMessageHandlers(): void {
         }
     });
 
+    // ======== SENDING EMAIL ========
+    ipcMain.handle('message:sendEmail', async (_event: IpcMainInvokeEvent, options: { to: string; subject: string; body: string; recipientId?: number; recipientType?: string; userId: number }) => {
+        const service = new NotificationService();
+        const recipientType = (options.recipientType ?? 'GUARDIAN') as 'STUDENT' | 'STAFF' | 'GUARDIAN';
+        const result = await service.send({
+            recipientType,
+            recipientId: options.recipientId || 0,
+            channel: 'EMAIL',
+            to: options.to,
+            subject: options.subject,
+            message: options.body
+        }, options.userId);
+        return result;
+    });
+
     // ======== MESSAGE LOGS ========
-    ipcMain.handle('message:getLogs', async (_, limit = 50) => {
+    ipcMain.handle('message:getLogs', async (_event: IpcMainInvokeEvent, limit = 50) => {
         return db.prepare('SELECT * FROM message_log ORDER BY created_at DESC LIMIT ?').all(limit);
     });
 }

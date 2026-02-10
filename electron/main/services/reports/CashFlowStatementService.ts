@@ -1,5 +1,7 @@
-import Database from 'better-sqlite3'
 import { getDatabase } from '../../database'
+
+import type Database from 'better-sqlite3'
+
 
 // ============================================================================
 // SEGREGATED INTERFACES (ISP)
@@ -17,8 +19,10 @@ export interface IFinancingActivitiesCalculator {
   getFinancingActivities(startDate: string, endDate: string): Promise<FinancingActivitiesResult>
 }
 
+export type LiquidityStatus = 'STRONG' | 'ADEQUATE' | 'TIGHT' | 'CRITICAL'
+
 export interface ILiquidityAnalyzer {
-  assessLiquidityStatus(closingBalance: number, avgMonthlyExpenses?: number): 'STRONG' | 'ADEQUATE' | 'TIGHT' | 'CRITICAL'
+  assessLiquidityStatus(closingBalance: number, avgMonthlyExpenses?: number): LiquidityStatus
 }
 
 export interface ICashFlowForecaster {
@@ -73,7 +77,7 @@ export interface CashFlowStatement {
   closing_cash_balance: number
   cash_forecast_30_days: number
   cash_forecast_60_days: number
-  liquidity_status: 'STRONG' | 'ADEQUATE' | 'TIGHT' | 'CRITICAL'
+  liquidity_status: LiquidityStatus
 }
 
 interface LedgerTransactionResult {
@@ -114,7 +118,7 @@ interface BalanceResult {
 // ============================================================================
 
 class CashFlowRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -195,8 +199,8 @@ class CashFlowRepository {
 // ============================================================================
 
 class OperatingActivitiesCalculator implements IOperatingActivitiesCalculator {
-  private db: Database.Database
-  private repo: CashFlowRepository
+  private readonly db: Database.Database
+  private readonly repo: CashFlowRepository
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -240,8 +244,8 @@ class OperatingActivitiesCalculator implements IOperatingActivitiesCalculator {
 // ============================================================================
 
 class InvestingActivitiesCalculator implements IInvestingActivitiesCalculator {
-  private db: Database.Database
-  private repo: CashFlowRepository
+  private readonly db: Database.Database
+  private readonly repo: CashFlowRepository
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -257,7 +261,7 @@ class InvestingActivitiesCalculator implements IInvestingActivitiesCalculator {
     assetTransactions.forEach((trans: AssetTransactionResult) => {
       if (trans.transaction_type === 'PURCHASE') {
         assetPurchases += trans.amount || 0
-      } else if (trans.transaction_type === 'SALE') {
+      } else {
         assetSales += trans.amount || 0
       }
     })
@@ -277,8 +281,8 @@ class InvestingActivitiesCalculator implements IInvestingActivitiesCalculator {
 // ============================================================================
 
 class FinancingActivitiesCalculator implements IFinancingActivitiesCalculator {
-  private db: Database.Database
-  private repo: CashFlowRepository
+  private readonly db: Database.Database
+  private readonly repo: CashFlowRepository
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -297,7 +301,7 @@ class FinancingActivitiesCalculator implements IFinancingActivitiesCalculator {
         loansReceived += trans.amount || 0
       } else if (trans.transaction_type === 'REPAYMENT') {
         loanRepayments += trans.amount || 0
-      } else if (trans.transaction_type === 'GRANT') {
+      } else {
         grantReceived += trans.amount || 0
       }
     })
@@ -318,20 +322,20 @@ class FinancingActivitiesCalculator implements IFinancingActivitiesCalculator {
 // ============================================================================
 
 class LiquidityAnalyzer implements ILiquidityAnalyzer {
-  private db: Database.Database
-  private repo: CashFlowRepository
+  private readonly db: Database.Database
+  private readonly repo: CashFlowRepository
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
     this.repo = new CashFlowRepository(this.db)
   }
 
-  async getStatus(closingBalance: number): Promise<'STRONG' | 'ADEQUATE' | 'TIGHT' | 'CRITICAL'> {
+  async getStatus(closingBalance: number): Promise<LiquidityStatus> {
     const avgMonthlyExpenses = await this.repo.getAverageMonthlyExpenses()
     return this.assessLiquidityStatus(closingBalance, avgMonthlyExpenses)
   }
 
-  assessLiquidityStatus(closingBalance: number, avgMonthlyExpenses: number = 0): 'STRONG' | 'ADEQUATE' | 'TIGHT' | 'CRITICAL' {
+  assessLiquidityStatus(closingBalance: number, avgMonthlyExpenses: number = 0): LiquidityStatus {
     // Determine liquidity status based on available months of expenses
     if (closingBalance >= avgMonthlyExpenses * 3) {
       return 'STRONG' // 3+ months of expenses available
@@ -394,8 +398,8 @@ class CashFlowForecaster implements ICashFlowForecaster {
 
       // Confidence decreases over time
       let confidence: 'HIGH' | 'MEDIUM' | 'LOW' = 'HIGH'
-      if (i > 30) confidence = 'MEDIUM'
-      if (i > 45) confidence = 'LOW'
+      if (i > 30) {confidence = 'MEDIUM'}
+      if (i > 45) {confidence = 'LOW'}
 
       forecasts.push({
         forecast_date: forecastDate.toISOString().split('T')[0],
@@ -415,7 +419,7 @@ class CashFlowForecaster implements ICashFlowForecaster {
 export class CashFlowStatementService
   implements IOperatingActivitiesCalculator, IInvestingActivitiesCalculator, IFinancingActivitiesCalculator {
   // Composed services
-  private db: Database.Database
+  private readonly db: Database.Database
   private readonly operatingCalculator: OperatingActivitiesCalculator
   private readonly investingCalculator: InvestingActivitiesCalculator
   private readonly financingCalculator: FinancingActivitiesCalculator
@@ -463,8 +467,9 @@ export class CashFlowStatementService
       const transactions = await this.repository.getTransactionsByType(period.startDate, period.endDate, ['CREDIT', 'PAYMENT'])
       const forecasts = await this.forecaster.generateCashForecasts(transactions, 60)
 
-      const cashForecast30 = forecasts.find(f => f.forecast_date === new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])?.projected_balance || closingCashBalance
-      const cashForecast60 = forecasts.find(f => f.forecast_date === new Date(new Date().getTime() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])?.projected_balance || closingCashBalance
+      const now = Date.now()
+      const cashForecast30 = forecasts.find(f => f.forecast_date === new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])?.projected_balance || closingCashBalance
+      const cashForecast60 = forecasts.find(f => f.forecast_date === new Date(now + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])?.projected_balance || closingCashBalance
 
       return {
         period_start: period.startDate,

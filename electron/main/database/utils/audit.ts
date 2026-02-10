@@ -1,6 +1,15 @@
 import { getDatabase } from '../index'
 
-export function logAudit(userId: number, actionType: string, tableName: string, recordId: number | null, oldValues: unknown, newValues: unknown): void {
+type LogAuditArgs = [
+    userId: number,
+    actionType: string,
+    tableName: string,
+    recordId: number | null,
+    oldValues: unknown,
+    newValues: unknown
+]
+
+export function logAudit(...[userId, actionType, tableName, recordId, oldValues, newValues]: LogAuditArgs): void {
     const db = getDatabase()
     try {
         db.prepare(`INSERT INTO audit_log (

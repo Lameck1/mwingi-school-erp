@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react'
+import React, { useId, useRef, useState } from 'react'
+
 import { cn } from '../../utils/cn'
 
 interface TooltipProps {
@@ -7,6 +8,79 @@ interface TooltipProps {
     position?: 'top' | 'bottom' | 'left' | 'right'
     className?: string
     delay?: number
+}
+
+const positionClasses = {
+    top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
+    bottom: 'top-full left-1/2 -translate-x-1/2 mt-2',
+    left: 'right-full top-1/2 -translate-y-1/2 mr-2',
+    right: 'left-full top-1/2 -translate-y-1/2 ml-2'
+}
+
+const arrowClasses = {
+    top: 'top-full left-1/2 -translate-x-1/2 border-t-card/90',
+    bottom: 'bottom-full left-1/2 -translate-x-1/2 border-b-card/90',
+    left: 'left-full top-1/2 -translate-y-1/2 border-l-card/90',
+    right: 'right-full top-1/2 -translate-y-1/2 border-r-card/90'
+}
+
+const mergeHandler = <E extends React.SyntheticEvent>(
+    handler: () => void,
+    childHandler?: (event: E) => void
+) => (event: E) => {
+    handler()
+    childHandler?.(event)
+}
+
+const renderFallbackTrigger = (
+    tooltipId: string,
+    showTooltip: () => void,
+    hideTooltip: () => void,
+    children: React.ReactNode
+) => {
+    const handleKeyDown = (event: React.KeyboardEvent) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            showTooltip()
+        }
+        if (event.key === 'Escape') {
+            hideTooltip()
+        }
+    }
+
+    return (
+        <button
+            className="inline-flex bg-transparent border-0 padding-0 cursor-pointer"
+            aria-describedby={tooltipId}
+            onMouseEnter={showTooltip}
+            onMouseLeave={hideTooltip}
+            onFocus={showTooltip}
+            onBlur={hideTooltip}
+            onKeyDown={handleKeyDown}
+        >
+            {children}
+        </button>
+    )
+}
+
+const renderClonedTrigger = (
+    children: React.ReactElement,
+    tooltipId: string,
+    showTooltip: () => void,
+    hideTooltip: () => void
+) => {
+    const childProps = children.props as React.HTMLAttributes<HTMLElement>
+    const describedBy = childProps['aria-describedby']
+        ? `${childProps['aria-describedby']} ${tooltipId}`
+        : tooltipId
+
+    return React.cloneElement(children, {
+        onMouseEnter: mergeHandler(showTooltip, childProps.onMouseEnter),
+        onMouseLeave: mergeHandler(hideTooltip, childProps.onMouseLeave),
+        onFocus: mergeHandler(showTooltip, childProps.onFocus),
+        onBlur: mergeHandler(hideTooltip, childProps.onBlur),
+        'aria-describedby': describedBy
+    })
 }
 
 export const Tooltip: React.FC<TooltipProps> = ({
@@ -19,6 +93,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
     const [isVisible, setIsVisible] = useState(false)
     const [shouldRender, setShouldRender] = useState(false)
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const tooltipId = useId()
 
     const showTooltip = () => {
         timeoutRef.current = setTimeout(() => {
@@ -29,33 +104,21 @@ export const Tooltip: React.FC<TooltipProps> = ({
     }
 
     const hideTooltip = () => {
-        if (timeoutRef.current) clearTimeout(timeoutRef.current)
+        if (timeoutRef.current) {clearTimeout(timeoutRef.current)}
         setIsVisible(false)
         // Wait for animation to finish before unmounting
         setTimeout(() => setShouldRender(false), 150)
     }
 
-    const positionClasses = {
-        top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
-        bottom: 'top-full left-1/2 -translate-x-1/2 mt-2',
-        left: 'right-full top-1/2 -translate-y-1/2 mr-2',
-        right: 'left-full top-1/2 -translate-y-1/2 ml-2'
-    }
-
-    const arrowClasses = {
-        top: 'top-full left-1/2 -translate-x-1/2 border-t-card/90',
-        bottom: 'bottom-full left-1/2 -translate-x-1/2 border-b-card/90',
-        left: 'left-full top-1/2 -translate-y-1/2 border-l-card/90',
-        right: 'right-full top-1/2 -translate-y-1/2 border-r-card/90'
-    }
+    const trigger = React.isValidElement(children)
+        ? renderClonedTrigger(children, tooltipId, showTooltip, hideTooltip)
+        : renderFallbackTrigger(tooltipId, showTooltip, hideTooltip, children)
 
     return (
         <div
             className="relative inline-block w-full"
-            onMouseEnter={showTooltip}
-            onMouseLeave={hideTooltip}
         >
-            {children}
+            {trigger}
             {shouldRender && (
                 <div
                     className={cn(
@@ -64,6 +127,8 @@ export const Tooltip: React.FC<TooltipProps> = ({
                         positionClasses[position],
                         className
                     )}
+                    id={tooltipId}
+                    role="tooltip"
                 >
                     {content}
                     {/* Tiny Arrow */}

@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react'
-import { shillingsToCents } from '../../utils/format'
-import { useAuthStore } from '../../stores'
-import { TransactionCategory } from '../../types/electron-api/FinanceAPI'
 import { Plus, Check, Loader2, ArrowLeftCircle, Receipt, Tag, CreditCard, FileText, Calendar } from 'lucide-react'
+import React, { useCallback, useEffect, useState } from 'react'
+
 import { useToast } from '../../contexts/ToastContext'
+import { useAuthStore } from '../../stores'
+import { type TransactionCategory } from '../../types/electron-api/FinanceAPI'
+import { shillingsToCents } from '../../utils/format'
 
 export default function RecordExpense() {
     const { user } = useAuthStore()
@@ -25,34 +26,25 @@ export default function RecordExpense() {
         transaction_type: 'EXPENSE'
     })
 
-    useEffect(() => {
-        const loadCategories = async () => {
-            try {
-                const allCats = await window.electronAPI.getTransactionCategories()
-                setCategories(allCats.filter((c: TransactionCategory) => c.category_type === 'EXPENSE'))
-            } catch (error) {
-                console.error('Failed to load categories:', error)
-                showToast('Failed to load categories', 'error')
-            }
-        }
-        loadCategories()
-    }, [showToast])
-
-    const loadCategories = async () => {
+    const loadCategories = useCallback(async () => {
         try {
-            const allCats = await window.electronAPI.getTransactionCategories()
+            const allCats = await globalThis.electronAPI.getTransactionCategories()
             setCategories(allCats.filter((c: TransactionCategory) => c.category_type === 'EXPENSE'))
         } catch (error) {
             console.error('Failed to load categories:', error)
             showToast('Failed to load categories', 'error')
         }
-    }
+    }, [showToast])
+
+    useEffect(() => {
+        loadCategories().catch((err: unknown) => console.error('Failed to load expense categories', err))
+    }, [loadCategories])
 
     const handleCreateCategory = async () => {
-        if (!newCategory.trim()) return
+        if (!newCategory.trim()) {return}
         try {
             setLoading(true)
-            await window.electronAPI.createTransactionCategory(newCategory, 'EXPENSE')
+            await globalThis.electronAPI.createTransactionCategory(newCategory, 'EXPENSE')
             await loadCategories()
             setNewCategory('')
             setShowNewCategoryInput(false)
@@ -74,10 +66,10 @@ export default function RecordExpense() {
 
         setSaving(true)
         try {
-            await window.electronAPI.createTransaction({
+            await globalThis.electronAPI.createTransaction({
                 transaction_date: formData.transaction_date,
                 amount: shillingsToCents(formData.amount), // Whole currency units
-                category_id: parseInt(formData.category_id),
+                category_id: Number.parseInt(formData.category_id, 10),
                 reference: formData.payment_reference,
                 description: formData.description
             }, user!.id)
@@ -108,7 +100,7 @@ export default function RecordExpense() {
                     <p className="text-foreground/50 mt-1 font-medium italic">Document operational expenditures and institutional payouts</p>
                 </div>
                 <button
-                    onClick={() => window.history.back()}
+                    onClick={() => globalThis.history.back()}
                     className="flex items-center gap-2 text-foreground/40 text-[10px] font-bold uppercase tracking-widest hover:text-foreground transition-all group"
                 >
                     <ArrowLeftCircle className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
@@ -259,7 +251,7 @@ export default function RecordExpense() {
                     <div className="flex justify-end gap-3 pt-8 border-t border-border/10">
                         <button
                             type="button"
-                            onClick={() => window.history.back()}
+                            onClick={() => globalThis.history.back()}
                             className="btn btn-secondary px-8 py-3 font-bold uppercase tracking-widest text-[10px]"
                         >
                             Discard Draft

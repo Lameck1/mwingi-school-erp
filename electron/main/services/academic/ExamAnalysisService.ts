@@ -124,7 +124,7 @@ export class ExamAnalysisService {
 
       const result = this.db.prepare(query).get(...params) as SubjectStatisticsResult | undefined
 
-      if (!result) throw new Error('No data found for this subject')
+      if (!result) {throw new Error('No data found for this subject')}
 
       // Get all scores for calculations
       const scores = (this.db.prepare(`
@@ -261,7 +261,7 @@ export class ExamAnalysisService {
     try {
       const student = this.db.prepare('SELECT * FROM student WHERE id = ?').get(studentId) as StudentResult | undefined
 
-      if (!student) throw new Error('Student not found')
+      if (!student) {throw new Error('Student not found')}
 
       // Get all subject scores
       const results = this.db.prepare(`
@@ -275,7 +275,7 @@ export class ExamAnalysisService {
         ORDER BY er.score DESC
       `).all(examId, studentId) as StudentSubjectScoreResult[]
 
-      if (results.length === 0) throw new Error('No exam results found')
+      if (results.length === 0) {throw new Error('No exam results found')}
 
       const averageScore = results.reduce((sum, r) => sum + r.score, 0) / results.length
       const bestSubjects = results.slice(0, 3).map(r => r.subject_name)
@@ -293,9 +293,9 @@ export class ExamAnalysisService {
       `).get(studentId, examId, examId) as PreviousExamScoreResult | undefined
 
       let trend: 'improving' | 'declining' | 'stable' = 'stable'
-      if (previousExam && previousExam.avg_score) {
-        if (averageScore > previousExam.avg_score + 5) trend = 'improving'
-        else if (averageScore < previousExam.avg_score - 5) trend = 'declining'
+      if (previousExam?.avg_score) {
+        if (averageScore > previousExam.avg_score + 5) {trend = 'improving'}
+        else if (averageScore < previousExam.avg_score - 5) {trend = 'declining'}
       }
 
       const predictedGrade = this.predictKCPEGrade(averageScore)
@@ -357,7 +357,7 @@ export class ExamAnalysisService {
   private calculateMedian(scores: number[]): number {
     const sorted = [...scores].sort((a, b) => a - b)
     const mid = Math.floor(sorted.length / 2)
-    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+    return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
   }
 
   private calculateMode(scores: number[]): number {
@@ -397,19 +397,19 @@ export class ExamAnalysisService {
   }
 
   private getRating(score: number): string {
-    if (score >= 80) return 'Excellent'
-    if (score >= 70) return 'Good'
-    if (score >= 60) return 'Satisfactory'
-    if (score >= 50) return 'Fair'
+    if (score >= 80) {return 'Excellent'}
+    if (score >= 70) {return 'Good'}
+    if (score >= 60) {return 'Satisfactory'}
+    if (score >= 50) {return 'Fair'}
     return 'Poor'
   }
 
   private predictKCPEGrade(averageScore: number): string {
-    if (averageScore >= 85) return 'A (Excellent)'
-    if (averageScore >= 75) return 'B+ (Very Good)'
-    if (averageScore >= 65) return 'B (Good)'
-    if (averageScore >= 55) return 'C+ (Satisfactory)'
-    if (averageScore >= 45) return 'C (Fair)'
+    if (averageScore >= 85) {return 'A (Excellent)'}
+    if (averageScore >= 75) {return 'B+ (Very Good)'}
+    if (averageScore >= 65) {return 'B (Good)'}
+    if (averageScore >= 55) {return 'C+ (Satisfactory)'}
+    if (averageScore >= 45) {return 'C (Fair)'}
     return 'D (Poor)'
   }
 }

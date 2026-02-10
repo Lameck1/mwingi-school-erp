@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback } from 'react'
-import { Toast, ToastType } from '../components/ui/Toast'
+import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+
+import { Toast, type ToastType } from '../components/ui/Toast'
 
 interface ToastMessage {
     id: string
@@ -13,25 +14,33 @@ interface ToastContextType {
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined)
 
-export function ToastProvider({ children }: { children: React.ReactNode }) {
+export function ToastProvider({ children }: Readonly<{ children: React.ReactNode }>) {
     const [toasts, setToasts] = useState<ToastMessage[]>([])
+    const fallbackIdCounter = useRef(0)
 
-    const showToast = useCallback((message: string, type: ToastType = 'info') => {
-        const id = Math.random().toString(36).substring(7)
-        setToasts(prev => [...prev, { id, message, type }])
-        
-        // Auto-remove toast after 5 seconds
-        setTimeout(() => {
-            setToasts(prev => prev.filter(toast => toast.id !== id))
-        }, 5000)
-    }, [])
-
-    const removeToast = useCallback((id: string) => {
+    const removeToastById = useCallback((id: string) => {
         setToasts(prev => prev.filter(toast => toast.id !== id))
     }, [])
 
+    const showToast = useCallback((message: string, type: ToastType = 'info') => {
+        fallbackIdCounter.current += 1
+        const id = globalThis.crypto?.randomUUID
+            ? globalThis.crypto.randomUUID()
+            : `toast-${Date.now()}-${fallbackIdCounter.current}`
+        setToasts(prev => [...prev, { id, message, type }])
+        setTimeout(() => {
+            removeToastById(id)
+        }, 5000)
+    }, [removeToastById])
+
+    const removeToast = useCallback((id: string) => {
+        removeToastById(id)
+    }, [removeToastById])
+
+    const value = useMemo(() => ({ showToast }), [showToast])
+
     return (
-        <ToastContext.Provider value={{ showToast }}>
+        <ToastContext.Provider value={value}>
             {children}
             <div className="fixed top-4 right-4 z-50 space-y-2">
                 {toasts.map(toast => (

@@ -81,6 +81,8 @@ export interface AcademicSubject {
   code: string
   name: string
   curriculum: string
+  is_compulsory?: boolean | number
+  is_active?: boolean | number
   [key: string]: unknown
 }
 
@@ -130,6 +132,10 @@ export interface AcademicAPI {
 
   // Academic System (New)
   getAcademicSubjects: () => Promise<AcademicSubject[]>
+  getAcademicSubjectsAdmin: () => Promise<AcademicSubject[]>
+  createAcademicSubject: (data: Partial<AcademicSubject>, userId: number) => Promise<{ success: boolean; id: number }>
+  updateAcademicSubject: (id: number, data: Partial<AcademicSubject>, userId: number) => Promise<{ success: boolean }>
+  setAcademicSubjectActive: (id: number, isActive: boolean, userId: number) => Promise<{ success: boolean }>
   getAcademicExams: (academicYearId: number, termId: number) => Promise<AcademicExam[]>
   createAcademicExam: (data: unknown, userId: number) => Promise<void>
   deleteAcademicExam: (id: number, userId: number) => Promise<void>
@@ -151,7 +157,7 @@ export interface AcademicAPI {
   // Merit Lists & Analysis
   generateMeritList: (options: { academicYearId: number; termId: number; streamId: number }) => Promise<MeritListResult['rankings']>;
   generateClassMeritList: (examId: number, streamId: number) => Promise<MeritListResult>;
-  getSubjectMeritList: (subjectId: number, examId: number) => Promise<SubjectMeritListRow[]>;
+  getSubjectMeritList: (filters: { examId: number; subjectId: number; streamId: number }) => Promise<SubjectMeritListRow[]>;
   getPerformanceImprovement: (studentId: number) => Promise<PerformanceImprovement[]>;
 
   // Awards
@@ -178,19 +184,19 @@ export interface AcademicAPI {
   getVenues: () => Promise<unknown[]>
   generateExamTimetable: (config: unknown) => Promise<unknown>
   detectExamClashes: (filters: { examId: number }) => Promise<unknown[]>
-  exportExamTimetableToPDF: (data: unknown) => Promise<void>
+  exportExamTimetableToPDF: (data: unknown) => Promise<{ success: boolean; filePath?: string; error?: string }>
   getMostImprovedStudents: (filters: { academicYearId: number; currentTermId: number; comparisonTermId: number; streamId?: number; minimumImprovement: number }) => Promise<ImprovedStudent[]>
-  generateCertificate: (data: { studentId: number; studentName: string; awardCategory: string; academicYearId: number; improvementPercentage: number }) => Promise<void>
-  emailParents: (data: { students: ImprovedStudent[]; awardCategory: string; templateType: string }) => Promise<void>
+  generateCertificate: (data: { studentId: number; studentName: string; awardCategory: string; academicYearId: number; improvementPercentage: number }) => Promise<{ success: boolean; filePath?: string }>
+  emailParents: (data: { students: ImprovedStudent[]; awardCategory: string; templateType: string }, userId: number) => Promise<{ success: boolean; sent: number; failed: number; errors: string[] }>
 
   // Report Cards (Refactored)
-  generateBatchReportCards: (data: { exam_id: number; stream_id: number; on_progress?: (progress: any) => void }) => Promise<{ success: boolean; generated: number; failed: number }>;
+  generateBatchReportCards: (data: { exam_id: number; stream_id: number }) => Promise<{ success: boolean; generated: number; failed: number }>;
   emailReportCards: (data: { exam_id: number; stream_id: number; template_id: string; include_sms: boolean }) => Promise<{ success: boolean; sent: number; failed: number }>;
-  mergeReportCards: (data: { exam_id: number; stream_id: number; output_path: string }) => Promise<{ success: boolean; message?: string }>;
-  downloadReportCards: (data: { exam_id: number; stream_id: number; merge: boolean }) => Promise<{ success: boolean }>;
+  mergeReportCards: (data: { exam_id: number; stream_id: number; output_path: string }) => Promise<{ success: boolean; message?: string; filePath?: string }>;
+  downloadReportCards: (data: { exam_id: number; stream_id: number; merge: boolean }) => Promise<{ success: boolean; filePath?: string; files?: string[]; message?: string }>;
 
   // General Export
-  exportToPDF: (data: { data: any; filename: string; title: string; subtitle: string }) => Promise<void>;
+  exportToPDF: (data: { html?: string; content?: string; filename?: string; title?: string }) => Promise<{ success: boolean; filePath?: string; error?: string }>;
 }
 
 export interface ImprovedStudent {

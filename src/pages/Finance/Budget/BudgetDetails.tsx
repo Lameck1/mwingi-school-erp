@@ -1,15 +1,16 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
 import {
     ArrowLeft, TrendingUp, TrendingDown, CheckCircle,
     XCircle, Clock, Edit, Send, FileText, AlertTriangle
 } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+
 import { PageHeader } from '../../../components/patterns/PageHeader'
 import { StatCard } from '../../../components/patterns/StatCard'
 import { Badge } from '../../../components/ui/Badge'
 import { useAuthStore } from '../../../stores'
-import { formatCurrency } from '../../../utils/format'
-import { Budget } from '../../../types/electron-api'
+import { type Budget } from '../../../types/electron-api'
+import { formatCurrencyFromCents } from '../../../utils/format'
 
 const statusConfig = {
     DRAFT: { label: 'Draft', variant: 'default' as const, icon: Edit },
@@ -31,7 +32,7 @@ export default function BudgetDetails() {
 
     const loadBudget = useCallback(async () => {
         const budgetId = Number(id)
-        if (!id || isNaN(budgetId)) {
+        if (!id || Number.isNaN(budgetId)) {
             console.warn('Invalid budget ID in URL:', id)
             navigate('/budget')
             return
@@ -39,7 +40,7 @@ export default function BudgetDetails() {
 
         setLoading(true)
         try {
-            const data = await window.electronAPI.getBudgetById(budgetId)
+            const data = await globalThis.electronAPI.getBudgetById(budgetId)
             if (!data) {
                 console.warn('Budget not found for ID:', budgetId)
                 return
@@ -53,16 +54,16 @@ export default function BudgetDetails() {
     }, [id, navigate])
 
     useEffect(() => {
-        loadBudget()
+        loadBudget().catch((err: unknown) => console.error('Failed to load budget:', err))
     }, [loadBudget])
 
     const handleSubmitForApproval = async () => {
-        if (!budget || !user) return
+        if (!budget || !user) {return}
         setActionLoading(true)
         try {
-            const result = await window.electronAPI.submitBudgetForApproval(budget.id, user.id)
+            const result = await globalThis.electronAPI.submitBudgetForApproval(budget.id, user.id)
             if (result.success) {
-                loadBudget()
+                loadBudget().catch((err: unknown) => console.error('Failed to reload budget:', err))
             }
         } catch (error) {
             console.error('Failed to submit budget:', error)
@@ -72,12 +73,12 @@ export default function BudgetDetails() {
     }
 
     const handleApprove = async () => {
-        if (!budget || !user) return
+        if (!budget || !user) {return}
         setActionLoading(true)
         try {
-            const result = await window.electronAPI.approveBudget(budget.id, user.id)
+            const result = await globalThis.electronAPI.approveBudget(budget.id, user.id)
             if (result.success) {
-                loadBudget()
+                loadBudget().catch((err: unknown) => console.error('Failed to reload budget:', err))
             }
         } catch (error) {
             console.error('Failed to approve budget:', error)
@@ -91,8 +92,8 @@ export default function BudgetDetails() {
             <div className="space-y-8 pb-10">
                 <div className="h-20 bg-white/5 animate-pulse rounded-xl" />
                 <div className="grid grid-cols-4 gap-6">
-                    {[1, 2, 3, 4].map(i => (
-                        <div key={i} className="h-32 bg-white/5 animate-pulse rounded-xl" />
+                    {[1, 2, 3, 4].map((value) => (
+                        <div key={value} className="h-32 bg-white/5 animate-pulse rounded-xl" />
                     ))}
                 </div>
             </div>
@@ -180,19 +181,19 @@ export default function BudgetDetails() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard
                     label="Total Budgeted"
-                    value={formatCurrency(budget.total_budgeted || 0)}
+                    value={formatCurrencyFromCents(budget.total_budgeted || 0)}
                     icon={FileText}
                     color="from-blue-500/20 to-indigo-500/20 text-blue-400"
                 />
                 <StatCard
                     label="Actual Spent"
-                    value={formatCurrency(budget.total_actual || 0)}
+                    value={formatCurrencyFromCents(budget.total_actual || 0)}
                     icon={TrendingDown}
                     color="from-amber-500/20 to-orange-500/20 text-amber-400"
                 />
                 <StatCard
                     label="Variance"
-                    value={formatCurrency(Math.abs(variance))}
+                    value={formatCurrencyFromCents(Math.abs(variance))}
                     icon={variance >= 0 ? TrendingUp : TrendingDown}
                     color={variance >= 0
                         ? "from-green-500/20 to-emerald-500/20 text-green-400"

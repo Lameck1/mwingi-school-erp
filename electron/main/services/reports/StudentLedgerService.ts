@@ -1,6 +1,8 @@
-import Database from 'better-sqlite3'
+
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
+
+import type Database from 'better-sqlite3'
 
 // ============================================================================
 // SEGREGATED INTERFACES (ISP)
@@ -80,12 +82,18 @@ export interface Discrepancy {
   difference: number
 }
 
+const isCreditTransaction = (transactionType: string): boolean =>
+  transactionType === 'CREDIT' || transactionType === 'PAYMENT'
+
+const isDebitTransaction = (transactionType: string): boolean =>
+  transactionType === 'DEBIT' || transactionType === 'CHARGE' || transactionType === 'REVERSAL'
+
 // ============================================================================
 // REPOSITORY LAYER (SRP)
 // ============================================================================
 
 class StudentLedgerRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -156,8 +164,8 @@ class StudentLedgerRepository {
 // ============================================================================
 
 class OpeningBalanceCalculator implements IOpeningBalanceCalculator {
-  private db: Database.Database
-  private repo: StudentLedgerRepository
+  private readonly db: Database.Database
+  private readonly repo: StudentLedgerRepository
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -190,9 +198,9 @@ class OpeningBalanceCalculator implements IOpeningBalanceCalculator {
 // ============================================================================
 
 class LedgerGenerator implements ILedgerGenerator {
-  private db: Database.Database
-  private repo: StudentLedgerRepository
-  private balanceCalc: OpeningBalanceCalculator
+  private readonly db: Database.Database
+  private readonly repo: StudentLedgerRepository
+  private readonly balanceCalc: OpeningBalanceCalculator
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -226,13 +234,10 @@ class LedgerGenerator implements ILedgerGenerator {
       let debit = 0
       let credit = 0
 
-      if (transaction.transaction_type === 'CREDIT' || transaction.transaction_type === 'PAYMENT') {
+      if (isCreditTransaction(transaction.transaction_type)) {
         credit = transaction.amount || 0
         runningBalance += credit
-      } else if (transaction.transaction_type === 'DEBIT' || transaction.transaction_type === 'CHARGE') {
-        debit = transaction.amount || 0
-        runningBalance -= debit
-      } else if (transaction.transaction_type === 'REVERSAL') {
+      } else if (isDebitTransaction(transaction.transaction_type)) {
         debit = transaction.amount || 0
         runningBalance -= debit
       }
@@ -256,9 +261,9 @@ class LedgerGenerator implements ILedgerGenerator {
 // ============================================================================
 
 class LedgerReconciler implements ILedgerReconciler {
-  private db: Database.Database
-  private repo: StudentLedgerRepository
-  private ledgerGen: LedgerGenerator
+  private readonly db: Database.Database
+  private readonly repo: StudentLedgerRepository
+  private readonly ledgerGen: LedgerGenerator
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -306,14 +311,22 @@ class LedgerReconciler implements ILedgerReconciler {
 // ============================================================================
 
 class LedgerValidator implements ILedgerValidator {
-  private db: Database.Database
-  private repo: StudentLedgerRepository
-  private balanceCalc: OpeningBalanceCalculator
+  private readonly db: Database.Database
+  private readonly repo: StudentLedgerRepository
+  private readonly balanceCalc: OpeningBalanceCalculator
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
-    this.repo = new StudentLedgerRepository(this.db)
-    this.balanceCalc = new OpeningBalanceCalculator(this.db)
+    this.repo = this.createRepository()
+    this.balanceCalc = this.createOpeningBalanceCalculator()
+  }
+
+  private createRepository(): StudentLedgerRepository {
+    return new StudentLedgerRepository(this.db)
+  }
+
+  private createOpeningBalanceCalculator(): OpeningBalanceCalculator {
+    return new OpeningBalanceCalculator(this.db)
   }
 
   async verifyOpeningBalance(studentId: number, periodStart: string): Promise<VerificationResult> {
@@ -353,7 +366,7 @@ export class StudentLedgerService
   implements IOpeningBalanceCalculator, ILedgerGenerator, ILedgerReconciler, ILedgerValidator
 {
   // Composed services
-  private db: Database.Database
+  private readonly db: Database.Database
   private readonly balanceCalculator: OpeningBalanceCalculator
   private readonly ledgerGenerator: LedgerGenerator
   private readonly reconciler: LedgerReconciler

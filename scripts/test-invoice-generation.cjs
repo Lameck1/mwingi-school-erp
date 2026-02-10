@@ -1,9 +1,7 @@
 const { getDatabase } = require('../electron/main/database/index.js');
-const { registerFinanceHandlers } = require('../electron/main/ipc/finance/finance-handlers.ts');
 
 const academicYearId = 1; // 2025
 const termId = 1; // Term 1
-void registerFinanceHandlers; // Suppress unused variable warning
 
 console.error('--- Testing Batch Invoice Generation Logic ---');
 

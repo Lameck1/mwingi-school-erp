@@ -1,5 +1,9 @@
-import { getDatabase } from '../../database/index';
+import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
+import { centsToShillings } from '../../utils/money';
+
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 /**
  * BudgetEnforcementService
@@ -67,7 +71,60 @@ export interface BudgetVarianceReport {
 }
 
 export class BudgetEnforcementService {
-  private db = getDatabase();
+  private readonly db = getDatabase();
+
+  private getBudgetAllocation(
+    glAccountCode: string,
+    fiscalYear: number,
+    department: string | null
+  ): {
+    id: number;
+    gl_account_code: string;
+    allocated_amount: number;
+    account_name: string;
+    department: string | null;
+  } | undefined {
+    return this.db.prepare(`
+      SELECT ba.id, ba.gl_account_code, ba.allocated_amount, ga.account_name,
+             ba.department
+      FROM budget_allocation ba
+      JOIN gl_account ga ON ga.account_code = ba.gl_account_code
+      WHERE ba.gl_account_code = ?
+        AND ba.fiscal_year = ?
+        AND (ba.department = ? OR (ba.department IS NULL AND ? IS NULL))
+        AND ba.is_active = 1
+    `).get(glAccountCode, fiscalYear, department, department) as {
+      id: number;
+      gl_account_code: string;
+      allocated_amount: number;
+      account_name: string;
+      department: string | null;
+    } | undefined;
+  }
+
+  private buildBudgetStatus(
+    allocatedAmount: number,
+    spent: number,
+    amount: number
+  ): NonNullable<BudgetValidationResult['budget_status']> {
+    const remaining = allocatedAmount - spent;
+    const utilizationPercentage = (spent / allocatedAmount) * 100;
+    const afterSpent = spent + amount;
+    const afterRemaining = allocatedAmount - afterSpent;
+    const afterUtilization = (afterSpent / allocatedAmount) * 100;
+
+    return {
+      allocated: allocatedAmount,
+      spent,
+      remaining,
+      utilization_percentage: utilizationPercentage,
+      after_transaction: {
+        spent: afterSpent,
+        remaining: afterRemaining,
+        utilization_percentage: afterUtilization,
+      },
+    };
+  }
 
   /**
    * Create or update budget allocation
@@ -129,7 +186,7 @@ export class BudgetEnforcementService {
     } catch (error: unknown) {
       return {
         success: false,
-        message: `Failed to set budget allocation: ${error.message}`,
+        message: `Failed to set budget allocation: ${getErrorMessage(error)}`,
       };
     }
   }
@@ -144,23 +201,7 @@ export class BudgetEnforcementService {
     department: string | null = null
   ): Promise<BudgetValidationResult> {
     try {
-      // Get budget allocation
-      const allocation = this.db.prepare(`
-        SELECT ba.id, ba.gl_account_code, ba.allocated_amount, ga.account_name,
-               ba.department
-        FROM budget_allocation ba
-        JOIN gl_account ga ON ga.account_code = ba.gl_account_code
-        WHERE ba.gl_account_code = ?
-          AND ba.fiscal_year = ?
-          AND (ba.department = ? OR (ba.department IS NULL AND ? IS NULL))
-          AND ba.is_active = 1
-      `).get(glAccountCode, fiscalYear, department, department) as {
-        id: number;
-        gl_account_code: string;
-        allocated_amount: number;
-        account_name: string;
-        department: string | null;
-      } | undefined;
+      const allocation = this.getBudgetAllocation(glAccountCode, fiscalYear, department);
 
       // If no budget allocation, allow transaction (no budget set)
       if (!allocation) {
@@ -170,34 +211,18 @@ export class BudgetEnforcementService {
         };
       }
 
-      // Calculate current spending
       const spent = this.calculateSpentAmount(glAccountCode, fiscalYear, department);
-      const remaining = allocation.allocated_amount - spent;
-      const utilizationPercentage = (spent / allocation.allocated_amount) * 100;
-
-      // Calculate what would happen after transaction
-      const afterSpent = spent + amount;
-      const afterRemaining = allocation.allocated_amount - afterSpent;
-      const afterUtilization = (afterSpent / allocation.allocated_amount) * 100;
-
-      const budget_status = {
-        allocated: allocation.allocated_amount / 100,
-        spent: spent / 100,
-        remaining: remaining / 100,
-        utilization_percentage: utilizationPercentage,
-        after_transaction: {
-          spent: afterSpent / 100,
-          remaining: afterRemaining / 100,
-          utilization_percentage: afterUtilization,
-        },
-      };
+      const budget_status = this.buildBudgetStatus(allocation.allocated_amount, spent, amount);
+      const afterSpent = budget_status.after_transaction.spent;
+      const afterUtilization = budget_status.after_transaction.utilization_percentage;
+      const utilizationPercentage = budget_status.utilization_percentage;
 
       // Check if transaction exceeds budget
       if (afterSpent > allocation.allocated_amount) {
         const overrun = afterSpent - allocation.allocated_amount;
         return {
           is_allowed: false,
-          message: `Transaction would exceed budget by Kes ${(overrun / 100).toFixed(2)}. Budget: Kes ${(allocation.allocated_amount / 100).toFixed(2)}, Spent: Kes ${(spent / 100).toFixed(2)}, Requested: Kes ${(amount / 100).toFixed(2)}.`,
+          message: `Transaction would exceed budget by Kes ${centsToShillings(overrun).toFixed(2)}. Budget: Kes ${centsToShillings(allocation.allocated_amount).toFixed(2)}, Spent: Kes ${centsToShillings(spent).toFixed(2)}, Requested: Kes ${centsToShillings(amount).toFixed(2)}.`,
           budget_status,
         };
       }
@@ -230,7 +255,7 @@ export class BudgetEnforcementService {
       console.error('Budget validation error:', error);
       return {
         is_allowed: true,
-        message: `Budget validation failed: ${error.message}. Transaction allowed.`,
+        message: `Budget validation failed: ${getErrorMessage(error)}. Transaction allowed.`,
       };
     }
   }
@@ -296,9 +321,9 @@ export class BudgetEnforcementService {
           account_name: a.account_name,
           department: a.department || undefined,
           fiscal_year: a.fiscal_year,
-          allocated_amount: a.allocated_amount / 100,
-          spent_amount: spent / 100,
-          remaining_amount: remaining / 100,
+          allocated_amount: a.allocated_amount,
+          spent_amount: spent,
+          remaining_amount: remaining,
           utilization_percentage: utilization,
           is_active: a.is_active === 1,
         };
@@ -316,8 +341,10 @@ export class BudgetEnforcementService {
     const allocations = await this.getBudgetAllocations(fiscalYear);
 
     const items = allocations.map(a => {
-      const variance = (a.allocated_amount * 100) - (a.spent_amount || 0) * 100;
-      const variancePercentage = ((a.spent_amount || 0) / a.allocated_amount) * 100 - 100;
+      const variance = a.allocated_amount - (a.spent_amount || 0);
+      const variancePercentage = a.allocated_amount
+        ? ((a.spent_amount || 0) / a.allocated_amount) * 100 - 100
+        : 0;
 
       let status: 'UNDER_BUDGET' | 'ON_BUDGET' | 'OVER_BUDGET';
       if ((a.spent_amount || 0) > a.allocated_amount) {
@@ -335,7 +362,7 @@ export class BudgetEnforcementService {
         allocated: a.allocated_amount,
         spent: a.spent_amount || 0,
         remaining: a.remaining_amount || 0,
-        variance: variance / 100,
+        variance,
         variance_percentage: variancePercentage,
         status,
       };
@@ -413,4 +440,5 @@ export class BudgetEnforcementService {
     });
   }
 }
+
 

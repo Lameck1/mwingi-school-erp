@@ -7,6 +7,14 @@ export interface BoardingFacility {
   occupancy_rate?: number; // Computed on frontend usually
 }
 
+export interface CBCStrand {
+  id: number;
+  code: string;
+  name: string;
+  description?: string;
+  is_active: boolean;
+}
+
 export interface TransportRoute {
   id: number;
   route_name: string;
@@ -79,6 +87,11 @@ export interface StudentCostTrendItem {
 }
 
 export interface OperationsAPI {
+  // CBC Strands
+  getCBCStrands: () => Promise<{ success: boolean; data: CBCStrand[]; message?: string }>
+  getActiveCBCStrands: () => Promise<{ success: boolean; data: CBCStrand[]; message?: string }>
+  linkFeeCategoryToStrand: (feeCategoryId: number, strandId: number, allocationPercentage: number, userId: number) => Promise<{ success: boolean; data?: number; message?: string }>
+
   // Operations - Boarding
   getBoardingFacilities: () => Promise<BoardingFacility[]>
   getActiveBoardingFacilities: () => Promise<BoardingFacility[]>
@@ -96,7 +109,14 @@ export interface OperationsAPI {
 
   // Operations - Grants
   createGrant: (data: Omit<Grant, 'id'>, userId: number) => Promise<{ success: boolean, id?: number, message?: string }>
-  recordGrantUtilization: (grantId: number, amount: number, description: string, glAccountCode: string | null, utilizationDate: string, userId: number) => Promise<{ success: boolean, message?: string }>
+  recordGrantUtilization: (payload: {
+    grantId: number
+    amount: number
+    description: string
+    glAccountCode: string | null
+    utilizationDate: string
+    userId: number
+  }) => Promise<{ success: boolean, message?: string }>
   getGrantSummary: (grantId: number) => Promise<{ success: boolean, data?: GrantSummary }>
   getGrantsByStatus: (status: 'ACTIVE' | 'EXPIRED' | 'FULLY_UTILIZED') => Promise<Grant[]>
   getExpiringGrants: (daysThreshold: number) => Promise<Grant[]>

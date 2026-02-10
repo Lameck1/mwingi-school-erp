@@ -17,18 +17,30 @@
  * @param amount - The amount to format (in whole currency units)
  * @returns Formatted currency string (e.g., "KES 34,000.00")
  */
-export function formatCurrency(amount: number | null | undefined): string {
+export function formatCurrency(amount?: number | null): string {
     if (amount === null || amount === undefined || isNaN(Number(amount))) {
-        return 'KES 0.00'
+        return 'Ksh 0.00'
     }
 
-    const displayAmount = centsToShillings(amount)
-
-    return new Intl.NumberFormat('en-KE', {
+    const displayAmount = Number(amount)
+    const formatted = new Intl.NumberFormat('en-KE', {
         style: 'currency',
         currency: 'KES',
         minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
     }).format(displayAmount)
+
+    // Normalize currency label to "Ksh" for UI consistency
+    return formatted.replaceAll('KES', 'Ksh').replaceAll('KSh', 'Ksh').replaceAll('\u00A0', ' ')
+}
+
+/**
+ * Format a cents-based amount as Kenyan Shillings (KES) currency
+ * @param cents - The amount in cents
+ * @returns Formatted currency string (e.g., "KES 34,000.00")
+ */
+export function formatCurrencyFromCents(cents?: number | null): string {
+    return formatCurrency(centsToShillings(cents))
 }
 
 /**
@@ -37,7 +49,7 @@ export function formatCurrency(amount: number | null | undefined): string {
  * @returns Amount in shillings
  */
 export function centsToShillings(cents: number | string | null | undefined): number {
-    if (cents === null || cents === undefined) return 0
+    if (cents === null || cents === undefined) {return 0}
     return Number(cents) / 100
 }
 
@@ -47,7 +59,7 @@ export function centsToShillings(cents: number | string | null | undefined): num
  * @returns Amount in cents (rounded to integer)
  */
 export function shillingsToCents(shillings: number | string | null | undefined): number {
-    if (shillings === null || shillings === undefined) return 0
+    if (shillings === null || shillings === undefined) {return 0}
     return Math.round(Number(shillings) * 100)
 }
 
@@ -56,11 +68,11 @@ export function shillingsToCents(shillings: number | string | null | undefined):
  * @param dateString - ISO date string or Date object
  * @returns Formatted date string (e.g., "Jan 23, 2026") or "N/A"
  */
-export function formatDate(dateString: string | Date | null | undefined): string {
-    if (!dateString) return 'N/A'
+export function formatDate(dateString?: string | Date | null): string {
+    if (!dateString) {return 'N/A'}
 
     const date = new Date(dateString)
-    if (isNaN(date.getTime())) return 'N/A'
+    if (Number.isNaN(date.getTime())) {return 'N/A'}
 
     return date.toLocaleDateString('en-US', {
         year: 'numeric',
@@ -74,11 +86,11 @@ export function formatDate(dateString: string | Date | null | undefined): string
  * @param dateString - ISO date string or Date object
  * @returns Formatted datetime string or "N/A"
  */
-export function formatDateTime(dateString: string | Date | null | undefined): string {
-    if (!dateString) return 'N/A'
+export function formatDateTime(dateString?: string | Date | null): string {
+    if (!dateString) {return 'N/A'}
 
     const date = new Date(dateString)
-    if (isNaN(date.getTime())) return 'N/A'
+    if (Number.isNaN(date.getTime())) {return 'N/A'}
 
     return date.toLocaleString('en-US', {
         year: 'numeric',

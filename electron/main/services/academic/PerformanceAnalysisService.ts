@@ -152,30 +152,19 @@ export class PerformanceAnalysisService {
   /**
    * Get student performance comparison
    */
-  async getStudentPerformanceComparison(
-    studentId: number,
-    academicYearId: number,
-    currentTermId: number,
-    comparisonTermId: number
-  ): Promise<StudentPerformanceSnapshot | null> {
-    try {
-      interface StudentRaw {
-        id: number
-        admission_number: string
-        name: string
-      }
-      const student = this.db.prepare('SELECT * FROM student WHERE id = ?').get(studentId) as StudentRaw | undefined
+  private getStudent(studentId: number): { admission_number: string; id: number; name: string } | null {
+    interface StudentRaw {
+      id: number
+      admission_number: string
+      name: string
+    }
 
-      if (!student) return null
+    const student = this.db.prepare('SELECT * FROM student WHERE id = ?').get(studentId) as StudentRaw | undefined
+    return student || null
+  }
 
-      interface CurrentPerformanceRaw {
-        subject_id: number
-        subject_name: string
-        current_score: number
-      }
-
-      // Get current term performance
-      const currentPerformance = this.db.prepare(`
+  private getCurrentTermPerformance(studentId: number, currentTermId: number, academicYearId: number): Array<{ current_score: number; subject_id: number; subject_name: string }> {
+    return this.db.prepare(`
         SELECT 
           er.subject_id,
           s.name as subject_name,
@@ -186,15 +175,11 @@ export class PerformanceAnalysisService {
         WHERE er.student_id = ?
           AND e.term_id = ?
           AND e.academic_year_id = ?
-      `).all(studentId, currentTermId, academicYearId) as CurrentPerformanceRaw[]
+      `).all(studentId, currentTermId, academicYearId) as Array<{ current_score: number; subject_id: number; subject_name: string }>
+  }
 
-      interface ComparisonPerformanceRaw {
-        subject_id: number
-        previous_score: number
-      }
-
-      // Get comparison term performance
-      const comparisonPerformance = this.db.prepare(`
+  private getComparisonTermScores(studentId: number, comparisonTermId: number, academicYearId: number): Map<number, number> {
+    const comparisonScores = this.db.prepare(`
         SELECT 
           er.subject_id,
           er.score as previous_score
@@ -203,41 +188,59 @@ export class PerformanceAnalysisService {
         WHERE er.student_id = ?
           AND e.term_id = ?
           AND e.academic_year_id = ?
-      `).all(studentId, comparisonTermId, academicYearId) as ComparisonPerformanceRaw[]
+      `).all(studentId, comparisonTermId, academicYearId) as Array<{ previous_score: number; subject_id: number }>
 
-      // Map scores
-      const scoreMap = new Map(comparisonPerformance.map(p => [p.subject_id, p.previous_score]))
+    return new Map(comparisonScores.map(score => [score.subject_id, score.previous_score]))
+  }
 
-      // Calculate subject performance
-      const subjects: SubjectPerformance[] = currentPerformance.map(curr => {
-        const previous_score = scoreMap.get(curr.subject_id) || 0
-        const improvement = curr.current_score - previous_score
+  private buildSubjectPerformanceSnapshot(
+    currentPerformance: Array<{ current_score: number; subject_id: number; subject_name: string }>,
+    previousScores: Map<number, number>
+  ): SubjectPerformance[] {
+    return currentPerformance.map((current) => {
+      const previousScore = previousScores.get(current.subject_id) || 0
+      const improvement = current.current_score - previousScore
 
-        return {
-          subject_id: curr.subject_id,
-          subject_name: curr.subject_name,
-          current_score: curr.current_score,
-          previous_score,
-          improvement,
-          improvement_percentage: previous_score > 0 ? ((improvement / previous_score) * 100) : 0,
-          current_grade: this.scoreToGrade(curr.current_score),
-          previous_grade: this.scoreToGrade(previous_score)
-        }
-      })
+      return {
+        subject_id: current.subject_id,
+        subject_name: current.subject_name,
+        current_score: current.current_score,
+        previous_score: previousScore,
+        improvement,
+        improvement_percentage: previousScore > 0 ? ((improvement / previousScore) * 100) : 0,
+        current_grade: this.scoreToGrade(current.current_score),
+        previous_grade: this.scoreToGrade(previousScore)
+      }
+    })
+  }
+
+  private getImprovementLevel(improvementPercentage: number): StudentPerformanceSnapshot['improvement_level'] {
+    if (improvementPercentage >= 20) {return 'excellent'}
+    if (improvementPercentage >= 10) {return 'good'}
+    if (improvementPercentage >= 5) {return 'moderate'}
+    if (improvementPercentage > 0) {return 'slight'}
+    return 'declined'
+  }
+
+  async getStudentPerformanceComparison(
+    studentId: number,
+    academicYearId: number,
+    currentTermId: number,
+    comparisonTermId: number
+  ): Promise<StudentPerformanceSnapshot | null> {
+    try {
+      const student = this.getStudent(studentId)
+      if (!student) {return null}
+
+      const currentPerformance = this.getCurrentTermPerformance(studentId, currentTermId, academicYearId)
+      const previousScores = this.getComparisonTermScores(studentId, comparisonTermId, academicYearId)
+      const subjects = this.buildSubjectPerformanceSnapshot(currentPerformance, previousScores)
 
       // Calculate overall improvement
       const totalImprovement = subjects.reduce((sum, s) => sum + s.improvement, 0)
-      const avgImprovement = totalImprovement / subjects.length
       const improvementPercentage = subjects.length > 0
         ? subjects.reduce((sum, s) => sum + s.improvement_percentage, 0) / subjects.length
         : 0
-
-      let improvementLevel: 'excellent' | 'good' | 'moderate' | 'slight' | 'declined'
-      if (improvementPercentage >= 20) improvementLevel = 'excellent'
-      else if (improvementPercentage >= 10) improvementLevel = 'good'
-      else if (improvementPercentage >= 5) improvementLevel = 'moderate'
-      else if (improvementPercentage > 0) improvementLevel = 'slight'
-      else improvementLevel = 'declined'
 
       return {
         student_id: student.id,
@@ -245,7 +248,7 @@ export class PerformanceAnalysisService {
         student_name: student.name,
         total_improvement: totalImprovement,
         improvement_percentage: improvementPercentage,
-        improvement_level: improvementLevel,
+        improvement_level: this.getImprovementLevel(improvementPercentage),
         subjects
       }
     } catch (error) {
@@ -349,16 +352,15 @@ export class PerformanceAnalysisService {
   }
 
   private scoreToGrade(score: number): string {
-    if (score >= 80) return 'A'
-    if (score >= 75) return 'A-'
-    if (score >= 70) return 'B+'
-    if (score >= 65) return 'B'
-    if (score >= 60) return 'B-'
-    if (score >= 55) return 'C+'
-    if (score >= 50) return 'C'
-    if (score >= 45) return 'C-'
+    if (score >= 80) {return 'A'}
+    if (score >= 75) {return 'A-'}
+    if (score >= 70) {return 'B+'}
+    if (score >= 65) {return 'B'}
+    if (score >= 60) {return 'B-'}
+    if (score >= 55) {return 'C+'}
+    if (score >= 50) {return 'C'}
+    if (score >= 45) {return 'C-'}
     return 'E'
   }
 }
-
 

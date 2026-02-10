@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import Database from 'better-sqlite3'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
 import { ApprovalWorkflowService } from '../../workflow/ApprovalWorkflowService'
 
 vi.mock('../../../../database/utils/audit', () => ({
@@ -109,11 +110,11 @@ describe('ApprovalWorkflowService', () => {
   })
 
   afterEach(() => {
-    if (db) db.close()
+    if (db) {db.close()}
   })
 
   it('should create approval request successfully', async () => {
-    const result = await service.createApprovalRequest({
+    const result = service.createApprovalRequest({
       requestType: 'PAYMENT',
       entityType: 'fee_invoice',
       entityId: 1,
@@ -126,7 +127,7 @@ describe('ApprovalWorkflowService', () => {
   })
 
   it('should return request ID', async () => {
-    const result = await service.createApprovalRequest({
+    const result = service.createApprovalRequest({
       requestType: 'PAYMENT',
       entityType: 'fee_invoice',
       entityId: 1,
@@ -139,7 +140,7 @@ describe('ApprovalWorkflowService', () => {
   })
 
   it('should approve request successfully', async () => {
-    const request = await service.createApprovalRequest({
+    const request = service.createApprovalRequest({
       requestType: 'PAYMENT',
       entityType: 'fee_invoice',
       entityId: 1,
@@ -148,7 +149,7 @@ describe('ApprovalWorkflowService', () => {
       requestedBy: 1
     })
 
-    const result = await service.processApproval({
+    const result = service.processApproval({
       requestId: request.requestId as number,
       level: 1,
       decision: 'APPROVED',
@@ -160,7 +161,7 @@ describe('ApprovalWorkflowService', () => {
   })
 
   it('should reject request successfully', async () => {
-    const request = await service.createApprovalRequest({
+    const request = service.createApprovalRequest({
       requestType: 'PAYMENT',
       entityType: 'fee_invoice',
       entityId: 1,
@@ -169,7 +170,7 @@ describe('ApprovalWorkflowService', () => {
       requestedBy: 1
     })
 
-    const result = await service.processApproval({
+    const result = service.processApproval({
       requestId: request.requestId as number,
       level: 1,
       decision: 'REJECTED',

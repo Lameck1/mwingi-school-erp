@@ -1,17 +1,18 @@
-import { app, BrowserWindow, dialog } from './electron-env'
-import type { BrowserWindow as BrowserWindowType } from 'electron'
 
-import path from 'path'
-import { fileURLToPath } from 'url'
-import { initializeDatabase } from './database/index'
-import { verifyMigrations } from './database/verify_migrations'
-import { registerAllIpcHandlers } from './ipc/index'
-import { registerServices } from './services/base/ServiceContainer'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { BackupService } from './backup-service'
-import { WindowStateManager } from './utils/windowState'
+import { initializeDatabase } from './database'
+import { verifyMigrations } from './database/verify_migrations'
+import { app, BrowserWindow, dialog } from './electron-env'
+import { registerAllIpcHandlers } from './ipc/index'
 import { createApplicationMenu } from './menu/applicationMenu'
-import { AutoUpdateManager } from './updates/autoUpdater'
+import { registerServices } from './services/base/ServiceContainer'
 import { reportScheduler } from './services/reports/ReportScheduler'
+import { WindowStateManager } from './utils/windowState'
+
+import type { BrowserWindow as BrowserWindowType } from 'electron'
 
 // ESM __dirname polyfill
 const __filename = fileURLToPath(import.meta.url)
@@ -24,6 +25,15 @@ let mainWindow: BrowserWindowType | null = null
 
 const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 
+async function initializeAutoUpdater(window: BrowserWindowType): Promise<unknown> {
+    if (!app.isPackaged) {
+        return null
+    }
+
+    const { AutoUpdateManager } = await import('./updates/autoUpdater')
+    return new AutoUpdateManager(window)
+}
+
 function createWindow() {
     const windowState = new WindowStateManager('main')
     const state = windowState.getState()
@@ -35,12 +45,12 @@ function createWindow() {
         height: state.height,
         minWidth: 1200,
         minHeight: 700,
-        icon: path.join(__dirname, '../../resources/icon.ico'),
+        icon: path.join(app.isPackaged ? process.resourcesPath : path.join(__dirname, '../../'), 'assets', 'icon.ico'),
         webPreferences: {
             preload: path.join(__dirname, '../preload/index.cjs'),
             nodeIntegration: false,
             contextIsolation: true,
-            sandbox: false,
+            sandbox: true,
         },
         show: false,
         titleBarStyle: 'default',
@@ -49,8 +59,10 @@ function createWindow() {
     if (mainWindow) {
         windowState.manage(mainWindow)
         createApplicationMenu(mainWindow)
-        // Initialize Auto Updater
-        new AutoUpdateManager(mainWindow)
+        // Initialize Auto Updater (packaged only)
+        initializeAutoUpdater(mainWindow).catch((error) => {
+            console.error('Failed to initialize auto updater:', error)
+        })
     }
 
     // Show window when ready
@@ -58,17 +70,25 @@ function createWindow() {
         mainWindow?.show()
     })
 
-    // Pipe renderer logs to main process
-    mainWindow!.webContents.on('console-message', (_event, _level, message) => {
-        console.error(`[Renderer] ${message}`)
+    // Pipe renderer logs to main process using the current Electron event payload shape.
+    mainWindow!.webContents.on('console-message', (_event, details: unknown) => {
+        if (!details || typeof details !== 'object' || !('message' in details)) {
+            return
+        }
+        const detailsObj = details as { message?: unknown }
+        const rawMessage = detailsObj.message
+        const message = typeof rawMessage === 'string' ? rawMessage : ''
+        if (message.length > 0) {
+            console.error(`[Renderer] ${message}`)
+        }
     })
 
     // Load the app
     if (VITE_DEV_SERVER_URL) {
-        mainWindow!.loadURL(VITE_DEV_SERVER_URL)
+        mainWindow!.loadURL(VITE_DEV_SERVER_URL).catch((err: Error) => console.error('Failed to load dev URL:', err.message))
         mainWindow!.webContents.openDevTools()
     } else {
-        mainWindow!.loadFile(path.join(__dirname, '../../dist/index.html'))
+        mainWindow!.loadFile(path.join(__dirname, '../../dist/index.html')).catch((err: Error) => console.error('Failed to load file:', err.message))
     }
 
     mainWindow!.on('closed', () => {
@@ -76,43 +96,62 @@ function createWindow() {
     })
 }
 
+function sendDbError(message: string) {
+    if (!mainWindow || mainWindow.isDestroyed()) {return}
+    mainWindow.webContents.send('db-error', message)
+}
+
 // App lifecycle
-app.whenReady().then(async () => {
+try {
+    await app.whenReady()
+
     // Initialize database
+    let dbReady = false
     try {
         await initializeDatabase()
         // console.error('Database initialized successfully')
-        
+
         // Verify migrations
         verifyMigrations()
+        dbReady = true
     } catch (error) {
         console.error('Failed to initialize database:', error)
+        sendDbError(error instanceof Error ? error.message : 'Database initialization failed')
         dialog.showErrorBox('Database Error', 'Failed to initialize database. Application will exit.')
         app.quit()
-        return
     }
 
-    // Initialize Services
-    registerServices()
+    if (dbReady) {
+        // Initialize Services
+        registerServices()
 
-    // Register IPC handlers
-    registerAllIpcHandlers()
+        // Register IPC handlers
+        registerAllIpcHandlers()
 
-    // Initialize Auto Backup Service
-    BackupService.init()
-
-    // Initialize Report Scheduler
-    reportScheduler.initialize()
-
-    // Create window
-    createWindow()
-
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) {
-            createWindow()
+        // Initialize Auto Backup Service
+        try {
+            await BackupService.init()
+        } catch (error) {
+            console.error('Failed to initialize backup service:', error)
         }
-    })
-});
+
+        // Initialize Report Scheduler
+        reportScheduler.initialize()
+
+        // Create window
+        createWindow()
+
+        app.on('activate', () => {
+            if (BrowserWindow.getAllWindows().length === 0) {
+                createWindow()
+            }
+        })
+    }
+} catch (error: unknown) {
+    console.error('Application startup failed:', error)
+    dialog.showErrorBox('Startup Error', 'Failed to start application.')
+    app.quit()
+}
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
@@ -124,6 +163,7 @@ app.on('window-all-closed', () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (process as any).on('uncaughtException', (error: Error) => {
     console.error('Uncaught Exception:', error)
+    sendDbError(error.message || 'Unexpected error')
     // In production, you might want to gracefully exit or restart
 });
 
@@ -131,12 +171,8 @@ app.on('window-all-closed', () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (process as any).on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason)
-    // In production, you might want to gracefully exit or restart
+    sendDbError(reason instanceof Error ? reason.message : 'Unhandled promise rejection')
 });
-
-
-
-
 
 
 

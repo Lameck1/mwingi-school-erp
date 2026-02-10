@@ -31,12 +31,12 @@ export class StudentService extends BaseService<Student, CreateStudentDTO> {
 
     protected validateCreate(data: CreateStudentDTO): string[] | null {
         const errors: string[] = []
-        if (!data.full_name) errors.push('Full name is required')
-        if (!data.admission_number) errors.push('Admission number is required')
+        if (!data.full_name) {errors.push('Full name is required')}
+        if (!data.admission_number) {errors.push('Admission number is required')}
         return errors.length > 0 ? errors : null
     }
 
-    protected async validateUpdate(id: number, data: Partial<CreateStudentDTO>): Promise<string[] | null> {
+    protected async validateUpdate(_id: number, _data: Partial<CreateStudentDTO>): Promise<string[] | null> {
         return null
     }
 

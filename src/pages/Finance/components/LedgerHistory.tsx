@@ -1,20 +1,23 @@
-import React from 'react'
 import { Printer } from 'lucide-react'
-import { Payment } from '../../../types/electron-api/FinanceAPI'
-import { formatCurrency, formatDate } from '../../../utils/format'
+import React from 'react'
+
+import { type Payment } from '../../../types/electron-api/FinanceAPI'
+import { type Student } from '../../../types/electron-api/StudentAPI'
+import { formatCurrencyFromCents, formatDate } from '../../../utils/format'
 import { printDocument } from '../../../utils/print'
-import { Student } from '../../../types/electron-api/StudentAPI'
+
+import type { SchoolSettings } from '../../../types/electron-api/SettingsAPI'
 
 interface LedgerHistoryProps {
     payments: Payment[]
     student: Student | null
-    schoolSettings: any
+    schoolSettings: SchoolSettings | null
 }
 
 export const LedgerHistory: React.FC<LedgerHistoryProps> = ({ payments, student, schoolSettings }) => {
 
     const handlePrint = (payment: Payment) => {
-        if (!payment || !student) return
+        if (!payment || !student) {return}
 
         // Amount to words converter
         const amountToWords = (num: number): string => {
@@ -22,11 +25,11 @@ export const LedgerHistory: React.FC<LedgerHistoryProps> = ({ payments, student,
                 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
             const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
 
-            if (num === 0) return 'Zero'
-            if (num < 20) return ones[num]
-            if (num < 100) return tens[Math.floor(num / 10)] + (num % 10 ? ' ' + ones[num % 10] : '')
-            if (num < 1000) return ones[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' and ' + amountToWords(num % 100) : '')
-            if (num < 1000000) return amountToWords(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + amountToWords(num % 1000) : '')
+            if (num === 0) {return 'Zero'}
+            if (num < 20) {return ones[num]}
+            if (num < 100) {return tens[Math.floor(num / 10)] + (num % 10 ? ' ' + ones[num % 10] : '')}
+            if (num < 1000) {return ones[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' and ' + amountToWords(num % 100) : '')}
+            if (num < 1000000) {return amountToWords(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + amountToWords(num % 1000) : '')}
             return amountToWords(Math.floor(num / 1000000)) + ' Million' + (num % 1000000 ? ' ' + amountToWords(num % 1000000) : '')
         }
 
@@ -40,7 +43,7 @@ export const LedgerHistory: React.FC<LedgerHistoryProps> = ({ payments, student,
             studentName: `${student.first_name} ${student.last_name}`,
             admissionNumber: student.admission_number,
             balance: student.balance, // This is CURRENT balance, not balance at time of payment. Accepted limitation for reprint.
-            amountInWords: amountToWords(payment.amount) + ' Shillings Only'
+            amountInWords: amountToWords(Math.floor(payment.amount / 100)) + ' Shillings Only'
         }
 
         printDocument({
@@ -51,7 +54,7 @@ export const LedgerHistory: React.FC<LedgerHistoryProps> = ({ payments, student,
         })
     }
 
-    if (payments.length === 0) return null
+    if (payments.length === 0) {return null}
 
     return (
         <div className="card animate-slide-up">
@@ -68,7 +71,7 @@ export const LedgerHistory: React.FC<LedgerHistoryProps> = ({ payments, student,
                                 <Printer className="w-5 h-5 opacity-40 group-hover:opacity-100 transition-opacity" />
                             </div>
                             <div>
-                                <p className="font-bold text-foreground">{formatCurrency(p.amount)}</p>
+                                <p className="font-bold text-foreground">{formatCurrencyFromCents(p.amount)}</p>
                                 <p className="text-[10px] text-foreground/40 font-bold uppercase tracking-tighter">{p.payment_method} • {p.receipt_number}</p>
                             </div>
                         </div>

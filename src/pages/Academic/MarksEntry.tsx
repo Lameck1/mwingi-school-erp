@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react'
 import {
     Save, Loader2, Search, AlertCircle, TrendingUp
 } from 'lucide-react'
+import React, { useState, useEffect, useCallback } from 'react'
+
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { Tooltip } from '../../components/ui/Tooltip'
@@ -47,11 +48,11 @@ export default function MarksEntry() {
     const [processing, setProcessing] = useState(false)
 
     const loadInitialData = useCallback(async () => {
-        if (!currentAcademicYear || !currentTerm || !user) return
+        if (!currentAcademicYear || !currentTerm || !user) {return}
         try {
             const [examsData, allocationsData] = await Promise.all([
-                window.electronAPI.getAcademicExams(currentAcademicYear.id, currentTerm.id),
-                window.electronAPI.getTeacherAllocations(currentAcademicYear.id, currentTerm.id)
+                globalThis.electronAPI.getAcademicExams(currentAcademicYear.id, currentTerm.id),
+                globalThis.electronAPI.getTeacherAllocations(currentAcademicYear.id, currentTerm.id)
             ])
 
             setExams(examsData)
@@ -70,11 +71,11 @@ export default function MarksEntry() {
 
     const loadResults = useCallback(async () => {
         const alloc = allocations.find((a: Allocation) => a.id === selectedAllocation)
-        if (!selectedExam || !alloc) return
+        if (!selectedExam || !alloc) {return}
 
         setLoading(true)
         try {
-            const data = await window.electronAPI.getAcademicResults(
+            const data = await globalThis.electronAPI.getAcademicResults(
                 selectedExam, alloc.subject_id, alloc.stream_id, user!.id
             )
             setResults(data.map((r) => ({
@@ -94,13 +95,13 @@ export default function MarksEntry() {
 
     useEffect(() => {
         if (currentAcademicYear && currentTerm) {
-            loadInitialData()
+            loadInitialData().catch((err: unknown) => console.error('Load initial data failed:', err))
         }
     }, [loadInitialData, currentAcademicYear, currentTerm])
 
     useEffect(() => {
         if (selectedExam && selectedAllocation) {
-            loadResults()
+            loadResults().catch((err: unknown) => console.error('Load results failed:', err))
         }
     }, [selectedExam, selectedAllocation, loadResults])
 
@@ -111,11 +112,11 @@ export default function MarksEntry() {
     }
 
     const handleSave = async () => {
-        if (!selectedExam || !user) return
+        if (!selectedExam || !user) {return}
 
         setSaving(true)
         try {
-            await window.electronAPI.saveAcademicResults(selectedExam, results, user.id)
+            await globalThis.electronAPI.saveAcademicResults(selectedExam, results, user.id)
             alert('Results saved successfully!')
         } catch (error) {
             console.error('Failed to save results:', error)
@@ -126,12 +127,12 @@ export default function MarksEntry() {
     }
 
     const handleProcessResults = async () => {
-        if (!selectedExam || !user) return
-        if (!confirm('This will calculate ranks and averages for the entire school for this exam. Proceed?')) return
+        if (!selectedExam || !user) {return}
+        if (!confirm('This will calculate ranks and averages for the entire school for this exam. Proceed?')) {return}
 
         setProcessing(true)
         try {
-            await window.electronAPI.processAcademicResults(selectedExam, user.id)
+            await globalThis.electronAPI.processAcademicResults(selectedExam, user.id)
             alert('Results processed successfully! Ranks have been updated.')
         } catch (error) {
             console.error('Failed to process results:', error)
@@ -143,6 +144,97 @@ export default function MarksEntry() {
 
     const selectedAlloc = allocations.find((a: Allocation) => a.id === selectedAllocation)
     const isCBC = selectedAlloc?.curriculum === 'CBC' || selectedAlloc?.curriculum === 'ECDE'
+
+    const renderResultsContent = () => {
+        if (!selectedExam || !selectedAllocation) {
+            return (
+                <div className="flex flex-col items-center justify-center h-64 text-foreground/40 space-y-3">
+                    <Search className="w-12 h-12 opacity-20" />
+                    <p>Select an exam and your allocated subject to begin</p>
+                </div>
+            )
+        }
+
+        if (loading) {
+            return (
+                <div className="flex items-center justify-center h-64 text-foreground/40">
+                    <Loader2 className="w-8 h-8 animate-spin" />
+                </div>
+            )
+        }
+
+        if (results.length === 0) {
+            return (
+                <div className="flex flex-col items-center justify-center h-64 text-foreground/40 space-y-3 font-semibold">
+                    <AlertCircle className="w-12 h-12 text-amber-500 opacity-50" />
+                    <p>No students found for the selected class.</p>
+                </div>
+            )
+        }
+
+        return (
+            <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                        <tr className="border-b border-white/10">
+                            <th className="pb-4 pt-2 font-bold text-foreground/60 w-1/4">Student</th>
+                            <th className="pb-4 pt-2 font-bold text-foreground/60 w-1/4">
+                                {isCBC ? 'Competency Level' : 'Score (0-100)'}
+                            </th>
+                            <th className="pb-4 pt-2 font-bold text-foreground/60">Teacher Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                        {results.map((row: StudentResult) => (
+                            <tr key={row.student_id} className="group hover:bg-white/[0.02] transition-colors">
+                                <td className="py-4 pr-4">
+                                    <p className="font-bold text-white">{row.student_name}</p>
+                                    <p className="text-xs text-foreground/40 font-mono tracking-tighter uppercase">{row.admission_number}</p>
+                                </td>
+                                <td className="py-4 pr-4">
+                                    {isCBC ? (
+                                        <Select aria-label="Selection"
+                                            value={row.competency_level || 0}
+                                            onChange={(val) => handleScoreChange(row.student_id, 'competency_level', Number(val))}
+                                            options={[
+                                                { value: 0, label: 'Select Level...' },
+                                                { value: 4, label: '4 - Exceeding Expectations' },
+                                                { value: 3, label: '3 - Meeting Expectations' },
+                                                { value: 2, label: '2 - Approaching Expectations' },
+                                                { value: 1, label: '1 - Below Expectations' }
+                                            ]}
+                                            className="w-full"
+                                        />
+                                    ) : (
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                value={row.score ?? ''}
+                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleScoreChange(row.student_id, 'score', e.target.value === '' ? null : Number(e.target.value))}
+                                                className="w-full bg-sidebar border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50 text-sm text-center"
+                                                placeholder="0-100"
+                                            />
+                                        </div>
+                                    )}
+                                </td>
+                                <td className="py-4">
+                                    <input
+                                        type="text"
+                                        value={row.teacher_remarks || ''}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleScoreChange(row.student_id, 'teacher_remarks', e.target.value)}
+                                        className="w-full bg-sidebar border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50 text-sm"
+                                        placeholder="e.g. Excellent work, keep it up"
+                                    />
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        )
+    }
 
     return (
         <div className="space-y-8 pb-10">
@@ -205,84 +297,8 @@ export default function MarksEntry() {
 
             {/* Results Grid */}
             <div className="premium-card min-h-[400px]">
-                {!selectedExam || !selectedAllocation ? (
-                    <div className="flex flex-col items-center justify-center h-64 text-foreground/40 space-y-3">
-                        <Search className="w-12 h-12 opacity-20" />
-                        <p>Select an exam and your allocated subject to begin</p>
-                    </div>
-                ) : loading ? (
-                    <div className="flex items-center justify-center h-64 text-foreground/40">
-                        <Loader2 className="w-8 h-8 animate-spin" />
-                    </div>
-                ) : results.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-64 text-foreground/40 space-y-3 font-semibold">
-                        <AlertCircle className="w-12 h-12 text-amber-500 opacity-50" />
-                        <p>No students found for the selected class.</p>
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="border-b border-white/10">
-                                    <th className="pb-4 pt-2 font-bold text-foreground/60 w-1/4">Student</th>
-                                    <th className="pb-4 pt-2 font-bold text-foreground/60 w-1/4">
-                                        {isCBC ? 'Competency Level' : 'Score (0-100)'}
-                                    </th>
-                                    <th className="pb-4 pt-2 font-bold text-foreground/60">Teacher Remarks</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/5">
-                                {results.map((row: StudentResult) => (
-                                    <tr key={row.student_id} className="group hover:bg-white/[0.02] transition-colors">
-                                        <td className="py-4 pr-4">
-                                            <p className="font-bold text-white">{row.student_name}</p>
-                                            <p className="text-xs text-foreground/40 font-mono tracking-tighter uppercase">{row.admission_number}</p>
-                                        </td>
-                                        <td className="py-4 pr-4">
-                                            {isCBC ? (
-                                                <Select
-                                                    value={row.competency_level || 0}
-                                                    onChange={(val) => handleScoreChange(row.student_id, 'competency_level', Number(val))}
-                                                    options={[
-                                                        { value: 0, label: 'Select Level...' },
-                                                        { value: 4, label: '4 - Exceeding Expectations' },
-                                                        { value: 3, label: '3 - Meeting Expectations' },
-                                                        { value: 2, label: '2 - Approaching Expectations' },
-                                                        { value: 1, label: '1 - Below Expectations' }
-                                                    ]}
-                                                    className="w-full"
-                                                />
-                                            ) : (
-                                                <div className="relative">
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        max="100"
-                                                        value={row.score === null ? '' : row.score}
-                                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleScoreChange(row.student_id, 'score', e.target.value === '' ? null : Number(e.target.value))}
-                                                        className="w-full bg-sidebar border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50 text-sm text-center"
-                                                        placeholder="0-100"
-                                                    />
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="py-4">
-                                            <input
-                                                type="text"
-                                                value={row.teacher_remarks || ''}
-                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleScoreChange(row.student_id, 'teacher_remarks', e.target.value)}
-                                                className="w-full bg-sidebar border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50 text-sm"
-                                                placeholder="e.g. Excellent work, keep it up"
-                                            />
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                {renderResultsContent()}
             </div>
         </div>
     )
 }
-

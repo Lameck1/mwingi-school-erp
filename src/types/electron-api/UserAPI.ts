@@ -1,9 +1,11 @@
+export type UserRole = 'ADMIN' | 'ACCOUNTS_CLERK' | 'AUDITOR'
+
 export interface User {
   id: number;
   username: string;
   full_name: string;
   email: string;
-  role: 'ADMIN' | 'ACCOUNTS_CLERK' | 'AUDITOR';
+  role: UserRole;
   is_active: boolean;
   last_login: string;
   created_at: string;
@@ -15,14 +17,14 @@ export interface CreateUserData {
   full_name: string;
   email: string;
   password: string;
-  role: 'ADMIN' | 'ACCOUNTS_CLERK' | 'AUDITOR';
+  role: UserRole;
 }
 
 export interface UpdateUserData {
   username?: string;
   full_name?: string;
   email?: string;
-  role?: 'ADMIN' | 'ACCOUNTS_CLERK' | 'AUDITOR';
+  role?: UserRole;
 }
 
 export interface UserAPI {

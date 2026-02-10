@@ -1,6 +1,9 @@
-import { Database } from 'better-sqlite3-multiple-ciphers';
 import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
+
+import type Database from 'better-sqlite3';
+
+const ACCOUNT_NOT_FOUND = 'Account not found';
 
 export interface GLAccountData {
   account_code: string;
@@ -21,7 +24,7 @@ export interface GLAccount extends GLAccountData {
 }
 
 export class GLAccountService {
-  private db: Database;
+  private readonly db: Database.Database;
 
   constructor() {
     this.db = getDatabase();
@@ -68,9 +71,9 @@ export class GLAccountService {
 
   async getById(id: number): Promise<{ success: boolean; data?: GLAccount; message?: string }> {
     try {
-      const account = this.db.prepare(`SELECT * FROM gl_account WHERE id = ?`).get(id) as GLAccount;
-      if (!account) {
-        return { success: false, message: 'Account not found' };
+      const account = this.findAccountById(id);
+      if (account === undefined) {
+        return { success: false, message: ACCOUNT_NOT_FOUND };
       }
       return { success: true, data: account };
     } catch (error) {
@@ -93,7 +96,7 @@ export class GLAccountService {
         data.account_subtype || null,
         data.parent_account_id || null,
         data.is_system_account ? 1 : 0,
-        data.is_active !== false ? 1 : 0, // Default to true
+        data.is_active === false ? 0 : 1, // Default to true
         data.requires_subsidiary ? 1 : 0,
         data.normal_balance,
         data.description || null
@@ -111,9 +114,9 @@ export class GLAccountService {
 
   async update(id: number, data: Partial<GLAccountData>, userId: number): Promise<{ success: boolean; data?: GLAccount; message?: string }> {
     try {
-      const currentAccount = this.db.prepare(`SELECT * FROM gl_account WHERE id = ?`).get(id) as GLAccount;
-      if (!currentAccount) {
-        return { success: false, message: 'Account not found' };
+      const currentAccount = this.findAccountById(id);
+      if (currentAccount === undefined) {
+        return { success: false, message: ACCOUNT_NOT_FOUND };
       }
 
       // Don't allow changing system accounts critical fields if it is a system account
@@ -121,18 +124,7 @@ export class GLAccountService {
          return { success: false, message: 'Cannot change account code of a system account' };
       }
 
-      const fields: string[] = [];
-      const params: unknown[] = [];
-
-      if (data.account_code !== undefined) { fields.push('account_code = ?'); params.push(data.account_code); }
-      if (data.account_name !== undefined) { fields.push('account_name = ?'); params.push(data.account_name); }
-      if (data.account_type !== undefined) { fields.push('account_type = ?'); params.push(data.account_type); }
-      if (data.account_subtype !== undefined) { fields.push('account_subtype = ?'); params.push(data.account_subtype); }
-      if (data.parent_account_id !== undefined) { fields.push('parent_account_id = ?'); params.push(data.parent_account_id); }
-      if (data.is_active !== undefined) { fields.push('is_active = ?'); params.push(data.is_active ? 1 : 0); }
-      if (data.requires_subsidiary !== undefined) { fields.push('requires_subsidiary = ?'); params.push(data.requires_subsidiary ? 1 : 0); }
-      if (data.normal_balance !== undefined) { fields.push('normal_balance = ?'); params.push(data.normal_balance); }
-      if (data.description !== undefined) { fields.push('description = ?'); params.push(data.description); }
+      const { fields, params } = this.buildUpdatePayload(data);
 
       if (fields.length === 0) {
         return { success: true, data: currentAccount, message: 'No changes provided' };
@@ -154,9 +146,9 @@ export class GLAccountService {
 
   async delete(id: number, userId: number): Promise<{ success: boolean; message: string }> {
     try {
-      const currentAccount = this.db.prepare(`SELECT * FROM gl_account WHERE id = ?`).get(id) as GLAccount;
-      if (!currentAccount) {
-        return { success: false, message: 'Account not found' };
+      const currentAccount = this.findAccountById(id);
+      if (currentAccount === undefined) {
+        return { success: false, message: ACCOUNT_NOT_FOUND };
       }
 
       if (currentAccount.is_system_account) {
@@ -180,5 +172,43 @@ export class GLAccountService {
       console.error('Error deleting GL account:', error);
       return { success: false, message: (error as Error).message };
     }
+  }
+
+  private findAccountById(id: number): GLAccount | undefined {
+    return this.db.prepare(`SELECT * FROM gl_account WHERE id = ?`).get(id) as GLAccount | undefined;
+  }
+
+  private buildUpdatePayload(data: Partial<GLAccountData>): { fields: string[]; params: unknown[] } {
+    const fields: string[] = [];
+    const params: unknown[] = [];
+
+    this.pushIfDefined(fields, params, data.account_code, 'account_code');
+    this.pushIfDefined(fields, params, data.account_name, 'account_name');
+    this.pushIfDefined(fields, params, data.account_type, 'account_type');
+    this.pushIfDefined(fields, params, data.account_subtype, 'account_subtype');
+    this.pushIfDefined(fields, params, data.parent_account_id, 'parent_account_id');
+    this.pushIfDefined(fields, params, data.normal_balance, 'normal_balance');
+    this.pushIfDefined(fields, params, data.description, 'description');
+
+    if (data.is_active !== undefined) {
+      fields.push('is_active = ?');
+      params.push(data.is_active ? 1 : 0);
+    }
+
+    if (data.requires_subsidiary !== undefined) {
+      fields.push('requires_subsidiary = ?');
+      params.push(data.requires_subsidiary ? 1 : 0);
+    }
+
+    return { fields, params };
+  }
+
+  private pushIfDefined(fields: string[], params: unknown[], value: unknown, columnName: string): void {
+    if (value === undefined) {
+      return;
+    }
+
+    fields.push(`${columnName} = ?`);
+    params.push(value);
   }
 }

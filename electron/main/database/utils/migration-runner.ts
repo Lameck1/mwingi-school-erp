@@ -1,7 +1,8 @@
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { getDatabase } from '../index'
-import * as fs from 'fs'
-import * as path from 'path'
-import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -13,8 +14,8 @@ interface MigrationRecord {
 }
 
 export class MigrationRunner {
-  private db = getDatabase()
-  private migrationsPath: string
+  private readonly db = getDatabase()
+  private readonly migrationsPath: string
 
   constructor(migrationsPath?: string) {
     this.migrationsPath = migrationsPath || path.join(__dirname, '../migrations')
@@ -56,7 +57,7 @@ export class MigrationRunner {
 
     const allMigrations = fs.readdirSync(this.migrationsPath)
       .filter(file => file.endsWith('.sql'))
-      .sort()
+      .sort((left, right) => left.localeCompare(right))
 
     const executedMigrations = this.getExecutedMigrations()
 

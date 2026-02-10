@@ -1,12 +1,20 @@
-import { ipcMain } from '../../electron-env'
+import * as path from 'node:path'
+
+import { ipcMain, shell, app } from '../../electron-env'
 import { BackupService } from '../../services/BackupService'
-import { shell, IpcMainInvokeEvent } from 'electron'
-import * as path from 'path'
+
+import type { IpcMainInvokeEvent } from 'electron'
 
 export function registerBackupHandlers(): void {
 
     ipcMain.handle('backup:create', async () => {
-        return BackupService.createBackup()
+        const result = await BackupService.createBackup()
+        return { ...result, cancelled: false }
+    })
+
+    ipcMain.handle('backup:createTo', async (_event: IpcMainInvokeEvent, filePath: string) => {
+        const result = await BackupService.createBackupToPath(filePath)
+        return { ...result, cancelled: false }
     })
 
     ipcMain.handle('backup:getList', async () => {
@@ -14,7 +22,8 @@ export function registerBackupHandlers(): void {
     })
 
     ipcMain.handle('backup:restore', async (_event: IpcMainInvokeEvent, filename: string) => {
-        return BackupService.restoreBackup(filename)
+        const success = await BackupService.restoreBackup(filename)
+        return { success, message: success ? 'Restore initiated. App will restart.' : 'Restore failed', cancelled: false }
     })
 
     ipcMain.handle('backup:openFolder', async () => {
@@ -28,7 +37,6 @@ export function registerBackupHandlers(): void {
         // Actually, let's just use the known path in Service or make it public.
         // I will make it public getter in Service correction or just assume standard path here.
         // Let's stick to standard path here for now.
-        const { app } = await import('electron')
         const backupDir = path.join(app.getPath('userData'), 'backups')
         await shell.openPath(backupDir)
         return { success: true }

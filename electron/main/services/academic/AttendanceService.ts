@@ -33,6 +33,15 @@ export interface DailyAttendanceEntry {
     notes?: string
 }
 
+type MarkAttendanceArgs = [
+    entries: DailyAttendanceEntry[],
+    streamId: number,
+    date: string,
+    academicYearId: number,
+    termId: number,
+    userId: number
+]
+
 export class AttendanceService {
     private get db() { return getDatabase() }
 
@@ -63,12 +72,7 @@ export class AttendanceService {
      * Mark attendance for a class on a specific date
      */
     async markAttendance(
-        entries: DailyAttendanceEntry[],
-        streamId: number,
-        date: string,
-        academicYearId: number,
-        termId: number,
-        userId: number
+        ...[entries, streamId, date, academicYearId, termId, userId]: MarkAttendanceArgs
     ): Promise<{ success: boolean; marked: number; errors?: string[] }> {
         let marked = 0
 

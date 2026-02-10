@@ -1,15 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react'
 import {
     Plus, Search, Filter
 } from 'lucide-react'
+import React, { useState, useEffect, useCallback } from 'react'
+
 import { PageHeader } from '../../../components/patterns/PageHeader'
-import { useAuthStore } from '../../../stores'
-import { formatCurrency, formatDate } from '../../../utils/format'
-import { FixedAsset, CreateAssetData } from '../../../types/electron-api/FixedAssetAPI'
 import { Modal } from '../../../components/ui/Modal'
+import { useToast } from '../../../contexts/ToastContext'
+import { useAuthStore } from '../../../stores'
+import { type FixedAsset, type CreateAssetData } from '../../../types/electron-api/FixedAssetAPI'
+import { formatCurrencyFromCents, formatDate, shillingsToCents } from '../../../utils/format'
 
 export default function AssetRegister() {
     const { user } = useAuthStore()
+    const { showToast } = useToast()
     const [assets, setAssets] = useState<FixedAsset[]>([])
     const [loading, setLoading] = useState(false)
     const [search, setSearch] = useState('')
@@ -36,7 +39,7 @@ export default function AssetRegister() {
     const loadAssets = useCallback(async (searchQuery: string) => {
         setLoading(true)
         try {
-            const data = await window.electronAPI.getAssets({ search: searchQuery })
+            const data = await globalThis.electronAPI.getAssets({ search: searchQuery })
             setAssets(data)
         } catch (error) {
             console.error('Failed to load assets', error)
@@ -46,16 +49,20 @@ export default function AssetRegister() {
     }, [])
 
     useEffect(() => {
-        loadAssets('')
+        loadAssets('').catch((err: unknown) => console.error('Failed to load assets', err))
     }, [loadAssets])
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault()
+        if (!user?.id) {
+            showToast('You must be signed in to create assets', 'error')
+            return
+        }
         try {
-            const result = await window.electronAPI.createAsset({
+            const result = await globalThis.electronAPI.createAsset({
                 ...createForm,
-                acquisition_cost: Number(createForm.acquisition_cost), // Whole currency units
-            }, user?.id || 1)
+                acquisition_cost: shillingsToCents(createForm.acquisition_cost), // Whole currency units -> cents
+            }, user.id)
 
             if (result.success) {
                 setShowCreateModal(false)
@@ -68,11 +75,11 @@ export default function AssetRegister() {
                     serial_number: '',
                     location: ''
                 })
-                loadAssets(search)
+                loadAssets(search).catch((err: unknown) => console.error('Failed to reload assets', err))
             } else {
                 alert('Failed to create asset: ' + result.errors?.join(', '))
             }
-        } catch (error) {
+        } catch {
             alert('Error creating asset')
         }
     }
@@ -134,8 +141,8 @@ export default function AssetRegister() {
                                 <td className="px-4 py-4 text-sm text-foreground/70">{asset.category_name || '-'}</td>
                                 <td className="px-4 py-4 text-sm text-foreground/70">{asset.location || '-'}</td>
                                 <td className="px-4 py-4 text-sm text-foreground/70">{formatDate(asset.acquisition_date)}</td>
-                                <td className="px-4 py-4 text-right font-mono text-sm">{formatCurrency(asset.acquisition_cost)}</td>
-                                <td className="px-4 py-4 text-right font-bold text-white font-mono">{formatCurrency(asset.current_value)}</td>
+                                <td className="px-4 py-4 text-right font-mono text-sm">{formatCurrencyFromCents(asset.acquisition_cost)}</td>
+                                <td className="px-4 py-4 text-right font-bold text-white font-mono">{formatCurrencyFromCents(asset.current_value)}</td>
                                 <td className="px-4 py-4">
                                     <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full ${asset.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-500/10 text-slate-400'
                                         }`}>
@@ -162,8 +169,8 @@ export default function AssetRegister() {
             >
                 <form onSubmit={handleCreate} className="space-y-4">
                     <div className="space-y-2">
-                        <label className="label">Asset Name</label>
-                        <input
+                        <label htmlFor="field-172" className="label">Asset Name</label>
+                        <input id="field-172"
                             type="text"
                             value={createForm.asset_name}
                             onChange={(e) => setCreateForm(prev => ({ ...prev, asset_name: e.target.value }))}
@@ -174,8 +181,8 @@ export default function AssetRegister() {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="label">Category</label>
-                            <select
+                            <label htmlFor="field-184" className="label">Category</label>
+                            <select id="field-184"
                                 value={createForm.category_id}
                                 onChange={(e) => setCreateForm(prev => ({ ...prev, category_id: Number(e.target.value) }))}
                                 className="input"
@@ -187,8 +194,8 @@ export default function AssetRegister() {
                             </select>
                         </div>
                         <div className="space-y-2">
-                            <label className="label">Acquisition Cost</label>
-                            <input
+                            <label htmlFor="field-197" className="label">Acquisition Cost</label>
+                            <input id="field-197"
                                 type="number"
                                 value={createForm.acquisition_cost || ''}
                                 onChange={(e) => setCreateForm(prev => ({ ...prev, acquisition_cost: Number(e.target.value) }))}
@@ -201,8 +208,8 @@ export default function AssetRegister() {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="label">Date Acquired</label>
-                            <input
+                            <label htmlFor="field-211" className="label">Date Acquired</label>
+                            <input id="field-211"
                                 type="date"
                                 value={createForm.acquisition_date}
                                 onChange={(e) => setCreateForm(prev => ({ ...prev, acquisition_date: e.target.value }))}
@@ -212,8 +219,8 @@ export default function AssetRegister() {
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="label">Location</label>
-                            <input
+                            <label htmlFor="field-222" className="label">Location</label>
+                            <input id="field-222"
                                 type="text"
                                 value={createForm.location || ''}
                                 onChange={(e) => setCreateForm(prev => ({ ...prev, location: e.target.value }))}
@@ -223,8 +230,8 @@ export default function AssetRegister() {
                         </div>
                     </div>
                     <div className="space-y-2">
-                        <label className="label">Serial Number</label>
-                        <input
+                        <label htmlFor="field-233" className="label">Serial Number</label>
+                        <input id="field-233"
                             type="text"
                             value={createForm.serial_number || ''}
                             onChange={(e) => setCreateForm(prev => ({ ...prev, serial_number: e.target.value }))}

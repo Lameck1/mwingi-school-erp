@@ -1,11 +1,13 @@
+import { getDatabase } from '../../database'
 import { ipcMain } from '../../electron-env'
-import { getDatabase } from '../../database/index'
+
+import type { IpcMainInvokeEvent } from 'electron'
 
 export function registerAuditHandlers(): void {
     const db = getDatabase()
 
     // ======== AUDIT LOG ========
-    ipcMain.handle('audit:getLog', async (_, limit = 100) => {
+    ipcMain.handle('audit:getLog', async (_event: IpcMainInvokeEvent, limit = 100) => {
         return db.prepare(`
             SELECT a.*, u.full_name as user_name 
             FROM audit_log a
@@ -15,6 +17,7 @@ export function registerAuditHandlers(): void {
         `).all(limit)
     })
 }
+
 
 
 

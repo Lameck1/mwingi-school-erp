@@ -1,9 +1,10 @@
 
+import { Download, AlertTriangle, CheckCircle } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
+
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { useAppStore } from '../../stores'
-import { Download, AlertTriangle, CheckCircle } from 'lucide-react'
 
 interface ExamSlot {
   id: number
@@ -35,6 +36,12 @@ interface TimetableStats {
   average_capacity_usage: number
 }
 
+interface TimetableResult {
+  slots: ExamSlot[]
+  clashes: ClashReport[]
+  stats: TimetableStats
+}
+
 const ExamScheduler = () => {
   const { currentAcademicYear, currentTerm } = useAppStore()
 
@@ -47,10 +54,11 @@ const ExamScheduler = () => {
   const [clashes, setClashes] = useState<ClashReport[]>([])
   const [loading, setLoading] = useState(false)
   const [stats, setStats] = useState<TimetableStats | null>(null)
+  const schedulerDisabled = false
 
   const loadInitialData = useCallback(async () => {
     try {
-      const examsData = await window.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id })
+      const examsData = await globalThis.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id })
       setExams(examsData || [])
     } catch (error) {
       console.error('Failed to load initial data:', error)
@@ -58,10 +66,14 @@ const ExamScheduler = () => {
   }, [currentAcademicYear, currentTerm])
 
   useEffect(() => {
-    loadInitialData()
+    loadInitialData().catch((err: unknown) => console.error('Failed to load initial data:', err))
   }, [loadInitialData])
 
   const handleGenerateTimetable = async () => {
+    if (schedulerDisabled) {
+      alert('Exam scheduler is temporarily unavailable. Please try again after the scheduling engine is enabled.')
+      return
+    }
     if (!selectedExam || !startDate || !endDate) {
       alert('Please select an exam and date range')
       return
@@ -69,16 +81,16 @@ const ExamScheduler = () => {
 
     setLoading(true)
     try {
-      const result = await window.electronAPI.generateExamTimetable({
+      const result = await globalThis.electronAPI.generateExamTimetable({
         examId: selectedExam,
         startDate,
         endDate,
         slots: slots.length || 20 // Default number of slots
-      })
+      }) as TimetableResult
 
-      setSlots(result.slots || [])
-      setClashes(result.clashes || [])
-      setStats(result.stats || null)
+      setSlots(result?.slots || [])
+      setClashes(result?.clashes || [])
+      setStats(result?.stats || null)
     } catch (error) {
       console.error('Failed to generate timetable:', error)
       alert('Failed to generate exam timetable')
@@ -88,6 +100,10 @@ const ExamScheduler = () => {
   }
 
   const handleDetectClashes = async () => {
+    if (schedulerDisabled) {
+      alert('Clash detection is temporarily unavailable.')
+      return
+    }
     if (!selectedExam) {
       alert('Please select an exam first')
       return
@@ -95,10 +111,10 @@ const ExamScheduler = () => {
 
     setLoading(true)
     try {
-      const clashData = await window.electronAPI.detectExamClashes({ examId: selectedExam })
+      const clashData = await globalThis.electronAPI.detectExamClashes({ examId: selectedExam }) as ClashReport[]
       setClashes(clashData || [])
 
-      if (clashData && clashData.length === 0) {
+      if (clashData?.length === 0) {
         alert('No clashes detected!')
       }
     } catch (error) {
@@ -110,13 +126,17 @@ const ExamScheduler = () => {
   }
 
   const handleExportPDF = async () => {
+    if (schedulerDisabled) {
+      alert('PDF export is temporarily unavailable.')
+      return
+    }
     if (slots.length === 0) {
       alert('Please generate a timetable first')
       return
     }
 
     try {
-      await window.electronAPI.exportExamTimetableToPDF({
+      await globalThis.electronAPI.exportExamTimetableToPDF({
         examId: selectedExam,
         slots
       })
@@ -136,6 +156,11 @@ const ExamScheduler = () => {
 
       {/* Configuration */}
       <div className="premium-card">
+        {schedulerDisabled && (
+          <div className="mb-6 p-4 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400 text-sm">
+            The exam scheduling engine is currently disabled. Generation, clash detection, and PDF export are unavailable.
+          </div>
+        )}
         <h3 className="text-lg font-semibold mb-6">Timetable Configuration</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
           <Select
@@ -148,8 +173,8 @@ const ExamScheduler = () => {
             ]}
           />
           <div>
-            <label className="block text-sm font-medium mb-2">Start Date</label>
-            <input
+            <label htmlFor="field-176" className="block text-sm font-medium mb-2">Start Date</label>
+            <input id="field-176"
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
@@ -157,8 +182,8 @@ const ExamScheduler = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2">End Date</label>
-            <input
+            <label htmlFor="field-185" className="block text-sm font-medium mb-2">End Date</label>
+            <input id="field-185"
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
@@ -168,7 +193,7 @@ const ExamScheduler = () => {
           <div className="flex items-end">
             <button
               onClick={handleGenerateTimetable}
-              disabled={loading}
+              disabled={loading || schedulerDisabled}
               className="btn btn-primary w-full"
             >
               {loading ? 'Generating...' : 'Generate Timetable'}
@@ -179,7 +204,7 @@ const ExamScheduler = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <button
             onClick={handleDetectClashes}
-            disabled={loading || !selectedExam}
+            disabled={loading || !selectedExam || schedulerDisabled}
             className="btn btn-secondary flex items-center gap-2 justify-center"
           >
             <AlertTriangle size={18} />
@@ -187,7 +212,7 @@ const ExamScheduler = () => {
           </button>
           <button
             onClick={handleExportPDF}
-            disabled={slots.length === 0}
+            disabled={slots.length === 0 || schedulerDisabled}
             className="btn btn-secondary flex items-center gap-2 justify-center"
           >
             <Download size={18} />
@@ -229,8 +254,8 @@ const ExamScheduler = () => {
             Scheduling Clashes Detected
           </h3>
           <div className="space-y-3">
-            {clashes.map((clash, idx) => (
-              <div key={idx} className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
+            {clashes.map((clash) => (
+              <div key={`${clash.subject1_id}-${clash.subject2_id}-${clash.clash_type}`} className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
                 <p className="font-semibold">
                   {clash.subject1_name} vs {clash.subject2_name}
                 </p>

@@ -1,6 +1,8 @@
-import Database from 'better-sqlite3';
+
 import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
+
+import type Database from 'better-sqlite3';
 
 /**
  * Double-Entry Journal Service
@@ -46,6 +48,15 @@ export interface JournalEntry {
   lines: JournalEntryLine[];
 }
 
+type RecordPaymentArgs = [
+  studentId: number,
+  amount: number,
+  paymentMethod: string,
+  paymentReference: string,
+  paymentDate: string,
+  userId: number
+];
+
 export interface JournalEntryLine {
   id: number;
   line_number: number;
@@ -77,7 +88,7 @@ export interface AccountBalance {
 // ============================================================================
 
 export class DoubleEntryJournalService {
-  private db: Database.Database;
+  private readonly db: Database.Database;
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase();
@@ -87,53 +98,85 @@ export class DoubleEntryJournalService {
    * Creates a journal entry with validation
    * Ensures debits = credits before posting
    */
-  async createJournalEntry(data: JournalEntryData): Promise<{ success: boolean; message: string; entry_id?: number }> {
-    try {
-      // Validation 1: At least 2 lines required (double-entry)
-      if (data.lines.length < 2) {
-        return {
-          success: false,
-          message: 'Journal entry must have at least 2 lines (debit + credit)'
-        };
-      }
+  private validateLineCount(lines: JournalEntryLineData[]): { message?: string; valid: boolean } {
+    if (lines.length >= 2) {
+      return { valid: true };
+    }
 
-      // Validation 2: Debits must equal credits
-      const totalDebits = data.lines.reduce((sum, line) => sum + line.debit_amount, 0);
-      const totalCredits = data.lines.reduce((sum, line) => sum + line.credit_amount, 0);
+    return {
+      valid: false,
+      message: 'Journal entry must have at least 2 lines (debit + credit)'
+    };
+  }
 
-      if (totalDebits !== totalCredits) {
-        return {
-          success: false,
-          message: `Debits (${totalDebits}) must equal Credits (${totalCredits}). Difference: ${Math.abs(totalDebits - totalCredits)}`
-        };
-      }
+  private validateBalancing(lines: JournalEntryLineData[]): { message?: string; totalCredits: number; totalDebits: number; valid: boolean } {
+    const totalDebits = lines.reduce((sum, line) => sum + line.debit_amount, 0);
+    const totalCredits = lines.reduce((sum, line) => sum + line.credit_amount, 0);
 
-      // Validation 3: Validate GL accounts exist
-      for (const line of data.lines) {
-        const account = this.db.prepare(`
+    if (totalDebits !== totalCredits) {
+      return {
+        valid: false,
+        totalDebits,
+        totalCredits,
+        message: `Debits (${totalDebits}) must equal Credits (${totalCredits}). Difference: ${Math.abs(totalDebits - totalCredits)}`
+      };
+    }
+
+    return { valid: true, totalDebits, totalCredits };
+  }
+
+  private validateGlAccounts(lines: JournalEntryLineData[]): { message?: string; valid: boolean } {
+    for (const line of lines) {
+      const account = this.db.prepare(`
           SELECT id, account_code, account_name, is_active
           FROM gl_account
           WHERE account_code = ? AND is_active = 1
         `).get(line.gl_account_code);
 
-        if (!account) {
-          return {
-            success: false,
-            message: `Invalid GL account code: ${line.gl_account_code}. Check Chart of Accounts or verify account is active.`
-          };
-        }
+      if (!account) {
+        return {
+          valid: false,
+          message: `Invalid GL account code: ${line.gl_account_code}. Check Chart of Accounts or verify account is active.`
+        };
       }
+    }
 
-      // Check if approval required
-      const requiresApproval = data.requires_approval || await this.checkApprovalRequired(data);
+    return { valid: true };
+  }
 
-      // Generate entry reference
-      const entryRef = this.generateEntryRef(data.entry_type);
+  private insertJournalLines(entryId: number, lines: JournalEntryLineData[]): void {
+    const lineStatement = this.db.prepare(`
+          INSERT INTO journal_entry_line (
+            journal_entry_id, line_number, gl_account_id,
+            debit_amount, credit_amount, description
+          ) VALUES (?, ?, ?, ?, ?, ?)
+        `);
 
-      // Start transaction
-      const insert = this.db.transaction(() => {
-        // Insert journal entry header
-        const headerResult = this.db.prepare(`
+    lines.forEach((line, index) => {
+      const account = this.db.prepare(`
+            SELECT id FROM gl_account WHERE account_code = ?
+          `).get(line.gl_account_code) as { id: number };
+
+      lineStatement.run(
+        entryId,
+        index + 1,
+        account.id,
+        line.debit_amount,
+        line.credit_amount,
+        line.description || null
+      );
+    });
+  }
+
+  private insertJournalEntryTransaction(
+    data: JournalEntryData,
+    entryRef: string,
+    requiresApproval: boolean,
+    totalCredits: number,
+    totalDebits: number
+  ): number {
+    const insert = this.db.transaction(() => {
+      const headerResult = this.db.prepare(`
           INSERT INTO journal_entry (
             entry_ref, entry_date, entry_type, description,
             student_id, staff_id, term_id,
@@ -141,72 +184,79 @@ export class DoubleEntryJournalService {
             created_by_user_id
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
-          entryRef,
-          data.entry_date,
-          data.entry_type,
-          data.description,
-          data.student_id || null,
-          data.staff_id || null,
-          data.term_id || null,
-          requiresApproval ? 1 : 0,
-          requiresApproval ? 'PENDING' : 'APPROVED',
-          data.created_by_user_id
-        );
+        entryRef,
+        data.entry_date,
+        data.entry_type,
+        data.description,
+        data.student_id || null,
+        data.staff_id || null,
+        data.term_id || null,
+        requiresApproval ? 1 : 0,
+        requiresApproval ? 'PENDING' : 'APPROVED',
+        data.created_by_user_id
+      );
 
-        const entryId = headerResult.lastInsertRowid as number;
+      const entryId = headerResult.lastInsertRowid as number;
+      this.insertJournalLines(entryId, data.lines);
 
-        // Insert journal entry lines
-        const lineStmt = this.db.prepare(`
-          INSERT INTO journal_entry_line (
-            journal_entry_id, line_number, gl_account_id,
-            debit_amount, credit_amount, description
-          ) VALUES (?, ?, ?, ?, ?, ?)
-        `);
-
-        data.lines.forEach((line, index) => {
-          const account = this.db.prepare(`
-            SELECT id FROM gl_account WHERE account_code = ?
-          `).get(line.gl_account_code) as { id: number };
-
-          lineStmt.run(
-            entryId,
-            index + 1,
-            account.id,
-            line.debit_amount,
-            line.credit_amount,
-            line.description || null
-          );
-        });
-
-        // Auto-post if no approval required
-        if (!requiresApproval) {
-          this.db.prepare(`
+      if (!requiresApproval) {
+        this.db.prepare(`
             UPDATE journal_entry
             SET is_posted = 1, posted_by_user_id = ?, posted_at = CURRENT_TIMESTAMP
             WHERE id = ?
           `).run(data.created_by_user_id, entryId);
+      }
+
+      logAudit(
+        data.created_by_user_id,
+        'CREATE',
+        'journal_entry',
+        entryId,
+        null,
+        {
+          entry_ref: entryRef,
+          entry_type: data.entry_type,
+          total_debits: totalDebits,
+          total_credits: totalCredits,
+          requires_approval: requiresApproval
         }
+      );
 
-        // Audit log
-        logAudit(
-          data.created_by_user_id,
-          'CREATE',
-          'journal_entry',
-          entryId,
-          null,
-          {
-            entry_ref: entryRef,
-            entry_type: data.entry_type,
-            total_debits: totalDebits,
-            total_credits: totalCredits,
-            requires_approval: requiresApproval
-          }
-        );
+      return entryId;
+    });
 
-        return entryId;
-      });
+    return insert();
+  }
 
-      const entryId = insert();
+  async createJournalEntry(data: JournalEntryData): Promise<{ success: boolean; message: string; entry_id?: number }> {
+    try {
+      const lineCountValidation = this.validateLineCount(data.lines);
+      if (!lineCountValidation.valid) {
+        return { success: false, message: lineCountValidation.message || 'Invalid journal entry line count' };
+      }
+
+      const balancingValidation = this.validateBalancing(data.lines);
+      if (!balancingValidation.valid) {
+        return { success: false, message: balancingValidation.message || 'Journal entry is not balanced' };
+      }
+
+      const accountValidation = this.validateGlAccounts(data.lines);
+      if (!accountValidation.valid) {
+        return { success: false, message: accountValidation.message || 'Invalid GL account' };
+      }
+
+      // Check if approval required
+      const requiresApproval = data.requires_approval || await this.checkApprovalRequired(data);
+
+      // Generate entry reference
+      const entryRef = this.generateEntryRef(data.entry_type);
+      const entryId = this.insertJournalEntryTransaction(
+        data,
+        entryRef,
+        requiresApproval,
+        balancingValidation.totalCredits,
+        balancingValidation.totalDebits
+      );
 
       return {
         success: true,
@@ -229,12 +279,7 @@ export class DoubleEntryJournalService {
    * Credit: Student Receivable
    */
   async recordPayment(
-    studentId: number,
-    amount: number,
-    paymentMethod: string,
-    paymentReference: string,
-    paymentDate: string,
-    userId: number
+    ...[studentId, amount, paymentMethod, paymentReference, paymentDate, userId]: RecordPaymentArgs
   ): Promise<{ success: boolean; message: string; entry_id?: number }> {
     // Determine cash/bank account
     const cashAccountCode = paymentMethod === 'CASH' ? '1010' : '1020';
@@ -325,7 +370,7 @@ export class DoubleEntryJournalService {
         WHERE je.id = ? AND je.is_voided = 0
       `).all(entryId) as Array<{ entry_date: string; debit_amount: number }>;
 
-      if (!originalEntry || originalEntry.length === 0) {
+      if (originalEntry.length === 0) {
         return {
           success: false,
           message: 'Journal entry not found or already voided'
@@ -334,7 +379,7 @@ export class DoubleEntryJournalService {
 
       // Check if approval required for void
       const daysOld = Math.floor(
-        (new Date().getTime() - new Date(originalEntry[0].entry_date).getTime()) / (1000 * 60 * 60 * 24)
+        (Date.now() - new Date(originalEntry[0].entry_date).getTime()) / (1000 * 60 * 60 * 24)
       );
 
       // Calculate total amount from line items
@@ -352,7 +397,7 @@ export class DoubleEntryJournalService {
 
       if (needsApproval) {
         // Create approval request
-        const approvalResult = this.db.prepare(`
+        const _approvalResult = this.db.prepare(`
           INSERT INTO transaction_approval (
             journal_entry_id, approval_rule_id,
             requested_by_user_id, status

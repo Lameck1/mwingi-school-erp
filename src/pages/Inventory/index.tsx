@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react'
 import { Plus, Package, AlertTriangle, Search, ArrowUpRight, ArrowDownLeft, X, Loader2 } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+
 import { useAuthStore } from '../../stores'
-import { formatCurrency, shillingsToCents, centsToShillings } from '../../utils/format'
-import { InventoryItem, InventoryCategory, Supplier } from '../../types/electron-api/InventoryAPI'
+import { type InventoryItem, type InventoryCategory, type Supplier } from '../../types/electron-api/InventoryAPI'
+import { formatCurrencyFromCents, shillingsToCents, centsToShillings } from '../../utils/format'
 
 export default function Inventory() {
     const { user } = useAuthStore()
@@ -32,10 +33,10 @@ export default function Inventory() {
     const loadData = async () => {
         try {
             const [itemsData, lowStockData, catsData, suppliersData] = await Promise.all([
-                window.electronAPI.getInventory(),
-                window.electronAPI.getLowStockItems(),
-                window.electronAPI.getInventoryCategories(),
-                window.electronAPI.getSuppliers()
+                globalThis.electronAPI.getInventory(),
+                globalThis.electronAPI.getLowStockItems(),
+                globalThis.electronAPI.getInventoryCategories(),
+                globalThis.electronAPI.getSuppliers()
             ])
             setItems(itemsData)
             setLowStock(lowStockData)
@@ -46,12 +47,12 @@ export default function Inventory() {
         } finally { setLoading(false) }
     }
 
-    useEffect(() => { loadData() }, [])
+    useEffect(() => { void loadData() }, [])
 
     const handleAddItem = async (e: React.FormEvent) => {
         e.preventDefault()
         try {
-            await window.electronAPI.createInventoryItem({
+            await globalThis.electronAPI.createInventoryItem({
                 item_code: newItem.item_code,
                 item_name: newItem.item_name,
                 category_id: Number(newItem.category_id),
@@ -64,7 +65,7 @@ export default function Inventory() {
                 item_code: '', item_name: '', category_id: '',
                 unit_of_measure: 'Pieces', reorder_level: 10, unit_cost: 0
             })
-            loadData()
+            await loadData()
         } catch (error) {
             console.error('Failed to add item:', error)
         }
@@ -72,12 +73,12 @@ export default function Inventory() {
 
     const handleStockMovement = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!selectedItem) return
+        if (!selectedItem) {return}
 
         try {
-            if (!user) throw new Error('User not authenticated')
+            if (!user) {throw new Error('User not authenticated')}
 
-            await window.electronAPI.recordStockMovement({
+            await globalThis.electronAPI.recordStockMovement({
                 item_id: selectedItem.id,
                 movement_type: stockAction,
                 quantity: stockMovement.quantity,
@@ -89,7 +90,7 @@ export default function Inventory() {
 
             setShowStockModal(false)
             setStockMovement({ quantity: 0, unit_cost: 0, description: '', reference_number: '', supplier_id: '' })
-            loadData()
+            await loadData()
         } catch (error) {
             console.error('Failed to record movement:', error)
         }
@@ -109,6 +110,94 @@ export default function Inventory() {
         i.item_name.toLowerCase().includes(search.toLowerCase()) ||
         i.item_code.toLowerCase().includes(search.toLowerCase())
     )
+
+    const renderInventoryContent = () => {
+        if (loading) {
+            return (
+                <div className="flex flex-col items-center justify-center py-24 gap-4">
+                    <Loader2 className="w-12 h-12 text-primary animate-spin" />
+                    <p className="text-foreground/40 font-bold uppercase tracking-widest text-xs">Cataloging Assets...</p>
+                </div>
+            )
+        }
+
+        if (filteredItems.length === 0) {
+            return (
+                <div className="text-center py-24">
+                    <Package className="w-20 h-20 mx-auto mb-6 text-foreground/10" />
+                    <h3 className="text-xl font-bold text-foreground mb-2">Inventory Empty</h3>
+                    <p className="text-foreground/30 font-medium">Verify your search criteria or register a new school asset.</p>
+                </div>
+            )
+        }
+
+        return (
+            <div className="overflow-x-auto -mx-2">
+                <table className="w-full text-left">
+                    <thead>
+                        <tr className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 border-b border-white/5">
+                            <th className="px-4 py-4">Asset Details</th>
+                            <th className="px-4 py-4">Classification</th>
+                            <th className="px-4 py-4 text-right">Stock Level</th>
+                            <th className="px-4 py-4 text-right">Valuation</th>
+                            <th className="px-4 py-4">Availability</th>
+                            <th className="px-4 py-4 text-right">Inventory Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/20">
+                        {filteredItems.map((item) => (
+                            <tr key={item.id} className="group hover:bg-accent/20 transition-colors">
+                                <td className="px-4 py-5">
+                                    <p className="font-bold text-foreground group-hover:text-primary transition-colors">{item.item_name}</p>
+                                    <p className="text-[10px] font-mono text-foreground/40 uppercase tracking-widest">CODE: {item.item_code}</p>
+                                </td>
+                                <td className="px-4 py-5 font-bold">
+                                    <p className="text-xs text-foreground">{item.category_name}</p>
+                                    <p className="text-[10px] text-foreground/40 font-medium uppercase">{item.unit_of_measure}</p>
+                                </td>
+                                <td className="px-4 py-5 text-right font-bold text-foreground">
+                                    {item.current_stock}
+                                    <p className="text-[10px] text-foreground/40 font-medium uppercase tracking-tighter">Threshold: {item.reorder_level}</p>
+                                </td>
+                                <td className="px-4 py-5 text-right">
+                                    <p className="text-xs font-bold text-foreground">{formatCurrencyFromCents(item.unit_cost * item.current_stock)}</p>
+                                    <p className="text-[10px] text-foreground/40 italic">at {formatCurrencyFromCents(item.unit_cost)}/unit</p>
+                                </td>
+                                <td className="px-4 py-5">
+                                    <span className={`text-[9px] font-bold tracking-widest uppercase px-3 py-1 rounded-full border ${item.current_stock <= item.reorder_level
+                                        ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                                        : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                        }`}>
+                                        {item.current_stock <= item.reorder_level ? 'Replenish Soon' : 'Optimal'}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-5">
+                                    <div className="flex items-center justify-end gap-2">
+                                        <button
+                                            onClick={() => openStockModal(item, 'IN')}
+                                            className="p-3 bg-secondary hover:bg-emerald-500/20 text-emerald-400 rounded-xl transition-all shadow-sm"
+                                            title="Add Stock / Inbound"
+                                            aria-label={`Add stock for ${item.item_name}`}
+                                        >
+                                            <ArrowDownLeft className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => openStockModal(item, 'OUT')}
+                                            className="p-3 bg-secondary hover:bg-red-500/20 text-red-400 rounded-xl transition-all shadow-sm"
+                                            title="Issue Stock / Outbound"
+                                            aria-label={`Issue stock for ${item.item_name}`}
+                                        >
+                                            <ArrowUpRight className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        )
+    }
 
     return (
         <div className="space-y-8 pb-10">
@@ -158,81 +247,7 @@ export default function Inventory() {
 
             {/* Main Asset Ledger */}
             <div className="card animate-slide-up no-scrollbar">
-                {loading ? (
-                    <div className="flex flex-col items-center justify-center py-24 gap-4">
-                        <Loader2 className="w-12 h-12 text-primary animate-spin" />
-                        <p className="text-foreground/40 font-bold uppercase tracking-widest text-xs">Cataloging Assets...</p>
-                    </div>
-                ) : filteredItems.length === 0 ? (
-                    <div className="text-center py-24">
-                        <Package className="w-20 h-20 mx-auto mb-6 text-foreground/10" />
-                        <h3 className="text-xl font-bold text-foreground mb-2">Inventory Empty</h3>
-                        <p className="text-foreground/30 font-medium">Verify your search criteria or register a new school asset.</p>
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto -mx-2">
-                        <table className="w-full text-left">
-                            <thead>
-                                <tr className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 border-b border-white/5">
-                                    <th className="px-4 py-4">Asset Details</th>
-                                    <th className="px-4 py-4">Classification</th>
-                                    <th className="px-4 py-4 text-right">Stock Level</th>
-                                    <th className="px-4 py-4 text-right">Valuation</th>
-                                    <th className="px-4 py-4">Availability</th>
-                                    <th className="px-4 py-4 text-right">Inventory Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/20">
-                                {filteredItems.map((item) => (
-                                    <tr key={item.id} className="group hover:bg-accent/20 transition-colors">
-                                        <td className="px-4 py-5">
-                                            <p className="font-bold text-foreground group-hover:text-primary transition-colors">{item.item_name}</p>
-                                            <p className="text-[10px] font-mono text-foreground/40 uppercase tracking-widest">CODE: {item.item_code}</p>
-                                        </td>
-                                        <td className="px-4 py-5 font-bold">
-                                            <p className="text-xs text-foreground">{item.category_name}</p>
-                                            <p className="text-[10px] text-foreground/40 font-medium uppercase">{item.unit_of_measure}</p>
-                                        </td>
-                                        <td className="px-4 py-5 text-right font-bold text-foreground">
-                                            {item.current_stock}
-                                            <p className="text-[10px] text-foreground/40 font-medium uppercase tracking-tighter">Threshold: {item.reorder_level}</p>
-                                        </td>
-                                        <td className="px-4 py-5 text-right">
-                                            <p className="text-xs font-bold text-foreground">{formatCurrency(item.unit_cost * item.current_stock)}</p>
-                                            <p className="text-[10px] text-foreground/40 italic">at {formatCurrency(item.unit_cost)}/unit</p>
-                                        </td>
-                                        <td className="px-4 py-5">
-                                            <span className={`text-[9px] font-bold tracking-widest uppercase px-3 py-1 rounded-full border ${item.current_stock <= item.reorder_level
-                                                ? 'bg-red-500/10 border-red-500/20 text-red-400'
-                                                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                                }`}>
-                                                {item.current_stock <= item.reorder_level ? 'Replenish Soon' : 'Optimal'}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-5">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <button
-                                                    onClick={() => openStockModal(item, 'IN')}
-                                                    className="p-3 bg-secondary hover:bg-emerald-500/20 text-emerald-400 rounded-xl transition-all shadow-sm"
-                                                    title="Add Stock / Inbound"
-                                                >
-                                                    <ArrowDownLeft className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => openStockModal(item, 'OUT')}
-                                                    className="p-3 bg-secondary hover:bg-red-500/20 text-red-400 rounded-xl transition-all shadow-sm"
-                                                    title="Issue Stock / Outbound"
-                                                >
-                                                    <ArrowUpRight className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                {renderInventoryContent()}
             </div>
 
             {/* Add Item Modal */}
@@ -241,24 +256,24 @@ export default function Inventory() {
                     <div className="card w-full max-w-md animate-scale-in">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-xl font-bold text-foreground">Register Asset</h2>
-                            <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-white/5 rounded-xl transition-colors"><X className="w-5 h-5 text-foreground/40" /></button>
+                            <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-white/5 rounded-xl transition-colors" aria-label="Close add asset modal"><X className="w-5 h-5 text-foreground/40" /></button>
                         </div>
                         <form onSubmit={handleAddItem} className="space-y-4">
                             <div>
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Asset Code</label>
-                                <input type="text" required value={newItem.item_code}
+                                <label htmlFor="inventory-item-code" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Asset Code</label>
+                                <input id="inventory-item-code" type="text" required value={newItem.item_code}
                                     onChange={(e) => setNewItem({ ...newItem, item_code: e.target.value })}
                                     className="input bg-secondary/20 border-border/20" placeholder="e.g. STN-001" />
                             </div>
                             <div>
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Asset Name</label>
-                                <input type="text" required value={newItem.item_name}
+                                <label htmlFor="inventory-item-name" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Asset Name</label>
+                                <input id="inventory-item-name" type="text" required value={newItem.item_name}
                                     onChange={(e) => setNewItem({ ...newItem, item_name: e.target.value })}
                                     className="input bg-secondary/20 border-border/20" placeholder="e.g. A4 Paper Ream" />
                             </div>
                             <div>
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Classification</label>
-                                <select required value={newItem.category_id}
+                                <label htmlFor="inventory-category" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Classification</label>
+                                <select id="inventory-category" required value={newItem.category_id}
                                     aria-label="Category"
                                     onChange={(e) => setNewItem({ ...newItem, category_id: e.target.value })}
                                     className="input bg-secondary/20 border-border/20">
@@ -270,21 +285,21 @@ export default function Inventory() {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Unit</label>
-                                    <input type="text" required value={newItem.unit_of_measure}
+                                    <label htmlFor="inventory-unit" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Unit</label>
+                                    <input id="inventory-unit" type="text" required value={newItem.unit_of_measure}
                                         onChange={(e) => setNewItem({ ...newItem, unit_of_measure: e.target.value })}
                                         className="input bg-secondary/20 border-border/20" placeholder="e.g. Box" />
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Threshold</label>
-                                    <input type="number" required value={newItem.reorder_level}
+                                    <label htmlFor="inventory-threshold" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Threshold</label>
+                                    <input id="inventory-threshold" type="number" required value={newItem.reorder_level}
                                         onChange={(e) => setNewItem({ ...newItem, reorder_level: Number(e.target.value) })}
                                         className="input bg-secondary/20 border-border/20" placeholder="10" />
                                 </div>
                             </div>
                             <div>
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Unit Cost (KES)</label>
-                                <input type="number" required value={newItem.unit_cost}
+                                <label htmlFor="inventory-unit-cost" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Unit Cost (KES)</label>
+                                <input id="inventory-unit-cost" type="number" required value={newItem.unit_cost}
                                     onChange={(e) => setNewItem({ ...newItem, unit_cost: Number(e.target.value) })}
                                     className="input bg-secondary/20 border-border/20" placeholder="0.00" />
                             </div>
@@ -305,27 +320,27 @@ export default function Inventory() {
                             <h2 className="text-xl font-bold text-foreground">
                                 {stockAction === 'IN' ? 'Restock' : 'Issue'} Content
                             </h2>
-                            <button onClick={() => setShowStockModal(false)} className="p-2 hover:bg-white/5 rounded-xl transition-colors"><X className="w-5 h-5 text-foreground/40" /></button>
+                            <button onClick={() => setShowStockModal(false)} className="p-2 hover:bg-white/5 rounded-xl transition-colors" aria-label="Close stock movement modal"><X className="w-5 h-5 text-foreground/40" /></button>
                         </div>
                         <p className="text-xs font-bold text-primary uppercase tracking-widest mb-6 px-1">{selectedItem?.item_name}</p>
                         <form onSubmit={handleStockMovement} className="space-y-4">
                             <div>
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Movement Quantity</label>
-                                <input type="number" required min="1" value={stockMovement.quantity}
+                                <label htmlFor="stock-movement-quantity" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Movement Quantity</label>
+                                <input id="stock-movement-quantity" type="number" required min="1" value={stockMovement.quantity}
                                     onChange={(e) => setStockMovement({ ...stockMovement, quantity: Number(e.target.value) })}
                                     className="input bg-secondary/20 border-border/20" placeholder="0" />
                             </div>
                             {stockAction === 'IN' && (
                                 <>
                                     <div>
-                                        <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Inbound Cost (KES)</label>
-                                        <input type="number" required min="0" value={stockMovement.unit_cost}
+                                        <label htmlFor="stock-movement-cost" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Inbound Cost (KES)</label>
+                                        <input id="stock-movement-cost" type="number" required min="0" value={stockMovement.unit_cost}
                                             onChange={(e) => setStockMovement({ ...stockMovement, unit_cost: Number(e.target.value) })}
                                             className="input bg-secondary/20 border-border/20" placeholder="0.00" />
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Vendor / Supplier</label>
-                                        <select value={stockMovement.supplier_id}
+                                        <label htmlFor="stock-movement-supplier" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Vendor / Supplier</label>
+                                        <select id="stock-movement-supplier" value={stockMovement.supplier_id}
                                             onChange={(e) => setStockMovement({ ...stockMovement, supplier_id: e.target.value })}
                                             className="input bg-secondary/20 border-border/20">
                                             <option value="">Select Supplier (Optional)</option>
@@ -337,14 +352,14 @@ export default function Inventory() {
                                 </>
                             )}
                             <div>
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Documentation Reference</label>
-                                <input type="text" value={stockMovement.reference_number}
+                                <label htmlFor="stock-movement-reference" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Documentation Reference</label>
+                                <input id="stock-movement-reference" type="text" value={stockMovement.reference_number}
                                     onChange={(e) => setStockMovement({ ...stockMovement, reference_number: e.target.value })}
                                     className="input bg-secondary/20 border-border/20" placeholder="e.g. Invoice # / Receipt #" />
                             </div>
                             <div>
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Justification</label>
-                                <textarea value={stockMovement.description}
+                                <label htmlFor="stock-movement-description" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-1.5 ml-1">Justification</label>
+                                <textarea id="stock-movement-description" value={stockMovement.description}
                                     onChange={(e) => setStockMovement({ ...stockMovement, description: e.target.value })}
                                     className="input bg-secondary/20 border-border/20" rows={2} placeholder="Brief reason for movement..." />
                             </div>

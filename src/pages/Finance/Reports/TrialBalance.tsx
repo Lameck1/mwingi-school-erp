@@ -1,33 +1,21 @@
-import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { formatCurrency } from '../../../utils/format';
-import { ElectronAPI } from '../../../types/electron-api';
+import { useState, useEffect } from 'react';
 
-interface TrialBalanceAccount {
-  account_code: string;
-  account_name: string;
-  debit_total: number;
-  credit_total: number;
-}
+import { formatCurrencyFromCents } from '../../../utils/format';
 
-interface TrialBalance {
-  accounts: TrialBalanceAccount[];
-  total_debits: number;
-  total_credits: number;
-  is_balanced: boolean;
-}
+import type { TrialBalanceReport } from '../../../types/electron-api';
 
 export default function TrialBalancePage() {
   const [startDate, setStartDate] = useState<string>(
     format(new Date(new Date().getFullYear(), 0, 1), 'yyyy-MM-dd')
   );
   const [endDate, setEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
-  const [trialBalance, setTrialBalance] = useState<TrialBalance | null>(null);
+  const [trialBalance, setTrialBalance] = useState<TrialBalanceReport | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadTrialBalance();
+    void loadTrialBalance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -36,7 +24,7 @@ export default function TrialBalancePage() {
     setError(null);
 
     try {
-      const result = await (window as unknown as { electronAPI: ElectronAPI }).electronAPI.getTrialBalance(startDate, endDate);
+      const result = await globalThis.electronAPI.getTrialBalance(startDate, endDate) as { success: boolean; data: TrialBalanceReport; message?: string };
 
       if (result.success) {
         setTrialBalance(result.data);
@@ -69,8 +57,8 @@ export default function TrialBalancePage() {
 
       <div className="bg-white rounded-lg shadow p-4 mb-6">
         <div className="flex items-center gap-4">
-          <label className="text-sm font-medium text-gray-700">Period:</label>
-          <input
+          <label htmlFor="field-60" className="text-sm font-medium text-gray-700">Period:</label>
+          <input id="field-60"
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
@@ -114,7 +102,7 @@ export default function TrialBalancePage() {
               </div>
               {!trialBalance.is_balanced && (
                 <div className="text-red-600 font-medium">
-                  Variance: {formatCurrency(Math.abs(trialBalance.total_debits - trialBalance.total_credits))}
+                  Variance: {formatCurrencyFromCents(Math.abs(trialBalance.total_debits - trialBalance.total_credits))}
                 </div>
               )}
             </div>
@@ -136,10 +124,10 @@ export default function TrialBalancePage() {
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{account.account_code}</td>
                     <td className="px-6 py-4 text-sm text-gray-900">{account.account_name}</td>
                     <td className="px-6 py-4 text-sm text-right text-gray-900">
-                      {formatCurrency(account.debit_total)}
+                      {formatCurrencyFromCents(account.debit_total)}
                     </td>
                     <td className="px-6 py-4 text-sm text-right text-gray-900">
-                      {formatCurrency(account.credit_total)}
+                      {formatCurrencyFromCents(account.credit_total)}
                     </td>
                   </tr>
                 ))}
@@ -148,10 +136,10 @@ export default function TrialBalancePage() {
                 <tr>
                   <td colSpan={2} className="px-6 py-4 text-sm font-bold text-gray-900">TOTAL</td>
                   <td className="px-6 py-4 text-sm font-bold text-right text-gray-900">
-                    {formatCurrency(trialBalance.total_debits)}
+                    {formatCurrencyFromCents(trialBalance.total_debits)}
                   </td>
                   <td className="px-6 py-4 text-sm font-bold text-right text-gray-900">
-                    {formatCurrency(trialBalance.total_credits)}
+                    {formatCurrencyFromCents(trialBalance.total_credits)}
                   </td>
                 </tr>
               </tfoot>

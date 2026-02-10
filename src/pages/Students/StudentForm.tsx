@@ -1,8 +1,9 @@
+import { ArrowLeft, Save, Loader2, User, Shield, Phone, Mail, MapPin, Calendar, Heart } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Save, Loader2, User, Shield, Phone, Mail, MapPin, Calendar, Heart } from 'lucide-react'
+
 import { Select } from '../../components/ui/Select'
-import { Stream } from '../../types/electron-api/AcademicAPI'
+import { type Stream } from '../../types/electron-api/AcademicAPI'
 
 export default function StudentForm() {
     const navigate = useNavigate()
@@ -36,11 +37,11 @@ export default function StudentForm() {
         const loadData = async () => {
             setLoading(true)
             try {
-                const streamsData = await window.electronAPI.getStreams()
+                const streamsData = await globalThis.electronAPI.getStreams()
                 setStreams(streamsData)
 
                 if (id) {
-                    const student = await window.electronAPI.getStudentById(parseInt(id))
+                    const student = await globalThis.electronAPI.getStudentById(Number.parseInt(id, 10))
                     if (student) {
                         setFormData({
                             admission_number: student.admission_number || '',
@@ -69,7 +70,7 @@ export default function StudentForm() {
             }
         }
 
-        loadData()
+        void loadData()
     }, [id])
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -82,15 +83,15 @@ export default function StudentForm() {
         setSaving(true)
 
         try {
-            if (isEdit) {
-                await window.electronAPI.updateStudent(parseInt(id!), {
+            if (isEdit && id) {
+                await globalThis.electronAPI.updateStudent(Number.parseInt(id, 10), {
                     ...formData,
-                    stream_id: parseInt(formData.stream_id)
+                    stream_id: Number.parseInt(formData.stream_id, 10)
                 })
             } else {
-                await window.electronAPI.createStudent({
+                await globalThis.electronAPI.createStudent({
                     ...formData,
-                    stream_id: parseInt(formData.stream_id)
+                    stream_id: Number.parseInt(formData.stream_id, 10)
                 })
             }
             navigate('/students')
@@ -152,7 +153,7 @@ export default function StudentForm() {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="md:col-span-2">
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Full Legal Name (Primary)</label>
+                                <p className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Full Legal Name (Primary)</p>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <input name="first_name" value={formData.first_name} onChange={handleChange} required
                                         className="input bg-secondary/20 border-border/20" placeholder="First Name" />
@@ -164,8 +165,8 @@ export default function StudentForm() {
                             </div>
 
                             <div>
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Admission Number</label>
-                                <input name="admission_number" value={formData.admission_number} onChange={handleChange} required
+                                <label htmlFor="student-admission-number" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Admission Number</label>
+                                <input id="student-admission-number" name="admission_number" value={formData.admission_number} onChange={handleChange} required
                                     className="input bg-secondary/20 border-border/20 font-mono" placeholder="MAS-2025-XXX" />
                             </div>
 
@@ -173,7 +174,7 @@ export default function StudentForm() {
                                 label="Academic Placement"
                                 name="stream_id"
                                 value={formData.stream_id}
-                                onChange={(val) => setFormData(prev => ({ ...prev, stream_id: val }))}
+                                onChange={(val) => setFormData(prev => ({ ...prev, stream_id: String(val) }))}
                                 options={[
                                     { value: '', label: 'Select Stream' },
                                     ...streams.map(s => ({ value: s.id.toString(), label: s.stream_name }))
@@ -184,7 +185,7 @@ export default function StudentForm() {
                                 label="Gender Identity"
                                 name="gender"
                                 value={formData.gender}
-                                onChange={(val) => setFormData(prev => ({ ...prev, gender: val }))}
+                                onChange={(val) => setFormData(prev => ({ ...prev, gender: String(val) as 'MALE' | 'FEMALE' }))}
                                 options={[
                                     { value: 'MALE', label: 'Male' },
                                     { value: 'FEMALE', label: 'Female' }
@@ -195,7 +196,7 @@ export default function StudentForm() {
                                 label="Enrollment Type"
                                 name="student_type"
                                 value={formData.student_type}
-                                onChange={(val) => setFormData(prev => ({ ...prev, student_type: val }))}
+                                onChange={(val) => setFormData(prev => ({ ...prev, student_type: String(val) as 'BOARDER' | 'DAY_SCHOLAR' }))}
                                 options={[
                                     { value: 'DAY_SCHOLAR', label: 'Day Scholar' },
                                     { value: 'BOARDER', label: 'Boarder' }
@@ -203,14 +204,14 @@ export default function StudentForm() {
                             />
 
                             <div>
-                                <label className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest block mb-2 ml-1">Date of Birth</label>
-                                <input name="date_of_birth" type="date" value={formData.date_of_birth} onChange={handleChange}
+                                <label htmlFor="student-dob" className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest block mb-2 ml-1">Date of Birth</label>
+                                <input id="student-dob" name="date_of_birth" type="date" value={formData.date_of_birth} onChange={handleChange}
                                     className="input bg-secondary/30 border-border/40 focus:border-primary/50 transition-all font-medium" />
                             </div>
 
                             <div>
-                                <label className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest block mb-2 ml-1">Admission Date</label>
-                                <input name="admission_date" type="date" value={formData.admission_date} onChange={handleChange} required
+                                <label htmlFor="student-admission-date" className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest block mb-2 ml-1">Admission Date</label>
+                                <input id="student-admission-date" name="admission_date" type="date" value={formData.admission_date} onChange={handleChange} required
                                     className="input bg-secondary/30 border-border/40 focus:border-primary/50 transition-all font-medium" />
                             </div>
                         </div>
@@ -227,34 +228,34 @@ export default function StudentForm() {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="md:col-span-2">
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Primary Guardian Name</label>
-                                <input name="guardian_name" value={formData.guardian_name} onChange={handleChange}
+                                <label htmlFor="student-guardian-name" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Primary Guardian Name</label>
+                                <input id="student-guardian-name" name="guardian_name" value={formData.guardian_name} onChange={handleChange}
                                     className="input bg-secondary/20 border-border/20" placeholder="Enter full name" />
                             </div>
 
                             <div>
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Contact Phone</label>
+                                <label htmlFor="student-guardian-phone" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Contact Phone</label>
                                 <div className="relative">
                                     <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40" />
-                                    <input name="guardian_phone" type="tel" value={formData.guardian_phone} onChange={handleChange}
+                                    <input id="student-guardian-phone" name="guardian_phone" type="tel" value={formData.guardian_phone} onChange={handleChange}
                                         className="input pl-11 bg-secondary/20 border-border/20" placeholder="e.g. 0712 XXX XXX" />
                                 </div>
                             </div>
 
                             <div>
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Email (Optional)</label>
+                                <label htmlFor="student-guardian-email" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Email (Optional)</label>
                                 <div className="relative">
                                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40" />
-                                    <input name="guardian_email" type="email" value={formData.guardian_email} onChange={handleChange}
+                                    <input id="student-guardian-email" name="guardian_email" type="email" value={formData.guardian_email} onChange={handleChange}
                                         className="input pl-11 bg-secondary/20 border-border/20" placeholder="guardian@example.com" />
                                 </div>
                             </div>
 
                             <div className="md:col-span-2">
-                                <label className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest block mb-2 ml-1">Residential Address</label>
+                                <label htmlFor="student-address" className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest block mb-2 ml-1">Residential Address</label>
                                 <div className="relative">
                                     <MapPin className="absolute left-4 top-4 w-4 h-4 text-foreground/40" />
-                                    <textarea name="address" value={formData.address} onChange={handleChange}
+                                    <textarea id="student-address" name="address" value={formData.address} onChange={handleChange}
                                         className="input pl-11 bg-secondary/30 border-border/40 focus:border-primary/50 transition-all min-h-[100px] font-medium" placeholder="Village, Town, Street details..." />
                                 </div>
                             </div>

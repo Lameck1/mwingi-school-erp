@@ -1,6 +1,8 @@
-import Database from 'better-sqlite3'
+
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
+
+import type Database from 'better-sqlite3'
 
 // ============================================================================
 // SEGREGATED INTERFACES (ISP)
@@ -60,7 +62,7 @@ export interface AllocationResult {
 // ============================================================================
 
 class CreditRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -95,13 +97,13 @@ class CreditRepository {
     return db.prepare(query).all(studentId) as CreditTransaction[]
   }
 
-  async recordCreditTransaction(data: {
+  recordCreditTransaction(data: {
     student_id: number
     amount: number
     transaction_type: 'CREDIT_RECEIVED' | 'CREDIT_APPLIED' | 'CREDIT_REFUNDED'
     reference_invoice_id?: number
     notes: string
-  }): Promise<number> {
+  }): number {
     const db = this.db
     const result = db.prepare(`
       INSERT INTO credit_transaction (student_id, amount, transaction_type, reference_invoice_id, notes)
@@ -119,7 +121,7 @@ class CreditRepository {
 }
 
 class InvoiceRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -145,7 +147,7 @@ class InvoiceRepository {
     `).all(studentId) as OutstandingInvoice[]
   }
 
-  async updateInvoicePayment(invoiceId: number, amountToAdd: number): Promise<void> {
+  updateInvoicePayment(invoiceId: number, amountToAdd: number): void {
     const db = this.db
     db.prepare(`
       UPDATE fee_invoice
@@ -168,8 +170,8 @@ class FIFOAllocationStrategy implements ICreditAllocationStrategy {
   determineAllocationOrder(invoices: OutstandingInvoice[]): OutstandingInvoice[] {
     return [...invoices].sort((a, b) => {
       // First priority: overdue invoices
-      if (a.days_overdue > 0 && b.days_overdue <= 0) return -1
-      if (b.days_overdue > 0 && a.days_overdue <= 0) return 1
+      if (a.days_overdue > 0 && b.days_overdue <= 0) {return -1}
+      if (b.days_overdue > 0 && a.days_overdue <= 0) {return 1}
 
       // Second priority: by due date (oldest first)
       return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
@@ -178,12 +180,12 @@ class FIFOAllocationStrategy implements ICreditAllocationStrategy {
 }
 
 class CreditAllocator implements ICreditAllocator {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(
-    private creditRepo: CreditRepository,
-    private invoiceRepo: InvoiceRepository,
-    private allocationStrategy: ICreditAllocationStrategy,
+    private readonly creditRepo: CreditRepository,
+    private readonly invoiceRepo: InvoiceRepository,
+    private readonly allocationStrategy: ICreditAllocationStrategy,
     db?: Database.Database
   ) {
     this.db = db || getDatabase()
@@ -228,7 +230,7 @@ class CreditAllocator implements ICreditAllocator {
 
       const transaction = db.transaction(() => {
         for (const invoice of sortedInvoices) {
-          if (remainingCredit <= 0) break
+          if (remainingCredit <= 0) {break}
 
           const amountToApply = Math.min(remainingCredit, invoice.balance)
 
@@ -294,7 +296,7 @@ class CreditAllocator implements ICreditAllocator {
 }
 
 class CreditBalanceTracker implements ICreditBalanceTracker {
-  constructor(private creditRepo: CreditRepository) {}
+  constructor(private readonly creditRepo: CreditRepository) {}
 
   async getStudentCreditBalance(studentId: number): Promise<number> {
     return this.creditRepo.getStudentCreditBalance(studentId)
@@ -310,7 +312,7 @@ class CreditBalanceTracker implements ICreditBalanceTracker {
 // ============================================================================
 
 export class CreditAutoApplicationService implements ICreditAllocator, ICreditBalanceTracker {
-  private db: Database.Database
+  private readonly db: Database.Database
   private readonly allocator: CreditAllocator
   private readonly balanceTracker: CreditBalanceTracker
 
@@ -352,7 +354,7 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
   async addCreditToStudent(studentId: number, amount: number, notes: string, userId: number): Promise<{ success: boolean; message: string; credit_id: number }> {
     try {
       const creditRepo = new CreditRepository(this.db)
-      const creditId = await creditRepo.recordCreditTransaction({
+      const creditId = creditRepo.recordCreditTransaction({
         student_id: studentId,
         amount,
         transaction_type: 'CREDIT_RECEIVED',
@@ -383,8 +385,8 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
    */
   autoApplyCredits(studentId: number, userId?: number): { success: boolean; message: string; credits_applied?: number; remaining_credit?: number; invoices_affected?: number } {
     try {
-      const creditRepo = new CreditRepository(this.db)
-      const invoiceRepo = new InvoiceRepository(this.db)
+      const _creditRepo = new CreditRepository(this.db)
+      const _invoiceRepo = new InvoiceRepository(this.db)
 
       // Get student's credit balance
       const creditResult = this.db.prepare(
@@ -409,7 +411,7 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
       let applicationsCount = 0
 
       for (const invoice of invoices) {
-        if (remainingCredit === 0) break
+        if (remainingCredit === 0) {break}
 
         const amountDue = invoice.amount_due - invoice.amount_paid
         const applicationAmount = Math.min(remainingCredit, amountDue)

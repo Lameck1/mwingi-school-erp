@@ -5,8 +5,10 @@
  * Validates that debits = credits before posting
  */
 
-import React, { useState } from 'react';
-import { formatCurrency } from '../../../utils/format';
+import React, { useEffect, useState } from 'react';
+
+import { useAuthStore, useAppStore } from '../../../stores';
+import { formatCurrency, shillingsToCents } from '../../../utils/format';
 
 
 interface ImportedBalance {
@@ -17,7 +19,57 @@ interface ImportedBalance {
   debitCredit: 'DEBIT' | 'CREDIT';
 }
 
+const findFirstIndex = (values: string[], candidates: string[]): number => {
+  for (const candidate of candidates) {
+    const idx = values.indexOf(candidate);
+    if (idx >= 0) {
+      return idx;
+    }
+  }
+  return -1;
+};
+
+const parseCsvBalances = (text: string): { balances: ImportedBalance[]; error?: string } => {
+  const lines = text.split(/\r?\n/).filter(line => line.trim());
+  if (lines.length < 2) {
+    return { balances: [], error: 'CSV file must have a header row and at least one data row' };
+  }
+
+  const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const typeIdx = header.indexOf('type');
+  const idIdx = findFirstIndex(header, ['identifier', 'id', 'code']);
+  const nameIdx = header.indexOf('name');
+  const amountIdx = header.indexOf('amount');
+  const dcIdx = findFirstIndex(header, ['debit_credit', 'debitcredit', 'dc']);
+
+  if (typeIdx === -1 || idIdx === -1 || amountIdx === -1) {
+    return { balances: [], error: 'CSV must have columns: type, identifier, amount (and optionally: name, debit_credit)' };
+  }
+
+  const parsed: ImportedBalance[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.trim());
+    if (cols.length < Math.max(typeIdx, idIdx, amountIdx) + 1) {continue;}
+
+    const type = cols[typeIdx].toUpperCase() as 'STUDENT' | 'GL_ACCOUNT';
+    const amount = Number.parseFloat(cols[amountIdx]);
+    if (Number.isNaN(amount) || amount <= 0) {continue;}
+
+    parsed.push({
+      type: type === 'GL_ACCOUNT' ? 'GL_ACCOUNT' : 'STUDENT',
+      identifier: cols[idIdx],
+      name: nameIdx >= 0 ? cols[nameIdx] : cols[idIdx],
+      amount,
+      debitCredit: dcIdx >= 0 && cols[dcIdx].toUpperCase().startsWith('C') ? 'CREDIT' : 'DEBIT'
+    });
+  }
+
+  return { balances: parsed };
+};
+
 export const OpeningBalanceImport: React.FC = () => {
+  const { user } = useAuthStore();
+  const { currentAcademicYear } = useAppStore();
   const [balances, setBalances] = useState<ImportedBalance[]>([]);
   const [importing, setImporting] = useState(false);
   const [verified, setVerified] = useState(false);
@@ -30,45 +82,41 @@ export const OpeningBalanceImport: React.FC = () => {
     debitCredit: 'DEBIT',
   });
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  useEffect(() => {
+    if (!showAddModal) {return;}
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowAddModal(false);
+      }
+    };
+
+    globalThis.addEventListener('keydown', handleEscape);
+    return () => globalThis.removeEventListener('keydown', handleEscape);
+  }, [showAddModal]);
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file) {return;}
+    try {
+      const text = await file.text();
+      const { balances: parsed, error } = parseCsvBalances(text);
+      if (error) {
+        alert(error);
+        return;
+      }
 
-    // TODO: Parse CSV/Excel file
-    // For now, mock data
-    const mockData: ImportedBalance[] = [
-      {
-        type: 'STUDENT',
-        identifier: 'STU001',
-        name: 'John Doe',
-        amount: 50000,
-        debitCredit: 'DEBIT',
-      },
-      {
-        type: 'STUDENT',
-        identifier: 'STU002',
-        name: 'Jane Smith',
-        amount: 30000,
-        debitCredit: 'DEBIT',
-      },
-      {
-        type: 'GL_ACCOUNT',
-        identifier: '1100',
-        name: 'Accounts Receivable',
-        amount: 80000,
-        debitCredit: 'DEBIT',
-      },
-      {
-        type: 'GL_ACCOUNT',
-        identifier: '3000',
-        name: 'Retained Earnings',
-        amount: 80000,
-        debitCredit: 'CREDIT',
-      },
-    ];
+      if (parsed.length === 0) {
+        alert('No valid rows found in CSV file');
+        return;
+      }
 
-    setBalances(mockData);
-    setVerified(false);
+      setBalances(parsed);
+      setVerified(false);
+    } catch (err) {
+      console.error('CSV parse error:', err);
+      alert('Failed to parse CSV file. Ensure it is a valid CSV format.');
+    }
   };
 
   const handleAddBalance = () => {
@@ -123,11 +171,53 @@ export const OpeningBalanceImport: React.FC = () => {
       alert('Please verify balances before importing');
       return;
     }
+    if (!user?.id) {
+      alert('You must be signed in to import opening balances');
+      return;
+    }
+    if (!currentAcademicYear?.id) {
+      alert('Select an active academic year before importing balances');
+      return;
+    }
 
     setImporting(true);
     try {
-      // TODO: Call IPC handler to import balances
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Split balances by type and call appropriate IPC handlers
+      const studentBalances = balances
+        .filter(b => b.type === 'STUDENT')
+        .map(b => ({
+          student_id: Number(b.identifier),
+          admission_number: b.identifier,
+          student_name: b.name,
+          opening_balance: shillingsToCents(b.amount),
+          balance_type: b.debitCredit
+        }));
+
+      const invalidStudent = studentBalances.find(b => !Number.isFinite(b.student_id) || b.student_id <= 0);
+      if (invalidStudent) {
+        alert('Student balances must include a valid numeric student ID in the identifier field.');
+        return;
+      }
+
+      const glBalances = balances
+        .filter(b => b.type === 'GL_ACCOUNT')
+        .map(b => ({
+          academic_year_id: currentAcademicYear.id,
+          gl_account_code: b.identifier,
+          debit_amount: b.debitCredit === 'DEBIT' ? shillingsToCents(b.amount) : 0,
+          credit_amount: b.debitCredit === 'CREDIT' ? shillingsToCents(b.amount) : 0,
+          description: `Opening balance for ${b.identifier}`,
+          imported_from: 'csv_import',
+          imported_by_user_id: user.id
+        }));
+
+      if (studentBalances.length > 0) {
+        await globalThis.electronAPI.importStudentOpeningBalances(studentBalances, currentAcademicYear.id, 'csv_import', user.id);
+      }
+      if (glBalances.length > 0) {
+        await globalThis.electronAPI.importGLOpeningBalances(glBalances, user.id);
+      }
+
       alert('Opening balances imported successfully!');
       setBalances([]);
       setVerified(false);
@@ -182,10 +272,11 @@ export const OpeningBalanceImport: React.FC = () => {
       <div className="bg-white rounded-lg shadow p-4">
         <div className="flex gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="opening-balance-upload" className="block text-sm font-medium text-gray-700 mb-2">
               Upload CSV File
             </label>
             <input
+              id="opening-balance-upload"
               type="file"
               accept=".csv,.xlsx"
               onChange={handleFileUpload}
@@ -291,7 +382,7 @@ export const OpeningBalanceImport: React.FC = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {balances.map((balance, index) => (
-                <tr key={index} className="hover:bg-gray-50">
+                <tr key={`${balance.type}-${balance.identifier}-${balance.debitCredit}-${balance.amount}`} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${balance.type === 'STUDENT'
@@ -348,32 +439,30 @@ export const OpeningBalanceImport: React.FC = () => {
       {/* Add Balance Modal */}
       {showAddModal && (
         <div
-          className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50"
-          onClick={() => setShowAddModal(false)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              setShowAddModal(false)
-            }
-          }}
-          role="button"
-          tabIndex={0}
+          className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 relative"
         >
-          <div
-            className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            role="presentation"
+          <button
+            type="button"
+            aria-label="Close add balance modal"
+            onClick={() => setShowAddModal(false)}
+            className="absolute inset-0"
+          />
+          <dialog
+            open
+            className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full relative z-10"
+            aria-labelledby="opening-balance-modal-title"
           >
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            <h3 id="opening-balance-modal-title" className="text-lg font-semibold text-gray-900 mb-4">
               Add Balance Entry
             </h3>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="opening-balance-type" className="block text-sm font-medium text-gray-700 mb-1">
                   Type
                 </label>
                 <select
+                  id="opening-balance-type"
                   value={newBalance.type}
                   onChange={(e) =>
                     setNewBalance({
@@ -389,12 +478,13 @@ export const OpeningBalanceImport: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="opening-balance-identifier" className="block text-sm font-medium text-gray-700 mb-1">
                   {newBalance.type === 'STUDENT'
                     ? 'Student ID'
                     : 'GL Account Code'}
                 </label>
                 <input
+                  id="opening-balance-identifier"
                   type="text"
                   value={newBalance.identifier}
                   onChange={(e) =>
@@ -405,10 +495,11 @@ export const OpeningBalanceImport: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="opening-balance-name" className="block text-sm font-medium text-gray-700 mb-1">
                   Name
                 </label>
                 <input
+                  id="opening-balance-name"
                   type="text"
                   value={newBalance.name}
                   onChange={(e) =>
@@ -419,10 +510,11 @@ export const OpeningBalanceImport: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="opening-balance-debit-credit" className="block text-sm font-medium text-gray-700 mb-1">
                   Debit/Credit
                 </label>
                 <select
+                  id="opening-balance-debit-credit"
                   value={newBalance.debitCredit}
                   onChange={(e) =>
                     setNewBalance({
@@ -438,16 +530,17 @@ export const OpeningBalanceImport: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="opening-balance-amount" className="block text-sm font-medium text-gray-700 mb-1">
                   Amount (Kes)
                 </label>
                 <input
+                  id="opening-balance-amount"
                   type="number"
                   value={newBalance.amount}
                   onChange={(e) =>
                     setNewBalance({
                       ...newBalance,
-                      amount: parseFloat(e.target.value) || 0,
+                      amount: Number.parseFloat(e.target.value) || 0,
                     })
                   }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -469,7 +562,7 @@ export const OpeningBalanceImport: React.FC = () => {
                 Add Entry
               </button>
             </div>
-          </div>
+          </dialog>
         </div>
       )}
     </div>

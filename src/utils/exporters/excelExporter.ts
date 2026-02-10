@@ -4,6 +4,8 @@
  * For more complex Excel files, consider using ExcelJS or SheetJS
  */
 
+import { centsToShillings } from '../format'
+
 export interface ExcelColumn {
     key: string
     header: string
@@ -80,7 +82,7 @@ export function downloadCSV(options: ExcelExportOptions): void {
 }
 
 function escapeCSV(value: unknown): string {
-    if (value === null || value === undefined) return ''
+    if (value === null || value === undefined) {return ''}
     const str = String(value)
     // Escape quotes and wrap in quotes if contains comma, quote, or newline
     if (str.includes(',') || str.includes('"') || str.includes('\n')) {
@@ -90,11 +92,11 @@ function escapeCSV(value: unknown): string {
 }
 
 function formatValue(value: unknown, format?: ExcelColumn['format']): string {
-    if (value === null || value === undefined) return ''
+    if (value === null || value === undefined) {return ''}
 
     switch (format) {
         case 'currency': {
-            const amount = Number(value)
+            const amount = centsToShillings(value as number)
             return escapeCSV(amount.toFixed(2))
         }
         case 'number':

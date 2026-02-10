@@ -13,14 +13,16 @@
  * the legacy system calls can be removed.
  */
 
-import Database from 'better-sqlite3';
-import { getDatabase } from '../../database/index';
+
+import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
-import { DoubleEntryJournalService, JournalEntryData } from '../accounting/DoubleEntryJournalService';
+import { DoubleEntryJournalService, type JournalEntryData } from '../accounting/DoubleEntryJournalService';
+
+import type Database from 'better-sqlite3';
 
 export interface PaymentIntegrationData {
   student_id: number;
-  amount: number; // In Kenyan Shillings (not cents)
+  amount: number; // In cents
   payment_method: 'CASH' | 'MPESA' | 'BANK_TRANSFER' | 'CHEQUE' | 'CREDIT_BALANCE';
   transaction_date: string; // ISO date string
   description?: string;
@@ -80,9 +82,28 @@ export interface PaymentHistoryEntry {
   voided_reason: string | null;
 }
 
+interface LegacyPaymentContext {
+  data: PaymentIntegrationData;
+  userId: number;
+  amountCents: number;
+  description: string;
+  paymentRef: string;
+  transactionRef: string;
+  receiptNumber: string;
+}
+
+interface JournalEntryContext {
+  data: PaymentIntegrationData;
+  userId: number;
+  amountCents: number;
+  description: string;
+  paymentRef: string;
+  legacyTransactionId: number;
+}
+
 export class PaymentIntegrationService {
-  private db: Database.Database;
-  private journalService: DoubleEntryJournalService;
+  private readonly db: Database.Database;
+  private readonly journalService: DoubleEntryJournalService;
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase();
@@ -92,194 +113,230 @@ export class PaymentIntegrationService {
   /**
    * Records a payment in both legacy and new accounting systems
    */
+  private createReferenceNumbers(): { transactionRef: string; receiptNumber: string } {
+    const dateStr = new Date().toISOString().slice(0, 10).replaceAll('-', '')
+    const timestamp = String(Date.now()).slice(-6)
+
+    return {
+      transactionRef: `TXN-${dateStr}-${timestamp}`,
+      receiptNumber: `RCP-${dateStr}-${timestamp}`
+    }
+  }
+
+  private recordLegacyPayment(context: LegacyPaymentContext): number {
+    const {
+      data,
+      userId,
+      amountCents,
+      description,
+      paymentRef,
+      transactionRef,
+      receiptNumber
+    } = context
+
+    const legacyTxnStmt = this.db.prepare(`
+      INSERT INTO ledger_transaction (
+        transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit,
+        student_id, payment_method, payment_reference, description, term_id, recorded_by_user_id, invoice_id
+      ) VALUES (?, ?, 'FEE_PAYMENT', (SELECT id FROM transaction_category WHERE category_name = 'School Fees'), ?, 'CREDIT', ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    const legacyResult = legacyTxnStmt.run(
+      transactionRef,
+      data.transaction_date,
+      amountCents,
+      data.student_id,
+      data.payment_method,
+      paymentRef,
+      description,
+      data.term_id || null,
+      userId,
+      data.invoice_id || null
+    )
+
+    const legacyTransactionId = legacyResult.lastInsertRowid as number
+
+    logAudit(userId, 'CREATE', 'ledger_transaction', legacyTransactionId, null, {
+      ...data,
+      amount: amountCents
+    })
+
+    const receiptStatement = this.db.prepare(`
+      INSERT INTO receipt (
+        receipt_number, transaction_id, receipt_date, student_id, amount,
+        amount_in_words, payment_method, payment_reference, created_by_user_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    receiptStatement.run(
+      receiptNumber,
+      legacyTransactionId,
+      data.transaction_date,
+      data.student_id,
+      amountCents,
+      data.amount_in_words || '',
+      data.payment_method,
+      paymentRef,
+      userId
+    )
+
+    return legacyTransactionId
+  }
+
+  private async recordJournalEntry(context: JournalEntryContext): Promise<number | undefined> {
+    const {
+      data,
+      userId,
+      amountCents,
+      description,
+      paymentRef,
+      legacyTransactionId
+    } = context
+
+    if (!['CASH', 'MPESA', 'BANK_TRANSFER', 'CHEQUE'].includes(data.payment_method)) {
+      return undefined
+    }
+
+    try {
+      const paymentResult = await this.createDoubleEntryRecord({
+        student_id: data.student_id,
+        amount: amountCents,
+        payment_method: data.payment_method as 'CASH' | 'MPESA' | 'BANK_TRANSFER' | 'CHEQUE',
+        payment_date: data.transaction_date,
+        description,
+        reference: paymentRef,
+        term_id: data.term_id,
+        invoice_id: data.invoice_id,
+        recorded_by: userId
+      })
+
+      if (!(paymentResult.success && paymentResult.journal_entry_id)) {
+        return undefined
+      }
+
+      const journalEntryId = paymentResult.journal_entry_id
+      this.db
+        .prepare('UPDATE ledger_transaction SET journal_entry_id = ? WHERE id = ?')
+        .run(journalEntryId, legacyTransactionId)
+
+      return journalEntryId
+    } catch (journalError) {
+      console.error('Failed to create journal entry:', journalError)
+      return undefined
+    }
+  }
+
+  private applyInvoicePayments(data: PaymentIntegrationData, amountCents: number): void {
+    if (data.invoice_id) {
+      const invoice = this.db
+        .prepare('SELECT total_amount, amount_paid FROM fee_invoice WHERE id = ?')
+        .get(data.invoice_id) as { total_amount: number; amount_paid: number } | undefined
+
+      if (invoice) {
+        this.db
+          .prepare(
+            `UPDATE fee_invoice 
+              SET amount_paid = amount_paid + ?,
+                  status = CASE WHEN amount_paid + ? >= total_amount THEN 'PAID' ELSE 'PARTIAL' END
+              WHERE id = ?`
+          )
+          .run(amountCents, amountCents, data.invoice_id)
+      }
+
+      return
+    }
+
+    let remainingAmount = amountCents
+    const pendingInvoices = this.db
+      .prepare(
+        `SELECT id, total_amount, amount_paid 
+         FROM fee_invoice 
+         WHERE student_id = ? AND status != 'PAID'
+         ORDER BY invoice_date ASC`
+      )
+      .all(data.student_id) as Array<{ id: number; total_amount: number; amount_paid: number }>
+
+    const updateInvoiceStmt = this.db.prepare(`
+      UPDATE fee_invoice 
+      SET amount_paid = amount_paid + ?,
+          status = CASE WHEN amount_paid + ? >= total_amount THEN 'PAID' ELSE 'PARTIAL' END
+      WHERE id = ?
+    `)
+
+    for (const invoice of pendingInvoices) {
+      if (remainingAmount <= 0) {
+        break
+      }
+
+      const outstanding = invoice.total_amount - (invoice.amount_paid || 0)
+      const payAmount = Math.min(remainingAmount, outstanding)
+      updateInvoiceStmt.run(payAmount, payAmount, invoice.id)
+      remainingAmount -= payAmount
+    }
+  }
+
+  private updateStudentCreditBalance(studentId: number, amountCents: number): void {
+    this.db.prepare(`
+      UPDATE student
+      SET credit_balance = COALESCE(credit_balance, 0) + ?
+      WHERE id = ?
+    `).run(amountCents, studentId)
+  }
+
   async recordPaymentDualSystem(
     data: PaymentIntegrationData,
     userId: number
   ): Promise<PaymentIntegrationResult> {
-    // Use manual transaction to allow async operations (await)
-    const db = this.db;
-    db.prepare('BEGIN').run();
+    const amountCents = Math.round(data.amount)
+    const description = data.description || 'Tuition Fee Payment'
+    const paymentRef = data.payment_reference || ''
+    const { transactionRef, receiptNumber } = this.createReferenceNumbers()
+
+    this.db.prepare('BEGIN').run()
 
     try {
-      // Convert amount to cents for legacy system
-      const amountCents = Math.round(data.amount * 100);
-      const description = data.description || 'Tuition Fee Payment';
-      const paymentRef = data.payment_reference || '';
-
-      // Generate reference numbers
-      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-      const timestamp = String(Date.now()).slice(-6);
-      const txnRef = `TXN-${dateStr}-${timestamp}`;
-      const rcpNum = `RCP-${dateStr}-${timestamp}`;
-
-      // ===== STEP 1: Record in Legacy System =====
-      const legacyTxnStmt = this.db.prepare(`
-        INSERT INTO ledger_transaction (
-          transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit,
-          student_id, payment_method, payment_reference, description, term_id, recorded_by_user_id, invoice_id
-        ) VALUES (?, ?, 'FEE_PAYMENT', (SELECT id FROM transaction_category WHERE category_name = 'School Fees'), ?, 'CREDIT', ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      const legacyResult = legacyTxnStmt.run(
-        txnRef,
-        data.transaction_date,
-        amountCents,
-        data.student_id,
-        data.payment_method,
-        paymentRef,
-        description,
-        data.term_id || null,
+      const legacyTransactionId = this.recordLegacyPayment({
+        data,
         userId,
-        data.invoice_id || null
-      );
-
-      const legacyTransactionId = legacyResult.lastInsertRowid as number;
-
-      // Audit log for legacy transaction
-      logAudit(userId, 'CREATE', 'ledger_transaction', legacyTransactionId, null, {
-        ...data,
-        amount: amountCents,
-      });
-
-      // Create receipt in legacy system
-      const rcpStmt = this.db.prepare(`
-        INSERT INTO receipt (
-          receipt_number, transaction_id, receipt_date, student_id, amount,
-          amount_in_words, payment_method, payment_reference, created_by_user_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      rcpStmt.run(
-        rcpNum,
-        legacyTransactionId,
-        data.transaction_date,
-        data.student_id,
         amountCents,
-        data.amount_in_words || '',
-        data.payment_method,
+        description,
         paymentRef,
-        userId
-      );
+        transactionRef,
+        receiptNumber
+      })
 
-      // ===== STEP 2: Record in Double-Entry System =====
-      let journalEntryId: number | undefined;
+      const journalEntryId = await this.recordJournalEntry({
+        data,
+        userId,
+        amountCents,
+        description,
+        paymentRef,
+        legacyTransactionId
+      })
 
-      // Only process double-entry if payment method is compatible
-      if (['CASH', 'MPESA', 'BANK_TRANSFER', 'CHEQUE'].includes(data.payment_method)) {
-        try {
-          const paymentResult = await this.createDoubleEntryRecord({
-            student_id: data.student_id,
-            amount: data.amount, // In KES
-            payment_method: data.payment_method as 'CASH' | 'MPESA' | 'BANK_TRANSFER' | 'CHEQUE',
-            payment_date: data.transaction_date,
-            description,
-            reference: paymentRef,
-            term_id: data.term_id,
-            invoice_id: data.invoice_id,
-            recorded_by: userId
-          });
+      this.applyInvoicePayments(data, amountCents)
+      this.updateStudentCreditBalance(data.student_id, amountCents)
 
-          if (paymentResult.success && paymentResult.journal_entry_id) {
-            journalEntryId = paymentResult.journal_entry_id;
-
-            // Link legacy transaction to journal entry
-            this.db
-              .prepare(
-                'UPDATE ledger_transaction SET journal_entry_id = ? WHERE id = ?'
-              )
-              .run(journalEntryId, legacyTransactionId);
-          }
-        } catch (journalError) {
-          console.error('Failed to create journal entry:', journalError);
-          // Don't fail the entire transaction - legacy system still recorded
-          // This allows gradual migration
-        }
-      }
-
-      // ===== STEP 3: Apply Payment to Invoices (Legacy Logic) =====
-      let remainingAmount = amountCents;
-
-      if (data.invoice_id) {
-        // Apply to specific invoice
-        const inv = this.db
-          .prepare('SELECT total_amount, amount_paid FROM fee_invoice WHERE id = ?')
-          .get(data.invoice_id) as
-          | { total_amount: number; amount_paid: number }
-          | undefined;
-
-        if (inv) {
-          this.db
-            .prepare(`
-              UPDATE fee_invoice 
-              SET amount_paid = amount_paid + ?, 
-                  status = CASE WHEN amount_paid + ? >= total_amount THEN 'PAID' ELSE 'PARTIAL' END 
-              WHERE id = ?
-            `)
-            .run(amountCents, amountCents, data.invoice_id);
-        }
-      } else {
-        // Apply to oldest unpaid invoices (FIFO)
-        const pendingInvoices = this.db
-          .prepare(`
-            SELECT id, total_amount, amount_paid 
-            FROM fee_invoice 
-            WHERE student_id = ? AND status != 'PAID'
-            ORDER BY invoice_date ASC
-          `)
-          .all(data.student_id) as Array<{
-          id: number;
-          total_amount: number;
-          amount_paid: number;
-        }>;
-
-        const updateInvStmt = this.db.prepare(`
-          UPDATE fee_invoice 
-          SET amount_paid = amount_paid + ?, 
-              status = CASE WHEN amount_paid + ? >= total_amount THEN 'PAID' ELSE 'PARTIAL' END 
-          WHERE id = ?
-        `);
-
-        for (const inv of pendingInvoices) {
-          if (remainingAmount <= 0) break;
-
-          const outstanding = inv.total_amount - (inv.amount_paid || 0);
-          const payAmount = Math.min(remainingAmount, outstanding);
-
-          updateInvStmt.run(payAmount, payAmount, inv.id);
-          remainingAmount -= payAmount;
-        }
-      }
-      
-      // ===== STEP 4: Update Student Credit Balance =====
-      // Update denormalized credit_balance for backward compatibility
-      // Note: This logic was present in EnhancedPaymentService but missing in PaymentIntegrationService
-      this.db.prepare(`
-        UPDATE student
-        SET credit_balance = COALESCE(credit_balance, 0) + ?
-        WHERE id = ?
-      `).run(data.amount, data.student_id);
-
-      db.prepare('COMMIT').run();
+      this.db.prepare('COMMIT').run()
 
       return {
         success: true,
         message: 'Payment recorded successfully',
-        transactionRef: txnRef,
-        receiptNumber: rcpNum,
+        transactionRef,
+        receiptNumber,
         journalEntryId,
-        legacyTransactionId,
-      };
+        legacyTransactionId
+      }
     } catch (error) {
-      db.prepare('ROLLBACK').run();
-      console.error('Payment recording failed:', error);
+      this.db.prepare('ROLLBACK').run()
+      console.error('Payment recording failed:', error)
       return {
         success: false,
-        message: `Failed to record payment: ${(error as Error).message}`,
-      };
+        message: `Failed to record payment: ${(error as Error).message}`
+      }
     }
   }
-
-  // ============================================================================
+// ============================================================================
   // DOUBLE ENTRY INTEGRATION METHODS (Merged from EnhancedPaymentService)
   // ============================================================================
 
@@ -469,3 +526,5 @@ export class PaymentIntegrationService {
     }
   }
 }
+
+

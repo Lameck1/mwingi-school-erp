@@ -1,17 +1,18 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
 import {
     Search, Plus, ChevronLeft, ChevronRight, Edit,
     LayoutGrid, List as ListIcon,
     Printer, Loader2, Wallet, Users, Upload
 } from 'lucide-react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
+
+import { ImportDialog } from '../../components/ui/ImportDialog'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore } from '../../stores'
-import { Student } from '../../types/electron-api/StudentAPI'
-import { Stream } from '../../types/electron-api/AcademicAPI'
+import { type Stream } from '../../types/electron-api/AcademicAPI'
+import { type Student } from '../../types/electron-api/StudentAPI'
+import { formatCurrencyFromCents } from '../../utils/format'
 import { printDocument } from '../../utils/print'
-import { formatCurrency } from '../../utils/format'
-import { ImportDialog } from '../../components/ui/ImportDialog'
 
 interface StudentLedgerResult {
     student: Student;
@@ -23,6 +24,7 @@ interface StudentLedgerResult {
 
 export default function Students() {
     const navigate = useNavigate()
+    const location = useLocation()
     const { showToast } = useToast()
     const { schoolSettings } = useAppStore()
     const [students, setStudents] = useState<Student[]>([])
@@ -44,7 +46,7 @@ export default function Students() {
     const loadStudents = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await window.electronAPI.getStudents({
+            const data = await globalThis.electronAPI.getStudents({
                 ...filters,
                 search: searchRef.current || undefined
             })
@@ -60,7 +62,7 @@ export default function Students() {
     const loadData = useCallback(async () => {
         try {
             const [streamsData] = await Promise.all([
-                window.electronAPI.getStreams()
+                globalThis.electronAPI.getStreams()
             ])
             setStreams(streamsData)
             await loadStudents()
@@ -71,16 +73,30 @@ export default function Students() {
     }, [loadStudents, showToast])
 
     useEffect(() => {
-        loadData()
+        loadData().catch((err: unknown) => console.error('Failed to load student data', err))
     }, [loadData])
 
     useEffect(() => {
-        loadStudents()
+        const params = new URLSearchParams(location.search)
+        if (params.get('import') === '1') {
+            setShowImport(true)
+        }
+    }, [location.search])
+
+    useEffect(() => {
+        const unsubscribe = globalThis.electronAPI.onOpenImportDialog(() => {
+            setShowImport(true)
+        })
+        return () => unsubscribe()
+    }, [])
+
+    useEffect(() => {
+        loadStudents().catch((err: unknown) => console.error('Failed to reload students', err))
     }, [loadStudents])
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault()
-        loadStudents()
+        loadStudents().catch((err: unknown) => console.error('Failed to search students', err))
     }
 
     const filteredStudents = students
@@ -96,7 +112,7 @@ export default function Students() {
     const handlePrintStatement = async (student: Student) => {
         setPrintingId(student.id)
         try {
-            const result = await window.electronAPI.getStudentLedgerReport(student.id) as unknown as StudentLedgerResult
+            const result = await globalThis.electronAPI.getStudentLedgerReport(student.id) as unknown as StudentLedgerResult
             if (result && !result.error) {
                 printDocument({
                     title: `Statement - ${student.first_name} ${student.last_name}`,
@@ -206,19 +222,29 @@ export default function Students() {
             </div>
 
             {/* Main Data View */}
-            {loading ? (
-                <div className="card flex flex-col items-center justify-center py-24 gap-4">
-                    <Loader2 className="w-12 h-12 text-primary animate-spin" />
-                    <p className="text-foreground/40 font-bold uppercase tracking-widest text-xs">Synchronizing Records...</p>
-                </div>
-            ) : filteredStudents.length === 0 ? (
-                <div className="card text-center py-24">
-                    <Users className="w-20 h-20 mx-auto mb-6 text-foreground/5" />
-                    <h3 className="text-xl font-bold text-foreground mb-2">No Records Found</h3>
-                    <p className="text-foreground/30 font-medium">Verify your search criteria or add a new student record.</p>
-                </div>
-            ) : viewMode === 'list' ? (
-                <div className="card animate-slide-up no-scrollbar">
+            {(() => {
+                if (loading) {
+                    return (
+                        <div className="card flex flex-col items-center justify-center py-24 gap-4">
+                            <Loader2 className="w-12 h-12 text-primary animate-spin" />
+                            <p className="text-foreground/40 font-bold uppercase tracking-widest text-xs">Synchronizing Records...</p>
+                        </div>
+                    )
+                }
+
+                if (filteredStudents.length === 0) {
+                    return (
+                        <div className="card text-center py-24">
+                            <Users className="w-20 h-20 mx-auto mb-6 text-foreground/5" />
+                            <h3 className="text-xl font-bold text-foreground mb-2">No Records Found</h3>
+                            <p className="text-foreground/30 font-medium">Verify your search criteria or add a new student record.</p>
+                        </div>
+                    )
+                }
+
+                if (viewMode === 'list') {
+                    return (
+                        <div className="card animate-slide-up no-scrollbar">
                     <div className="overflow-x-auto -mx-2">
                         <table className="w-full text-left">
                             <thead>
@@ -254,7 +280,7 @@ export default function Students() {
                                         </td>
                                         <td className="px-4 py-5 text-right">
                                             <p className={`text-xs font-bold ${(student.balance || 0) > 0 ? 'text-amber-600 dark:text-amber-500' : 'text-emerald-500'}`}>
-                                                {formatCurrency(student.balance || 0)}
+                                                {formatCurrencyFromCents(student.balance || 0)}
                                             </p>
                                         </td>
                                         <td className="px-4 py-5">
@@ -271,23 +297,26 @@ export default function Students() {
                                                     onClick={() => navigate(`/fee-payment?student=${student.id}`)}
                                                     className="p-2 bg-secondary/50 hover:bg-primary/20 text-primary rounded-lg transition-all"
                                                     title="Collect Fees"
+                                                    aria-label={`Collect fees for ${student.first_name} ${student.last_name}`}
                                                 >
-                                                    <Wallet className="w-4 h-4" />
+                                                    <Wallet className="w-4 h-4" aria-hidden="true" />
                                                 </button>
                                                 <button
                                                     onClick={() => handlePrintStatement(student)}
                                                     className="p-2 bg-secondary/50 hover:bg-accent/20 text-foreground/40 hover:text-foreground rounded-lg transition-all"
                                                     title="Print Statement"
                                                     disabled={printingId === student.id}
+                                                    aria-label={`Print statement for ${student.first_name} ${student.last_name}`}
                                                 >
-                                                    {printingId === student.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+                                                    {printingId === student.id ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Printer className="w-4 h-4" aria-hidden="true" />}
                                                 </button>
                                                 <button
                                                     onClick={() => navigate(`/students/${student.id}`)}
                                                     className="p-2 bg-secondary/50 hover:bg-accent/20 text-foreground/40 hover:text-foreground rounded-lg transition-all"
                                                     title="Edit Profile"
+                                                    aria-label={`Edit profile for ${student.first_name} ${student.last_name}`}
                                                 >
-                                                    <Edit className="w-4 h-4" />
+                                                    <Edit className="w-4 h-4" aria-hidden="true" />
                                                 </button>
                                             </div>
                                         </td>
@@ -297,8 +326,11 @@ export default function Students() {
                         </table>
                     </div>
                 </div>
-            ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    )
+                }
+
+                return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {paginatedStudents.map((student) => (
                         <div key={student.id} className="card group hover:-translate-y-1 transition-all duration-300">
                             <div className="flex items-start justify-between mb-4">
@@ -326,7 +358,7 @@ export default function Students() {
                                 <div className="flex justify-between items-center text-[11px]">
                                     <span className="text-foreground/40 font-bold uppercase tracking-tighter">Outstanding</span>
                                     <span className={`font-bold ${(student.balance || 0) > 0 ? 'text-orange-400' : 'text-emerald-400'}`}>
-                                        {formatCurrency(student.balance || 0)}
+                                        {formatCurrencyFromCents(student.balance || 0)}
                                     </span>
                                 </div>
                             </div>
@@ -348,7 +380,8 @@ export default function Students() {
                         </div>
                     ))}
                 </div>
-            )}
+                )
+            })()}
 
             {/* Pagination */}
             {totalPages > 1 && (
@@ -386,7 +419,7 @@ export default function Students() {
                 onSuccess={() => {
                     setShowImport(false)
                     showToast('Students imported successfully', 'success')
-                    loadStudents()
+                    loadStudents().catch((err: unknown) => console.error('Failed to reload students after import', err))
                 }}
                 entityType="STUDENT"
                 title="Import Students"

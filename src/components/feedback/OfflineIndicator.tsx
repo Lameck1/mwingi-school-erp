@@ -1,28 +1,27 @@
-import { useState, useEffect } from 'react'
 import { WifiOff, AlertTriangle, RefreshCw } from 'lucide-react'
+import { useState, useEffect } from 'react'
 
 export function OfflineIndicator() {
     const [isOnline, setIsOnline] = useState(navigator.onLine)
-    const [dbError] = useState<string | null>(null)
+    const [dbError, setDbError] = useState<string | null>(null)
     const [retrying, setRetrying] = useState(false)
 
     useEffect(() => {
         const handleOnline = () => setIsOnline(true)
         const handleOffline = () => setIsOnline(false)
 
-        window.addEventListener('online', handleOnline)
-        window.addEventListener('offline', handleOffline)
+            globalThis.addEventListener('online', handleOnline)
+            globalThis.addEventListener('offline', handleOffline)
 
         // Listen for database errors from main process
-        try {
-            if (window.electronAPI) {
-                // TODO: Add listener when needed
-            }
-        } catch (e) { console.error(e) }
+        const unsubscribe = globalThis.electronAPI.onDatabaseError((message) => {
+            setDbError(message)
+        })
 
         return () => {
-            window.removeEventListener('online', handleOnline)
-            window.removeEventListener('offline', handleOffline)
+                globalThis.removeEventListener('online', handleOnline)
+                globalThis.removeEventListener('offline', handleOffline)
+            unsubscribe()
         }
     }, [])
 
@@ -30,11 +29,11 @@ export function OfflineIndicator() {
         setRetrying(true)
         setTimeout(() => {
             setRetrying(false)
-            window.location.reload()
+                globalThis.location.reload()
         }, 1000)
     }
 
-    if (isOnline && !dbError) return null
+    if (isOnline && !dbError) {return null}
 
     return (
         <div className="fixed bottom-4 right-4 z-50 animate-slide-up">

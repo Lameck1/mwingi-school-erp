@@ -1,8 +1,10 @@
-import { useEffect, useState, useCallback } from 'react'
 import { Save, Plus, Loader2 } from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+
 import { useToast } from '../../contexts/ToastContext'
-import { AcademicYear, Term, Stream } from '../../types/electron-api/AcademicAPI'
-import { FeeCategory, FeeStructureCreateData } from '../../types/electron-api/FinanceAPI'
+import { useAuthStore } from '../../stores'
+import { type AcademicYear, type Term, type Stream } from '../../types/electron-api/AcademicAPI'
+import { type FeeCategory, type FeeStructureCreateData } from '../../types/electron-api/FinanceAPI'
 import { centsToShillings, shillingsToCents } from '../../utils/format'
 
 interface FeeStructureItem {
@@ -15,8 +17,11 @@ interface FeeStructureItem {
     amount?: number
 }
 
+const STUDENT_TYPES = ['DAY_SCHOLAR', 'BOARDER'] as const
+
 export default function FeeStructure() {
     const { showToast } = useToast()
+    const { user } = useAuthStore()
 
     const [years, setYears] = useState<AcademicYear[]>([])
     const [terms, setTerms] = useState<Term[]>([])
@@ -38,23 +43,23 @@ export default function FeeStructure() {
     const loadInitialData = useCallback(async () => {
         try {
             const [y, s, c] = await Promise.all([
-                window.electronAPI.getAcademicYears(),
-                window.electronAPI.getStreams(),
-                window.electronAPI.getFeeCategories()
+                globalThis.electronAPI.getAcademicYears(),
+                globalThis.electronAPI.getStreams(),
+                globalThis.electronAPI.getFeeCategories()
             ])
             setYears(y)
             setStreams(s)
             setCategories(c)
 
             // Auto-select current year/term if possible
-            const currentYear = await window.electronAPI.getCurrentAcademicYear()
+            const currentYear = await globalThis.electronAPI.getCurrentAcademicYear()
             if (currentYear) {
                 setSelectedYear(currentYear.id.toString())
-                const termList = await window.electronAPI.getTermsByYear(currentYear.id)
+                const termList = await globalThis.electronAPI.getTermsByYear(currentYear.id)
                 setTerms(termList)
-                const currentTerm = await window.electronAPI.getCurrentTerm()
-                if (currentTerm) setSelectedTerm(currentTerm.id.toString())
-                else if (termList.length > 0) setSelectedTerm(termList[0].id.toString())
+                const currentTerm = await globalThis.electronAPI.getCurrentTerm()
+                if (currentTerm) {setSelectedTerm(currentTerm.id.toString())}
+                else if (termList.length > 0) {setSelectedTerm(termList[0].id.toString())}
             }
         } catch (error) {
             console.error(error)
@@ -65,14 +70,14 @@ export default function FeeStructure() {
 
 
     useEffect(() => {
-        loadInitialData()
+        loadInitialData().catch((err: unknown) => console.error('Failed to load fee structure data', err))
     }, [loadInitialData])
 
     useEffect(() => {
         const loadStructure = async () => {
             setLoading(true)
             try {
-                const data = await window.electronAPI.getFeeStructure(Number(selectedYear), Number(selectedTerm))
+                const data = await globalThis.electronAPI.getFeeStructure(Number(selectedYear), Number(selectedTerm))
                 const map: Record<string, number> = {}
                 data.forEach((item: FeeStructureItem) => {
                     // Handle both FeeStructure and FeeStructureItem formats
@@ -97,7 +102,7 @@ export default function FeeStructure() {
         }
 
         if (selectedYear && selectedTerm) {
-            loadStructure()
+            void loadStructure()
         }
     }, [selectedYear, selectedTerm, showToast])
 
@@ -106,6 +111,69 @@ export default function FeeStructure() {
     const handleAmountChange = (streamId: number, studentType: string, categoryId: number, value: string) => {
         const key = `${streamId}-${studentType}-${categoryId}`
         setStructure(prev => ({ ...prev, [key]: Number(value) || 0 }))
+    }
+
+    const calculateRowTotal = (streamId: number, studentType: string): number => {
+        let total = 0
+        for (const category of categories) {
+            const key = `${streamId}-${studentType}-${category.id}`
+            total += structure[key] || 0
+        }
+        return total
+    }
+
+    const renderAmountCells = (streamId: number, studentType: string) => {
+        return categories.map(category => {
+            const key = `${streamId}-${studentType}-${category.id}`
+            return (
+                <td key={category.id} className="px-2 py-3 whitespace-nowrap">
+                    <input
+                        type="number"
+                        min="0"
+                        value={structure[key] || ''}
+                        onChange={event => handleAmountChange(streamId, studentType, category.id, event.target.value)}
+                        className="w-full text-right bg-secondary/30 border border-border/20 rounded-lg px-2 py-1.5 text-sm font-mono text-foreground focus:ring-2 focus:ring-primary/20 transition-all"
+                        placeholder="0"
+                    />
+                </td>
+            )
+        })
+    }
+
+    const renderTableRows = () => {
+        const rows: JSX.Element[] = []
+        for (const stream of streams) {
+            for (const [index, studentType] of STUDENT_TYPES.entries()) {
+                const streamStyle = index === 0 ? 'hsl(var(--background))' : 'hsl(var(--card))'
+                rows.push(
+                    <tr key={`${stream.id}-${studentType}`} className={`${index === 0 ? 'bg-background' : 'bg-card'} hover:bg-accent/10 transition-colors`}>
+                        {index === 0 && (
+                            <td
+                                rowSpan={2}
+                                className="px-4 py-3 whitespace-nowrap text-sm font-bold text-foreground sticky left-0 z-30 border-r border-border/20"
+                                style={{ backgroundColor: 'hsl(var(--background))' }}
+                            >
+                                {stream.stream_name}
+                            </td>
+                        )}
+                        <td
+                            className="px-4 py-3 whitespace-nowrap text-[10px] font-bold text-foreground/40 uppercase sticky left-[140px] z-30 border-r border-border/20"
+                            style={{ backgroundColor: streamStyle }}
+                        >
+                            {studentType.replace('_', ' ')}
+                        </td>
+                        {renderAmountCells(stream.id, studentType)}
+                        <td
+                            className="px-4 py-3 whitespace-nowrap text-sm font-bold text-emerald-400 text-right sticky right-0 z-30 border-l border-border/20"
+                            style={{ backgroundColor: streamStyle }}
+                        >
+                            {calculateRowTotal(stream.id, studentType).toLocaleString()}
+                        </td>
+                    </tr>
+                )
+            }
+        }
+        return rows
     }
 
     const handleSave = async () => {
@@ -132,7 +200,7 @@ export default function FeeStructure() {
                 }
             }
 
-            await window.electronAPI.saveFeeStructure(data, Number(selectedYear), Number(selectedTerm))
+            await globalThis.electronAPI.saveFeeStructure(data, Number(selectedYear), Number(selectedTerm))
             showToast('Fee structure saved successfully', 'success')
         } catch (error) {
             console.error(error)
@@ -143,12 +211,12 @@ export default function FeeStructure() {
     }
 
     const handleCreateCategory = async () => {
-        if (!newCategoryName.trim()) return
+        if (!newCategoryName.trim()) {return}
         try {
-            await window.electronAPI.createFeeCategory(newCategoryName, '')
+            await globalThis.electronAPI.createFeeCategory(newCategoryName, '')
             setNewCategoryName('')
             setShowNewCategory(false)
-            const c = await window.electronAPI.getFeeCategories()
+            const c = await globalThis.electronAPI.getFeeCategories()
             setCategories(c)
             showToast('Category created', 'success')
         } catch (error) {
@@ -158,15 +226,14 @@ export default function FeeStructure() {
     }
 
     const handleGenerateInvoices = async () => {
-        // if (!confirm('This will generate invoices for all active students based on this structure. Are you sure?')) return
-
         setGenerating(true)
         try {
-            const userStr = localStorage.getItem('school_erp_user')
-            const parsed = userStr ? JSON.parse(userStr) : null
-            const userId = (parsed && parsed.id) ? parsed.id : 1
+            if (!user?.id) {
+                showToast('You must be signed in to generate invoices', 'error')
+                return
+            }
 
-            const result = await window.electronAPI.generateBatchInvoices(Number(selectedYear), Number(selectedTerm), userId)
+            const result = await globalThis.electronAPI.generateBatchInvoices(Number(selectedYear), Number(selectedTerm), user.id)
 
             if (result.success) {
                 showToast(`Successfully generated ${result.count} invoices`, 'success')
@@ -213,12 +280,17 @@ export default function FeeStructure() {
             <div className="premium-card mb-6 p-4">
                 <div className="flex flex-wrap gap-4 items-end">
                     <div className="flex-1 min-w-[200px]">
-                        <label className="block text-[10px] font-bold text-foreground/40 uppercase tracking-widest mb-1.5 ml-1">Academic Year</label>
-                        <select
+                        <label htmlFor="field-220" className="block text-[10px] font-bold text-foreground/40 uppercase tracking-widest mb-1.5 ml-1">Academic Year</label>
+                        <select id="field-220"
                             value={selectedYear}
                             onChange={e => {
                                 setSelectedYear(e.target.value)
-                                window.electronAPI.getTermsByYear(Number(e.target.value)).then(terms => setTerms(terms))
+                                globalThis.electronAPI
+                                    .getTermsByYear(Number(e.target.value))
+                                    .then(terms => setTerms(terms))
+                                    .catch((error) => {
+                                        console.error('Failed to load terms:', error)
+                                    })
                             }}
                             className="input w-full bg-secondary/30 border-border/20 focus:border-primary/50 transition-all font-medium py-2.5"
                         >
@@ -229,8 +301,8 @@ export default function FeeStructure() {
                         </select>
                     </div>
                     <div className="flex-1 min-w-[200px]">
-                        <label className="block text-[10px] font-bold text-foreground/40 uppercase tracking-widest mb-1.5 ml-1">Term</label>
-                        <select
+                        <label htmlFor="field-236" className="block text-[10px] font-bold text-foreground/40 uppercase tracking-widest mb-1.5 ml-1">Term</label>
+                        <select id="field-236"
                             value={selectedTerm}
                             onChange={e => setSelectedTerm(e.target.value)}
                             className="input w-full bg-secondary/30 border-border/20 focus:border-primary/50 transition-all font-medium py-2.5"
@@ -289,51 +361,7 @@ export default function FeeStructure() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border/20">
-                                {streams.flatMap(stream =>
-                                    ['DAY_SCHOLAR', 'BOARDER'].map((type, idx) => (
-                                        <tr key={`${stream.id}-${type}`} className={`${idx === 0 ? 'bg-background' : 'bg-card'} hover:bg-accent/10 transition-colors`}>
-                                            {idx === 0 && (
-                                                <td
-                                                    rowSpan={2}
-                                                    className="px-4 py-3 whitespace-nowrap text-sm font-bold text-foreground sticky left-0 z-30 border-r border-border/20"
-                                                    style={{ backgroundColor: 'hsl(var(--background))' }}
-                                                >
-                                                    {stream.stream_name}
-                                                </td>
-                                            )}
-                                            <td
-                                                className="px-4 py-3 whitespace-nowrap text-[10px] font-bold text-foreground/40 uppercase sticky left-[140px] z-30 border-r border-border/20"
-                                                style={{ backgroundColor: idx === 0 ? 'hsl(var(--background))' : 'hsl(var(--card))' }}
-                                            >
-                                                {type.replace('_', ' ')}
-                                            </td>
-                                            {categories.map(cat => {
-                                                const key = `${stream.id}-${type}-${cat.id}`
-                                                return (
-                                                    <td key={cat.id} className="px-2 py-3 whitespace-nowrap">
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            value={structure[key] || ''}
-                                                            onChange={e => handleAmountChange(stream.id, type, cat.id, e.target.value)}
-                                                            className="w-full text-right bg-secondary/30 border border-border/20 rounded-lg px-2 py-1.5 text-sm font-mono text-foreground focus:ring-2 focus:ring-primary/20 transition-all"
-                                                            placeholder="0"
-                                                        />
-                                                    </td>
-                                                )
-                                            })}
-                                            <td
-                                                className="px-4 py-3 whitespace-nowrap text-sm font-bold text-emerald-400 text-right sticky right-0 z-30 border-l border-border/20"
-                                                style={{ backgroundColor: idx === 0 ? 'hsl(var(--background))' : 'hsl(var(--card))' }}
-                                            >
-                                                {categories.reduce((sum, cat) => {
-                                                    const key = `${stream.id}-${type}-${cat.id}`
-                                                    return sum + (structure[key] || 0)
-                                                }, 0).toLocaleString()}
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
+                                {renderTableRows()}
                             </tbody>
                         </table>
                     </div>

@@ -1,4 +1,3 @@
-import { BaseService } from '../base/BaseService'
 import { getDatabase } from '../../database'
 
 export interface BankAccount {
@@ -75,11 +74,11 @@ export class BankReconciliationService {
     async createBankAccount(data: CreateBankAccountData): Promise<{ success: boolean; id?: number; errors?: string[] }> {
         const errors: string[] = []
 
-        if (!data.account_name?.trim()) errors.push('Account name is required')
-        if (!data.account_number?.trim()) errors.push('Account number is required')
-        if (!data.bank_name?.trim()) errors.push('Bank name is required')
+        if (!data.account_name.trim()) {errors.push('Account name is required')}
+        if (!data.account_number.trim()) {errors.push('Account number is required')}
+        if (!data.bank_name.trim()) {errors.push('Bank name is required')}
 
-        if (errors.length > 0) return { success: false, errors }
+        if (errors.length > 0) {return { success: false, errors }}
 
         try {
             const result = this.db.prepare(`
@@ -129,7 +128,7 @@ export class BankReconciliationService {
       WHERE bs.id = ?
     `).get(statementId) as BankStatement | null
 
-        if (!statement) return null
+        if (!statement) {return null}
 
         const lines = this.db.prepare(`
       SELECT * FROM bank_statement_line WHERE bank_statement_id = ? ORDER BY transaction_date, id
@@ -176,7 +175,7 @@ export class BankReconciliationService {
             )
 
             return { success: true, id: result.lastInsertRowid as number }
-        } catch (error) {
+        } catch {
             return { success: false }
         }
     }
@@ -190,7 +189,7 @@ export class BankReconciliationService {
       `).run(transactionId, lineId)
 
             return { success: true }
-        } catch (error) {
+        } catch {
             return { success: false }
         }
     }
@@ -202,7 +201,7 @@ export class BankReconciliationService {
       `).run(lineId)
 
             return { success: true }
-        } catch (error) {
+        } catch {
             return { success: false }
         }
     }
@@ -228,7 +227,7 @@ export class BankReconciliationService {
       `).run(userId, statementId)
 
             return { success: true }
-        } catch (error) {
+        } catch {
             return { success: false }
         }
     }

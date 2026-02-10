@@ -1,6 +1,8 @@
-import Database from 'better-sqlite3';
+
 import { getDatabase } from '../../database';
-import { DoubleEntryJournalService, JournalEntryData } from '../accounting/DoubleEntryJournalService';
+import { DoubleEntryJournalService, type JournalEntryData } from '../accounting/DoubleEntryJournalService';
+
+import type Database from 'better-sqlite3';
 
 /**
  * Payroll Journal Service
@@ -26,9 +28,18 @@ export interface PayrollPeriod {
   payment_date: string;
 }
 
+type PostStatutoryPaymentArgs = [
+  deductionType: 'PAYE' | 'NSSF' | 'NHIF' | 'HOUSING_LEVY',
+  amount: number,
+  paymentDate: string,
+  bankAccountCode: string,
+  referenceNumber: string,
+  userId: number
+];
+
 export class PayrollJournalService {
-  private db: Database.Database;
-  private journalService: DoubleEntryJournalService;
+  private readonly db: Database.Database;
+  private readonly journalService: DoubleEntryJournalService;
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase();
@@ -268,7 +279,7 @@ export class PayrollJournalService {
         WHERE period_id = ?
       `).get(periodId) as { total_net: number };
 
-      if (!totals || totals.total_net === 0) {
+      if (totals.total_net === 0) {
         return {
           success: false,
           message: 'No salary amounts to pay'
@@ -326,12 +337,7 @@ export class PayrollJournalService {
    * Credit: Bank Account
    */
   async postStatutoryPayment(
-    deductionType: 'PAYE' | 'NSSF' | 'NHIF' | 'HOUSING_LEVY',
-    amount: number,
-    paymentDate: string,
-    bankAccountCode: string,
-    referenceNumber: string,
-    userId: number
+    ...[deductionType, amount, paymentDate, bankAccountCode, referenceNumber, userId]: PostStatutoryPaymentArgs
   ): Promise<PayrollJournalResult> {
     try {
       const liabilityAccountCode = this.getDeductionAccountCode(deductionType);

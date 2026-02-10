@@ -1,26 +1,29 @@
+import { DollarSign, TrendingUp } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import {
     PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend
 } from 'recharts'
+
 import { PageHeader } from '../../../components/patterns/PageHeader'
 import { StatCard } from '../../../components/patterns/StatCard'
 import { Select } from '../../../components/ui/Select'
 import { useToast } from '../../../contexts/ToastContext'
-import { formatCurrency } from '../../../utils/format'
-import { DollarSign, TrendingUp } from 'lucide-react'
-import { ElectronAPI, Student, StudentCostResult } from '../../../types/electron-api'
+import { useAppStore } from '../../../stores'
+import { type Student, type StudentCostResult } from '../../../types/electron-api'
+import { formatCurrencyFromCents } from '../../../utils/format'
 
 export default function StudentCostAnalysis() {
     const { showToast } = useToast()
+    const { currentAcademicYear, currentTerm } = useAppStore()
     const [, setLoading] = useState(false)
     const [students, setStudents] = useState<Student[]>([])
-    const [selectedStudent, setSelectedStudent] = useState<string>('')
+    const [selectedStudent, setSelectedStudent] = useState<number | ''>('')
     const [costData, setCostData] = useState<StudentCostResult | null>(null)
     const [costVsRevenue, setCostVsRevenue] = useState<{ cost: number, revenue: number, subsidy: number } | null>(null)
 
     const loadStudents = useCallback(async () => {
         try {
-            const data = await (window.electronAPI as unknown as ElectronAPI).getStudents({ is_active: true })
+            const data = await globalThis.electronAPI.getStudents({ is_active: true })
             setStudents(data)
         } catch (error) {
             console.error(error)
@@ -30,13 +33,16 @@ export default function StudentCostAnalysis() {
     const loadCostData = useCallback(async (studentId: number) => {
         setLoading(true)
         try {
-            const termId = 1 // Default to Term 1 for now
-            const academicYearId = 2026 // Default to 2026 for now
+            if (!currentAcademicYear?.id || !currentTerm?.id) {
+                showToast('Select an active academic year and term to calculate costs', 'error')
+                setLoading(false)
+                return
+            }
 
-            const breakdown = await (window.electronAPI as unknown as ElectronAPI).calculateStudentCost(studentId, termId, academicYearId)
+            const breakdown = await globalThis.electronAPI.calculateStudentCost(studentId, currentTerm.id, currentAcademicYear.id)
             setCostData(breakdown)
 
-            const vsRevenue = await (window.electronAPI as unknown as ElectronAPI).getStudentCostVsRevenue(studentId, termId)
+            const vsRevenue = await globalThis.electronAPI.getStudentCostVsRevenue(studentId, currentTerm.id)
             setCostVsRevenue(vsRevenue)
         } catch (error) {
             console.error(error)
@@ -44,15 +50,15 @@ export default function StudentCostAnalysis() {
         } finally {
             setLoading(false)
         }
-    }, [showToast])
+    }, [showToast, currentAcademicYear, currentTerm])
 
     useEffect(() => {
-        loadStudents()
+        loadStudents().catch((err: unknown) => console.error('Failed to load students', err))
     }, [loadStudents])
 
     useEffect(() => {
-        if (selectedStudent) {
-            loadCostData(parseInt(selectedStudent))
+        if (selectedStudent !== '') {
+            loadCostData(Number(selectedStudent)).catch((err: unknown) => console.error('Failed to load cost data', err))
         }
     }, [selectedStudent, loadCostData])
 
@@ -81,32 +87,32 @@ export default function StudentCostAnalysis() {
                     <Select
                         label="Select Student"
                         value={selectedStudent}
-                        onChange={(e) => setSelectedStudent(e.target.value)}
+                        onChange={(val) => setSelectedStudent(val === '' ? '' : Number(val))}
                         options={students.map(s => ({ value: s.id, label: `${s.admission_number} - ${s.first_name} ${s.last_name}` }))}
                         placeholder="Search student..."
                     />
                 </div>
             </div>
 
-            {selectedStudent && costData && (
+            {selectedStudent !== '' && costData && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Key Metrics */}
                     <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
                         <StatCard 
                             label="Total Cost Per Term" 
-                            value={formatCurrency(costData.total_cost)} 
+                            value={formatCurrencyFromCents(costData.total_cost)} 
                             icon={DollarSign} 
                             color="text-red-500" 
                         />
                         <StatCard 
                             label="Revenue (Fees)" 
-                            value={formatCurrency(costVsRevenue?.revenue || 0)} 
+                            value={formatCurrencyFromCents(costVsRevenue?.revenue || 0)} 
                             icon={DollarSign} 
                             color="text-green-500" 
                         />
                         <StatCard 
                             label="Subsidy / Deficit" 
-                            value={formatCurrency((costVsRevenue?.revenue || 0) - costData.total_cost)} 
+                            value={formatCurrencyFromCents((costVsRevenue?.revenue || 0) - costData.total_cost)} 
                             icon={TrendingUp} 
                             color={(costVsRevenue?.revenue || 0) - costData.total_cost >= 0 ? "text-green-500" : "text-red-500"} 
                         />
@@ -124,10 +130,10 @@ export default function StudentCostAnalysis() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border/10">
-                                {pieData.map((item, index) => (
-                                    <tr key={index}>
+                                {pieData.map((item) => (
+                                    <tr key={item.name}>
                                         <td className="py-3">{item.name}</td>
-                                        <td className="py-3 text-right">{formatCurrency(item.value)}</td>
+                                        <td className="py-3 text-right">{formatCurrencyFromCents(item.value)}</td>
                                         <td className="py-3 text-right">{((item.value / costData.total_cost) * 100).toFixed(1)}%</td>
                                     </tr>
                                 ))}
@@ -135,7 +141,7 @@ export default function StudentCostAnalysis() {
                             <tfoot className="border-t border-border/20 font-bold">
                                 <tr>
                                     <td className="py-3">Total</td>
-                                    <td className="py-3 text-right">{formatCurrency(costData.total_cost)}</td>
+                                    <td className="py-3 text-right">{formatCurrencyFromCents(costData.total_cost)}</td>
                                     <td className="py-3 text-right">100%</td>
                                 </tr>
                             </tfoot>
@@ -157,11 +163,11 @@ export default function StudentCostAnalysis() {
                                         paddingAngle={5}
                                         dataKey="value"
                                     >
-                                        {pieData.map((_, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        {pieData.map((item, index) => (
+                                            <Cell key={item.name} fill={COLORS[index % COLORS.length]} />
                                         ))}
                                     </Pie>
-                                    <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                                    <Tooltip formatter={(value: number) => formatCurrencyFromCents(value)} />
                                     <Legend />
                                 </PieChart>
                             </ResponsiveContainer>

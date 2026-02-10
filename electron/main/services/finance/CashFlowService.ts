@@ -26,7 +26,7 @@ export class CashFlowService {
 
     // Calculate Cash Flow Statement (Direct Method)
     static getCashFlowStatement(startDate: string, endDate: string): CashFlowStatement {
-        if (!db) throw new Error('Database not initialized')
+        if (!db) {throw new Error('Database not initialized')}
 
         // 1. Operating Activities
         // Inflows: Fee Payments + Other Income
@@ -53,7 +53,7 @@ export class CashFlowService {
             AND tc.category_type = 'EXPENSE'
         `).get(startDate, endDate) as { total: number }
 
-        // TODO: payroll table structure verification needed, assuming standard expenses for now if integrated
+        // Payroll schema compatibility should be verified in integration tests; fallback remains conservative.
         // For this MVP, we assume payroll is recorded as EXPENSE in ledger_transaction if system is integrated correctly.
         // If not, we would query 'payroll' table directly. Let's add a separate query just in case it's separate.
         const payrollOutflow = db.prepare(`
@@ -127,7 +127,7 @@ export class CashFlowService {
     }
 
     static getForecast(monthsToProject: number = 6): FinancialForecast {
-        if (!db) throw new Error('Database not initialized')
+        if (!db) {throw new Error('Database not initialized')}
 
         // 1. Get last 6 months actuals
         // Group by month
@@ -161,7 +161,7 @@ export class CashFlowService {
         return {
             labels,
             actual,
-            projected: [...Array(results.length).fill(null), ...projected],
+            projected: [...new Array(results.length).fill(null), ...projected],
             trend_slope: 0
         }
     }

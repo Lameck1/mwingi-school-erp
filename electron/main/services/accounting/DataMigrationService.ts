@@ -1,7 +1,9 @@
-import Database from 'better-sqlite3';
+
+import { DoubleEntryJournalService, type JournalEntryData } from './DoubleEntryJournalService';
 import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
-import { DoubleEntryJournalService, JournalEntryData } from './DoubleEntryJournalService';
+
+import type Database from 'better-sqlite3';
 
 /**
  * Data Migration Service
@@ -40,12 +42,94 @@ interface LegacyTransaction {
 }
 
 export class DataMigrationService {
-  private db: Database.Database;
-  private journalService: DoubleEntryJournalService;
+  private readonly db: Database.Database;
+  private readonly journalService: DoubleEntryJournalService;
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase();
     this.journalService = new DoubleEntryJournalService(this.db);
+  }
+
+  private getUnmigratedTransactions(): LegacyTransaction[] {
+    return this.db.prepare(`
+      SELECT
+        lt.*,
+        s.first_name || ' ' || s.last_name as student_name,
+        s.admission_number
+      FROM ledger_transaction lt
+      LEFT JOIN student s ON lt.student_id = s.id
+      WHERE lt.is_migrated IS NULL OR lt.is_migrated = 0
+      ORDER BY lt.transaction_date, lt.id
+    `).all() as LegacyTransaction[];
+  }
+
+  private ensureMigrationColumns(): void {
+    try {
+      this.db.exec(`ALTER TABLE ledger_transaction ADD COLUMN is_migrated INTEGER DEFAULT 0`);
+    } catch {
+      // Column already exists in migrated databases.
+    }
+  }
+
+  private buildJournalData(
+    transaction: LegacyTransaction,
+    userId: number,
+    debitAccount: string,
+    creditAccount: string
+  ): JournalEntryData {
+    const isDebitTransaction = transaction.debit_credit === 'DEBIT';
+
+    return {
+      entry_date: transaction.transaction_date,
+      entry_type: this.mapTransactionType(transaction.transaction_type),
+      description: transaction.description || `Migrated: ${transaction.transaction_type}`,
+      student_id: transaction.student_id || undefined,
+      created_by_user_id: userId,
+      lines: [
+        {
+          gl_account_code: debitAccount,
+          debit_amount: isDebitTransaction ? transaction.amount : 0,
+          credit_amount: isDebitTransaction ? 0 : transaction.amount,
+          description: 'Migrated from legacy system'
+        },
+        {
+          gl_account_code: creditAccount,
+          debit_amount: isDebitTransaction ? 0 : transaction.amount,
+          credit_amount: isDebitTransaction ? transaction.amount : 0,
+          description: 'Migrated from legacy system'
+        }
+      ]
+    };
+  }
+
+  private markTransactionMigrated(transactionId: number, entryId: number): void {
+    this.db.prepare(`
+      UPDATE ledger_transaction
+      SET is_migrated = 1, migrated_journal_entry_id = ?
+      WHERE id = ?
+    `).run(entryId, transactionId);
+  }
+
+  private async migrateSingleTransaction(
+    transaction: LegacyTransaction,
+    userId: number,
+    dryRun: boolean
+  ): Promise<{ success: boolean; error?: string }> {
+    if (dryRun) {
+      console.error(`[DRY RUN] Would migrate transaction ${transaction.id}`);
+      return { success: true };
+    }
+
+    const { debitAccount, creditAccount } = this.determineGLAccounts(transaction);
+    const journalData = this.buildJournalData(transaction, userId, debitAccount, creditAccount);
+    const result = await this.journalService.createJournalEntry(journalData);
+
+    if (!result.success || !result.entry_id) {
+      return { success: false, error: result.message || 'Journal entry creation failed' };
+    }
+
+    this.markTransactionMigrated(transaction.id, result.entry_id);
+    return { success: true };
   }
 
   /**
@@ -53,21 +137,11 @@ export class DataMigrationService {
    * Dry run mode available for testing
    */
   async migrateHistoricalTransactions(
-    dryRun = false,
-    userId: number
+    userId: number,
+    dryRun = false
   ): Promise<MigrationResult> {
     try {
-      // Get unmigrated transactions
-      const transactions = this.db.prepare(`
-        SELECT
-          lt.*,
-          s.first_name || ' ' || s.last_name as student_name,
-          s.admission_number
-        FROM ledger_transaction lt
-        LEFT JOIN student s ON lt.student_id = s.id
-        WHERE lt.is_migrated IS NULL OR lt.is_migrated = 0
-        ORDER BY lt.transaction_date, lt.id
-      `).all() as LegacyTransaction[];
+      const transactions = this.getUnmigratedTransactions();
 
       if (transactions.length === 0) {
         return {
@@ -82,62 +156,17 @@ export class DataMigrationService {
       const errors: string[] = [];
 
       if (!dryRun) {
-        // Add is_migrated column if it doesn't exist
-        try {
-          this.db.exec(`ALTER TABLE ledger_transaction ADD COLUMN is_migrated INTEGER DEFAULT 0`);
-        } catch (e) {
-          // Column may already exist
-        }
+        this.ensureMigrationColumns();
       }
 
       for (const transaction of transactions) {
         try {
-          if (dryRun) {
-            // Just validate, don't actually create entries
-            console.error(`[DRY RUN] Would migrate transaction ${transaction.id}`);
+          const migrationResult = await this.migrateSingleTransaction(transaction, userId, dryRun);
+          if (migrationResult.success) {
             migratedCount++;
           } else {
-            // Determine GL accounts based on transaction type and description
-            const { debitAccount, creditAccount } = this.determineGLAccounts(transaction);
-
-            // Create journal entry
-            const journalData: JournalEntryData = {
-              entry_date: transaction.transaction_date,
-              entry_type: this.mapTransactionType(transaction.transaction_type),
-              description: transaction.description || `Migrated: ${transaction.transaction_type}`,
-              student_id: transaction.student_id || undefined,
-              created_by_user_id: userId,
-              lines: [
-                {
-                  gl_account_code: debitAccount,
-                  debit_amount: transaction.debit_credit === 'DEBIT' ? transaction.amount : 0,
-                  credit_amount: transaction.debit_credit === 'CREDIT' ? transaction.amount : 0,
-                  description: 'Migrated from legacy system'
-                },
-                {
-                  gl_account_code: creditAccount,
-                  debit_amount: transaction.debit_credit === 'CREDIT' ? transaction.amount : 0,
-                  credit_amount: transaction.debit_credit === 'DEBIT' ? transaction.amount : 0,
-                  description: 'Migrated from legacy system'
-                }
-              ]
-            };
-
-            const result = await this.journalService.createJournalEntry(journalData);
-
-            if (result.success) {
-              // Mark as migrated
-              this.db.prepare(`
-                UPDATE ledger_transaction
-                SET is_migrated = 1, migrated_journal_entry_id = ?
-                WHERE id = ?
-              `).run(result.entry_id, transaction.id);
-
-              migratedCount++;
-            } else {
-              failedCount++;
-              errors.push(`Transaction ${transaction.id}: ${result.message}`);
-            }
+            failedCount++;
+            errors.push(`Transaction ${transaction.id}: ${migrationResult.error || 'Unknown migration error'}`);
           }
         } catch (error) {
           failedCount++;
@@ -274,39 +303,30 @@ export class DataMigrationService {
   // ============================================================================
 
   private determineGLAccounts(transaction: LegacyTransaction): { debitAccount: string; creditAccount: string } {
-    // Determine GL accounts based on transaction type and description
     const type = (transaction.transaction_type || '').toUpperCase();
     const desc = (transaction.description || '').toLowerCase();
+    const paymentTypes = new Set(['PAYMENT', 'CREDIT']);
+    const invoiceTypes = new Set(['INVOICE', 'CHARGE', 'DEBIT']);
 
-    // Payment transactions
-    if (type === 'PAYMENT' || type === 'CREDIT') {
-      if (desc.includes('cash')) {
-        return { debitAccount: '1010', creditAccount: '1100' }; // Cash, Receivable
-      } else {
-        return { debitAccount: '1020', creditAccount: '1100' }; // Bank, Receivable
-      }
+    if (paymentTypes.has(type)) {
+      return {
+        debitAccount: desc.includes('cash') ? '1010' : '1020',
+        creditAccount: '1100'
+      };
     }
 
-    // Invoice/Charge transactions
-    if (type === 'INVOICE' || type === 'CHARGE' || type === 'DEBIT') {
-      let revenueAccount = '4300'; // Other Income (default)
-
-      if (desc.includes('tuition') || desc.includes('school fee')) {
-        revenueAccount = '4010'; // Tuition
-      } else if (desc.includes('board') || desc.includes('boarding')) {
-        revenueAccount = '4020'; // Boarding
-      } else if (desc.includes('transport') || desc.includes('bus')) {
-        revenueAccount = '4030'; // Transport
-      } else if (desc.includes('activity') || desc.includes('sport')) {
-        revenueAccount = '4040'; // Activity
-      } else if (desc.includes('exam')) {
-        revenueAccount = '4050'; // Exam
-      }
-
-      return { debitAccount: '1100', creditAccount: revenueAccount }; // Receivable, Revenue
+    if (invoiceTypes.has(type)) {
+      const revenueRules: ReadonlyArray<{ account: string; matches: (description: string) => boolean }> = [
+        { account: '4010', matches: (description) => description.includes('tuition') || description.includes('school fee') },
+        { account: '4020', matches: (description) => description.includes('board') || description.includes('boarding') },
+        { account: '4030', matches: (description) => description.includes('transport') || description.includes('bus') },
+        { account: '4040', matches: (description) => description.includes('activity') || description.includes('sport') },
+        { account: '4050', matches: (description) => description.includes('exam') }
+      ];
+      const matchedRevenue = revenueRules.find((rule) => rule.matches(desc));
+      return { debitAccount: '1100', creditAccount: matchedRevenue?.account || '4300' };
     }
 
-    // Default: treat as cash transaction
     return { debitAccount: '1010', creditAccount: '1100' };
   }
 

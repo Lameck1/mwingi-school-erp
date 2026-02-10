@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
 import {
     Users, BookOpen, Save, Loader2, UserPlus, Trash2
 } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { useAppStore, useAuthStore } from '../../stores'
@@ -54,13 +55,13 @@ export default function TeacherAllocation() {
             if (currentAcademicYear && currentTerm) {
                 setLoading(true)
                 const [allocationsData, streamsData, subjectsData] = await Promise.all([
-                    window.electronAPI.getTeacherAllocations(
+                    globalThis.electronAPI.getTeacherAllocations(
                         currentAcademicYear.id,
                         currentTerm.id,
                         selectedStream || undefined
                     ),
-                    window.electronAPI.getStreams(),
-                    window.electronAPI.getAcademicSubjects()
+                    globalThis.electronAPI.getStreams(),
+                    globalThis.electronAPI.getAcademicSubjects()
                 ])
 
                 setAllocations(allocationsData || [])
@@ -77,7 +78,7 @@ export default function TeacherAllocation() {
     const loadInitialData = useCallback(async () => {
         try {
             const [staffData] = await Promise.all([
-                window.electronAPI.getStaff(),
+                globalThis.electronAPI.getStaff(),
             ])
             setStaff(staffData)
         } catch (error) {
@@ -86,11 +87,11 @@ export default function TeacherAllocation() {
     }, [])
 
     useEffect(() => {
-        loadInitialData()
+        loadInitialData().catch((err: unknown) => console.error('Failed to load initial data:', err))
     }, [loadInitialData])
 
     useEffect(() => {
-        loadAllocations()
+        loadAllocations().catch((err: unknown) => console.error('Failed to load allocations:', err))
     }, [loadAllocations])
 
     const handleAllocate = async () => {
@@ -101,7 +102,7 @@ export default function TeacherAllocation() {
 
         setSaving(true)
         try {
-            await window.electronAPI.allocateTeacher({
+            await globalThis.electronAPI.allocateTeacher({
                 academic_year_id: currentAcademicYear.id,
                 term_id: currentTerm.id,
                 stream_id: selectedStream,
@@ -121,6 +122,60 @@ export default function TeacherAllocation() {
         } finally {
             setSaving(false)
         }
+    }
+
+    const renderAllocationsContent = () => {
+        if (!selectedStream) {
+            return (
+                <div className="flex flex-col items-center justify-center h-64 text-foreground/40 space-y-3">
+                    <Users className="w-12 h-12 opacity-20" />
+                    <p>Select a class to view its allocations</p>
+                </div>
+            )
+        }
+
+        if (loading) {
+            return (
+                <div className="flex items-center justify-center h-64 text-foreground/40">
+                    <Loader2 className="w-8 h-8 animate-spin" />
+                </div>
+            )
+        }
+
+        if (allocations.length === 0) {
+            return (
+                <div className="flex flex-col items-center justify-center h-64 text-foreground/40 space-y-3">
+                    <p>No subjects allocated for this class yet</p>
+                </div>
+            )
+        }
+
+        return (
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead>
+                        <tr className="border-b border-white/10">
+                            <th className="pb-3 font-bold text-foreground/60">Subject</th>
+                            <th className="pb-3 font-bold text-foreground/60">Teacher</th>
+                            <th className="pb-3 font-bold text-foreground/60 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                        {allocations.map(allocation => (
+                            <tr key={allocation.id} className="group">
+                                <td className="py-4 font-medium text-white">{allocation.subject_name}</td>
+                                <td className="py-4 text-foreground/80">{allocation.teacher_name}</td>
+                                <td className="py-4 text-right">
+                                    <button className="p-2 text-foreground/30 hover:text-destructive transition-colors">
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        )
     }
 
     return (
@@ -191,45 +246,7 @@ export default function TeacherAllocation() {
                             Current Allocations
                         </h3>
 
-                        {!selectedStream ? (
-                            <div className="flex flex-col items-center justify-center h-64 text-foreground/40 space-y-3">
-                                <Users className="w-12 h-12 opacity-20" />
-                                <p>Select a class to view its allocations</p>
-                            </div>
-                        ) : loading ? (
-                            <div className="flex items-center justify-center h-64 text-foreground/40">
-                                <Loader2 className="w-8 h-8 animate-spin" />
-                            </div>
-                        ) : allocations.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-64 text-foreground/40 space-y-3">
-                                <p>No subjects allocated for this class yet</p>
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left">
-                                    <thead>
-                                        <tr className="border-b border-white/10">
-                                            <th className="pb-3 font-bold text-foreground/60">Subject</th>
-                                            <th className="pb-3 font-bold text-foreground/60">Teacher</th>
-                                            <th className="pb-3 font-bold text-foreground/60 text-right">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-white/5">
-                                        {allocations.map(allocation => (
-                                            <tr key={allocation.id} className="group">
-                                                <td className="py-4 font-medium text-white">{allocation.subject_name}</td>
-                                                <td className="py-4 text-foreground/80">{allocation.teacher_name}</td>
-                                                <td className="py-4 text-right">
-                                                    <button className="p-2 text-foreground/30 hover:text-destructive transition-colors">
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
+                        {renderAllocationsContent()}
                     </div>
                 </div>
             </div>

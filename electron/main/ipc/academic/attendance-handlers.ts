@@ -1,10 +1,24 @@
-import { IpcMainInvokeEvent } from 'electron'
 import { ipcMain } from '../../electron-env'
-import { AttendanceService, DailyAttendanceEntry } from '../../services/academic/AttendanceService'
+import { AttendanceService, type DailyAttendanceEntry } from '../../services/academic/AttendanceService'
 
-const service = new AttendanceService()
+import type { IpcMainInvokeEvent } from 'electron'
+
+let cachedService: AttendanceService | null = null
+const getService = () => {
+    cachedService ??= new AttendanceService()
+    return cachedService
+}
 
 export function registerAttendanceHandlers(): void {
+    type MarkAttendanceArgs = [
+        entries: DailyAttendanceEntry[],
+        streamId: number,
+        date: string,
+        academicYearId: number,
+        termId: number,
+        userId: number
+    ]
+
     ipcMain.handle('attendance:getByDate', async (
         _event: IpcMainInvokeEvent,
         streamId: number,
@@ -12,19 +26,14 @@ export function registerAttendanceHandlers(): void {
         academicYearId: number,
         termId: number
     ) => {
-        return service.getAttendanceByDate(streamId, date, academicYearId, termId)
+        return getService().getAttendanceByDate(streamId, date, academicYearId, termId)
     })
 
     ipcMain.handle('attendance:markAttendance', async (
         _event: IpcMainInvokeEvent,
-        entries: DailyAttendanceEntry[],
-        streamId: number,
-        date: string,
-        academicYearId: number,
-        termId: number,
-        userId: number
+        ...[entries, streamId, date, academicYearId, termId, userId]: MarkAttendanceArgs
     ) => {
-        return service.markAttendance(entries, streamId, date, academicYearId, termId, userId)
+        return getService().markAttendance(entries, streamId, date, academicYearId, termId, userId)
     })
 
     ipcMain.handle('attendance:getStudentSummary', async (
@@ -33,7 +42,7 @@ export function registerAttendanceHandlers(): void {
         academicYearId: number,
         termId?: number
     ) => {
-        return service.getStudentAttendanceSummary(studentId, academicYearId, termId)
+        return getService().getStudentAttendanceSummary(studentId, academicYearId, termId)
     })
 
     ipcMain.handle('attendance:getClassSummary', async (
@@ -43,7 +52,7 @@ export function registerAttendanceHandlers(): void {
         academicYearId: number,
         termId: number
     ) => {
-        return service.getClassAttendanceSummary(streamId, date, academicYearId, termId)
+        return getService().getClassAttendanceSummary(streamId, date, academicYearId, termId)
     })
 
     ipcMain.handle('attendance:getStudentsForMarking', async (
@@ -52,6 +61,6 @@ export function registerAttendanceHandlers(): void {
         academicYearId: number,
         termId: number
     ) => {
-        return service.getStudentsForAttendance(streamId, academicYearId, termId)
+        return getService().getStudentsForAttendance(streamId, academicYearId, termId)
     })
 }

@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
 import { Save, Lock, Smartphone, Mail, Globe, Eye, EyeOff } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+
 import { useToast } from '../../contexts/ToastContext'
 
 export default function IntegrationsSettings() {
@@ -24,7 +25,7 @@ export default function IntegrationsSettings() {
 
     const loadConfigs = useCallback(async () => {
         try {
-            const all = await window.electronAPI.getAllConfigs()
+            const all = await globalThis.electronAPI.getAllConfigs()
 
             setSmsConfig(prev => ({
                 ...prev,
@@ -48,20 +49,20 @@ export default function IntegrationsSettings() {
     }, [showToast])
 
     useEffect(() => {
-        loadConfigs()
+        loadConfigs().catch((err: unknown) => console.error('Failed to load integration configs', err))
     }, [loadConfigs])
 
     const handleSaveSMS = async () => {
         setLoading(true)
         try {
             await Promise.all([
-                window.electronAPI.saveSecureConfig('sms.provider', smsConfig.provider),
-                window.electronAPI.saveSecureConfig('sms.api_key', smsConfig.api_key),
-                window.electronAPI.saveSecureConfig('sms.username', smsConfig.username),
-                window.electronAPI.saveSecureConfig('sms.sender_id', smsConfig.sender_id)
+                globalThis.electronAPI.saveSecureConfig('sms.provider', smsConfig.provider),
+                globalThis.electronAPI.saveSecureConfig('sms.api_key', smsConfig.api_key),
+                globalThis.electronAPI.saveSecureConfig('sms.username', smsConfig.username),
+                globalThis.electronAPI.saveSecureConfig('sms.sender_id', smsConfig.sender_id)
             ])
             showToast('SMS Gateway settings saved securely', 'success')
-        } catch (error) {
+        } catch {
             showToast('Failed to save SMS settings', 'error')
         } finally {
             setLoading(false)
@@ -72,13 +73,13 @@ export default function IntegrationsSettings() {
         setLoading(true)
         try {
             await Promise.all([
-                window.electronAPI.saveSecureConfig('smtp.host', smtpConfig.host),
-                window.electronAPI.saveSecureConfig('smtp.port', smtpConfig.port),
-                window.electronAPI.saveSecureConfig('smtp.user', smtpConfig.user),
-                window.electronAPI.saveSecureConfig('smtp.pass', smtpConfig.pass)
+                globalThis.electronAPI.saveSecureConfig('smtp.host', smtpConfig.host),
+                globalThis.electronAPI.saveSecureConfig('smtp.port', smtpConfig.port),
+                globalThis.electronAPI.saveSecureConfig('smtp.user', smtpConfig.user),
+                globalThis.electronAPI.saveSecureConfig('smtp.pass', smtpConfig.pass)
             ])
             showToast('SMTP settings saved securely', 'success')
-        } catch (error) {
+        } catch {
             showToast('Failed to save SMTP settings', 'error')
         } finally {
             setLoading(false)
@@ -110,8 +111,9 @@ export default function IntegrationsSettings() {
 
                     <div className="space-y-5">
                         <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Service Provider</label>
+                            <label htmlFor="sms-provider" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Service Provider</label>
                             <select
+                                id="sms-provider"
                                 className="input w-full bg-secondary/30"
                                 value={smsConfig.provider}
                                 onChange={e => setSmsConfig({ ...smsConfig, provider: e.target.value })}
@@ -122,8 +124,9 @@ export default function IntegrationsSettings() {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Username / SID</label>
+                            <label htmlFor="sms-username" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Username / SID</label>
                             <input
+                                id="sms-username"
                                 type="text"
                                 className="input w-full bg-secondary/30"
                                 value={smsConfig.username}
@@ -133,9 +136,10 @@ export default function IntegrationsSettings() {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">API Key / Auth Token</label>
+                            <label htmlFor="sms-api-key" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">API Key / Auth Token</label>
                             <div className="relative">
                                 <input
+                                    id="sms-api-key"
                                     type={showKeys['sms'] ? "text" : "password"}
                                     className="input w-full bg-secondary/30 pr-10"
                                     value={smsConfig.api_key}
@@ -143,8 +147,10 @@ export default function IntegrationsSettings() {
                                     placeholder="••••••••••••••••"
                                 />
                                 <button
+                                    type="button"
                                     onClick={() => setShowKeys(p => ({ ...p, sms: !p.sms }))}
                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/40 hover:text-foreground transition-colors"
+                                    aria-label={showKeys['sms'] ? 'Hide SMS API key' : 'Show SMS API key'}
                                 >
                                     {showKeys['sms'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                 </button>
@@ -155,8 +161,9 @@ export default function IntegrationsSettings() {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Sender ID</label>
+                            <label htmlFor="sms-sender-id" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Sender ID</label>
                             <input
+                                id="sms-sender-id"
                                 type="text"
                                 className="input w-full bg-secondary/30"
                                 value={smsConfig.sender_id}
@@ -191,8 +198,9 @@ export default function IntegrationsSettings() {
                     <div className="space-y-5">
                         <div className="grid grid-cols-3 gap-4">
                             <div className="col-span-2 space-y-2">
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Host Address</label>
+                                <label htmlFor="smtp-host" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Host Address</label>
                                 <input
+                                    id="smtp-host"
                                     type="text"
                                     className="input w-full bg-secondary/30"
                                     value={smtpConfig.host}
@@ -201,8 +209,9 @@ export default function IntegrationsSettings() {
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Port</label>
+                                <label htmlFor="smtp-port" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Port</label>
                                 <input
+                                    id="smtp-port"
                                     type="text"
                                     className="input w-full bg-secondary/30"
                                     value={smtpConfig.port}
@@ -213,8 +222,9 @@ export default function IntegrationsSettings() {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Auth Username / Email</label>
+                            <label htmlFor="smtp-user" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Auth Username / Email</label>
                             <input
+                                id="smtp-user"
                                 type="text"
                                 className="input w-full bg-secondary/30"
                                 value={smtpConfig.user}
@@ -224,9 +234,10 @@ export default function IntegrationsSettings() {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Password</label>
+                            <label htmlFor="smtp-pass" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Password</label>
                             <div className="relative">
                                 <input
+                                    id="smtp-pass"
                                     type={showKeys['smtp'] ? "text" : "password"}
                                     className="input w-full bg-secondary/30 pr-10"
                                     value={smtpConfig.pass}
@@ -234,8 +245,10 @@ export default function IntegrationsSettings() {
                                     placeholder="••••••••••••••••"
                                 />
                                 <button
+                                    type="button"
                                     onClick={() => setShowKeys(p => ({ ...p, smtp: !p.smtp }))}
                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/40 hover:text-foreground transition-colors"
+                                    aria-label={showKeys['smtp'] ? 'Hide SMTP password' : 'Show SMTP password'}
                                 >
                                     {showKeys['smtp'] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                 </button>

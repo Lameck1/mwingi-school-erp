@@ -1,31 +1,28 @@
 export interface SchoolSettings {
   id: number
   school_name: string
-  school_motto: string
-  school_address: string
-  school_phone: string
-  school_email: string
-  school_website: string
-  school_logo: string
-  currency: string
-  timezone: string
-  date_format: string
-  sms_api_key?: string
-  sms_api_secret?: string
-  sms_sender_id?: string
-  mpesa_paybill?: string
+  school_motto: string | null
+  address: string | null
+  phone: string | null
+  email: string | null
+  logo_path: string | null
+  mpesa_paybill: string | null
+  sms_api_key?: string | null
+  sms_api_secret?: string | null
+  sms_sender_id?: string | null
   created_at: string
   updated_at: string
 }
 
 export interface SettingsAPI {
-  getSettings: () => Promise<unknown>
-  getSchoolSettings: () => Promise<unknown>
-  updateSettings: (data: unknown) => Promise<{ success: boolean }>
+  getSettings: () => Promise<SchoolSettings>
+  getSchoolSettings: () => Promise<SchoolSettings>
+  updateSettings: (data: Partial<SchoolSettings>) => Promise<{ success: boolean }>
 
   // Secure Config (Phase 3)
   getSecureConfig(key: string): Promise<string | null>
   saveSecureConfig(key: string, value: string): Promise<boolean>
   getAllConfigs(): Promise<Record<string, string>>
   resetAndSeedDatabase(userId: number): Promise<{ success: boolean; message: string }>
+  normalizeCurrencyScale(userId: number): Promise<{ success: boolean; message: string }>
 }

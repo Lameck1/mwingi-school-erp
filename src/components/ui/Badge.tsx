@@ -1,5 +1,5 @@
+import { type LucideIcon } from 'lucide-react'
 import React from 'react'
-import { LucideIcon } from 'lucide-react'
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'error' | 'info' | 'outline'
 
@@ -24,7 +24,7 @@ export function Badge({
     variant = 'default',
     icon: Icon,
     className = ''
-}: BadgeProps) {
+}: Readonly<BadgeProps>) {
     return (
         <span className={`
       inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border

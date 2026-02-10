@@ -1,9 +1,8 @@
-import { Database } from 'better-sqlite3'
+import { type Database } from 'better-sqlite3'
+
 import { getDatabase } from '../../database'
+import { type IReadable, type IWritable, type IAuditable, type AuditEntry } from './interfaces/IService'
 import { logAudit } from '../../database/utils/audit'
-import { IReadable, IWritable, IAuditable, AuditEntry } from './interfaces/IService'
-import * as fs from 'fs'
-import * as path from 'path'
 
 /**
  * Abstract base service implementing common CRUD operations.
@@ -12,6 +11,7 @@ import * as path from 'path'
  */
 export abstract class BaseService<T, C, U = Partial<C>, F = Record<string, unknown>>
     implements IReadable<T, F>, IWritable<T, C, U>, IAuditable {
+    private static readonly UNKNOWN_ERROR_MESSAGE = 'Unknown error'
 
     protected abstract getTableName(): string
     protected abstract getPrimaryKey(): string
@@ -52,21 +52,8 @@ export abstract class BaseService<T, C, U = Partial<C>, F = Record<string, unkno
         const primaryKey = this.getPrimaryKey()
         const query = `${this.buildSelectQuery()} WHERE ${prefix}${primaryKey} = ?${this.getGroupBy()}`
 
-        try {
-            const logMsg = `[${new Date().toISOString()}] ${this.constructor.name}.findById(${id}) | Table: ${this.getTableName()} | Alias: ${this.getTableAlias()} | Prefix: ${prefix} | Query: ${query}\n`
-            fs.appendFileSync('sql_debug.log', logMsg)
-        } catch (e) { /* ignore */ }
-
-        try {
-            const row = this.db.prepare(query).get(id)
-            return row ? this.mapRowToEntity(row) : null
-        } catch (error: unknown) {
-            try {
-                const errorMsg = `[${new Date().toISOString()}] ERROR in ${this.constructor.name}: ${error.message} | Query: ${query}\n`
-                fs.appendFileSync('sql_debug.log', errorMsg)
-            } catch (e) { /* ignore */ }
-            throw error
-        }
+        const row = this.db.prepare(query).get(id)
+        return row ? this.mapRowToEntity(row) : null
     }
 
     async findAll(filters?: F): Promise<T[]> {
@@ -99,7 +86,7 @@ export abstract class BaseService<T, C, U = Partial<C>, F = Record<string, unkno
             return {
                 success: false,
                 id: 0,
-                errors: [error instanceof Error ? error.message : 'Unknown error']
+                errors: [error instanceof Error ? error.message : BaseService.UNKNOWN_ERROR_MESSAGE]
             }
         }
     }
@@ -122,7 +109,7 @@ export abstract class BaseService<T, C, U = Partial<C>, F = Record<string, unkno
         } catch (error) {
             return {
                 success: false,
-                errors: [error instanceof Error ? error.message : 'Unknown error']
+                errors: [error instanceof Error ? error.message : BaseService.UNKNOWN_ERROR_MESSAGE]
             }
         }
     }
@@ -140,7 +127,7 @@ export abstract class BaseService<T, C, U = Partial<C>, F = Record<string, unkno
         } catch (error) {
             return {
                 success: false,
-                errors: [error instanceof Error ? error.message : 'Unknown error']
+                errors: [error instanceof Error ? error.message : BaseService.UNKNOWN_ERROR_MESSAGE]
             }
         }
     }
@@ -176,7 +163,7 @@ export abstract class BaseService<T, C, U = Partial<C>, F = Record<string, unkno
     /**
      * Override to add filter conditions.
      */
-    protected applyFilters(filters: F, conditions: string[], params: unknown[]): void {
+    protected applyFilters(_filters: F, _conditions: string[], _params: unknown[]): void {
         // Default: no filters. Override in subclasses.
     }
 
@@ -197,4 +184,3 @@ export abstract class BaseService<T, C, U = Partial<C>, F = Record<string, unkno
      */
     protected abstract executeUpdate(id: number, data: U): void
 }
-

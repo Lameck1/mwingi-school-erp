@@ -1,6 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import Database from 'better-sqlite3'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
 import { ScholarshipService } from '../ScholarshipService'
+
+type DbRow = Record<string, any>
 
 // Mock audit utilities
 vi.mock('../../../database/utils/audit', () => ({
@@ -82,7 +85,7 @@ describe('ScholarshipService', () => {
   })
 
   afterEach(() => {
-    if (db) db.close()
+    if (db) {db.close()}
   })
 
   describe('createScholarship', () => {
@@ -136,7 +139,7 @@ describe('ScholarshipService', () => {
         userId: 10
       })
 
-      const scholarship = db.prepare('SELECT * FROM scholarship WHERE name = ?').get('New Test Scholarship') as unknown
+      const scholarship = db.prepare('SELECT * FROM scholarship WHERE name = ?').get('New Test Scholarship') as DbRow
       expect(scholarship).toBeDefined()
     })
   })
@@ -164,7 +167,7 @@ describe('ScholarshipService', () => {
         userId: 10
       })
 
-      const scholarship = db.prepare('SELECT * FROM scholarship WHERE id = ?').get(1) as unknown
+      const scholarship = db.prepare('SELECT * FROM scholarship WHERE id = ?').get(1) as DbRow
       expect(scholarship.allocated_amount).toBeGreaterThanOrEqual(50000)
     })
 
@@ -225,7 +228,7 @@ describe('ScholarshipService', () => {
         userId: 10
       })
 
-      const allocation = db.prepare('SELECT * FROM student_scholarship WHERE student_id = 1 AND scholarship_id = 1').get() as unknown
+      const allocation = db.prepare('SELECT * FROM student_scholarship WHERE student_id = 1 AND scholarship_id = 1').get() as DbRow
       expect(allocation).toBeDefined()
     })
   })
@@ -256,17 +259,17 @@ describe('ScholarshipService', () => {
     })
 
     it('should calculate utilization percentage correctly', () => {
-      const scholarship = db.prepare('SELECT * FROM scholarship WHERE id = 1').get() as unknown
+      const scholarship = db.prepare('SELECT * FROM scholarship WHERE id = 1').get() as DbRow
       expect(scholarship.allocated_amount).toBeGreaterThan(0)
     })
 
     it('should list all allocations', () => {
-      const allocations = db.prepare('SELECT * FROM student_scholarship WHERE scholarship_id = 1').all() as unknown[]
+      const allocations = db.prepare('SELECT * FROM student_scholarship WHERE scholarship_id = 1').all() as DbRow[]
       expect(allocations.length).toBeGreaterThan(0)
     })
 
     it('should show 100% utilization for fully allocated scholarship', () => {
-      const scholarship = db.prepare('SELECT * FROM scholarship WHERE id = 3').get() as unknown
+      const scholarship = db.prepare('SELECT * FROM scholarship WHERE id = 3').get() as DbRow
       
       if (scholarship.available_amount === 0) {
         expect(scholarship.allocated_amount).toBe(scholarship.total_amount)
@@ -283,7 +286,7 @@ describe('ScholarshipService', () => {
         userId: 10
       })
 
-      const scholarship = db.prepare('SELECT * FROM scholarship WHERE name = ?').get('Unused Scholarship') as unknown
+      const scholarship = db.prepare('SELECT * FROM scholarship WHERE name = ?').get('Unused Scholarship') as DbRow
       expect(scholarship.allocated_amount).toBe(0)
     })
   })
@@ -314,21 +317,21 @@ describe('ScholarshipService', () => {
     })
 
     it('should calculate total scholarship amount', () => {
-      const allocations = db.prepare('SELECT SUM(amount_allocated) as total FROM student_scholarship WHERE student_id = 1').get() as unknown
+      const allocations = db.prepare('SELECT SUM(amount_allocated) as total FROM student_scholarship WHERE student_id = 1').get() as DbRow
       expect(allocations.total).toBeGreaterThan(0)
     })
 
     it('should filter by status', () => {
       db.exec(`UPDATE student_scholarship SET status = 'REVOKED' WHERE scholarship_id = 2`)
 
-      const activeAllocations = db.prepare('SELECT * FROM student_scholarship WHERE student_id = 1 AND status = ?').all('ACTIVE') as unknown[]
+      const activeAllocations = db.prepare('SELECT * FROM student_scholarship WHERE student_id = 1 AND status = ?').all('ACTIVE') as DbRow[]
       expect(activeAllocations).toBeDefined()
     })
 
     it('should return empty for student with no scholarships', () => {
       db.exec("INSERT INTO student (first_name, last_name, admission_number) VALUES ('New', 'Student', 'STU-003')")
 
-      const allocations = db.prepare('SELECT * FROM student_scholarship WHERE student_id = 3').all() as unknown[]
+      const allocations = db.prepare('SELECT * FROM student_scholarship WHERE student_id = 3').all() as DbRow[]
       expect(allocations).toHaveLength(0)
     })
   })
@@ -379,12 +382,12 @@ describe('ScholarshipService', () => {
     })
 
     it('should exclude expired scholarships', () => {
-      const scholarships = db.prepare('SELECT * FROM scholarship WHERE status = ?').all('ACTIVE') as unknown[]
+      const scholarships = db.prepare('SELECT * FROM scholarship WHERE status = ?').all('ACTIVE') as DbRow[]
       expect(scholarships.length).toBeGreaterThan(0)
     })
 
     it('should exclude fully utilized scholarships', () => {
-      const scholarships = db.prepare('SELECT * FROM scholarship WHERE available_amount > 0').all() as unknown[]
+      const scholarships = db.prepare('SELECT * FROM scholarship WHERE available_amount > 0').all() as DbRow[]
       expect(scholarships.length).toBeGreaterThan(0)
     })
   })
@@ -414,7 +417,7 @@ describe('ScholarshipService', () => {
     })
 
     it('should restore scholarship available amount', async () => {
-      const beforeRevoke = db.prepare('SELECT * FROM scholarship WHERE id = 1').get() as unknown
+      const beforeRevoke = db.prepare('SELECT * FROM scholarship WHERE id = 1').get() as DbRow
 
       await service.revokeScholarship({
         allocationId,
@@ -422,7 +425,7 @@ describe('ScholarshipService', () => {
         userId: 10
       })
 
-      const afterRevoke = db.prepare('SELECT * FROM scholarship WHERE id = 1').get() as unknown
+      const afterRevoke = db.prepare('SELECT * FROM scholarship WHERE id = 1').get() as DbRow
       expect(afterRevoke.available_amount).toBeGreaterThanOrEqual(beforeRevoke.available_amount)
     })
 
@@ -459,7 +462,7 @@ describe('ScholarshipService', () => {
         userId: 10
       })
 
-      const allocation = db.prepare('SELECT * FROM student_scholarship WHERE id = ?').get(allocationId) as unknown
+      const allocation = db.prepare('SELECT * FROM student_scholarship WHERE id = ?').get(allocationId) as DbRow
       expect(allocation.status).toBe('REVOKED')
     })
   })

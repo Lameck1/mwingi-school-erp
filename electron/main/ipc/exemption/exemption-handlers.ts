@@ -1,8 +1,17 @@
-import { ipcMain, IpcMainInvokeEvent } from 'electron'
-import { ExemptionService, ExemptionCreateData } from '../../services/finance/ExemptionService'
+import { ipcMain } from '../../electron-env'
+import { ExemptionService, type ExemptionCreateData } from '../../services/finance/ExemptionService'
+
+import type { IpcMainInvokeEvent } from 'electron'
 
 export function registerExemptionHandlers(): void {
     const exemptionService = new ExemptionService()
+    type CalculateExemptionArgs = [
+        studentId: number,
+        academicYearId: number,
+        termId: number,
+        categoryId: number,
+        originalAmount: number
+    ]
 
     ipcMain.handle('exemption:getAll', async (_event: IpcMainInvokeEvent, filters?: {
         studentId?: number;
@@ -21,7 +30,7 @@ export function registerExemptionHandlers(): void {
         return exemptionService.getStudentExemptions(studentId, academicYearId, termId)
     })
 
-    ipcMain.handle('exemption:calculate', async (_event: IpcMainInvokeEvent, studentId: number, academicYearId: number, termId: number, categoryId: number, originalAmount: number) => {
+    ipcMain.handle('exemption:calculate', async (_event: IpcMainInvokeEvent, ...[studentId, academicYearId, termId, categoryId, originalAmount]: CalculateExemptionArgs) => {
         return exemptionService.calculateExemption(studentId, academicYearId, termId, categoryId, originalAmount)
     })
 

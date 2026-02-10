@@ -1,35 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { formatCurrency } from '../../../utils/format';
+import React, { useState, useEffect, useCallback } from 'react';
 
-interface EligibleStudent {
-  student_id: number;
-  admission_number: string;
-  full_name: string;
-  current_grade: number;
-  boarding_status: 'DAY' | 'BOARDER';
-  outstanding_balance: number;
-}
+import { useAuthStore } from '../../../stores';
+import { formatCurrencyFromCents } from '../../../utils/format';
 
-interface JSSFeeStructure {
-  id: number;
-  fiscal_year: number;
-  jss_grade: number;
-  tuition_fee: number;
-  boarding_fee: number;
-  activity_fee: number;
-  total_fee: number;
-}
-
-interface TransitionResult {
-  successful: EligibleStudent[];
-  failed: Array<{
-    student: EligibleStudent;
-    reason: string;
-  }>;
-  total_processed: number;
-}
+import type { EligibleStudent, JSSFeeStructure, TransitionResult } from '../../../types/electron-api/JSSAPI';
 
 const JSSTransition: React.FC = () => {
+  const { user } = useAuthStore();
   const [eligibleStudents, setEligibleStudents] = useState<EligibleStudent[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<Set<number>>(new Set());
   const [feeStructures, setFeeStructures] = useState<JSSFeeStructure[]>([]);
@@ -43,43 +20,38 @@ const JSSTransition: React.FC = () => {
     academic_year: 2026
   });
 
-  useEffect(() => {
-    loadEligibleStudents();
-    loadFeeStructures();
-  }, [filters]);
-
-  const loadEligibleStudents = async () => {
+  const loadEligibleStudents = useCallback(async () => {
     try {
       setLoading(true);
-      // Mock data - replace with actual API call
-      const students: EligibleStudent[] = [
-        { student_id: 1, admission_number: 'STU001', full_name: 'John Kamau', current_grade: 6, boarding_status: 'DAY', outstanding_balance: 0 },
-        { student_id: 2, admission_number: 'STU002', full_name: 'Mary Wanjiru', current_grade: 6, boarding_status: 'BOARDER', outstanding_balance: 5000 },
-        { student_id: 3, admission_number: 'STU003', full_name: 'Peter Ochieng', current_grade: 6, boarding_status: 'DAY', outstanding_balance: 0 },
-        { student_id: 4, admission_number: 'STU004', full_name: 'Grace Akinyi', current_grade: 6, boarding_status: 'BOARDER', outstanding_balance: 2500 },
-        { student_id: 5, admission_number: 'STU005', full_name: 'David Mwangi', current_grade: 6, boarding_status: 'DAY', outstanding_balance: 1000 }
-      ];
+      const result = await globalThis.electronAPI.getEligibleStudents(filters.from_grade, filters.academic_year);
+      const students: EligibleStudent[] = result?.data ?? [];
       setEligibleStudents(students);
     } catch (error) {
       console.error('Error loading students:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
 
-  const loadFeeStructures = async () => {
+  const loadFeeStructures = useCallback(async () => {
     try {
-      // Mock data - replace with actual API call
-      const structures: JSSFeeStructure[] = [
-        { id: 1, fiscal_year: 2026, jss_grade: 7, tuition_fee: 1800000, boarding_fee: 2500000, activity_fee: 50000, total_fee: 4350000 },
-        { id: 2, fiscal_year: 2026, jss_grade: 8, tuition_fee: 1900000, boarding_fee: 2500000, activity_fee: 50000, total_fee: 4450000 },
-        { id: 3, fiscal_year: 2026, jss_grade: 9, tuition_fee: 2000000, boarding_fee: 2500000, activity_fee: 50000, total_fee: 4550000 }
-      ];
+      // Load fee structures for each JSS grade
+      const results = await Promise.all(
+        [7, 8, 9].map(grade => globalThis.electronAPI.getJSSFeeStructure(grade, filters.academic_year))
+      );
+      const structures: JSSFeeStructure[] = results
+        .map(r => r?.data)
+        .filter((data): data is JSSFeeStructure => Boolean(data));
       setFeeStructures(structures);
     } catch (error) {
       console.error('Error loading fee structures:', error);
     }
-  };
+  }, [filters.academic_year]);
+
+  useEffect(() => {
+    loadEligibleStudents().catch((err: unknown) => console.error('Failed to load students:', err));
+    loadFeeStructures().catch((err: unknown) => console.error('Failed to load fee structures:', err));
+  }, [loadEligibleStudents, loadFeeStructures]);
 
   const handleSelectAll = () => {
     if (selectedStudents.size === eligibleStudents.length) {
@@ -100,6 +72,11 @@ const JSSTransition: React.FC = () => {
   };
 
   const handleBatchTransition = async () => {
+    if (!user) {
+      alert('User not authenticated');
+      return;
+    }
+
     if (selectedStudents.size === 0) {
       alert('Please select at least one student to process');
       return;
@@ -111,20 +88,22 @@ const JSSTransition: React.FC = () => {
 
     try {
       setProcessing(true);
-      // Mock processing - replace with actual API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const result = await globalThis.electronAPI.bulkTransition({
+        student_ids: Array.from(selectedStudents),
+        from_grade: filters.from_grade,
+        to_grade: filters.to_grade,
+        transition_date: new Date().toISOString().slice(0, 10),
+        processed_by: user.id
+      });
+
+      const successful = result?.data?.successful ?? Array.from(selectedStudents);
+      const failed = result?.data?.failed ?? [];
+      const transitionSummary: TransitionResult = { successful, failed };
       
-      const successful = eligibleStudents.filter(s => selectedStudents.has(s.student_id));
-      const result: TransitionResult = {
-        successful,
-        failed: [],
-        total_processed: selectedStudents.size
-      };
-      
-      setTransitionResult(result);
+      setTransitionResult(transitionSummary);
       setSelectedStudents(new Set());
       
-      alert(`Transition complete! ${result.successful.length} student(s) promoted successfully.`);
+      alert(`Transition complete! ${transitionSummary.successful.length} student(s) promoted successfully.`);
     } catch (error) {
       console.error('Error processing transition:', error);
       alert('Failed to process transition');
@@ -134,7 +113,7 @@ const JSSTransition: React.FC = () => {
   };
 
   const getCurrentFeeStructure = () => {
-    return feeStructures.find(f => f.jss_grade === filters.to_grade && f.fiscal_year === filters.academic_year);
+    return feeStructures.find(f => f.grade === filters.to_grade && f.fiscal_year === filters.academic_year);
   };
 
   if (loading) {
@@ -159,7 +138,7 @@ const JSSTransition: React.FC = () => {
               id="from_grade"
               title="From Grade"
               value={filters.from_grade}
-              onChange={(e) => setFilters({ ...filters, from_grade: parseInt(e.target.value) })}
+              onChange={(e) => setFilters({ ...filters, from_grade: Number.parseInt(e.target.value, 10) })}
               className="w-full border rounded px-3 py-2"
             >
               <option value={6}>Grade 6 (Primary)</option>
@@ -173,7 +152,7 @@ const JSSTransition: React.FC = () => {
               id="to_grade"
               title="To Grade"
               value={filters.to_grade}
-              onChange={(e) => setFilters({ ...filters, to_grade: parseInt(e.target.value) })}
+              onChange={(e) => setFilters({ ...filters, to_grade: Number.parseInt(e.target.value, 10) })}
               className="w-full border rounded px-3 py-2"
             >
               <option value={7}>Grade 7 (JSS)</option>
@@ -187,7 +166,7 @@ const JSSTransition: React.FC = () => {
               id="academic_year"
               title="Academic Year"
               value={filters.academic_year}
-              onChange={(e) => setFilters({ ...filters, academic_year: parseInt(e.target.value) })}
+              onChange={(e) => setFilters({ ...filters, academic_year: Number.parseInt(e.target.value, 10) })}
               className="w-full border rounded px-3 py-2"
             >
               <option value={2025}>2025</option>
@@ -201,23 +180,33 @@ const JSSTransition: React.FC = () => {
       {/* Fee Structure Info */}
       {feeStructure && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <h3 className="text-lg font-semibold text-blue-900 mb-2">JSS Grade {feeStructure.jss_grade} Fee Structure ({feeStructure.fiscal_year})</h3>
+          <h3 className="text-lg font-semibold text-blue-900 mb-2">JSS Grade {feeStructure.grade} Fee Structure ({feeStructure.fiscal_year})</h3>
           <div className="grid grid-cols-4 gap-4 text-sm">
             <div>
               <span className="text-blue-700">Tuition:</span>
-              <div className="font-semibold text-blue-900">{formatCurrency(feeStructure.tuition_fee)}</div>
+              <div className="font-semibold text-blue-900">{formatCurrencyFromCents(feeStructure.tuition_fee_cents)}</div>
             </div>
             <div>
               <span className="text-blue-700">Boarding:</span>
-              <div className="font-semibold text-blue-900">{formatCurrency(feeStructure.boarding_fee)}</div>
+              <div className="font-semibold text-blue-900">{formatCurrencyFromCents(feeStructure.boarding_fee_cents || 0)}</div>
             </div>
             <div>
               <span className="text-blue-700">Activity:</span>
-              <div className="font-semibold text-blue-900">{formatCurrency(feeStructure.activity_fee)}</div>
+              <div className="font-semibold text-blue-900">{formatCurrencyFromCents(feeStructure.activity_fee_cents || 0)}</div>
             </div>
             <div>
               <span className="text-blue-700">Total:</span>
-              <div className="font-semibold text-blue-900">{formatCurrency(feeStructure.total_fee)}</div>
+              <div className="font-semibold text-blue-900">
+                {formatCurrencyFromCents(
+                  feeStructure.tuition_fee_cents +
+                  (feeStructure.boarding_fee_cents || 0) +
+                  (feeStructure.activity_fee_cents || 0) +
+                  (feeStructure.exam_fee_cents || 0) +
+                  (feeStructure.library_fee_cents || 0) +
+                  (feeStructure.lab_fee_cents || 0) +
+                  (feeStructure.ict_fee_cents || 0)
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -283,12 +272,12 @@ const JSSTransition: React.FC = () => {
                     <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
                       student.boarding_status === 'BOARDER' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
                     }`}>
-                      {student.boarding_status}
+                      {student.boarding_status === 'DAY_SCHOLAR' ? 'DAY SCHOLAR' : student.boarding_status}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <span className={student.outstanding_balance > 0 ? 'text-red-600 font-semibold' : 'text-gray-900'}>
-                      {formatCurrency(student.outstanding_balance)}
+                    <span className={student.outstanding_balance_cents > 0 ? 'text-red-600 font-semibold' : 'text-gray-900'}>
+                      {formatCurrencyFromCents(student.outstanding_balance_cents)}
                     </span>
                   </td>
                 </tr>

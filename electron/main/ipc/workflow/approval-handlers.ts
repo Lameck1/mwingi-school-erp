@@ -1,23 +1,28 @@
-import { IpcMainInvokeEvent } from 'electron'
 import { ipcMain } from '../../electron-env'
 import { ApprovalService } from '../../services/workflow/ApprovalService'
 
-const service = new ApprovalService()
+import type { IpcMainInvokeEvent } from 'electron'
+
+let cachedService: ApprovalService | null = null
+const getService = () => {
+    cachedService ??= new ApprovalService()
+    return cachedService
+}
 
 export function registerApprovalHandlers(): void {
     // Get pending approvals
     ipcMain.handle('approval:getPending', async (_event: IpcMainInvokeEvent, userId?: number) => {
-        return service.getPendingApprovals(userId)
+        return getService().getPendingApprovals(userId)
     })
 
     // Get all approvals with filters
     ipcMain.handle('approval:getAll', async (_event: IpcMainInvokeEvent, filters?: { status?: string; entity_type?: string }) => {
-        return service.getAllApprovals(filters)
+        return getService().getAllApprovals(filters)
     })
 
     // Get approval counts for dashboard
     ipcMain.handle('approval:getCounts', async () => {
-        return service.getApprovalCounts()
+        return getService().getApprovalCounts()
     })
 
     // Create approval request
@@ -27,7 +32,7 @@ export function registerApprovalHandlers(): void {
         entityId: number,
         requestedByUserId: number
     ) => {
-        return service.createApprovalRequest(entityType, entityId, requestedByUserId)
+        return getService().createApprovalRequest(entityType, entityId, requestedByUserId)
     })
 
     // Approve request
@@ -36,7 +41,7 @@ export function registerApprovalHandlers(): void {
         requestId: number,
         approverId: number
     ) => {
-        return service.approve(requestId, approverId)
+        return getService().approve(requestId, approverId)
     })
 
     // Reject request
@@ -46,7 +51,7 @@ export function registerApprovalHandlers(): void {
         approverId: number,
         reason: string
     ) => {
-        return service.reject(requestId, approverId, reason)
+        return getService().reject(requestId, approverId, reason)
     })
 
     // Cancel request
@@ -55,6 +60,6 @@ export function registerApprovalHandlers(): void {
         requestId: number,
         userId: number
     ) => {
-        return service.cancel(requestId, userId)
+        return getService().cancel(requestId, userId)
     })
 }

@@ -1,10 +1,12 @@
 
+import { Download, AlertTriangle } from 'lucide-react'
 import React, { useState, useEffect } from 'react'
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { useAppStore } from '../../stores'
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { Download, AlertTriangle } from 'lucide-react'
+import { exportToPDF } from '../../utils/exporters'
 
 interface PerformanceSummary {
   mean_score: number
@@ -60,8 +62,8 @@ const ExamAnalytics = () => {
   const loadInitialData = React.useCallback(async () => {
     try {
       const [examsData, streamsData] = await Promise.all([
-        window.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
-        window.electronAPI.getStreams()
+        globalThis.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
+        globalThis.electronAPI.getStreams()
       ])
 
       setExams(examsData || [])
@@ -72,7 +74,7 @@ const ExamAnalytics = () => {
   }, [currentAcademicYear, currentTerm])
 
   useEffect(() => {
-    loadInitialData()
+    loadInitialData().catch((err: unknown) => console.error('Failed to load initial data:', err))
   }, [loadInitialData])
 
   const handleAnalyze = async () => {
@@ -84,19 +86,19 @@ const ExamAnalytics = () => {
     setLoading(true)
     try {
       const [summary, grades, subjects, struggling] = await Promise.all([
-        window.electronAPI.getPerformanceSummary({
+        globalThis.electronAPI.getPerformanceSummary({
           examId: selectedExam,
           streamId: selectedStream
         }),
-        window.electronAPI.getGradeDistribution({
+        globalThis.electronAPI.getGradeDistribution({
           examId: selectedExam,
           streamId: selectedStream
         }),
-        window.electronAPI.getSubjectPerformance({
+        globalThis.electronAPI.getSubjectPerformance({
           examId: selectedExam,
           streamId: selectedStream
         }),
-        window.electronAPI.getStrugglingStudents({
+        globalThis.electronAPI.getStrugglingStudents({
           examId: selectedExam,
           streamId: selectedStream,
           threshold: 40
@@ -122,11 +124,24 @@ const ExamAnalytics = () => {
     }
 
     try {
-      await window.electronAPI.exportAnalyticsToPDF({
-        examId: selectedExam,
-        summary: performanceSummary,
-        grades: gradeDistribution,
-        subjects: subjectPerformance
+      await exportToPDF({
+        filename: `exam-analytics-${selectedExam}-${selectedStream}`,
+        title: 'Exam Analytics - Subject Performance',
+        subtitle: `Mean: ${performanceSummary.mean_score.toFixed(2)} | Pass Rate: ${performanceSummary.pass_rate.toFixed(1)}% | Students: ${performanceSummary.total_students}`,
+        columns: [
+          { key: 'subject_name', header: 'Subject', width: 70 },
+          { key: 'mean_score', header: 'Mean Score', width: 30, align: 'right' },
+          { key: 'pass_rate', header: 'Pass Rate', width: 30, align: 'right' },
+          { key: 'difficulty_index', header: 'Difficulty', width: 30, align: 'right' },
+          { key: 'discrimination_index', header: 'Discrimination', width: 35, align: 'right' }
+        ],
+        data: subjectPerformance.map((s) => ({
+          subject_name: s.subject_name,
+          mean_score: s.mean_score.toFixed(2),
+          pass_rate: `${s.pass_rate.toFixed(1)}%`,
+          difficulty_index: s.difficulty_index.toFixed(2),
+          discrimination_index: s.discrimination_index.toFixed(2)
+        }))
       })
     } catch (error) {
       console.error('Failed to export:', error)
@@ -230,8 +245,8 @@ const ExamAnalytics = () => {
                         fill="#8884d8"
                         dataKey="count"
                       >
-                        {gradeDistribution.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        {gradeDistribution.map((item, index) => (
+                          <Cell key={item.grade} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Pie>
                       <Tooltip formatter={(value) => `${value}`} />
@@ -243,8 +258,8 @@ const ExamAnalytics = () => {
               <div className="premium-card">
                 <h3 className="text-lg font-semibold mb-4">Grade Breakdown</h3>
                 <div className="space-y-3">
-                  {gradeDistribution.map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between">
+                  {gradeDistribution.map((item) => (
+                    <div key={item.grade} className="flex items-center justify-between">
                       <span className="font-medium">{item.grade}</span>
                       <div className="flex-1 mx-4">
                         <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
@@ -295,8 +310,8 @@ const ExamAnalytics = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {subjectPerformance.map((subject, idx) => (
-                      <tr key={idx} className="hover:bg-white/[0.02]">
+                    {subjectPerformance.map((subject) => (
+                      <tr key={subject.subject_name} className="hover:bg-white/[0.02]">
                         <td className="py-3 font-medium">{subject.subject_name}</td>
                         <td className="py-3">{subject.mean_score.toFixed(2)}</td>
                         <td className="py-3">{subject.pass_rate.toFixed(1)}%</td>

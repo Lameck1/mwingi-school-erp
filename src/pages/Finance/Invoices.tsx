@@ -1,12 +1,26 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
 import { FileText, Plus, Loader2, CheckCircle, AlertCircle, Eye, Printer } from 'lucide-react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Invoice, InvoiceItem } from '../../types/electron-api/FinanceAPI'
-import { useToast } from '../../contexts/ToastContext'
+
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
 import { Modal } from '../../components/ui/Modal'
-import { formatCurrency, formatDate } from '../../utils/format'
+import { useToast } from '../../contexts/ToastContext'
+import { type Invoice, type InvoiceItem } from '../../types/electron-api/FinanceAPI'
+import { formatCurrencyFromCents, formatDate } from '../../utils/format'
+import { printCurrentView } from '../../utils/print'
+
+const getStatusBadgeClass = (status: string): string => {
+    if (status === 'PAID') {
+        return 'status-badge-success'
+    }
+
+    if (status === 'PARTIAL') {
+        return 'status-badge-warning'
+    }
+
+    return 'status-badge-error'
+}
 
 export default function Invoices() {
     const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -18,7 +32,7 @@ export default function Invoices() {
 
     const loadInvoices = useCallback(async () => {
         try {
-            const data = await window.electronAPI.getInvoices()
+            const data = await globalThis.electronAPI.getInvoices()
             setInvoices(data)
         } catch (error) {
             console.error('Failed to load invoices:', error)
@@ -29,12 +43,12 @@ export default function Invoices() {
     }, [showToast])
 
     useEffect(() => {
-        loadInvoices()
+        loadInvoices().catch((err: unknown) => console.error('Failed to load invoices', err))
     }, [loadInvoices])
 
     const viewInvoice = async (invoice: Invoice) => {
         try {
-            const items = await window.electronAPI.getInvoiceItems(invoice.id)
+            const items = await globalThis.electronAPI.getInvoiceItems(invoice.id)
             setInvoiceItems(items)
             setSelectedInvoice(invoice)
         } catch (error) {
@@ -48,11 +62,83 @@ export default function Invoices() {
         const balance = total - paid
 
         return [
-            { label: 'Total Invoiced', value: formatCurrency(total), icon: FileText, color: 'from-blue-500/20 to-indigo-500/20 text-indigo-400' },
-            { label: 'Total Collected', value: formatCurrency(paid), icon: CheckCircle, color: 'from-emerald-500/20 to-teal-500/20 text-emerald-400' },
-            { label: 'Outstanding Balance', value: formatCurrency(balance), icon: AlertCircle, color: 'from-rose-500/20 to-orange-500/20 text-rose-400' },
+            { label: 'Total Invoiced', value: formatCurrencyFromCents(total), icon: FileText, color: 'from-blue-500/20 to-indigo-500/20 text-indigo-400' },
+            { label: 'Total Collected', value: formatCurrencyFromCents(paid), icon: CheckCircle, color: 'from-emerald-500/20 to-teal-500/20 text-emerald-400' },
+            { label: 'Outstanding Balance', value: formatCurrencyFromCents(balance), icon: AlertCircle, color: 'from-rose-500/20 to-orange-500/20 text-rose-400' },
         ]
     }, [invoices])
+
+    const renderInvoicesContent = () => {
+        if (loading) {
+            return (
+                <div className="text-center py-16 text-foreground/40 flex flex-col items-center gap-2">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary/40" />
+                    <span>Loading invoices...</span>
+                </div>
+            )
+        }
+
+        if (invoices.length === 0) {
+            return (
+                <div className="text-center py-16">
+                    <FileText className="w-16 h-16 text-foreground/10 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-foreground mb-2">No Invoices Yet</h3>
+                    <p className="text-foreground/40 mb-6">Generate invoices for students to track fee balances</p>
+                    <button
+                        onClick={() => navigate('/fee-structure')}
+                        className="btn btn-primary"
+                    >
+                        Generate Term Invoices
+                    </button>
+                </div>
+            )
+        }
+
+        return (
+            <div className="overflow-x-auto">
+                <table className="premium-table">
+                    <thead>
+                        <tr>
+                            <th>Invoice No</th>
+                            <th>Student</th>
+                            <th>Term</th>
+                            <th>Date</th>
+                            <th className="text-right">Amount</th>
+                            <th className="text-right">Paid</th>
+                            <th className="text-right">Balance</th>
+                            <th className="text-center">Status</th>
+                            <th className="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {invoices.map((inv) => (
+                            <tr key={inv.id}>
+                                <td className="font-mono text-xs font-bold">{inv.invoice_number}</td>
+                                <td className="font-bold">{inv.student_name}</td>
+                                <td>{inv.term_name}</td>
+                                <td>{formatDate(inv.invoice_date)}</td>
+                                <td className="text-right font-medium">{formatCurrencyFromCents(inv.total_amount)}</td>
+                                <td className="text-right text-emerald-500 font-medium">{formatCurrencyFromCents(inv.amount_paid)}</td>
+                                <td className="text-right text-amber-500 font-bold">{formatCurrencyFromCents(inv.total_amount - inv.amount_paid)}</td>
+                                <td className="text-center">
+                                    <span className={`status-badge ${getStatusBadgeClass(inv.status)}`}>{inv.status}</span>
+                                </td>
+                                <td className="text-right">
+                                    <button
+                                        onClick={() => viewInvoice(inv)}
+                                        className="btn btn-secondary px-3 py-1.5 text-xs hover:border-primary/40 group"
+                                    >
+                                        <Eye className="w-3.5 h-3.5 mr-1.5 opacity-40 group-hover:opacity-100" />
+                                        Details
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        )
+    }
 
     return (
         <div className="space-y-6">
@@ -75,76 +161,13 @@ export default function Invoices() {
             />
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {stats.map((stat, i) => (
-                    <StatCard key={i} {...stat} />
+                {stats.map((stat) => (
+                    <StatCard key={stat.label} {...stat} />
                 ))}
             </div>
 
             <div className="premium-card">
-                {loading ? (
-                    <div className="text-center py-16 text-foreground/40 flex flex-col items-center gap-2">
-                        <Loader2 className="w-8 h-8 animate-spin text-primary/40" />
-                        <span>Loading invoices...</span>
-                    </div>
-                ) : invoices.length === 0 ? (
-                    <div className="text-center py-16">
-                        <FileText className="w-16 h-16 text-foreground/10 mx-auto mb-4" />
-                        <h3 className="text-lg font-bold text-foreground mb-2">No Invoices Yet</h3>
-                        <p className="text-foreground/40 mb-6">Generate invoices for students to track fee balances</p>
-                        <button
-                            onClick={() => navigate('/fee-structure')}
-                            className="btn btn-primary"
-                        >
-                            Generate Term Invoices
-                        </button>
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="premium-table">
-                            <thead>
-                                <tr>
-                                    <th>Invoice No</th>
-                                    <th>Student</th>
-                                    <th>Term</th>
-                                    <th>Date</th>
-                                    <th className="text-right">Amount</th>
-                                    <th className="text-right">Paid</th>
-                                    <th className="text-right">Balance</th>
-                                    <th className="text-center">Status</th>
-                                    <th className="text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {invoices.map((inv) => (
-                                    <tr key={inv.id}>
-                                        <td className="font-mono text-xs font-bold">{inv.invoice_number}</td>
-                                        <td className="font-bold">{inv.student_name}</td>
-                                        <td>{inv.term_name}</td>
-                                        <td>{formatDate(inv.invoice_date)}</td>
-                                        <td className="text-right font-medium">{formatCurrency(inv.total_amount)}</td>
-                                        <td className="text-right text-emerald-500 font-medium">{formatCurrency(inv.amount_paid)}</td>
-                                        <td className="text-right text-amber-500 font-bold">{formatCurrency(inv.total_amount - inv.amount_paid)}</td>
-                                        <td className="text-center">
-                                            <span className={`status-badge ${inv.status === 'PAID' ? 'status-badge-success' :
-                                                inv.status === 'PARTIAL' ? 'status-badge-warning' :
-                                                    'status-badge-error'
-                                                }`}>{inv.status}</span>
-                                        </td>
-                                        <td className="text-right">
-                                            <button
-                                                onClick={() => viewInvoice(inv)}
-                                                className="btn btn-secondary px-3 py-1.5 text-xs hover:border-primary/40 group"
-                                            >
-                                                <Eye className="w-3.5 h-3.5 mr-1.5 opacity-40 group-hover:opacity-100" />
-                                                Details
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                {renderInvoicesContent()}
             </div>
 
             {/* View Invoice Modal */}
@@ -155,7 +178,7 @@ export default function Invoices() {
                 size="md"
             >
                 {selectedInvoice && (
-                    <div className="space-y-8">
+                    <div id="invoice-print-area" className="space-y-8">
                         {/* Header Details */}
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                             <div>
@@ -172,10 +195,7 @@ export default function Invoices() {
                             </div>
                             <div>
                                 <p className="text-[10px] uppercase tracking-widest font-bold text-foreground/40 mb-1">Status</p>
-                                <span className={`status-badge ${selectedInvoice.status === 'PAID' ? 'status-badge-success' :
-                                    selectedInvoice.status === 'PARTIAL' ? 'status-badge-warning' :
-                                        'status-badge-error'
-                                    }`}>{selectedInvoice.status}</span>
+                                <span className={`status-badge ${getStatusBadgeClass(selectedInvoice.status)}`}>{selectedInvoice.status}</span>
                             </div>
                         </div>
 
@@ -189,15 +209,15 @@ export default function Invoices() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border/10">
-                                    {invoiceItems.map((item, index) => (
-                                        <tr key={index} className="hover:bg-primary/5 transition-colors">
+                                    {invoiceItems.map((item) => (
+                                        <tr key={item.id} className="hover:bg-primary/5 transition-colors">
                                             <td className="px-6 py-4 text-sm text-foreground/80">{item.category_name}</td>
-                                            <td className="px-6 py-4 text-sm font-mono text-foreground text-right">{formatCurrency(item.amount)}</td>
+                                            <td className="px-6 py-4 text-sm font-mono text-foreground text-right">{formatCurrencyFromCents(item.amount)}</td>
                                         </tr>
                                     ))}
                                     <tr className="bg-secondary/20 font-bold text-lg">
                                         <td className="px-6 py-6 text-foreground">Total Fee</td>
-                                        <td className="px-6 py-6 text-foreground text-right">{formatCurrency(selectedInvoice.total_amount)}</td>
+                                        <td className="px-6 py-6 text-foreground text-right">{formatCurrencyFromCents(selectedInvoice.total_amount)}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -207,18 +227,21 @@ export default function Invoices() {
                         <div className="flex justify-between items-center p-6 bg-gradient-to-br from-secondary/40 to-background border border-border/40 rounded-2xl shadow-inner">
                             <div>
                                 <p className="text-[10px] uppercase tracking-widest font-bold text-foreground/40 mb-1">Total Paid</p>
-                                <p className="text-2xl font-bold text-emerald-500">{formatCurrency(selectedInvoice.amount_paid)}</p>
+                                <p className="text-2xl font-bold text-emerald-500">{formatCurrencyFromCents(selectedInvoice.amount_paid)}</p>
                             </div>
                             <div className="text-right">
                                 <p className="text-[10px] uppercase tracking-widest font-bold text-foreground/40 mb-1">Balance Due</p>
-                                <p className="text-2xl font-bold text-amber-500">{formatCurrency(selectedInvoice.total_amount - selectedInvoice.amount_paid)}</p>
+                                <p className="text-2xl font-bold text-amber-500">{formatCurrencyFromCents(selectedInvoice.total_amount - selectedInvoice.amount_paid)}</p>
                             </div>
                         </div>
 
                         {/* Actions */}
                         <div className="flex gap-3 justify-end pt-4">
                             <button
-                                onClick={() => window.print()}
+                                onClick={() => printCurrentView({
+                                    title: `Invoice ${selectedInvoice.invoice_number}`,
+                                    selector: '#invoice-print-area'
+                                })}
                                 className="btn btn-secondary flex items-center gap-2 group border-primary/20"
                             >
                                 <Printer className="w-4 h-4 text-primary group-hover:scale-110 transition-transform" />

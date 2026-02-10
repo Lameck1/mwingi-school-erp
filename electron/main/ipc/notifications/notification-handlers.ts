@@ -1,13 +1,18 @@
-import { IpcMainInvokeEvent } from 'electron'
 import { ipcMain } from '../../electron-env'
-import { NotificationService, NotificationRequest, MessageTemplate } from '../../services/notifications/NotificationService'
+import { NotificationService, type NotificationRequest, type MessageTemplate } from '../../services/notifications/NotificationService'
 
-const service = new NotificationService()
+import type { IpcMainInvokeEvent } from 'electron'
+
+let cachedService: NotificationService | null = null
+const getService = () => {
+    cachedService ??= new NotificationService()
+    return cachedService
+}
 
 export function registerNotificationHandlers(): void {
     // Config
     ipcMain.handle('notifications:reloadConfig', async () => {
-        service.reloadConfig()
+        getService().reloadConfig()
         return true
     })
 
@@ -17,7 +22,7 @@ export function registerNotificationHandlers(): void {
         request: NotificationRequest,
         userId: number
     ) => {
-        return service.send(request, userId)
+        return getService().send(request, userId)
     })
 
     ipcMain.handle('notifications:sendBulkFeeReminders', async (
@@ -34,16 +39,16 @@ export function registerNotificationHandlers(): void {
         }>,
         userId: number
     ) => {
-        return service.sendBulkFeeReminders(templateId, defaulters, userId)
+        return getService().sendBulkFeeReminders(templateId, defaulters, userId)
     })
 
     // Templates
     ipcMain.handle('notifications:getTemplates', async () => {
-        return service.getTemplates()
+        return getService().getTemplates()
     })
 
     ipcMain.handle('notifications:getTemplate', async (_event: IpcMainInvokeEvent, id: number) => {
-        return service.getTemplate(id)
+        return getService().getTemplate(id)
     })
 
     ipcMain.handle('notifications:createTemplate', async (
@@ -51,18 +56,18 @@ export function registerNotificationHandlers(): void {
         template: Omit<MessageTemplate, 'id' | 'is_active' | 'variables'>,
         userId: number
     ) => {
-        return service.createTemplate(
-            template.template_name,
-            template.template_type,
-            template.category,
-            template.subject,
-            template.body,
+        return getService().createTemplate({
+            name: template.template_name,
+            type: template.template_type,
+            category: template.category,
+            subject: template.subject,
+            body: template.body,
             userId
-        )
+        })
     })
 
     ipcMain.handle('notifications:getDefaultTemplates', async () => {
-        return service.getDefaultTemplates()
+        return getService().getDefaultTemplates()
     })
 
     // History
@@ -74,6 +79,6 @@ export function registerNotificationHandlers(): void {
         startDate?: string;
         endDate?: string;
     }) => {
-        return service.getCommunicationHistory(filters)
+        return getService().getCommunicationHistory(filters)
     })
 }

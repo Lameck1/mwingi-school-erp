@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from 'react'
 import { Search, Loader2, History, Database, UserCheck, Activity } from 'lucide-react'
-import { AuditLogEntry } from '../../types/electron-api/AuditAPI'
-import { formatDateTime } from '../../utils/format'
+import { useEffect, useState, useCallback } from 'react'
+
 import { useToast } from '../../contexts/ToastContext'
+import { type AuditLogEntry } from '../../types/electron-api/AuditAPI'
+import { formatDateTime } from '../../utils/format'
 
 export default function AuditLog() {
     const { showToast } = useToast()
@@ -13,7 +14,7 @@ export default function AuditLog() {
     const loadLogs = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await window.electronAPI.getAuditLog(200)
+            const data = await globalThis.electronAPI.getAuditLog(200)
             setLogs(data)
         } catch (error) {
             console.error('Failed to load audit logs:', error)
@@ -21,7 +22,7 @@ export default function AuditLog() {
         } finally { setLoading(false) }
     }, [showToast])
 
-    useEffect(() => { loadLogs() }, [loadLogs])
+    useEffect(() => { loadLogs().catch((err: unknown) => console.error('Failed to load logs:', err)) }, [loadLogs])
 
     const actionColors: Record<string, string> = {
         CREATE: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
@@ -90,18 +91,20 @@ export default function AuditLog() {
             </div>
 
             <div className="card overflow-hidden">
-                {loading ? (
+                {loading && (
                     <div className="flex flex-col items-center justify-center py-24 gap-4">
                         <Loader2 className="w-10 h-10 text-primary animate-spin" />
                         <p className="text-xs font-bold uppercase tracking-widest text-foreground/40">Fetching History...</p>
                     </div>
-                ) : filteredLogs.length === 0 ? (
+                )}
+                {!loading && filteredLogs.length === 0 && (
                     <div className="text-center py-24 bg-secondary/5 rounded-3xl border border-dashed border-border/40 m-4">
                         <History className="w-16 h-16 text-foreground/10 mx-auto mb-4" />
                         <h3 className="text-xl font-bold text-foreground/80 font-heading">No Historical Data</h3>
                         <p className="text-foreground/40 font-medium italic">No system events matched the active filtering parameters</p>
                     </div>
-                ) : (
+                )}
+                {!loading && filteredLogs.length > 0 && (
                     <div className="overflow-x-auto">
                         <table className="data-table">
                             <thead>
@@ -149,7 +152,7 @@ export default function AuditLog() {
                                                 <p className="font-mono text-[10px] text-foreground/50 truncate italic">
                                                     {(() => {
                                                         try {
-                                                            if (!log.new_values) return 'No mutation data'
+                                                            if (!log.new_values) {return 'No mutation data'}
                                                             const parsed = JSON.parse(log.new_values)
                                                             return JSON.stringify(parsed)
                                                         } catch {

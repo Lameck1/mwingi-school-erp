@@ -1,5 +1,7 @@
-import { BaseService } from '../base/BaseService'
 import { logAudit } from '../../database/utils/audit'
+import { BaseService } from '../base/BaseService'
+
+const BUDGET_NOT_FOUND_ERROR = 'Budget not found'
 
 export interface Budget {
     id: number
@@ -97,21 +99,21 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
     protected validateCreate(data: CreateBudgetData): string[] | null {
         const errors: string[] = []
 
-        if (!data.budget_name?.trim()) {
+        if (!data.budget_name.trim()) {
             errors.push('Budget name is required')
         }
         if (!data.academic_year_id) {
             errors.push('Academic year is required')
         }
-        if (!data.line_items?.length) {
+        if (!data.line_items.length) {
             errors.push('At least one budget line item is required')
         }
 
-        data.line_items?.forEach((item, index) => {
+        data.line_items.forEach((item, index) => {
             if (!item.category_id) {
                 errors.push(`Line item ${index + 1}: Category is required`)
             }
-            if (!item.description?.trim()) {
+            if (!item.description.trim()) {
                 errors.push(`Line item ${index + 1}: Description is required`)
             }
             if (item.budgeted_amount < 0) {
@@ -122,10 +124,10 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
         return errors.length > 0 ? errors : null
     }
 
-    protected async validateUpdate(id: number, data: Partial<CreateBudgetData>): Promise<string[] | null> {
+    protected async validateUpdate(id: number, _data: Partial<CreateBudgetData>): Promise<string[] | null> {
         const existing = await this.findById(id)
         if (!existing) {
-            return ['Budget not found']
+            return [BUDGET_NOT_FOUND_ERROR]
         }
 
         if (existing.status === 'APPROVED' || existing.status === 'CLOSED') {
@@ -176,8 +178,8 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
     }
 
     protected executeUpdate(id: number, data: Partial<CreateBudgetData>): void {
-        const sets: string[] = []
-        const params: unknown[] = []
+        const _sets: string[] = []
+        const _params: unknown[] = []
         // Implementation omitted for executeUpdate? No, this is replacing executeUpdate, so I should implement it or keep it.
         // Wait, the previous attempt to replace executeUpdate failed.
         // The file content I read shows:
@@ -256,7 +258,7 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
 
     async getBudgetWithLineItems(budgetId: number): Promise<Budget | null> {
         const budget = await this.findById(budgetId)
-        if (!budget) return null
+        if (!budget) {return null}
 
         const lineItems = this.db.prepare(`
       SELECT bli.*, tc.category_name, tc.category_type
@@ -271,8 +273,8 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
 
     async submitForApproval(budgetId: number, userId: number): Promise<{ success: boolean; errors?: string[] }> {
         const budget = await this.findById(budgetId)
-        if (!budget) return { success: false, errors: ['Budget not found'] }
-        if (budget.status !== 'DRAFT') return { success: false, errors: ['Only draft budgets can be submitted'] }
+        if (!budget) {return { success: false, errors: [BUDGET_NOT_FOUND_ERROR] }}
+        if (budget.status !== 'DRAFT') {return { success: false, errors: ['Only draft budgets can be submitted'] }}
 
         this.db.prepare(`UPDATE budget SET status = 'SUBMITTED', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(budgetId)
         logAudit(userId, 'SUBMIT', 'budget', budgetId, { status: 'DRAFT' }, { status: 'SUBMITTED' })
@@ -281,8 +283,8 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
 
     async approve(budgetId: number, userId: number): Promise<{ success: boolean; errors?: string[] }> {
         const budget = await this.findById(budgetId)
-        if (!budget) return { success: false, errors: ['Budget not found'] }
-        if (budget.status !== 'SUBMITTED') return { success: false, errors: ['Only submitted budgets can be approved'] }
+        if (!budget) {return { success: false, errors: [BUDGET_NOT_FOUND_ERROR] }}
+        if (budget.status !== 'SUBMITTED') {return { success: false, errors: ['Only submitted budgets can be approved'] }}
 
         this.db.prepare(`
       UPDATE budget 
@@ -297,4 +299,3 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
         return { success: true }
     }
 }
-

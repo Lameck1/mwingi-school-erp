@@ -1,9 +1,10 @@
+import { getDatabase } from '../../database'
 import { ipcMain } from '../../electron-env'
-import type { IpcMainInvokeEvent } from 'electron'
-import { getDatabase } from '../../database/index'
-import { ConfigService } from '../../services/ConfigService'
 import { container } from '../../services/base/ServiceContainer'
-import { SystemMaintenanceService } from '../../services/SystemMaintenanceService'
+import { ConfigService } from '../../services/ConfigService'
+import { type SystemMaintenanceService } from '../../services/SystemMaintenanceService'
+
+import type { IpcMainInvokeEvent } from 'electron'
 
 export function registerSettingsHandlers(): void {
     const db = getDatabase()
@@ -45,7 +46,7 @@ export function registerSettingsHandlers(): void {
     ipcMain.handle('settings:getSecure', async (_event: IpcMainInvokeEvent, key: string) => {
         // Return masked value if encrypted
         const val = ConfigService.getConfig(key)
-        if (!val) return null
+        if (!val) {return null}
         return val
     })
 
@@ -62,7 +63,13 @@ export function registerSettingsHandlers(): void {
         const maintenanceService = container.resolve<SystemMaintenanceService>('SystemMaintenanceService')
         return maintenanceService.resetAndSeed2026(userId)
     })
+
+    ipcMain.handle('system:normalizeCurrencyScale', async (_event: IpcMainInvokeEvent, userId: number) => {
+        const maintenanceService = container.resolve<SystemMaintenanceService>('SystemMaintenanceService')
+        return maintenanceService.normalizeCurrencyScale(userId)
+    })
 }
+
 
 
 

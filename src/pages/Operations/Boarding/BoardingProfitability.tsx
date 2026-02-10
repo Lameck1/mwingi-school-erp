@@ -1,17 +1,20 @@
-import React, { useState, useEffect, useCallback } from 'react'
 import {
     Users,
     Activity,
     Plus
 } from 'lucide-react'
+import React, { useState, useEffect, useCallback } from 'react'
+
 import { PageHeader } from '../../../components/patterns/PageHeader'
 import { StatCard } from '../../../components/patterns/StatCard'
-import { DataTable } from '../../../components/ui/Table/DataTable'
-import { Modal } from '../../../components/ui/Modal'
 import { Input } from '../../../components/ui/Input'
+import { Modal } from '../../../components/ui/Modal'
 import { Select } from '../../../components/ui/Select'
+import { DataTable } from '../../../components/ui/Table/DataTable'
 import { useToast } from '../../../contexts/ToastContext'
-import { BoardingFacility } from '../../../types/electron-api/OperationsAPI'
+import { useAuthStore } from '../../../stores'
+import { type BoardingFacility } from '../../../types/electron-api/OperationsAPI'
+import { shillingsToCents } from '../../../utils/format'
 
 interface BoardingSummary {
     totalCapacity: number
@@ -21,6 +24,7 @@ interface BoardingSummary {
 
 export default function BoardingProfitability() {
     const { showToast } = useToast()
+    const { user } = useAuthStore()
     const [loading, setLoading] = useState(false)
     const [facilities, setFacilities] = useState<BoardingFacility[]>([])
     const [summary, setSummary] = useState<BoardingSummary | null>(null)
@@ -45,7 +49,7 @@ export default function BoardingProfitability() {
         setLoading(true)
         try {
             // Fetch facilities with their profitability data
-            const data = await window.electronAPI.getBoardingFacilities()
+            const data = await globalThis.electronAPI.getBoardingFacilities()
             setFacilities(data)
             
             // Calculate aggregate summary
@@ -67,19 +71,23 @@ export default function BoardingProfitability() {
     }, [showToast])
 
     useEffect(() => {
-        loadData()
+        loadData().catch((err: unknown) => console.error('Failed to load boarding data', err))
     }, [loadData])
 
     const handleRecordExpense = async (e: React.FormEvent) => {
         e.preventDefault()
         try {
-            await window.electronAPI.recordBoardingExpense({
+            if (!user) {
+                showToast('User not authenticated', 'error')
+                return
+            }
+            await globalThis.electronAPI.recordBoardingExpense({
                 ...expenseForm,
-                facility_id: parseInt(expenseForm.facility_id),
-                amount_cents: Math.round(parseFloat(expenseForm.amount) * 100),
+                facility_id: Number.parseInt(expenseForm.facility_id, 10),
+                amount_cents: shillingsToCents(expenseForm.amount),
                 fiscal_year: new Date().getFullYear(), // Default to current year
                 term: 1, // Default to Term 1 or fetch current term
-                recorded_by: 1 // Default user
+                recorded_by: user.id
             })
             showToast('Expense recorded successfully', 'success')
             setIsExpenseModalOpen(false)
@@ -90,7 +98,7 @@ export default function BoardingProfitability() {
                 description: '',
                 gl_account_code: ''
             })
-            loadData() // Refresh
+            await loadData() // Refresh
         } catch (error) {
             console.error(error)
             showToast('Failed to record expense', 'error')
@@ -107,12 +115,14 @@ export default function BoardingProfitability() {
             accessorKey: 'occupancy_rate',
             cell: (row: BoardingFacility) => {
                 const rate = row.capacity > 0 ? (row.current_occupancy / row.capacity) * 100 : 0
+                let badgeClass = 'bg-yellow-100 text-yellow-800'
+                if (rate >= 90) {
+                    badgeClass = 'bg-green-100 text-green-800'
+                } else if (rate >= 70) {
+                    badgeClass = 'bg-blue-100 text-blue-800'
+                }
                 return (
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        rate >= 90 ? 'bg-green-100 text-green-800' :
-                        rate >= 70 ? 'bg-blue-100 text-blue-800' :
-                        'bg-yellow-100 text-yellow-800'
-                    }`}>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeClass}`}>
                         {rate.toFixed(1)}%
                     </span>
                 )
@@ -191,14 +201,14 @@ export default function BoardingProfitability() {
                     <Select
                         label="Facility"
                         value={expenseForm.facility_id}
-                        onChange={(e) => setExpenseForm({...expenseForm, facility_id: e.target.value})}
+                        onChange={(val) => setExpenseForm({ ...expenseForm, facility_id: String(val) })}
                         options={facilities.map(f => ({ value: f.id, label: f.name }))}
                     />
                     
                     <Select
                         label="Expense Type"
                         value={expenseForm.expense_type}
-                        onChange={(e) => setExpenseForm({...expenseForm, expense_type: e.target.value})}
+                        onChange={(val) => setExpenseForm({ ...expenseForm, expense_type: String(val) })}
                         options={[
                             { value: 'FOOD', label: 'Food' },
                             { value: 'UTILITIES', label: 'Utilities' },
@@ -210,8 +220,9 @@ export default function BoardingProfitability() {
                     />
 
                     <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-foreground/60 px-1">Amount (KES)</label>
+                        <label htmlFor="boarding-expense-amount" className="text-xs font-bold text-foreground/60 px-1">Amount (KES)</label>
                         <Input
+                            id="boarding-expense-amount"
                             type="number"
                             value={expenseForm.amount}
                             onChange={(e) => setExpenseForm({...expenseForm, amount: e.target.value})}
@@ -220,8 +231,9 @@ export default function BoardingProfitability() {
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-foreground/60 px-1">Description</label>
+                        <label htmlFor="boarding-expense-description" className="text-xs font-bold text-foreground/60 px-1">Description</label>
                         <Input
+                            id="boarding-expense-description"
                             value={expenseForm.description}
                             onChange={(e) => setExpenseForm({...expenseForm, description: e.target.value})}
                             required

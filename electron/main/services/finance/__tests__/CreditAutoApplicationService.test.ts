@@ -1,6 +1,9 @@
 import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { CreditAutoApplicationService } from '../CreditAutoApplicationService'
+
+type DbRow = Record<string, any>
 
 // Mock audit utilities
 vi.mock('../../../database/utils/audit', () => ({
@@ -62,7 +65,7 @@ describe('CreditAutoApplicationService', () => {
   })
 
   afterEach(() => {
-    if (db) db.close()
+    if (db) {db.close()}
   })
 
   describe('autoApplyCredits', () => {
@@ -77,15 +80,15 @@ describe('CreditAutoApplicationService', () => {
       service.autoApplyCredits(1)
 
       // Check first invoice (oldest due date)
-      const invoice1 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-001') as unknown
+      const invoice1 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-001') as DbRow
       expect(invoice1.amount_paid).toBeGreaterThanOrEqual(0)
 
       // Check second invoice
-      const invoice2 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-002') as unknown
+      const invoice2 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-002') as DbRow
       expect(invoice2.amount_paid).toBeGreaterThanOrEqual(0)
 
       // Check third invoice
-      const invoice3 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-003') as unknown
+      const invoice3 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-003') as DbRow
       expect(invoice3.amount_paid).toBeGreaterThanOrEqual(0)
     })
 
@@ -107,7 +110,7 @@ describe('CreditAutoApplicationService', () => {
       expect(result).toBeDefined()
 
       // First invoice should have some payment
-      const invoice1 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-001') as unknown
+      const invoice1 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-001') as DbRow
       expect(invoice1.amount_paid).toBeGreaterThanOrEqual(0)
     })
 
@@ -127,7 +130,7 @@ describe('CreditAutoApplicationService', () => {
       service.autoApplyCredits(1)
 
       // Overdue invoice should have payment applied
-      const invoice1 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-001') as unknown
+      const invoice1 = db.prepare('SELECT * FROM fee_invoice WHERE invoice_number = ?').get('INV-001') as DbRow
       expect(invoice1.amount_paid).toBeGreaterThanOrEqual(0)
     })
 
@@ -165,7 +168,7 @@ describe('CreditAutoApplicationService', () => {
     })
 
     it('should calculate credit correctly', () => {
-      const credits = db.prepare('SELECT SUM(amount) as total FROM credit_transaction WHERE student_id = 1').get() as unknown
+      const credits = db.prepare('SELECT SUM(amount) as total FROM credit_transaction WHERE student_id = 1').get() as DbRow
       expect(credits.total).toBe(70000)
     })
   })
@@ -194,7 +197,7 @@ describe('CreditAutoApplicationService', () => {
     })
 
     it('should create new credit transaction', () => {
-      const beforeCount = db.prepare('SELECT COUNT(*) as count FROM credit_transaction').get() as unknown
+      const beforeCount = db.prepare('SELECT COUNT(*) as count FROM credit_transaction').get() as DbRow
       
       service.addCredit(
         1,  // studentId
@@ -203,7 +206,7 @@ describe('CreditAutoApplicationService', () => {
         10  // userId
       )
 
-      const afterCount = db.prepare('SELECT COUNT(*) as count FROM credit_transaction').get() as unknown
+      const afterCount = db.prepare('SELECT COUNT(*) as count FROM credit_transaction').get() as DbRow
       expect(afterCount.count).toBeGreaterThanOrEqual(beforeCount.count)
     })
   })
@@ -220,7 +223,7 @@ describe('CreditAutoApplicationService', () => {
 
       const transactions = await service.getCreditTransactions(3)
 
-      expect(transactions === undefined || Array.isArray(transactions)).toBe(true)
+      expect(transactions == null || Array.isArray(transactions)).toBe(true)
     })
   })
 

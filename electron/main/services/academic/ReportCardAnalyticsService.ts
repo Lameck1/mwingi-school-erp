@@ -43,6 +43,24 @@ interface TermComparison {
   improvement: number
 }
 
+const UNKNOWN_ERROR = 'Unknown error'
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : UNKNOWN_ERROR
+}
+
+function calculateMedian(sortedScores: number[]): number {
+  if (sortedScores.length === 0) {
+    return 0
+  }
+
+  if (sortedScores.length % 2 === 0) {
+    return (sortedScores[sortedScores.length / 2 - 1] + sortedScores[sortedScores.length / 2]) / 2
+  }
+
+  return sortedScores[Math.floor(sortedScores.length / 2)]
+}
+
 class ReportCardAnalyticsService {
   /**
    * Get performance summary for a class
@@ -79,12 +97,7 @@ class ReportCardAnalyticsService {
       // Calculate statistics
       const mean = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0
       const sortedScores = [...scores].sort((a, b) => a - b)
-      const median =
-        sortedScores.length > 0
-          ? sortedScores.length % 2 === 0
-            ? (sortedScores[sortedScores.length / 2 - 1] + sortedScores[sortedScores.length / 2]) / 2
-            : sortedScores[Math.floor(sortedScores.length / 2)]
-          : 0
+      const median = calculateMedian(sortedScores)
 
       // Calculate mode
       const frequencyMap = new Map<number, number>()
@@ -110,8 +123,8 @@ class ReportCardAnalyticsService {
         mean_score: mean,
         median_score: median,
         mode_score: mode,
-        top_performer: topStudent?.student_name || 'N/A',
-        top_performer_score: topStudent?.average_score || 0,
+        top_performer: topStudent.student_name || 'N/A',
+        top_performer_score: topStudent.average_score || 0,
         total_students: totalStudents,
         pass_count: passCount,
         pass_rate: totalStudents > 0 ? (passCount / totalStudents) * 100 : 0,
@@ -120,7 +133,7 @@ class ReportCardAnalyticsService {
       }
     } catch (error) {
       console.error('Error getting performance summary:', error)
-      throw new Error(`Failed to get performance summary: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      throw new Error(`Failed to get performance summary: ${getErrorMessage(error)}`)
     }
   }
 
@@ -164,7 +177,7 @@ class ReportCardAnalyticsService {
       }))
     } catch (error) {
       console.error('Error getting grade distribution:', error)
-      throw new Error(`Failed to get grade distribution: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      throw new Error(`Failed to get grade distribution: ${getErrorMessage(error)}`)
     }
   }
 
@@ -228,7 +241,7 @@ class ReportCardAnalyticsService {
       return analysis.sort((a, b) => b.mean_score - a.mean_score)
     } catch (error) {
       console.error('Error getting subject performance:', error)
-      throw new Error(`Failed to get subject performance: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      throw new Error(`Failed to get subject performance: ${getErrorMessage(error)}`)
     }
   }
 
@@ -288,7 +301,7 @@ class ReportCardAnalyticsService {
       })
     } catch (error) {
       console.error('Error getting struggling students:', error)
-      throw new Error(`Failed to get struggling students: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      throw new Error(`Failed to get struggling students: ${getErrorMessage(error)}`)
     }
   }
 
@@ -302,7 +315,7 @@ class ReportCardAnalyticsService {
       // Get current exam details
       const currentExam = db
         .prepare('SELECT academic_year_id, term_id FROM exams WHERE id = ?')
-        .get(examId) as { academic_year_id: number; term_id: number }
+        .get(examId) as { academic_year_id: number; term_id: number } | undefined
 
       if (!currentExam) {
         return []
@@ -355,7 +368,7 @@ class ReportCardAnalyticsService {
       return comparison
     } catch (error) {
       console.error('Error getting term comparison:', error)
-      throw new Error(`Failed to get term comparison: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      throw new Error(`Failed to get term comparison: ${getErrorMessage(error)}`)
     }
   }
 }

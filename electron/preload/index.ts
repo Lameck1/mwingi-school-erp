@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+import type { IpcRendererEvent } from 'electron'
+
+const CHANNEL_EXPORT_PDF = 'export:pdf'
+const CHANNEL_CHECK_FOR_UPDATES = 'check-for-updates'
+const CHANNEL_UPDATE_STATUS = 'update-status'
+
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld('electronAPI', {
@@ -7,6 +13,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   login: (username: string, password: string) => ipcRenderer.invoke('auth:login', username, password),
   changePassword: (userId: number, oldPassword: string, newPassword: string) =>
     ipcRenderer.invoke('auth:changePassword', userId, oldPassword, newPassword),
+  hasUsers: () => ipcRenderer.invoke('auth:hasUsers'),
+  setupAdmin: (data: { username: string; password: string; full_name: string; email: string }) =>
+    ipcRenderer.invoke('auth:setupAdmin', data),
+  getSession: () => ipcRenderer.invoke('auth:getSession'),
+  setSession: (session: { user: unknown; lastActivity: number }) => ipcRenderer.invoke('auth:setSession', session),
+  clearSession: () => ipcRenderer.invoke('auth:clearSession'),
 
   // Settings
   getSettings: () => ipcRenderer.invoke('settings:get'),
@@ -15,6 +27,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAllConfigs: () => ipcRenderer.invoke('settings:getAllConfigs'),
   saveSecureConfig: (key: string, value: string) => ipcRenderer.invoke('settings:saveSecure', key, value),
   resetAndSeedDatabase: (userId: number) => ipcRenderer.invoke('system:resetAndSeed', userId),
+  normalizeCurrencyScale: (userId: number) => ipcRenderer.invoke('system:normalizeCurrencyScale', userId),
 
   // Academic
   getAcademicYears: () => ipcRenderer.invoke('academicYear:getAll'),
@@ -65,10 +78,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getStudentBalance: (studentId: number) => ipcRenderer.invoke('student:getBalance', studentId),
 
   // Staff
-  getStaff: () => ipcRenderer.invoke('staff:getAll'),
+  getStaff: (activeOnly?: boolean) => ipcRenderer.invoke('staff:getAll', activeOnly),
   getStaffById: (id: number) => ipcRenderer.invoke('staff:getById', id),
   createStaff: (data: unknown) => ipcRenderer.invoke('staff:create', data),
   updateStaff: (id: number, data: unknown) => ipcRenderer.invoke('staff:update', id, data),
+  setStaffActive: (id: number, isActive: boolean) => ipcRenderer.invoke('staff:setActive', id, isActive),
 
   // Payroll
   getPayrollHistory: () => ipcRenderer.invoke('payroll:getHistory'),
@@ -108,8 +122,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Backup
   createBackup: () => ipcRenderer.invoke('backup:create'),
+  createBackupTo: (filePath: string) => ipcRenderer.invoke('backup:createTo', filePath),
   restoreBackup: (filePath: string) => ipcRenderer.invoke('backup:restore', filePath),
   getBackupList: () => ipcRenderer.invoke('backup:getList'),
+  openBackupFolder: () => ipcRenderer.invoke('backup:openFolder'),
 
   // Users
   getUsers: () => ipcRenderer.invoke('user:getAll'),
@@ -144,16 +160,31 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getPromotionStreams: () => ipcRenderer.invoke('promotion:getStreams'),
   getStudentsForPromotion: (streamId: number, academicYearId: number) => ipcRenderer.invoke('promotion:getStudentsForPromotion', streamId, academicYearId),
   promoteStudent: (data: unknown, userId: number) => ipcRenderer.invoke('promotion:promoteStudent', data, userId),
-  batchPromoteStudents: (studentIds: number[], fromStreamId: number, toStreamId: number, fromAcademicYearId: number, toAcademicYearId: number, toTermId: number, userId: number) =>
-    ipcRenderer.invoke('promotion:batchPromote', studentIds, fromStreamId, toStreamId, fromAcademicYearId, toAcademicYearId, toTermId, userId),
+  batchPromoteStudents: (...args: [
+    studentIds: number[],
+    fromStreamId: number,
+    toStreamId: number,
+    fromAcademicYearId: number,
+    toAcademicYearId: number,
+    toTermId: number,
+    userId: number,
+  ]) =>
+    ipcRenderer.invoke('promotion:batchPromote', ...args),
   getStudentPromotionHistory: (studentId: number) => ipcRenderer.invoke('promotion:getStudentHistory', studentId),
   getNextStream: (currentStreamId: number) => ipcRenderer.invoke('promotion:getNextStream', currentStreamId),
 
   // Attendance
   getAttendanceByDate: (streamId: number, date: string, academicYearId: number, termId: number) =>
     ipcRenderer.invoke('attendance:getByDate', streamId, date, academicYearId, termId),
-  markAttendance: (entries: unknown[], streamId: number, date: string, academicYearId: number, termId: number, userId: number) =>
-    ipcRenderer.invoke('attendance:markAttendance', entries, streamId, date, academicYearId, termId, userId),
+  markAttendance: (...args: [
+    entries: unknown[],
+    streamId: number,
+    date: string,
+    academicYearId: number,
+    termId: number,
+    userId: number,
+  ]) =>
+    ipcRenderer.invoke('attendance:markAttendance', ...args),
   getStudentAttendanceSummary: (studentId: number, academicYearId: number, termId?: number) =>
     ipcRenderer.invoke('attendance:getStudentSummary', studentId, academicYearId, termId),
   getClassAttendanceSummary: (streamId: number, date: string, academicYearId: number, termId: number) =>
@@ -161,7 +192,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getStudentsForAttendance: (streamId: number, academicYearId: number, termId: number) =>
     ipcRenderer.invoke('attendance:getStudentsForMarking', streamId, academicYearId, termId),
 
-  // Report Cards
+  // Report Cards (Legacy / Non-CBC)
   getSubjects: () => ipcRenderer.invoke('reportcard:getSubjects'),
   getStudentGrades: (studentId: number, academicYearId: number, termId: number) =>
     ipcRenderer.invoke('reportcard:getStudentGrades', studentId, academicYearId, termId),
@@ -170,17 +201,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getStudentsForReportCards: (streamId: number, academicYearId: number, termId: number) =>
     ipcRenderer.invoke('reportcard:getStudentsForGeneration', streamId, academicYearId, termId),
 
-  // New Report Card Methods
+  // CBC Report Card Methods
   generateBatchReportCards: (data: unknown) => ipcRenderer.invoke('report-card:generateBatch', data),
   emailReportCards: (data: unknown) => ipcRenderer.invoke('report-card:emailReports', data),
   mergeReportCards: (data: unknown) => ipcRenderer.invoke('report-card:mergePDFs', data),
   downloadReportCards: (data: unknown) => ipcRenderer.invoke('report-card:downloadReports', data),
 
   // General
-  exportToPDF: (data: unknown) => ipcRenderer.invoke('export:pdf', data),
+  exportToPDF: (data: unknown) => ipcRenderer.invoke(CHANNEL_EXPORT_PDF, data),
 
   // Academic System
   getAcademicSubjects: () => ipcRenderer.invoke('academic:getSubjects'),
+  getAcademicSubjectsAdmin: () => ipcRenderer.invoke('academic:getSubjectsAdmin'),
+  createAcademicSubject: (data: unknown, userId: number) => ipcRenderer.invoke('academic:createSubject', data, userId),
+  updateAcademicSubject: (id: number, data: unknown, userId: number) => ipcRenderer.invoke('academic:updateSubject', id, data, userId),
+  setAcademicSubjectActive: (id: number, isActive: boolean, userId: number) => ipcRenderer.invoke('academic:setSubjectActive', id, isActive, userId),
   getAcademicExams: (academicYearId: number, termId: number) => ipcRenderer.invoke('academic:getExams', academicYearId, termId),
   createAcademicExam: (data: unknown, userId: number) => ipcRenderer.invoke('academic:createExam', data, userId),
   deleteAcademicExam: (id: number, userId: number) => ipcRenderer.invoke('academic:deleteExam', id, userId),
@@ -196,7 +231,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Merit Lists & Analysis
   generateMeritList: (options: unknown) => ipcRenderer.invoke('merit-list:generate', options),
   generateClassMeritList: (examId: number, streamId: number) => ipcRenderer.invoke('merit-list:getClass', examId, streamId),
-  getSubjectMeritList: (subjectId: number, examId: number) => ipcRenderer.invoke('merit-list:getSubject', subjectId, examId),
+  getSubjectMeritList: (filters: { examId: number; subjectId: number; streamId: number }) =>
+    ipcRenderer.invoke('merit-list:getSubject', filters),
   getPerformanceImprovement: (studentId: number) => ipcRenderer.invoke('merit-list:getImprovement', studentId),
 
   // Notifications
@@ -247,10 +283,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   revokeExemption: (id: number, reason: string, userId: number) => ipcRenderer.invoke('exemption:revoke', id, reason, userId),
   getExemptionStats: (academicYearId?: number) => ipcRenderer.invoke('exemption:getStats', academicYearId),
   // Analytics & Advanced Academic Features
-  getExamAnalytics: (examId: number, streamId?: number) => ipcRenderer.invoke('analytics:getExamAnalytics', examId, streamId),
-  getReportCardAnalytics: (academicYearId: number, termId: number) => ipcRenderer.invoke('analytics:getReportCardAnalytics', academicYearId, termId),
-  getSubjectMeritAnalysis: (examId: number, subjectId: number) => ipcRenderer.invoke('analytics:getSubjectMeritAnalysis', examId, subjectId),
-  getMostImprovedStudents: (examId: number, limit?: number) => ipcRenderer.invoke('analytics:getMostImproved', examId, limit),
+  getMostImprovedStudents: (filters: unknown) => ipcRenderer.invoke('merit-list:getMostImproved', filters),
+
+  // Certificates & Parent Notifications
+  generateCertificate: (data: unknown) => ipcRenderer.invoke('academic:generateCertificate', data),
+  emailParents: (data: unknown, userId: number) => ipcRenderer.invoke('academic:emailParents', data, userId),
 
   // Awards
   getAwards: (filters?: unknown) => ipcRenderer.invoke('awards:getAll', filters), // Updated to accept filters
@@ -269,4 +306,164 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportExamTimetableToPDF: (data: unknown) => ipcRenderer.invoke('schedule:exportPDF', data),
   getExams: (filters?: unknown) => ipcRenderer.invoke('academic:getExamsList', filters),
 
+  // === Missing preload bridges added during audit ===
+
+  // Financial Reports (reports/financial-reports-handlers)
+  getBalanceSheet: (asOfDate: string) => ipcRenderer.invoke('reports:getBalanceSheet', asOfDate),
+  getProfitAndLoss: (startDate: string, endDate: string) => ipcRenderer.invoke('reports:getProfitAndLoss', startDate, endDate),
+  getTrialBalance: (startDate: string, endDate: string) => ipcRenderer.invoke('reports:getTrialBalance', startDate, endDate),
+  getComparativeProfitAndLoss: (currentStart: string, currentEnd: string, priorStart: string, priorEnd: string) =>
+    ipcRenderer.invoke('reports:getComparativeProfitAndLoss', currentStart, currentEnd, priorStart, priorEnd),
+
+  // Transaction Approvals (finance/approval-handlers)
+  getApprovalQueue: (filter: string) => ipcRenderer.invoke('approvals:getQueue', filter),
+  approveTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) =>
+    ipcRenderer.invoke('approvals:approve', approvalId, reviewNotes, reviewerUserId),
+  rejectTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) =>
+    ipcRenderer.invoke('approvals:reject', approvalId, reviewNotes, reviewerUserId),
+
+  // Fixed Assets (finance/fixed-asset-handlers)
+  getAssets: (filters?: unknown) => ipcRenderer.invoke('assets:get-all', filters),
+  getAsset: (id: number) => ipcRenderer.invoke('assets:get-one', id),
+  createAsset: (data: unknown, userId: number) => ipcRenderer.invoke('assets:create', data, userId),
+  updateAsset: (id: number, data: unknown, userId: number) => ipcRenderer.invoke('assets:update', id, data, userId),
+  runDepreciation: (assetId: number, periodId: number, userId: number) => ipcRenderer.invoke('assets:run-depreciation', assetId, periodId, userId),
+
+  // GL Accounts (finance/gl-account-handlers)
+  getGLAccounts: (filters?: unknown) => ipcRenderer.invoke('gl:get-accounts', filters),
+  getGLAccount: (id: number) => ipcRenderer.invoke('gl:get-account', id),
+  createGLAccount: (data: unknown, userId: number) => ipcRenderer.invoke('gl:create-account', data, userId),
+  updateGLAccount: (id: number, data: unknown, userId: number) => ipcRenderer.invoke('gl:update-account', id, data, userId),
+  deleteGLAccount: (id: number, userId: number) => ipcRenderer.invoke('gl:delete-account', id, userId),
+
+  // Bank Reconciliation (overrides for clearer naming)
+  getAccounts: () => ipcRenderer.invoke('bank:getAccounts'),
+  getStatements: (bankAccountId?: number) => ipcRenderer.invoke('bank:getStatements', bankAccountId),
+  getStatementWithLines: (statementId: number) => ipcRenderer.invoke('bank:getStatementWithLines', statementId),
+  matchTransaction: (lineId: number, transactionId: number) => ipcRenderer.invoke('bank:matchTransaction', lineId, transactionId),
+
+  // Operations - Boarding
+  getBoardingFacilities: () => ipcRenderer.invoke('operations:boarding:getAllFacilities'),
+  getActiveBoardingFacilities: () => ipcRenderer.invoke('operations:boarding:getActiveFacilities'),
+  recordBoardingExpense: (params: unknown) => ipcRenderer.invoke('operations:boarding:recordExpense', params),
+
+  // Operations - Transport
+  getTransportRoutes: () => ipcRenderer.invoke('operations:transport:getAllRoutes'),
+  getActiveTransportRoutes: () => ipcRenderer.invoke('operations:transport:getActiveRoutes'),
+  createTransportRoute: (params: unknown) => ipcRenderer.invoke('operations:transport:createRoute', params),
+  recordTransportExpense: (params: unknown) => ipcRenderer.invoke('operations:transport:recordExpense', params),
+
+  // Exam Analysis
+  getSubjectAnalysis: (subjectId: number, examId: number) => ipcRenderer.invoke('exam-analysis:getSubjectAnalysis', subjectId, examId),
+  analyzeAllSubjects: (examId: number) => ipcRenderer.invoke('exam-analysis:analyzeAllSubjects', examId),
+
+  // Performance Analysis / Report Card Analytics
+  getPerformanceSummary: (filters: unknown) => ipcRenderer.invoke('report-card-analytics:getPerformanceSummary', filters),
+  getGradeDistribution: (filters: unknown) => ipcRenderer.invoke('report-card-analytics:getGradeDistribution', filters),
+  getSubjectPerformance: (filters: unknown) => ipcRenderer.invoke('report-card-analytics:getSubjectPerformance', filters),
+  getStrugglingStudents: (filters: unknown) => ipcRenderer.invoke('report-card-analytics:getStrugglingStudents', filters),
+  getTermComparison: (filters: unknown) => ipcRenderer.invoke('report-card-analytics:getTermComparison', filters),
+  getSubjectDifficulty: (filters: { examId: number; subjectId: number; streamId: number }) =>
+    ipcRenderer.invoke('merit-list:getSubjectDifficulty', filters),
+  exportAnalyticsToPDF: (data: unknown) => ipcRenderer.invoke(CHANNEL_EXPORT_PDF, data),
+  exportReportCardAnalyticsToPDF: (data: unknown) => ipcRenderer.invoke(CHANNEL_EXPORT_PDF, data),
+
+  // Grants and Student Cost
+  getGrantsByStatus: (status: string) => ipcRenderer.invoke('operations:grants:getByStatus', status),
+  createGrant: (data: unknown, userId: number) => ipcRenderer.invoke('operations:grants:create', data, userId),
+  recordGrantUtilization: (payload: {
+    grantId: number
+    amount: number
+    description: string
+    glAccountCode: string | null
+    utilizationDate: string
+    userId: number
+  }) =>
+    ipcRenderer.invoke('operations:grants:recordUtilization', payload),
+  generateNEMISExport: (fiscalYear: number) => ipcRenderer.invoke('operations:grants:generateNEMISExport', fiscalYear),
+
+  // Student Cost Analysis
+  calculateStudentCost: (studentId: number, termId: number, academicYearId: number) =>
+    ipcRenderer.invoke('operations:studentCost:calculate', studentId, termId, academicYearId),
+  getStudentCostVsRevenue: (studentId: number, termId: number) =>
+    ipcRenderer.invoke('operations:studentCost:getVsRevenue', studentId, termId),
+
+  // Opening Balances
+  importStudentOpeningBalances: (balances: unknown, academicYearId: number, importSource: string, userId: number) =>
+    ipcRenderer.invoke('opening-balance:import-student', balances, academicYearId, importSource, userId),
+  importGLOpeningBalances: (balances: unknown, userId: number) =>
+    ipcRenderer.invoke('opening-balance:import-gl', balances, userId),
+
+  // Reconciliation
+  runReconciliation: (userId: number) => ipcRenderer.invoke('reconciliation:runAll', userId),
+  getReconciliationHistory: (limit?: number) => ipcRenderer.invoke('reconciliation:getHistory', limit),
+
+  // CBC Strands
+  getCBCStrands: () => ipcRenderer.invoke('cbc:getStrands'),
+  getActiveCBCStrands: () => ipcRenderer.invoke('cbc:getActiveStrands'),
+  linkFeeCategoryToStrand: (feeCategoryId: number, strandId: number, allocationPercentage: number, userId: number) =>
+    ipcRenderer.invoke('cbc:linkFeeCategory', feeCategoryId, strandId, allocationPercentage, userId),
+
+  // JSS Transitions
+  initiateJSSTransition: (data: unknown) => ipcRenderer.invoke('jss:initiateTransition', data),
+  bulkJSSTransition: (data: unknown) => ipcRenderer.invoke('jss:bulkTransition', data),
+  getJSSEligibleStudents: (fromGrade: number, fiscalYear: number) => ipcRenderer.invoke('jss:getEligibleStudents', fromGrade, fiscalYear),
+  // Aliases used by UI
+  getEligibleStudents: (fromGrade: number, fiscalYear: number) => ipcRenderer.invoke('jss:getEligibleStudents', fromGrade, fiscalYear),
+  getJSSFeeStructure: (grade: number, fiscalYear: number) => ipcRenderer.invoke('jss:getFeeStructure', grade, fiscalYear),
+  bulkTransition: (data: unknown) => ipcRenderer.invoke('jss:bulkTransition', data),
+
+  // Budget Enforcement
+  setBudgetAllocation: (glAccountCode: string, fiscalYear: number, allocatedAmount: number, department: string | null, userId: number) =>
+    ipcRenderer.invoke('budget:setAllocation', glAccountCode, fiscalYear, allocatedAmount, department, userId),
+  validateBudgetTransaction: (glAccountCode: string, amount: number, fiscalYear: number, department?: string | null) =>
+    ipcRenderer.invoke('budget:validateTransaction', glAccountCode, amount, fiscalYear, department),
+
+  // Updates
+  checkForUpdates: () => ipcRenderer.invoke(CHANNEL_CHECK_FOR_UPDATES),
+  downloadUpdate: () => ipcRenderer.invoke('download-update'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
+
+  // Menu/Event listeners (return unsubscribe)
+  onNavigate: (callback: (path: string) => void) => {
+    const listener = (_event: IpcRendererEvent, path: string) => callback(path)
+    ipcRenderer.on('navigate', listener)
+    return () => ipcRenderer.removeListener('navigate', listener)
+  },
+  onOpenImportDialog: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('open-import-dialog', listener)
+    return () => ipcRenderer.removeListener('open-import-dialog', listener)
+  },
+  onTriggerPrint: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('trigger-print', listener)
+    return () => ipcRenderer.removeListener('trigger-print', listener)
+  },
+  onBackupDatabase: (callback: (path: string) => void) => {
+    const listener = (_event: IpcRendererEvent, path: string) => callback(path)
+    ipcRenderer.on('backup-database', listener)
+    return () => ipcRenderer.removeListener('backup-database', listener)
+  },
+  onOpenCommandPalette: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('open-command-palette', listener)
+    return () => ipcRenderer.removeListener('open-command-palette', listener)
+  },
+  onCheckForUpdates: (callback: () => void) => {
+    const listener = () => callback()
+    ipcRenderer.on(CHANNEL_CHECK_FOR_UPDATES, listener)
+    return () => ipcRenderer.removeListener(CHANNEL_CHECK_FOR_UPDATES, listener)
+  },
+  onUpdateStatus: (callback: (data: unknown) => void) => {
+    const listener = (_event: IpcRendererEvent, data: unknown) => callback(data)
+    ipcRenderer.on(CHANNEL_UPDATE_STATUS, listener)
+    return () => ipcRenderer.removeListener(CHANNEL_UPDATE_STATUS, listener)
+  },
+  onDatabaseError: (callback: (message: string) => void) => {
+    const listener = (_event: IpcRendererEvent, message: string) => callback(message)
+    ipcRenderer.on('db-error', listener)
+    return () => ipcRenderer.removeListener('db-error', listener)
+  },
 })

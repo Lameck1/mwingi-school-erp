@@ -1,10 +1,22 @@
 import React, { useState, useEffect } from 'react'
+
 import { useAuthStore } from '../../stores'
-import { HireBooking, HireAsset, HireClient, HireStats } from '../../types/electron-api/HireAPI'
+import { type HireBooking, type HireAsset, type HireClient, type HireStats } from '../../types/electron-api/HireAPI'
+import { formatCurrencyFromCents, shillingsToCents, centsToShillings } from '../../utils/format'
 import { printDocument } from '../../utils/print'
-import { formatCurrency, shillingsToCents } from '../../utils/format'
 
 type TabType = 'bookings' | 'clients' | 'assets'
+
+const getStatusColor = (status: string) => {
+    switch (status) {
+        case 'PENDING': return 'bg-yellow-100 text-yellow-800'
+        case 'CONFIRMED': return 'bg-blue-100 text-blue-800'
+        case 'IN_PROGRESS': return 'bg-purple-100 text-purple-800'
+        case 'COMPLETED': return 'bg-green-100 text-green-800'
+        case 'CANCELLED': return 'bg-red-100 text-red-800'
+        default: return 'bg-gray-100 text-gray-800'
+    }
+}
 
 export default function AssetHire() {
     const { user } = useAuthStore()
@@ -52,17 +64,17 @@ export default function AssetHire() {
     })
 
     useEffect(() => {
-        loadData()
+        void loadData()
     }, [])
 
     const loadData = async () => {
         setLoading(true)
         try {
             const [bookingsRes, clientsRes, assetsRes, statsRes] = await Promise.all([
-                window.electronAPI.getHireBookings(),
-                window.electronAPI.getHireClients(),
-                window.electronAPI.getHireAssets({ isActive: true }),
-                window.electronAPI.getHireStats()
+                globalThis.electronAPI.getHireBookings(),
+                globalThis.electronAPI.getHireClients(),
+                globalThis.electronAPI.getHireAssets({ isActive: true }),
+                globalThis.electronAPI.getHireStats()
             ])
             setBookings(bookingsRes)
             setClients(clientsRes)
@@ -77,7 +89,7 @@ export default function AssetHire() {
 
     const handleCreateBooking = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!user) return
+        if (!user) {return}
 
         // Validate
         if (!bookingForm.asset_id || !bookingForm.client_id || !bookingForm.total_amount) {
@@ -86,7 +98,7 @@ export default function AssetHire() {
         }
 
         // Check availability
-        const available = await window.electronAPI.checkHireAvailability(
+        const available = await globalThis.electronAPI.checkHireAvailability(
             bookingForm.asset_id,
             bookingForm.hire_date,
             bookingForm.return_date || undefined
@@ -96,9 +108,9 @@ export default function AssetHire() {
             return
         }
 
-        const result = await window.electronAPI.createHireBooking({
+        const result = await globalThis.electronAPI.createHireBooking({
             ...bookingForm,
-            distance_km: bookingForm.distance_km ? parseFloat(bookingForm.distance_km) : undefined,
+            distance_km: bookingForm.distance_km ? Number.parseFloat(bookingForm.distance_km) : undefined,
             total_amount: shillingsToCents(bookingForm.total_amount)
         }, user.id)
 
@@ -109,7 +121,7 @@ export default function AssetHire() {
                 asset_id: 0, client_id: 0, hire_date: new Date().toISOString().split('T')[0],
                 return_date: '', purpose: '', destination: '', distance_km: '', total_amount: ''
             })
-            loadData()
+            void loadData()
         } else {
             alert(`Error: ${result.errors?.join(', ')}`)
         }
@@ -117,12 +129,12 @@ export default function AssetHire() {
 
     const handleCreateClient = async (e: React.FormEvent) => {
         e.preventDefault()
-        const result = await window.electronAPI.createHireClient(clientForm)
+        const result = await globalThis.electronAPI.createHireClient(clientForm)
         if (result.success) {
             alert('Client created successfully!')
             setShowClientModal(false)
             setClientForm({ client_name: '', contact_phone: '', contact_email: '', organization: '', address: '', notes: '' })
-            loadData()
+            void loadData()
         } else {
             alert(`Error: ${result.errors?.join(', ')}`)
         }
@@ -130,9 +142,9 @@ export default function AssetHire() {
 
     const handleRecordPayment = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!user || !selectedBooking) return
+        if (!user || !selectedBooking) {return}
 
-        const result = await window.electronAPI.recordHirePayment(
+        const result = await globalThis.electronAPI.recordHirePayment(
             selectedBooking.id,
             {
                 ...paymentForm,
@@ -146,30 +158,30 @@ export default function AssetHire() {
             setShowPaymentModal(false)
             setPaymentForm({ amount: '', payment_method: 'CASH', payment_reference: '', payment_date: new Date().toISOString().split('T')[0] })
             setSelectedBooking(null)
-            loadData()
+            void loadData()
         } else {
             alert(`Error: ${result.errors?.join(', ')}`)
         }
     }
 
     const handleUpdateStatus = async (bookingId: number, status: string) => {
-        const result = await window.electronAPI.updateHireBookingStatus(bookingId, status)
+        const result = await globalThis.electronAPI.updateHireBookingStatus(bookingId, status)
         if (result.success) {
-            loadData()
+            void loadData()
         } else {
             alert(`Error: ${result.errors?.join(', ')}`)
         }
     }
 
     const handlePrintReceipt = async (booking: HireBooking) => {
-        const payments = await window.electronAPI.getHirePaymentsByBooking(booking.id)
+        const payments = await globalThis.electronAPI.getHirePaymentsByBooking(booking.id)
         const latestPayment = payments[0]
         if (!latestPayment) {
             alert('No payments to print')
             return
         }
 
-        const settings = await window.electronAPI.getSchoolSettings()
+        const settings = await globalThis.electronAPI.getSchoolSettings()
         printDocument({
             title: `Hire Receipt - ${latestPayment.receipt_number}`,
             template: 'receipt',
@@ -182,9 +194,9 @@ export default function AssetHire() {
                 studentName: booking.client_name,
                 admissionNumber: booking.booking_number,
                 description: `Asset Hire: ${booking.asset_name}`,
-                amountInWords: `${numberToWords(latestPayment.amount)} Shillings Only`
+                amountInWords: `${numberToWords(Math.floor(latestPayment.amount / 100))} Shillings Only`
             },
-            schoolSettings: (settings || {}) as Record<string, unknown>
+            schoolSettings: settings ? (settings as unknown as Record<string, unknown>) : {}
         })
     }
 
@@ -193,11 +205,11 @@ export default function AssetHire() {
             'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
         const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
 
-        if (num === 0) return 'Zero'
-        if (num < 20) return ones[num]
-        if (num < 100) return tens[Math.floor(num / 10)] + (num % 10 ? ' ' + ones[num % 10] : '')
-        if (num < 1000) return ones[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' and ' + numberToWords(num % 100) : '')
-        if (num < 1000000) return numberToWords(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + numberToWords(num % 1000) : '')
+        if (num === 0) {return 'Zero'}
+        if (num < 20) {return ones[num]}
+        if (num < 100) {return tens[Math.floor(num / 10)] + (num % 10 ? ' ' + ones[num % 10] : '')}
+        if (num < 1000) {return ones[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' and ' + numberToWords(num % 100) : '')}
+        if (num < 1000000) {return numberToWords(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + numberToWords(num % 1000) : '')}
         return numberToWords(Math.floor(num / 1000000)) + ' Million' + (num % 1000000 ? ' ' + numberToWords(num % 1000000) : '')
     }
 
@@ -212,17 +224,6 @@ export default function AssetHire() {
     const filteredClients = clients.filter(c =>
         !searchQuery || c.client_name.toLowerCase().includes(searchQuery.toLowerCase())
     )
-
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'PENDING': return 'bg-yellow-100 text-yellow-800'
-            case 'CONFIRMED': return 'bg-blue-100 text-blue-800'
-            case 'IN_PROGRESS': return 'bg-purple-100 text-purple-800'
-            case 'COMPLETED': return 'bg-green-100 text-green-800'
-            case 'CANCELLED': return 'bg-red-100 text-red-800'
-            default: return 'bg-gray-100 text-gray-800'
-        }
-    }
 
     if (loading) {
         return <div className="p-6 text-center">Loading...</div>
@@ -261,15 +262,15 @@ export default function AssetHire() {
                     </div>
                     <div className="bg-white p-4 rounded-lg shadow border-l-4 border-green-500">
                         <div className="text-sm text-gray-500">Total Income</div>
-                        <div className="text-2xl font-bold">{formatCurrency(stats.totalIncome)}</div>
+                        <div className="text-2xl font-bold">{formatCurrencyFromCents(stats.totalIncome)}</div>
                     </div>
                     <div className="bg-white p-4 rounded-lg shadow border-l-4 border-orange-500">
                         <div className="text-sm text-gray-500">Pending Amount</div>
-                        <div className="text-2xl font-bold">{formatCurrency(stats.pendingAmount)}</div>
+                        <div className="text-2xl font-bold">{formatCurrencyFromCents(stats.pendingAmount)}</div>
                     </div>
                     <div className="bg-white p-4 rounded-lg shadow border-l-4 border-purple-500">
                         <div className="text-sm text-gray-500">This Month</div>
-                        <div className="text-2xl font-bold">{formatCurrency(stats.thisMonth)}</div>
+                        <div className="text-2xl font-bold">{formatCurrencyFromCents(stats.thisMonth)}</div>
                     </div>
                 </div>
             )}
@@ -341,9 +342,9 @@ export default function AssetHire() {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">{booking.client_name}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">{booking.asset_name}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">{new Date(booking.hire_date).toLocaleDateString()}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm">{formatCurrency(booking.total_amount)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm">{formatCurrencyFromCents(booking.total_amount)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">
-                                        {formatCurrency(booking.balance || 0)}
+                                        {formatCurrencyFromCents(booking.balance || 0)}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(booking.status)}`}>
@@ -354,7 +355,7 @@ export default function AssetHire() {
                                         {booking.status !== 'COMPLETED' && booking.status !== 'CANCELLED' && (
                                             <>
                                                 <button
-                                                    onClick={() => { setSelectedBooking(booking); setShowPaymentModal(true); setPaymentForm({ ...paymentForm, amount: String(booking.balance || 0) }) }}
+                                                    onClick={() => { setSelectedBooking(booking); setShowPaymentModal(true); setPaymentForm({ ...paymentForm, amount: String(centsToShillings(booking.balance || 0)) }) }}
                                                     className="text-green-600 hover:text-green-800"
                                                 >
                                                     Pay
@@ -427,7 +428,7 @@ export default function AssetHire() {
                                 <tr key={asset.id}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">{asset.asset_name}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">{asset.asset_type}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm">{formatCurrency(asset.default_rate || 0)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm">{formatCurrencyFromCents(asset.default_rate || 0)}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">{asset.rate_type || 'MANUAL'}</td>
                                 </tr>
                             ))}
@@ -444,10 +445,10 @@ export default function AssetHire() {
                         <form onSubmit={handleCreateBooking} className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Asset *</label>
-                                    <select
+                                    <label htmlFor="field-448" className="block text-sm font-medium mb-1">Asset *</label>
+                                    <select id="field-448"
                                         value={bookingForm.asset_id}
-                                        onChange={(e) => setBookingForm({ ...bookingForm, asset_id: parseInt(e.target.value) })}
+                                        onChange={(e) => setBookingForm({ ...bookingForm, asset_id: Number.parseInt(e.target.value, 10) })}
                                         className="w-full border rounded-lg p-2"
                                         required
                                         aria-label="Select asset"
@@ -459,10 +460,10 @@ export default function AssetHire() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Client *</label>
-                                    <select
+                                    <label htmlFor="field-463" className="block text-sm font-medium mb-1">Client *</label>
+                                    <select id="field-463"
                                         value={bookingForm.client_id}
-                                        onChange={(e) => setBookingForm({ ...bookingForm, client_id: parseInt(e.target.value) })}
+                                        onChange={(e) => setBookingForm({ ...bookingForm, client_id: Number.parseInt(e.target.value, 10) })}
                                         className="w-full border rounded-lg p-2"
                                         required
                                         aria-label="Select client"
@@ -476,8 +477,8 @@ export default function AssetHire() {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Hire Date *</label>
-                                    <input
+                                    <label htmlFor="field-480" className="block text-sm font-medium mb-1">Hire Date *</label>
+                                    <input id="field-480"
                                         type="date"
                                         value={bookingForm.hire_date}
                                         onChange={(e) => setBookingForm({ ...bookingForm, hire_date: e.target.value })}
@@ -487,8 +488,8 @@ export default function AssetHire() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Return Date</label>
-                                    <input
+                                    <label htmlFor="field-491" className="block text-sm font-medium mb-1">Return Date</label>
+                                    <input id="field-491"
                                         type="date"
                                         value={bookingForm.return_date}
                                         onChange={(e) => setBookingForm({ ...bookingForm, return_date: e.target.value })}
@@ -498,8 +499,8 @@ export default function AssetHire() {
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium mb-1">Destination</label>
-                                <input
+                                <label htmlFor="field-502" className="block text-sm font-medium mb-1">Destination</label>
+                                <input id="field-502"
                                     type="text"
                                     value={bookingForm.destination}
                                     onChange={(e) => setBookingForm({ ...bookingForm, destination: e.target.value })}
@@ -509,8 +510,8 @@ export default function AssetHire() {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Distance (km)</label>
-                                    <input
+                                    <label htmlFor="field-513" className="block text-sm font-medium mb-1">Distance (km)</label>
+                                    <input id="field-513"
                                         type="number"
                                         value={bookingForm.distance_km}
                                         onChange={(e) => setBookingForm({ ...bookingForm, distance_km: e.target.value })}
@@ -520,8 +521,8 @@ export default function AssetHire() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Total Amount (KES) *</label>
-                                    <input
+                                    <label htmlFor="field-524" className="block text-sm font-medium mb-1">Total Amount (KES) *</label>
+                                    <input id="field-524"
                                         type="number"
                                         value={bookingForm.total_amount}
                                         onChange={(e) => setBookingForm({ ...bookingForm, total_amount: e.target.value })}
@@ -532,8 +533,8 @@ export default function AssetHire() {
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium mb-1">Purpose</label>
-                                <textarea
+                                <label htmlFor="field-536" className="block text-sm font-medium mb-1">Purpose</label>
+                                <textarea id="field-536"
                                     value={bookingForm.purpose}
                                     onChange={(e) => setBookingForm({ ...bookingForm, purpose: e.target.value })}
                                     className="w-full border rounded-lg p-2"
@@ -569,8 +570,8 @@ export default function AssetHire() {
                         <h2 className="text-xl font-bold mb-4">New Client</h2>
                         <form onSubmit={handleCreateClient} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium mb-1">Client Name *</label>
-                                <input
+                                <label htmlFor="field-573" className="block text-sm font-medium mb-1">Client Name *</label>
+                                <input id="field-573"
                                     type="text"
                                     value={clientForm.client_name}
                                     onChange={(e) => setClientForm({ ...clientForm, client_name: e.target.value })}
@@ -580,8 +581,8 @@ export default function AssetHire() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium mb-1">Organization</label>
-                                <input
+                                <label htmlFor="field-584" className="block text-sm font-medium mb-1">Organization</label>
+                                <input id="field-584"
                                     type="text"
                                     value={clientForm.organization}
                                     onChange={(e) => setClientForm({ ...clientForm, organization: e.target.value })}
@@ -591,8 +592,8 @@ export default function AssetHire() {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Phone</label>
-                                    <input
+                                    <label htmlFor="field-595" className="block text-sm font-medium mb-1">Phone</label>
+                                    <input id="field-595"
                                         type="tel"
                                         value={clientForm.contact_phone}
                                         onChange={(e) => setClientForm({ ...clientForm, contact_phone: e.target.value })}
@@ -601,8 +602,8 @@ export default function AssetHire() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Email</label>
-                                    <input
+                                    <label htmlFor="field-605" className="block text-sm font-medium mb-1">Email</label>
+                                    <input id="field-605"
                                         type="email"
                                         value={clientForm.contact_email}
                                         onChange={(e) => setClientForm({ ...clientForm, contact_email: e.target.value })}
@@ -637,12 +638,12 @@ export default function AssetHire() {
                     <div className="bg-white rounded-lg p-6 w-full max-w-md">
                         <h2 className="text-xl font-bold mb-4">Record Payment</h2>
                         <p className="text-sm text-gray-600 mb-4">
-                            Booking: {selectedBooking.booking_number} | Balance: KES {selectedBooking.balance?.toLocaleString()}
+                            Booking: {selectedBooking.booking_number} | Balance: {formatCurrencyFromCents(selectedBooking.balance || 0)}
                         </p>
                         <form onSubmit={handleRecordPayment} className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium mb-1">Amount (KES) *</label>
-                                <input
+                                <label htmlFor="field-645" className="block text-sm font-medium mb-1">Amount (KES) *</label>
+                                <input id="field-645"
                                     type="number"
                                     value={paymentForm.amount}
                                     onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
@@ -654,8 +655,8 @@ export default function AssetHire() {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Payment Method</label>
-                                    <select
+                                    <label htmlFor="field-658" className="block text-sm font-medium mb-1">Payment Method</label>
+                                    <select id="field-658"
                                         value={paymentForm.payment_method}
                                         onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value })}
                                         className="w-full border rounded-lg p-2"
@@ -668,8 +669,8 @@ export default function AssetHire() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Date</label>
-                                    <input
+                                    <label htmlFor="field-672" className="block text-sm font-medium mb-1">Date</label>
+                                    <input id="field-672"
                                         type="date"
                                         value={paymentForm.payment_date}
                                         onChange={(e) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })}
@@ -679,8 +680,8 @@ export default function AssetHire() {
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium mb-1">Reference</label>
-                                <input
+                                <label htmlFor="field-683" className="block text-sm font-medium mb-1">Reference</label>
+                                <input id="field-683"
                                     type="text"
                                     value={paymentForm.payment_reference}
                                     onChange={(e) => setPaymentForm({ ...paymentForm, payment_reference: e.target.value })}

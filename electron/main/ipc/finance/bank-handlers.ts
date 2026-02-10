@@ -1,17 +1,22 @@
-import { IpcMainInvokeEvent } from 'electron'
 import { ipcMain } from '../../electron-env'
 import { BankReconciliationService } from '../../services/finance/BankReconciliationService'
 
-const service = new BankReconciliationService()
+import type { IpcMainInvokeEvent } from 'electron'
+
+let cachedService: BankReconciliationService | null = null
+const getService = () => {
+    cachedService ??= new BankReconciliationService()
+    return cachedService
+}
 
 export function registerBankReconciliationHandlers(): void {
     // Bank Accounts
     ipcMain.handle('bank:getAccounts', async () => {
-        return service.getBankAccounts()
+        return getService().getBankAccounts()
     })
 
     ipcMain.handle('bank:getAccountById', async (_event: IpcMainInvokeEvent, id: number) => {
-        return service.getBankAccountById(id)
+        return getService().getBankAccountById(id)
     })
 
     ipcMain.handle('bank:createAccount', async (_event: IpcMainInvokeEvent, data: {
@@ -23,27 +28,23 @@ export function registerBankReconciliationHandlers(): void {
         currency?: string
         opening_balance: number
     }) => {
-        return service.createBankAccount(data)
+        return getService().createBankAccount(data)
     })
 
     // Bank Statements
     ipcMain.handle('bank:getStatements', async (_event: IpcMainInvokeEvent, bankAccountId?: number) => {
-        return service.getStatements(bankAccountId)
+        return getService().getStatements(bankAccountId)
     })
 
     ipcMain.handle('bank:getStatementWithLines', async (_event: IpcMainInvokeEvent, statementId: number) => {
-        return service.getStatementWithLines(statementId)
+        return getService().getStatementWithLines(statementId)
     })
 
     ipcMain.handle('bank:createStatement', async (
         _event: IpcMainInvokeEvent,
-        bankAccountId: number,
-        statementDate: string,
-        openingBalance: number,
-        closingBalance: number,
-        reference?: string
+        ...[bankAccountId, statementDate, openingBalance, closingBalance, reference]: CreateStatementArgs
     ) => {
-        return service.createStatement(bankAccountId, statementDate, openingBalance, closingBalance, reference)
+        return getService().createStatement(bankAccountId, statementDate, openingBalance, closingBalance, reference)
     })
 
     ipcMain.handle('bank:addStatementLine', async (
@@ -58,7 +59,7 @@ export function registerBankReconciliationHandlers(): void {
             running_balance?: number | null
         }
     ) => {
-        return service.addStatementLine(statementId, {
+        return getService().addStatementLine(statementId, {
             ...line,
             reference: line.reference ?? null,
             running_balance: line.running_balance ?? null
@@ -71,11 +72,11 @@ export function registerBankReconciliationHandlers(): void {
         lineId: number,
         transactionId: number
     ) => {
-        return service.matchTransaction(lineId, transactionId)
+        return getService().matchTransaction(lineId, transactionId)
     })
 
     ipcMain.handle('bank:unmatchTransaction', async (_event: IpcMainInvokeEvent, lineId: number) => {
-        return service.unmatchTransaction(lineId)
+        return getService().unmatchTransaction(lineId)
     })
 
     ipcMain.handle('bank:getUnmatchedTransactions', async (
@@ -83,7 +84,7 @@ export function registerBankReconciliationHandlers(): void {
         startDate: string,
         endDate: string
     ) => {
-        return service.getUnmatchedLedgerTransactions(startDate, endDate)
+        return getService().getUnmatchedLedgerTransactions(startDate, endDate)
     })
 
     ipcMain.handle('bank:markReconciled', async (
@@ -91,6 +92,13 @@ export function registerBankReconciliationHandlers(): void {
         statementId: number,
         userId: number
     ) => {
-        return service.markStatementReconciled(statementId, userId)
+        return getService().markStatementReconciled(statementId, userId)
     })
 }
+    type CreateStatementArgs = [
+        bankAccountId: number,
+        statementDate: string,
+        openingBalance: number,
+        closingBalance: number,
+        reference?: string
+    ]

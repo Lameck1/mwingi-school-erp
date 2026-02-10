@@ -33,6 +33,16 @@ export interface Stream {
     level_order: number
 }
 
+type BatchPromoteArgs = [
+    studentIds: number[],
+    fromStreamId: number,
+    toStreamId: number,
+    fromAcademicYearId: number,
+    toAcademicYearId: number,
+    toTermId: number,
+    userId: number
+]
+
 export class PromotionService {
     private get db() { return getDatabase() }
 
@@ -98,14 +108,15 @@ export class PromotionService {
 
                 // Create new enrollment
                 const result = this.db.prepare(`
-          INSERT INTO enrollment (student_id, academic_year_id, term_id, stream_id, student_type, status)
-          SELECT ?, ?, ?, ?, student_type, 'ACTIVE'
+          INSERT INTO enrollment (student_id, academic_year_id, term_id, academic_term_id, stream_id, student_type, status)
+          SELECT ?, ?, ?, ?, ?, student_type, 'ACTIVE'
           FROM enrollment 
           WHERE student_id = ? AND academic_year_id = ? AND stream_id = ?
           LIMIT 1
         `).run(
                     data.student_id,
                     data.to_academic_year_id,
+                    data.to_term_id,
                     data.to_term_id,
                     data.to_stream_id,
                     data.student_id,
@@ -129,13 +140,7 @@ export class PromotionService {
      * Batch promote multiple students
      */
     async batchPromote(
-        studentIds: number[],
-        fromStreamId: number,
-        toStreamId: number,
-        fromAcademicYearId: number,
-        toAcademicYearId: number,
-        toTermId: number,
-        userId: number
+        ...[studentIds, fromStreamId, toStreamId, fromAcademicYearId, toAcademicYearId, toTermId, userId]: BatchPromoteArgs
     ): Promise<{ success: boolean; promoted: number; failed: number; errors?: string[] }> {
         let promoted = 0
         let failed = 0
@@ -187,7 +192,7 @@ export class PromotionService {
      */
     async getNextStream(currentStreamId: number): Promise<Stream | null> {
         const current = this.db.prepare(`SELECT level_order FROM stream WHERE id = ?`).get(currentStreamId) as { level_order: number } | null
-        if (!current) return null
+        if (!current) {return null}
 
         return this.db.prepare(`
       SELECT id, stream_name, level_order 

@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useCallback } from 'react'
-import { shillingsToCents } from '../../utils/format'
-import { useAuthStore } from '../../stores'
 import { Plus, Check, Loader2, ArrowRightCircle, Wallet, Tag, CreditCard, FileText, Calendar } from 'lucide-react'
-import { useToast } from '../../contexts/ToastContext'
+import React, { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { TransactionCategory } from '../../types/electron-api/FinanceAPI'
+
+import { useToast } from '../../contexts/ToastContext'
+import { useAuthStore } from '../../stores'
+import { type TransactionCategory } from '../../types/electron-api/FinanceAPI'
+import { shillingsToCents } from '../../utils/format'
 
 export default function RecordIncome() {
     const { user } = useAuthStore()
@@ -28,7 +29,7 @@ export default function RecordIncome() {
 
     const loadCategories = useCallback(async () => {
         try {
-            const allCats = await window.electronAPI.getTransactionCategories()
+            const allCats = await globalThis.electronAPI.getTransactionCategories()
             setCategories(allCats.filter((c: TransactionCategory) => c.category_type === 'INCOME'))
         } catch (error) {
             console.error('Failed to load categories:', error)
@@ -37,14 +38,14 @@ export default function RecordIncome() {
     }, [showToast])
 
     useEffect(() => {
-        loadCategories()
+        loadCategories().catch((err: unknown) => console.error('Failed to load income categories', err))
     }, [loadCategories])
 
     const handleCreateCategory = async () => {
-        if (!newCategory.trim()) return
+        if (!newCategory.trim()) {return}
         try {
             setLoading(true)
-            await window.electronAPI.createTransactionCategory(newCategory, 'INCOME')
+            await globalThis.electronAPI.createTransactionCategory(newCategory, 'INCOME')
             await loadCategories()
             setNewCategory('')
             setShowNewCategoryInput(false)
@@ -66,10 +67,10 @@ export default function RecordIncome() {
 
         setSaving(true)
         try {
-            await window.electronAPI.createTransaction({
+            await globalThis.electronAPI.createTransaction({
                 transaction_date: formData.transaction_date,
                 amount: shillingsToCents(formData.amount), // Whole currency units
-                category_id: parseInt(formData.category_id),
+                category_id: Number.parseInt(formData.category_id, 10),
                 reference: formData.payment_reference,
                 description: formData.description
             }, user!.id)
@@ -274,7 +275,7 @@ export default function RecordIncome() {
                     <div className="flex justify-end gap-3 pt-8 border-t border-border/10">
                         <button
                             type="button"
-                            onClick={() => window.history.back()}
+                            onClick={() => globalThis.history.back()}
                             className="btn btn-secondary px-8 py-3 font-bold uppercase tracking-widest text-[10px]"
                         >
                             Abort Record

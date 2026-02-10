@@ -1,12 +1,6 @@
 import React, { useEffect, useState } from 'react'
 
-interface SchoolSettings {
-    school_name: string
-    address?: string
-    phone?: string
-    email?: string
-    logo_path?: string
-}
+import type { SchoolSettings } from '../../types/electron-api/SettingsAPI'
 
 interface InstitutionalHeaderProps {
     variant?: 'ui' | 'print'
@@ -18,16 +12,16 @@ export const InstitutionalHeader: React.FC<InstitutionalHeaderProps> = ({ varian
     useEffect(() => {
         const loadSettings = async () => {
             try {
-                const data = await window.electronAPI.getSchoolSettings()
+                const data = await globalThis.electronAPI.getSchoolSettings()
                 setSettings(data)
             } catch (error) {
                 console.error('Failed to load school settings for header:', error)
             }
         }
-        loadSettings()
+        void loadSettings()
     }, [])
 
-    if (!settings) return null
+    if (!settings) {return null}
 
     if (variant === 'print') {
         return (

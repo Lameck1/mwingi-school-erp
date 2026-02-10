@@ -1,12 +1,27 @@
-import { IpcMainInvokeEvent } from 'electron'
 import { ipcMain } from '../../electron-env'
 import { PromotionService } from '../../services/academic/PromotionService'
 
-const service = new PromotionService()
+import type { IpcMainInvokeEvent } from 'electron'
+
+let cachedService: PromotionService | null = null
+const getService = () => {
+    cachedService ??= new PromotionService()
+    return cachedService
+}
 
 export function registerPromotionHandlers(): void {
+    type BatchPromoteArgs = [
+        studentIds: number[],
+        fromStreamId: number,
+        toStreamId: number,
+        fromAcademicYearId: number,
+        toAcademicYearId: number,
+        toTermId: number,
+        userId: number
+    ]
+
     ipcMain.handle('promotion:getStreams', async () => {
-        return service.getStreams()
+        return getService().getStreams()
     })
 
     ipcMain.handle('promotion:getStudentsForPromotion', async (
@@ -14,7 +29,7 @@ export function registerPromotionHandlers(): void {
         streamId: number,
         academicYearId: number
     ) => {
-        return service.getStudentsForPromotion(streamId, academicYearId)
+        return getService().getStudentsForPromotion(streamId, academicYearId)
     })
 
     ipcMain.handle('promotion:promoteStudent', async (
@@ -29,20 +44,14 @@ export function registerPromotionHandlers(): void {
         },
         userId: number
     ) => {
-        return service.promoteStudent(data, userId)
+        return getService().promoteStudent(data, userId)
     })
 
     ipcMain.handle('promotion:batchPromote', async (
         _event: IpcMainInvokeEvent,
-        studentIds: number[],
-        fromStreamId: number,
-        toStreamId: number,
-        fromAcademicYearId: number,
-        toAcademicYearId: number,
-        toTermId: number,
-        userId: number
+        ...[studentIds, fromStreamId, toStreamId, fromAcademicYearId, toAcademicYearId, toTermId, userId]: BatchPromoteArgs
     ) => {
-        return service.batchPromote(
+        return getService().batchPromote(
             studentIds, fromStreamId, toStreamId,
             fromAcademicYearId, toAcademicYearId, toTermId, userId
         )
@@ -52,13 +61,13 @@ export function registerPromotionHandlers(): void {
         _event: IpcMainInvokeEvent,
         studentId: number
     ) => {
-        return service.getStudentPromotionHistory(studentId)
+        return getService().getStudentPromotionHistory(studentId)
     })
 
     ipcMain.handle('promotion:getNextStream', async (
         _event: IpcMainInvokeEvent,
         currentStreamId: number
     ) => {
-        return service.getNextStream(currentStreamId)
+        return getService().getNextStream(currentStreamId)
     })
 }

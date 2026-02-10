@@ -1,7 +1,8 @@
-import { db, getDatabasePath } from '../database'
-import * as path from 'path'
-import * as fs from 'fs'
-import { app } from 'electron'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+
+import { db, getDatabasePath, backupDatabase } from '../database'
+import { app } from '../electron-env'
 
 export interface BackupInfo {
     filename: string
@@ -12,7 +13,7 @@ export interface BackupInfo {
 export class BackupService {
     private static get BACKUP_DIR() { return path.join(app.getPath('userData'), 'backups') }
     // Keep last 7 days + 1 monthly (not implemented strictly yet, just count based rotation)
-    private static MAX_BACKUPS = 7
+    private static readonly MAX_BACKUPS = 7
 
     static async init() {
         if (!fs.existsSync(this.BACKUP_DIR)) {
@@ -25,7 +26,8 @@ export class BackupService {
 
     private static startScheduler() {
         // Check every hour
-        setInterval(async () => {
+        setInterval(() => {
+            void (async () => {
             const backups = this.listBackups()
             if (backups.length === 0) {
                 console.error('No backups found. Creating initial auto-backup...')
@@ -34,26 +36,30 @@ export class BackupService {
             }
 
             const lastBackup = backups[0] // list is sorted desc
-            const hoursSinceLast = (new Date().getTime() - lastBackup.created_at.getTime()) / (1000 * 60 * 60)
+            const hoursSinceLast = (Date.now() - lastBackup.created_at.getTime()) / (1000 * 60 * 60)
 
             if (hoursSinceLast >= 24) {
                 console.error(`Last backup was ${hoursSinceLast.toFixed(1)}h ago. Creating auto-backup...`)
                 await this.createBackup('auto')
             }
+            })()
         }, 1000 * 60 * 60) // 1 hour
     }
 
     static async createBackup(prefix: string = 'manual'): Promise<{ success: boolean; path?: string; error?: string }> {
-        if (!db) return { success: false, error: 'Database not initialized' }
+        if (!db) {return { success: false, error: 'Database not initialized' }}
 
         try {
             await this.init()
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+            const timestamp = new Date().toISOString().replaceAll(/[:.]/g, '-')
             const filename = `backup-${prefix}-${timestamp}.sqlite`
             const backupPath = path.join(this.BACKUP_DIR, filename)
 
             console.error(`Starting backup to ${backupPath}...`)
-            await db.backup(backupPath)
+            if (fs.existsSync(backupPath)) {
+                fs.unlinkSync(backupPath)
+            }
+            await backupDatabase(backupPath)
             console.error('Backup completed.')
 
             // Validate encryption? 
@@ -70,8 +76,32 @@ export class BackupService {
         }
     }
 
+    static async createBackupToPath(targetPath: string): Promise<{ success: boolean; path?: string; error?: string }> {
+        if (!db) {return { success: false, error: 'Database not initialized' }}
+        if (!targetPath) {return { success: false, error: 'Backup path is required' }}
+
+        try {
+            const dir = path.dirname(targetPath)
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true })
+            }
+
+            console.error(`Starting backup to ${targetPath}...`)
+            if (fs.existsSync(targetPath)) {
+                fs.unlinkSync(targetPath)
+            }
+            await backupDatabase(targetPath)
+            console.error('Backup completed.')
+
+            return { success: true, path: targetPath }
+        } catch (error) {
+            console.error('Backup failed:', error)
+            return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+        }
+    }
+
     static listBackups(): BackupInfo[] {
-        if (!fs.existsSync(this.BACKUP_DIR)) return []
+        if (!fs.existsSync(this.BACKUP_DIR)) {return []}
 
         try {
             const files = fs.readdirSync(this.BACKUP_DIR)
@@ -121,7 +151,7 @@ export class BackupService {
         const backupPath = path.join(this.BACKUP_DIR, filename)
         const dbPath = getDatabasePath()
 
-        if (!fs.existsSync(backupPath)) throw new Error('Backup file not found')
+        if (!fs.existsSync(backupPath)) {throw new Error('Backup file not found')}
 
         try {
             // Close DB connection

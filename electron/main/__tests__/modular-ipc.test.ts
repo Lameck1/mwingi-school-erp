@@ -1,6 +1,7 @@
-import { app, BrowserWindow, dialog, ipcMain } from '../electron-env'
-import { registerAllIpcHandlers } from '../ipc/index';
 import { vi, describe, test, expect, beforeEach, type Mock } from 'vitest';
+
+import { ipcMain } from '../electron-env'
+import { registerAllIpcHandlers } from '../ipc/index';
 
 // Mock ServiceContainer
 vi.mock('../services/base/ServiceContainer', () => ({
@@ -61,7 +62,7 @@ vi.mock('bcryptjs', () => ({
 }));
 
 // Mock database module
-vi.mock('../database/index', () => {
+vi.mock('../database', () => {
   const mockDb = {
     prepare: vi.fn(),
     transaction: vi.fn((fn) => () => fn()),
@@ -105,8 +106,8 @@ describe('Modular IPC Handlers Security Tests', () => {
     vi.clearAllMocks();
 
     // Get the mock database instance
-    const { getDatabase } = await import('../database/index');
-    mockDb = getDatabase() as unknown;
+    const { getDatabase } = await import('../database');
+    mockDb = getDatabase() as unknown as { prepare: Mock; transaction: Mock };
 
     // Register all handlers
     registerAllIpcHandlers();
@@ -192,8 +193,7 @@ describe('Modular IPC Handlers Security Tests', () => {
         term_id: 1
       };
 
-      const result = await handler({}, paymentData, 1);
-      // console.error('Handler Result:', result);
+      const _result = await handler({}, paymentData, 1);
 
       expect(mockDb.transaction).toHaveBeenCalled();
     });

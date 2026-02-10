@@ -1,18 +1,73 @@
-import { useEffect, useState } from 'react'
 import { Command } from 'cmdk'
-import { useNavigate } from 'react-router-dom'
 import {
     LayoutDashboard, Users, UserPlus, FileText,
     CreditCard, Settings, Sun, Moon, LogOut,
     Calculator, Package, Search
 } from 'lucide-react'
+import { type ComponentType, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+
 import { useTheme } from '../../contexts/ThemeContext'
 import { useAuthStore } from '../../stores'
+
+interface PaletteItem {
+    id: string
+    label: string
+    icon: ComponentType<{ className?: string }>
+    path?: string
+    action?: () => void
+    danger?: boolean
+}
+
+const NAVIGATION_ITEMS: PaletteItem[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+    { id: 'students', label: 'Students', icon: Users, path: '/students' },
+    { id: 'fee-payments', label: 'Fee Payments', icon: CreditCard, path: '/fee-payment' },
+    { id: 'inventory', label: 'Inventory', icon: Package, path: '/inventory' },
+    { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' }
+]
+
+const QUICK_ACTION_ITEMS: PaletteItem[] = [
+    { id: 'new-student', label: 'New Student', icon: UserPlus, path: '/students/new?action=create' },
+    { id: 'new-invoice', label: 'New Invoice', icon: FileText, path: '/invoices' },
+    { id: 'run-payroll', label: 'Run Payroll', icon: Calculator, path: '/payroll-run' }
+]
+
+const baseItemClassName = 'flex items-center gap-2 px-2 py-2 text-sm rounded-lg cursor-pointer'
+const normalItemClassName = `${baseItemClassName} text-slate-700 dark:text-slate-200 aria-selected:bg-blue-50 dark:aria-selected:bg-blue-900/20 aria-selected:text-blue-600 dark:aria-selected:text-blue-400`
+const dangerItemClassName = `${baseItemClassName} text-red-600 dark:text-red-400 aria-selected:bg-red-50 dark:aria-selected:bg-red-900/20`
+
+function CommandItemButton({
+    item,
+    onSelect
+}: Readonly<{ item: PaletteItem; onSelect: () => void }>) {
+    const Icon = item.icon
+
+    return (
+        <Command.Item onSelect={onSelect} className={item.danger ? dangerItemClassName : normalItemClassName}>
+            <Icon className="w-4 h-4" />
+            <span>{item.label}</span>
+        </Command.Item>
+    )
+}
+
+function PaletteGroupItems({
+    items,
+    onExecute
+}: Readonly<{ items: PaletteItem[]; onExecute: (item: PaletteItem) => void }>) {
+    return (
+        <>
+            {items.map((item) => (
+                <CommandItemButton key={item.id} item={item} onSelect={() => onExecute(item)} />
+            ))}
+        </>
+    )
+}
 
 export function CommandPalette() {
     const [open, setOpen] = useState(false)
     const navigate = useNavigate()
-    const { toggleTheme } = useTheme()
+    const { theme, toggleTheme } = useTheme()
     const { logout } = useAuthStore()
 
     useEffect(() => {
@@ -23,15 +78,37 @@ export function CommandPalette() {
             }
         }
         document.addEventListener('keydown', down)
-        return () => document.removeEventListener('keydown', down)
+        const unsubscribe = globalThis.electronAPI.onOpenCommandPalette(() => setOpen(true))
+        return () => {
+            document.removeEventListener('keydown', down)
+            unsubscribe()
+        }
     }, [])
 
-    const run = (action: () => void) => {
-        action()
+    const systemItems: PaletteItem[] = [
+        { id: 'toggle-theme', label: 'Toggle Theme', icon: theme === 'dark' ? Sun : Moon, action: toggleTheme },
+        {
+            id: 'logout',
+            label: 'Logout',
+            icon: LogOut,
+            action: () => {
+                logout()
+                navigate('/login')
+            },
+            danger: true
+        }
+    ]
+
+    const executeItem = (item: PaletteItem) => {
+        if (item.path) {
+            navigate(item.path)
+        } else {
+            item.action?.()
+        }
         setOpen(false)
     }
 
-    if (!open) return null
+    if (!open) {return null}
 
     return (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-start justify-center pt-[20vh] animate-in fade-in duration-200">
@@ -50,88 +127,19 @@ export function CommandPalette() {
                     </Command.Empty>
 
                     <Command.Group heading="Navigation" className="px-2 py-1.5 text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
-                        <Command.Item
-                            onSelect={() => run(() => navigate('/'))}
-                            className="flex items-center gap-2 px-2 py-2 text-sm text-slate-700 dark:text-slate-200 rounded-lg aria-selected:bg-blue-50 dark:aria-selected:bg-blue-900/20 aria-selected:text-blue-600 dark:aria-selected:text-blue-400 cursor-pointer"
-                        >
-                            <LayoutDashboard className="w-4 h-4" />
-                            <span>Dashboard</span>
-                        </Command.Item>
-                        <Command.Item
-                            onSelect={() => run(() => navigate('/students'))}
-                            className="flex items-center gap-2 px-2 py-2 text-sm text-slate-700 dark:text-slate-200 rounded-lg aria-selected:bg-blue-50 dark:aria-selected:bg-blue-900/20 aria-selected:text-blue-600 dark:aria-selected:text-blue-400 cursor-pointer"
-                        >
-                            <Users className="w-4 h-4" />
-                            <span>Students</span>
-                        </Command.Item>
-                        <Command.Item
-                            onSelect={() => run(() => navigate('/fee-payment'))}
-                            className="flex items-center gap-2 px-2 py-2 text-sm text-slate-700 dark:text-slate-200 rounded-lg aria-selected:bg-blue-50 dark:aria-selected:bg-blue-900/20 aria-selected:text-blue-600 dark:aria-selected:text-blue-400 cursor-pointer"
-                        >
-                            <CreditCard className="w-4 h-4" />
-                            <span>Fee Payments</span>
-                        </Command.Item>
-                        <Command.Item
-                            onSelect={() => run(() => navigate('/inventory'))}
-                            className="flex items-center gap-2 px-2 py-2 text-sm text-slate-700 dark:text-slate-200 rounded-lg aria-selected:bg-blue-50 dark:aria-selected:bg-blue-900/20 aria-selected:text-blue-600 dark:aria-selected:text-blue-400 cursor-pointer"
-                        >
-                            <Package className="w-4 h-4" />
-                            <span>Inventory</span>
-                        </Command.Item>
-                        <Command.Item
-                            onSelect={() => run(() => navigate('/settings'))}
-                            className="flex items-center gap-2 px-2 py-2 text-sm text-slate-700 dark:text-slate-200 rounded-lg aria-selected:bg-blue-50 dark:aria-selected:bg-blue-900/20 aria-selected:text-blue-600 dark:aria-selected:text-blue-400 cursor-pointer"
-                        >
-                            <Settings className="w-4 h-4" />
-                            <span>Settings</span>
-                        </Command.Item>
+                        <PaletteGroupItems items={NAVIGATION_ITEMS} onExecute={executeItem} />
                     </Command.Group>
 
                     <Command.Separator className="h-px bg-slate-200 dark:bg-slate-800 my-1" />
 
                     <Command.Group heading="Quick Actions" className="px-2 py-1.5 text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
-                        <Command.Item
-                            onSelect={() => run(() => navigate('/students/new?action=create'))} // Assuming we handle params or routing
-                            // Actually pure nav for now
-                            className="flex items-center gap-2 px-2 py-2 text-sm text-slate-700 dark:text-slate-200 rounded-lg aria-selected:bg-blue-50 dark:aria-selected:bg-blue-900/20 aria-selected:text-blue-600 dark:aria-selected:text-blue-400 cursor-pointer"
-                        >
-                            <UserPlus className="w-4 h-4" />
-                            <span>New Student</span>
-                        </Command.Item>
-                        <Command.Item
-                            onSelect={() => run(() => navigate('/invoices'))}
-                            className="flex items-center gap-2 px-2 py-2 text-sm text-slate-700 dark:text-slate-200 rounded-lg aria-selected:bg-blue-50 dark:aria-selected:bg-blue-900/20 aria-selected:text-blue-600 dark:aria-selected:text-blue-400 cursor-pointer"
-                        >
-                            <FileText className="w-4 h-4" />
-                            <span>New Invoice</span>
-                        </Command.Item>
-                        <Command.Item
-                            onSelect={() => run(() => navigate('/payroll-run'))}
-                            className="flex items-center gap-2 px-2 py-2 text-sm text-slate-700 dark:text-slate-200 rounded-lg aria-selected:bg-blue-50 dark:aria-selected:bg-blue-900/20 aria-selected:text-blue-600 dark:aria-selected:text-blue-400 cursor-pointer"
-                        >
-                            <Calculator className="w-4 h-4" />
-                            <span>Run Payroll</span>
-                        </Command.Item>
+                        <PaletteGroupItems items={QUICK_ACTION_ITEMS} onExecute={executeItem} />
                     </Command.Group>
 
                     <Command.Separator className="h-px bg-slate-200 dark:bg-slate-800 my-1" />
 
                     <Command.Group heading="System" className="px-2 py-1.5 text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
-                        <Command.Item
-                            onSelect={() => run(toggleTheme)}
-                            className="flex items-center gap-2 px-2 py-2 text-sm text-slate-700 dark:text-slate-200 rounded-lg aria-selected:bg-blue-50 dark:aria-selected:bg-blue-900/20 aria-selected:text-blue-600 dark:aria-selected:text-blue-400 cursor-pointer"
-                        >
-                            <Sun className="w-4 h-4 dark:hidden" />
-                            <Moon className="w-4 h-4 hidden dark:block" />
-                            <span>Toggle Theme</span>
-                        </Command.Item>
-                        <Command.Item
-                            onSelect={() => run(() => { logout(); navigate('/login') })}
-                            className="flex items-center gap-2 px-2 py-2 text-sm text-red-600 dark:text-red-400 rounded-lg aria-selected:bg-red-50 dark:aria-selected:bg-red-900/20 cursor-pointer"
-                        >
-                            <LogOut className="w-4 h-4" />
-                            <span>Logout</span>
-                        </Command.Item>
+                        <PaletteGroupItems items={systemItems} onExecute={executeItem} />
                     </Command.Group>
                 </Command.List>
             </Command>

@@ -1,6 +1,16 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import Database from 'better-sqlite3'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
 import { ApprovalWorkflowService } from '../ApprovalWorkflowService'
+
+const createAsyncService = (inner: ApprovalWorkflowService) => ({
+  createApprovalRequest: async (args: Parameters<ApprovalWorkflowService['createApprovalRequest']>[0]) =>
+    inner.createApprovalRequest(args),
+  processApproval: async (args: Parameters<ApprovalWorkflowService['processApproval']>[0]) =>
+    inner.processApproval(args),
+  getApprovalHistory: async (requestId: number) => inner.getApprovalHistory(requestId),
+  getApprovalQueue: async (level: number, requestType?: string) => inner.getApprovalQueue(level, requestType)
+})
 
 // Mock audit utilities
 vi.mock('../../../database/utils/audit', () => ({
@@ -9,7 +19,7 @@ vi.mock('../../../database/utils/audit', () => ({
 
 describe('ApprovalWorkflowService', () => {
   let db: Database.Database
-  let service: ApprovalWorkflowService
+  let service: ReturnType<typeof createAsyncService>
 
   beforeEach(() => {
     db = new Database(':memory:')
@@ -109,12 +119,12 @@ describe('ApprovalWorkflowService', () => {
         ('EXPENSE', 30000, NULL, 2, 'PRINCIPAL');
     `)
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    service = new ApprovalWorkflowService(db as any)
+     
+    service = createAsyncService(new ApprovalWorkflowService(db as any))
   })
 
   afterEach(() => {
-    if (db) db.close()
+    if (db) {db.close()}
   })
 
   describe('createApprovalRequest', () => {

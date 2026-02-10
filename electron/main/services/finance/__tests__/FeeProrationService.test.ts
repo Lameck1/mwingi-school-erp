@@ -1,6 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import Database from 'better-sqlite3'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
 import { FeeProrationService } from '../FeeProrationService'
+
+type DbRow = Record<string, any>
 
 // Mock audit utilities to avoid database initialization issues
 vi.mock('../../../database/utils/audit', () => ({
@@ -42,28 +45,38 @@ describe('FeeProrationService', () => {
       CREATE TABLE fee_invoice (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id INTEGER NOT NULL,
+        term_id INTEGER NOT NULL,
+        academic_term_id INTEGER,
         invoice_number TEXT UNIQUE NOT NULL,
-        amount REAL NOT NULL,
-        amount_paid REAL DEFAULT 0,
-        status TEXT DEFAULT 'OUTSTANDING',
-        is_prorated BOOLEAN DEFAULT 0,
+        invoice_date DATE,
+        due_date DATE,
+        total_amount INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+        amount_due INTEGER NOT NULL,
+        original_amount INTEGER,
+        amount_paid INTEGER DEFAULT 0,
+        description TEXT,
+        invoice_type TEXT,
+        class_id INTEGER,
+        status TEXT DEFAULT 'PENDING',
+        is_prorated INTEGER DEFAULT 0,
         proration_percentage REAL,
-        original_amount REAL,
+        created_by_user_id INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE pro_ration_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        student_id INTEGER NOT NULL,
         invoice_id INTEGER NOT NULL,
-        enrollment_date DATE NOT NULL,
-        term_start_date DATE NOT NULL,
-        term_end_date DATE NOT NULL,
+        student_id INTEGER NOT NULL,
+        full_amount INTEGER NOT NULL,
+        pro_rated_amount INTEGER NOT NULL,
+        discount_percentage REAL NOT NULL,
+        enrollment_date TEXT NOT NULL,
+        term_start TEXT NOT NULL,
+        term_end TEXT NOT NULL,
         days_in_term INTEGER NOT NULL,
         days_enrolled INTEGER NOT NULL,
-        proration_percentage REAL NOT NULL,
-        original_amount REAL NOT NULL,
-        prorated_amount REAL NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -88,7 +101,7 @@ describe('FeeProrationService', () => {
   })
 
   afterEach(() => {
-    if (db) db.close()
+    if (db) {db.close()}
   })
 
   describe('generateProRatedInvoice', () => {
@@ -111,7 +124,7 @@ describe('FeeProrationService', () => {
         userId: 10
       })
 
-      const prorationLog = db.prepare('SELECT * FROM pro_ration_log WHERE student_id = ?').get(1) as unknown
+      const prorationLog = db.prepare('SELECT * FROM pro_ration_log WHERE student_id = ?').get(1) as DbRow
 
       expect(prorationLog).toBeDefined()
       if (prorationLog) {
@@ -128,7 +141,7 @@ describe('FeeProrationService', () => {
         userId: 10
       })
 
-      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = ?').all(1) as unknown[]
+      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = ?').all(1) as DbRow[]
 
       expect(invoices.length).toBeGreaterThan(0)
     })
@@ -141,7 +154,7 @@ describe('FeeProrationService', () => {
         userId: 10
       })
 
-      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = ?').all(1) as unknown[]
+      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = ?').all(1) as DbRow[]
 
       const nonProratedExists = invoices.some(inv => inv.is_prorated === 0)
       if (nonProratedExists) {
@@ -158,7 +171,7 @@ describe('FeeProrationService', () => {
         userId: 10
       })
 
-      const prorationLogs = db.prepare('SELECT * FROM pro_ration_log WHERE student_id = ?').all(1) as unknown[]
+      const prorationLogs = db.prepare('SELECT * FROM pro_ration_log WHERE student_id = ?').all(1) as DbRow[]
       expect(prorationLogs.length).toBeGreaterThan(0)
     })
 
@@ -224,7 +237,7 @@ describe('FeeProrationService', () => {
     })
 
     it('should show original vs prorated amounts', () => {
-      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = 1').all() as unknown[]
+      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = 1').all() as DbRow[]
 
       expect(invoices.length).toBeGreaterThan(0)
       invoices.forEach(inv => {
@@ -235,7 +248,7 @@ describe('FeeProrationService', () => {
     })
 
     it('should calculate total savings', () => {
-      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = 1').all() as unknown[]
+      const invoices = db.prepare('SELECT * FROM fee_invoice WHERE student_id = 1').all() as DbRow[]
       
       let totalOriginal = 0
       let totalProrated = 0
@@ -254,29 +267,32 @@ describe('FeeProrationService', () => {
   })
 
   describe('validateEnrollmentDate', () => {
+    const termStart = '2026-01-01'
+    const termEnd = '2026-03-31'
+
     it('should validate date within term', () => {
-      const result = service.validateEnrollmentDate('2026-01-15')
+      const result = service.validateEnrollmentDate(termStart, termEnd, '2026-01-15')
 
       expect(result).toBeDefined()
     })
 
     it('should reject date before term', () => {
-      const result = service.validateEnrollmentDate('2025-12-01')
+      const result = service.validateEnrollmentDate(termStart, termEnd, '2025-12-01')
 
       expect(result).toBeDefined()
     })
 
     it('should reject date after term', () => {
-      const result = service.validateEnrollmentDate('2026-04-15')
+      const result = service.validateEnrollmentDate(termStart, termEnd, '2026-04-15')
 
       expect(result).toBeDefined()
     })
 
     it('should accept term boundary dates', () => {
-      const startResult = service.validateEnrollmentDate('2026-01-01')
+      const startResult = service.validateEnrollmentDate(termStart, termEnd, '2026-01-01')
       expect(startResult).toBeDefined()
 
-      const endResult = service.validateEnrollmentDate('2026-03-31')
+      const endResult = service.validateEnrollmentDate(termStart, termEnd, '2026-03-31')
       expect(endResult).toBeDefined()
     })
   })
@@ -340,6 +356,9 @@ describe('FeeProrationService', () => {
   })
 
   describe('edge cases', () => {
+    const termStart = '2026-01-01'
+    const termEnd = '2026-03-31'
+
     it('should handle student with no invoice templates', () => {
       db.exec('DELETE FROM invoice_template')
 
@@ -356,7 +375,7 @@ describe('FeeProrationService', () => {
     it('should handle term with no current flag', () => {
       db.exec('UPDATE academic_term SET is_current = 0')
 
-      const result = service.validateEnrollmentDate('2026-01-15')
+      const result = service.validateEnrollmentDate(termStart, termEnd, '2026-01-15')
 
       expect(result).toBeDefined()
     })

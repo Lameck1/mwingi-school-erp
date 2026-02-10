@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react'
 import { AlertCircle, CheckCircle, Download, Mail, MessageSquare, Loader } from 'lucide-react'
-import PageHeader from '../../components/PageHeader'
+import React, { useState, useEffect } from 'react'
+
+import { PageHeader } from '../../components/patterns/PageHeader'
 
 interface GenerationProgress {
   total: number
@@ -18,6 +19,22 @@ interface EmailTemplate {
   body: string
 }
 
+const handleDownloadReportCards = async (): Promise<void> => {
+  alert('Download is temporarily unavailable. Please use generated files from the report card service directory.')
+}
+
+const renderProgressIcon = (status: GenerationProgress['status']) => {
+  if (status === 'generating' || status === 'emailing') {
+    return <Loader className="w-6 h-6 text-blue-500 animate-spin" />
+  }
+
+  if (status === 'complete') {
+    return <CheckCircle className="w-6 h-6 text-green-500" />
+  }
+
+  return <AlertCircle className="w-6 h-6 text-red-500" />
+}
+
 const ReportCardGeneration: React.FC = () => {
   const [selectedExam, setSelectedExam] = useState<number | null>(null)
   const [selectedStream, setSelectedStream] = useState<number | null>(null)
@@ -25,7 +42,7 @@ const ReportCardGeneration: React.FC = () => {
   const [streams, setStreams] = useState<Array<{ id: number; name: string }>>([])
   const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<string>('default')
-  const [sendEmail, setSendEmail] = useState(true)
+  const [sendEmail, setSendEmail] = useState(false)
   const [sendSMS, setSendSMS] = useState(false)
   const [mergePDFs, setMergePDFs] = useState(false)
   const [progress, setProgress] = useState<GenerationProgress>({
@@ -39,18 +56,18 @@ const ReportCardGeneration: React.FC = () => {
 
   // Load initial data
   useEffect(() => {
-    loadExams()
-    loadStreams()
-    loadEmailTemplates()
+    void loadExams()
+    void loadStreams()
+    void loadEmailTemplates()
   }, [])
 
   const loadExams = async () => {
     try {
       // Changed to use typed getExams from AcademicAPI
-      const year = await window.electronAPI.getCurrentAcademicYear()
-      const term = await window.electronAPI.getCurrentTerm()
+      const year = await globalThis.electronAPI.getCurrentAcademicYear()
+      const term = await globalThis.electronAPI.getCurrentTerm()
       if (year && term) {
-        const examsData = await window.electronAPI.getAcademicExams(year.id, term.id)
+        const examsData = await globalThis.electronAPI.getAcademicExams(year.id, term.id)
         setExams(examsData || [])
       }
     } catch (error) {
@@ -60,7 +77,7 @@ const ReportCardGeneration: React.FC = () => {
 
   const loadStreams = async () => {
     try {
-      const streamsData = await window.electronAPI.getStreams()
+      const streamsData = await globalThis.electronAPI.getStreams()
       setStreams(streamsData.map(s => ({ id: s.id, name: s.stream_name })) || [])
     } catch (error) {
       console.error('Failed to load streams:', error)
@@ -69,7 +86,7 @@ const ReportCardGeneration: React.FC = () => {
 
   const loadEmailTemplates = async () => {
     try {
-      const templates = await window.electronAPI.getNotificationTemplates()
+      const templates = await globalThis.electronAPI.getNotificationTemplates()
       // Filter for report card type if property exists, otherwise all
       const rcTemplates = templates.filter(t => t.category === 'GENERAL' || t.template_name?.toLowerCase().includes('report'))
       setEmailTemplates(rcTemplates.map(t => ({
@@ -99,31 +116,21 @@ const ReportCardGeneration: React.FC = () => {
 
     try {
       // Get students for stream - using StudentAPI
-      const students = await window.electronAPI.getStudents({ stream_id: selectedStream, is_active: true })
+      const students = await globalThis.electronAPI.getStudents({ stream_id: selectedStream, is_active: true })
 
       setProgress(prev => ({ ...prev, total: students.length }))
 
       // Generate report cards - using new AcademicAPI method
-      const results = await window.electronAPI.generateBatchReportCards({
+      const results = await globalThis.electronAPI.generateBatchReportCards({
         exam_id: selectedExam,
-        stream_id: selectedStream,
-        on_progress: (data: unknown) => {
-          // Type assertion for progress data if needed, or update API type to include Progress type
-          const typedData = data as any;
-          setProgress(prev => ({
-            ...prev,
-            completed: typedData.completed,
-            current_student: typedData.current_student,
-            failed: typedData.failed
-          }))
-        }
+        stream_id: selectedStream
       })
 
       // If email requested
       if (sendEmail) {
         setProgress(prev => ({ ...prev, status: 'emailing' }))
 
-        await window.electronAPI.emailReportCards({
+        await globalThis.electronAPI.emailReportCards({
           exam_id: selectedExam,
           stream_id: selectedStream,
           template_id: selectedTemplate,
@@ -133,7 +140,7 @@ const ReportCardGeneration: React.FC = () => {
 
       // If merge PDFs requested
       if (mergePDFs) {
-        await window.electronAPI.mergeReportCards({
+        await globalThis.electronAPI.mergeReportCards({
           exam_id: selectedExam,
           stream_id: selectedStream,
           output_path: `ReportCards_${selectedExam}_${selectedStream}.pdf`
@@ -147,6 +154,8 @@ const ReportCardGeneration: React.FC = () => {
 
       setProgress(prev => ({
         ...prev,
+        completed: results.generated,
+        failed: results.failed,
         status: 'complete'
       }))
 
@@ -161,28 +170,15 @@ const ReportCardGeneration: React.FC = () => {
     }
   }
 
-  const handleDownloadReportCards = async () => {
-    try {
-      await window.electronAPI.downloadReportCards({
-        exam_id: selectedExam!,
-        stream_id: selectedStream!,
-        merge: mergePDFs
-      })
-      alert('Report cards downloaded successfully')
-    } catch (error) {
-      alert(`Error downloading: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
-  }
-
   const getProgressPercentage = () => {
-    if (progress.total === 0) return 0
+    if (progress.total === 0) {return 0}
     return Math.round((progress.completed / progress.total) * 100)
   }
 
   const getProgressColor = () => {
     const percent = getProgressPercentage()
-    if (percent < 33) return 'bg-red-500'
-    if (percent < 66) return 'bg-yellow-500'
+    if (percent < 33) {return 'bg-red-500'}
+    if (percent < 66) {return 'bg-yellow-500'}
     return 'bg-green-500'
   }
 
@@ -206,12 +202,12 @@ const ReportCardGeneration: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Exam Selection */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label htmlFor="field-193" className="block text-sm font-medium text-slate-700 mb-2">
                 Exam <span className="text-red-500">*</span>
               </label>
-              <select
+              <select id="field-193"
                 value={selectedExam ?? ''}
-                onChange={(e) => setSelectedExam(e.target.value ? parseInt(e.target.value) : null)}
+                onChange={(e) => setSelectedExam(e.target.value ? Number.parseInt(e.target.value, 10) : null)}
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Select Exam</option>
@@ -225,12 +221,12 @@ const ReportCardGeneration: React.FC = () => {
 
             {/* Stream Selection */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label htmlFor="field-212" className="block text-sm font-medium text-slate-700 mb-2">
                 Stream <span className="text-red-500">*</span>
               </label>
-              <select
+              <select id="field-212"
                 value={selectedStream ?? ''}
-                onChange={(e) => setSelectedStream(e.target.value ? parseInt(e.target.value) : null)}
+                onChange={(e) => setSelectedStream(e.target.value ? Number.parseInt(e.target.value, 10) : null)}
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Select Stream</option>
@@ -244,10 +240,10 @@ const ReportCardGeneration: React.FC = () => {
 
             {/* Email Options */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
+              <label htmlFor="field-231" className="block text-sm font-medium text-slate-700 mb-2">
                 Email Template
               </label>
-              <select
+              <select id="field-231"
                 value={selectedTemplate}
                 onChange={(e) => setSelectedTemplate(e.target.value)}
                 disabled={!sendEmail}
@@ -281,7 +277,6 @@ const ReportCardGeneration: React.FC = () => {
                   type="checkbox"
                   checked={sendSMS}
                   onChange={(e) => setSendSMS(e.target.checked)}
-                  disabled={!sendEmail}
                   className="w-4 h-4 text-blue-600 rounded disabled:opacity-50"
                 />
                 <span className="text-sm font-medium text-slate-700">
@@ -310,13 +305,7 @@ const ReportCardGeneration: React.FC = () => {
         {progress.status !== 'idle' && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
             <div className="flex items-center gap-4 mb-4">
-              {progress.status === 'generating' || progress.status === 'emailing' ? (
-                <Loader className="w-6 h-6 text-blue-500 animate-spin" />
-              ) : progress.status === 'complete' ? (
-                <CheckCircle className="w-6 h-6 text-green-500" />
-              ) : (
-                <AlertCircle className="w-6 h-6 text-red-500" />
-              )}
+              {renderProgressIcon(progress.status)}
 
               <div>
                 <h3 className="font-semibold text-slate-900">
@@ -406,8 +395,8 @@ const ReportCardGeneration: React.FC = () => {
           <div className="bg-white rounded-lg shadow-md p-6">
             <h3 className="font-semibold text-slate-900 mb-4">Generated Files</h3>
             <div className="space-y-2">
-              {generatedFiles.map((file, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded border border-slate-200">
+              {generatedFiles.map((file) => (
+                <div key={file} className="flex items-center justify-between p-3 bg-slate-50 rounded border border-slate-200">
                   <span className="text-sm text-slate-700">{file}</span>
                   <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
                     Download

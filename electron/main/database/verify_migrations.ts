@@ -16,8 +16,8 @@ export function verifyMigrations() {
       } else {
         migrations.forEach(m => console.warn(`  [${m.id}] ${m.name} (Applied at: ${m.applied_at})`))
       }
-    } catch (e) {
-      console.warn('  ❌ Could not read migrations table (might not exist).')
+    } catch {
+      console.warn('  [FAIL] Could not read migrations table (might not exist).')
     }
 
     // 2. Check for critical tables
@@ -45,17 +45,17 @@ export function verifyMigrations() {
     let allFound = true
     for (const table of expectedTables) {
       if (existingTableNames.has(table)) {
-        console.warn(`  ✅ ${table}`)
+        console.warn(`  [OK] ${table}`)
       } else {
-        console.warn(`  ❌ ${table} (MISSING)`)
+        console.warn(`  [MISSING] ${table}`)
         allFound = false
       }
     }
 
     if (allFound) {
-      console.warn('\n✅ All critical tables verified.')
+      console.warn('\n[OK] All critical tables verified.')
     } else {
-      console.error('\n❌ Some tables are missing. Migration verification FAILED.')
+      console.error('\n[FAIL] Some tables are missing. Migration verification FAILED.')
     }
 
   } catch (error) {

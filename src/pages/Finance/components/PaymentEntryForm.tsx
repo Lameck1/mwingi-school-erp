@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react'
 import { CreditCard, Check, Printer, MessageSquare, Loader2 } from 'lucide-react'
-import { Student } from '../../../types/electron-api/StudentAPI'
-import { useAuthStore } from '../../../stores'
+import React, { useState, useEffect } from 'react'
+
 import { useToast } from '../../../contexts/ToastContext'
-import { shillingsToCents, formatCurrency } from '../../../utils/format'
+import { useAuthStore, useAppStore } from '../../../stores'
+import { type Student } from '../../../types/electron-api/StudentAPI'
+import { shillingsToCents, formatCurrencyFromCents } from '../../../utils/format'
 import { printDocument } from '../../../utils/print'
+
+import type { SchoolSettings } from '../../../types/electron-api/SettingsAPI'
 
 export interface PaymentSuccess {
     success: boolean
@@ -21,11 +24,12 @@ export interface PaymentSuccess {
 interface PaymentEntryFormProps {
     selectedStudent: Student | null
     onPaymentComplete: (newBalance: number) => void
-    schoolSettings: any // Passed from parent or store
+    schoolSettings: SchoolSettings | null // Passed from parent or store
 }
 
 export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStudent, onPaymentComplete, schoolSettings }) => {
     const { user } = useAuthStore()
+    const { currentTerm } = useAppStore()
     const { showToast } = useToast()
 
     const [formData, setFormData] = useState({
@@ -52,7 +56,11 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!selectedStudent || !formData.amount) return
+        if (!selectedStudent || !formData.amount) {return}
+        if (!user?.id) {
+            showToast('You must be signed in to record payments', 'error')
+            return
+        }
 
         setSaving(true)
         setSuccess(null)
@@ -63,7 +71,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
             let resultData: PaymentSuccess;
 
             if (useCredit) {
-                const invoices = await window.electronAPI.getInvoicesByStudent(selectedStudent.id)
+                const invoices = await globalThis.electronAPI.getInvoicesByStudent(selectedStudent.id)
                 const pending = invoices.find(inv => inv.balance > 0)
 
                 if (!pending) {
@@ -78,13 +86,13 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                     return
                 }
 
-                const result = await window.electronAPI.payWithCredit({
+                const result = await globalThis.electronAPI.payWithCredit({
                     studentId: selectedStudent.id,
                     invoiceId: pending.id,
                     amount  // Send cents, not shillings
-                }, user!.id)
+                }, user.id)
 
-                if (!result.success) throw new Error(result.message || 'Credit payment failed')
+                if (!result.success) {throw new Error(result.message || 'Credit payment failed')}
 
                 resultData = {
                     success: true,
@@ -96,15 +104,17 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                     receiptNumber: 'N/A'
                 }
             } else {
-                const result = await window.electronAPI.recordPayment({
+                const result = await globalThis.electronAPI.recordPayment({
                     student_id: selectedStudent.id,
                     amount,
                     payment_method: formData.payment_method,
                     payment_reference: formData.payment_reference,
                     transaction_date: formData.transaction_date,
-                }, user!.id)
+                    description: formData.description,
+                    term_id: currentTerm?.id || 0
+                }, user.id)
 
-                if (!result.success) throw new Error(result.errors ? result.errors[0] : 'Payment failed')
+                if (!result.success) {throw new Error(result.errors?.[0] || result.message || 'Payment failed')}
 
                 resultData = {
                     ...result,
@@ -138,7 +148,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
     }
 
     const handlePrint = () => {
-        if (!success || !selectedStudent) return
+        if (!success || !selectedStudent) {return}
 
         // Amount to words converter
         const amountToWords = (num: number): string => {
@@ -146,11 +156,11 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
             const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
 
-            if (num === 0) return 'Zero'
-            if (num < 20) return ones[num]
-            if (num < 100) return tens[Math.floor(num / 10)] + (num % 10 ? ' ' + ones[num % 10] : '')
-            if (num < 1000) return ones[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' and ' + amountToWords(num % 100) : '')
-            if (num < 1000000) return amountToWords(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + amountToWords(num % 1000) : '')
+            if (num === 0) {return 'Zero'}
+            if (num < 20) {return ones[num]}
+            if (num < 100) {return tens[Math.floor(num / 10)] + (num % 10 ? ' ' + ones[num % 10] : '')}
+            if (num < 1000) {return ones[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' and ' + amountToWords(num % 100) : '')}
+            if (num < 1000000) {return amountToWords(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + amountToWords(num % 1000) : '')}
             return amountToWords(Math.floor(num / 1000000)) + ' Million' + (num % 1000000 ? ' ' + amountToWords(num % 1000000) : '')
         }
 
@@ -183,9 +193,9 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
 
         setSendingSms(true)
         try {
-            const message = `Payment Received: ${selectedStudent.first_name} ${selectedStudent.last_name}. Amount: KES ${success.amount}. Receipt: ${success.receiptNumber}. Bal: KES ${selectedStudent.balance}. Thank you.`
+            const message = `Payment Received: ${selectedStudent.first_name} ${selectedStudent.last_name}. Amount: ${formatCurrencyFromCents(success.amount)}. Receipt: ${success.receiptNumber}. Bal: ${formatCurrencyFromCents(selectedStudent.balance || 0)}. Thank you.`
 
-            const result = await window.electronAPI.sendSMS({
+            const result = await globalThis.electronAPI.sendSMS({
                 to: selectedStudent.guardian_phone,
                 message,
                 recipientId: selectedStudent.id,
@@ -198,7 +208,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
             } else {
                 alert('Failed to send SMS: ' + result.error)
             }
-        } catch (error) {
+        } catch {
             alert('Error sending SMS')
         } finally {
             setSendingSms(false)
@@ -251,10 +261,11 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
             <form onSubmit={handleSubmit} className="space-y-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-2">
-                        <label className="label">Amount Payable (KES)</label>
+                        <label className="label" htmlFor="payment-amount">Amount Payable (KES)</label>
                         <div className="relative">
                             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-foreground/40 font-bold">KSh</div>
                             <input
+                                id="payment-amount"
                                 type="number"
                                 value={formData.amount}
                                 onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
@@ -268,8 +279,9 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                     </div>
 
                     <div className="space-y-2">
-                        <label className="label">Value Date</label>
+                        <label className="label" htmlFor="payment-date">Value Date</label>
                         <input
+                            id="payment-date"
                             type="date"
                             value={formData.transaction_date}
                             onChange={(e) => setFormData(prev => ({ ...prev, transaction_date: e.target.value }))}
@@ -282,8 +294,9 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-2">
-                        <label className="label">Payment Instrument</label>
+                        <label className="label" htmlFor="payment-method">Payment Instrument</label>
                         <select
+                            id="payment-method"
                             value={formData.payment_method}
                             onChange={(e) => setFormData(prev => ({ ...prev, payment_method: e.target.value }))}
                             className="input bg-secondary/30 border-border/20"
@@ -302,14 +315,15 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                                     onChange={e => setUseCredit(e.target.checked)}
                                     className="checkbox checkbox-primary w-4 h-4 rounded"
                                 />
-                                <span>Use Credit ({formatCurrency(selectedStudent?.credit_balance || 0)})</span>
+                                <span>Use Credit ({formatCurrencyFromCents(selectedStudent?.credit_balance || 0)})</span>
                             </label>
                         )}
                     </div>
 
                     <div className="space-y-2">
-                        <label className="label">Reference / Slip Number</label>
+                        <label className="label" htmlFor="payment-reference">Reference / Slip Number</label>
                         <input
+                            id="payment-reference"
                             type="text"
                             value={formData.payment_reference}
                             onChange={(e) => setFormData(prev => ({ ...prev, payment_reference: e.target.value }))}
@@ -321,8 +335,9 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                 </div>
 
                 <div className="space-y-2">
-                    <label className="label">Transaction Narrative</label>
+                    <label className="label" htmlFor="payment-description">Transaction Narrative</label>
                     <textarea
+                        id="payment-description"
                         value={formData.description}
                         onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                         className="input bg-secondary/30 border-border/20 min-h-[100px]"

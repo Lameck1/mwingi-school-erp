@@ -1,8 +1,11 @@
-import React, { useEffect, useState, useCallback } from 'react'
 import { Plus, Users, Search, Edit, Lock, Trash, Check, Loader2, UserCircle2, ShieldCheck, Fingerprint, Save } from 'lucide-react'
-import type { User, CreateUserData, UpdateUserData } from '../../types/electron-api/UserAPI'
+import React, { useEffect, useState, useCallback } from 'react'
+
+
 import { Modal } from '../../components/ui/Modal'
 import { useToast } from '../../contexts/ToastContext'
+
+import type { User, CreateUserData, UpdateUserData } from '../../types/electron-api/UserAPI'
 
 export default function UsersPage() {
     const { showToast } = useToast()
@@ -29,7 +32,7 @@ export default function UsersPage() {
     const loadData = useCallback(async () => {
         setLoading(true)
         try {
-            const usersData = await window.electronAPI.getUsers()
+            const usersData = await globalThis.electronAPI.getUsers()
             setUsers(usersData)
         } catch (error) {
             console.error('Failed to load users:', error)
@@ -37,7 +40,7 @@ export default function UsersPage() {
         } finally { setLoading(false) }
     }, [showToast])
 
-    useEffect(() => { loadData() }, [loadData])
+    useEffect(() => { loadData().catch((err: unknown) => console.error('Failed to load users', err)) }, [loadData])
 
     const handleSaveUser = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -45,16 +48,16 @@ export default function UsersPage() {
         try {
             if (isEditing && selectedUser) {
                 const { password, ...updateData } = userData
-                await window.electronAPI.updateUser(selectedUser.id, updateData as UpdateUserData)
+                await globalThis.electronAPI.updateUser(selectedUser.id, updateData as UpdateUserData)
                 showToast('User profile updated successfully', 'success')
             } else {
-                await window.electronAPI.createUser(userData)
+                await globalThis.electronAPI.createUser(userData)
                 showToast('New user account established', 'success')
             }
 
             setShowUserModal(false)
             resetForms()
-            loadData()
+            loadData().catch((err: unknown) => console.error('Failed to reload users', err))
         } catch (error) {
             console.error('Failed to save user:', error)
             showToast(error instanceof Error ? error.message : 'Critical error saving user', 'error')
@@ -70,11 +73,11 @@ export default function UsersPage() {
             return
         }
 
-        if (!selectedUser) return
+        if (!selectedUser) {return}
 
         setSaving(true)
         try {
-            await window.electronAPI.resetUserPassword(selectedUser.id, passwordData.newPassword)
+            await globalThis.electronAPI.resetUserPassword(selectedUser.id, passwordData.newPassword)
             setShowPasswordModal(false)
             resetForms()
             showToast('Security credentials updated successfully', 'success')
@@ -88,12 +91,12 @@ export default function UsersPage() {
 
     const handleToggleStatus = async (user: User) => {
         const action = user.is_active ? 'deactivate' : 'activate'
-        if (!confirm(`Are you sure you want to ${action} user "${user.username}"?`)) return
+        if (!confirm(`Are you sure you want to ${action} user "${user.username}"?`)) {return}
 
         try {
-            await window.electronAPI.toggleUserStatus(user.id, !user.is_active)
+            await globalThis.electronAPI.toggleUserStatus(user.id, !user.is_active)
             showToast(`User ${action}d successfully`, 'success')
-            loadData()
+            loadData().catch((err: unknown) => console.error('Failed to reload users', err))
         } catch (error) {
             console.error('Failed to toggle status:', error)
             showToast('Status transition failed', 'error')
@@ -137,6 +140,16 @@ export default function UsersPage() {
         u.full_name.toLowerCase().includes(search.toLowerCase())
     )
 
+    const getRoleClass = (role: User['role']): string => {
+        if (role === 'ADMIN') {
+            return 'bg-purple-500/10 text-purple-500 border-purple-500/20'
+        }
+        if (role === 'AUDITOR') {
+            return 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+        }
+        return 'bg-secondary/50 text-foreground/50 border-border/40'
+    }
+
     return (
         <div className="space-y-8 pb-10">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -167,20 +180,29 @@ export default function UsersPage() {
             </div>
 
             <div className="card overflow-hidden transition-all duration-300">
-                {loading && users.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-24 gap-4">
-                        <Loader2 className="w-10 h-10 text-primary animate-spin" />
-                        <p className="text-xs font-bold uppercase tracking-widest text-foreground/40">Synchronizing Users...</p>
-                    </div>
-                ) : filteredUsers.length === 0 ? (
-                    <div className="text-center py-24 bg-secondary/5 rounded-3xl border border-dashed border-border/40 m-4">
-                        <Users className="w-16 h-16 text-foreground/10 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-foreground/80 font-heading">Void Directory</h3>
-                        <p className="text-foreground/40 font-medium italic mb-6">No matching user entities identified in the system</p>
-                        <button onClick={openAddModal} className="btn btn-secondary border-2 border-dashed px-8">Add First User</button>
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto">
+                {(() => {
+                    if (loading && users.length === 0) {
+                        return (
+                            <div className="flex flex-col items-center justify-center py-24 gap-4">
+                                <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                                <p className="text-xs font-bold uppercase tracking-widest text-foreground/40">Synchronizing Users...</p>
+                            </div>
+                        )
+                    }
+
+                    if (filteredUsers.length === 0) {
+                        return (
+                            <div className="text-center py-24 bg-secondary/5 rounded-3xl border border-dashed border-border/40 m-4">
+                                <Users className="w-16 h-16 text-foreground/10 mx-auto mb-4" />
+                                <h3 className="text-xl font-bold text-foreground/80 font-heading">Void Directory</h3>
+                                <p className="text-foreground/40 font-medium italic mb-6">No matching user entities identified in the system</p>
+                                <button onClick={openAddModal} className="btn btn-secondary border-2 border-dashed px-8">Add First User</button>
+                            </div>
+                        )
+                    }
+
+                    return (
+                        <div className="overflow-x-auto">
                         <table className="data-table">
                             <thead>
                                 <tr className="border-b border-border/40">
@@ -206,11 +228,8 @@ export default function UsersPage() {
                                             </div>
                                         </td>
                                         <td className="py-4">
-                                            <span className={`px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-widest flex items-center gap-2 w-fit border ${user.role === 'ADMIN' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' :
-                                                user.role === 'AUDITOR' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
-                                                    'bg-secondary/50 text-foreground/50 border-border/40'
-                                                }`}>
-                                                {user.role === 'ADMIN' ? <ShieldCheck className="w-3 h-3" /> : <UserCircle2 className="w-3 h-3" />}
+                                            <span className={`px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-widest flex items-center gap-2 w-fit border ${getRoleClass(user.role)}`}>
+                                                {user.role === 'ADMIN' ? <ShieldCheck className="w-3 h-3" aria-hidden="true" /> : <UserCircle2 className="w-3 h-3" aria-hidden="true" />}
                                                 {user.role}
                                             </span>
                                         </td>
@@ -234,17 +253,17 @@ export default function UsersPage() {
                                                 <button onClick={() => openEditModal(user)}
                                                     aria-label="Edit user"
                                                     className="p-2.5 bg-background border border-border/40 hover:border-blue-500/50 hover:text-blue-500 rounded-xl transition-all shadow-sm">
-                                                    <Edit className="w-4 h-4" />
+                                                    <Edit className="w-4 h-4" aria-hidden="true" />
                                                 </button>
                                                 <button onClick={() => openPasswordModal(user)}
                                                     aria-label="Reset user password"
                                                     className="p-2.5 bg-background border border-border/40 hover:border-orange-500/50 hover:text-orange-500 rounded-xl transition-all shadow-sm">
-                                                    <Lock className="w-4 h-4" />
+                                                    <Lock className="w-4 h-4" aria-hidden="true" />
                                                 </button>
                                                 <button onClick={() => handleToggleStatus(user)}
                                                     aria-label={user.is_active ? 'Deactivate user' : 'Activate user'}
                                                     className={`p-2.5 bg-background border border-border/40 rounded-xl transition-all shadow-sm ${user.is_active ? 'hover:border-destructive/50 hover:text-destructive' : 'hover:border-emerald-500/50 hover:text-emerald-500'}`}>
-                                                    {user.is_active ? <Trash className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                                                    {user.is_active ? <Trash className="w-4 h-4" aria-hidden="true" /> : <Check className="w-4 h-4" aria-hidden="true" />}
                                                 </button>
                                             </div>
                                         </td>
@@ -253,7 +272,8 @@ export default function UsersPage() {
                             </tbody>
                         </table>
                     </div>
-                )}
+                    )
+                })()}
             </div>
 
             {/* User Modification Modal */}

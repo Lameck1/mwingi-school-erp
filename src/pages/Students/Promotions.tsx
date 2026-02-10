@@ -1,12 +1,13 @@
-import { useState, useEffect, useCallback } from 'react'
 import {
     ArrowUpRight, Users, CheckCircle, AlertCircle, Loader2
 } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
 import { Select } from '../../components/ui/Select'
 import { useAppStore, useAuthStore } from '../../stores'
-import { Stream, AcademicYear, Term, PromotionStudent } from '../../types/electron-api/AcademicAPI'
+import { type Stream, type AcademicYear, type Term, type PromotionStudent } from '../../types/electron-api/AcademicAPI'
 
 export default function Promotions() {
     const { currentAcademicYear } = useAppStore()
@@ -33,7 +34,7 @@ export default function Promotions() {
 
     const loadStreams = useCallback(async () => {
         try {
-            const data = await window.electronAPI.getPromotionStreams()
+            const data = await globalThis.electronAPI.getPromotionStreams()
             setStreams(data)
         } catch (error) {
             console.error('Failed to load streams:', error)
@@ -42,7 +43,7 @@ export default function Promotions() {
 
     const loadAcademicYears = useCallback(async () => {
         try {
-            const data = await window.electronAPI.getAcademicYears()
+            const data = await globalThis.electronAPI.getAcademicYears()
             setAcademicYears(data)
             // Default to next academic year if available
             if (data.length > 1) {
@@ -55,7 +56,7 @@ export default function Promotions() {
 
     const loadTerms = useCallback(async () => {
         try {
-            const data = await window.electronAPI.getTermsByYear(toAcademicYear)
+            const data = await globalThis.electronAPI.getTermsByYear(toAcademicYear)
             setTerms(data)
             if (data.length > 0) {
                 setToTerm(data[0].id)
@@ -66,21 +67,21 @@ export default function Promotions() {
     }, [toAcademicYear])
 
     useEffect(() => {
-        loadStreams()
-        loadAcademicYears()
+        loadStreams().catch((err: unknown) => console.error('Failed to load streams', err))
+        loadAcademicYears().catch((err: unknown) => console.error('Failed to load academic years', err))
     }, [loadStreams, loadAcademicYears])
 
     useEffect(() => {
         if (toAcademicYear) {
-            loadTerms()
+            loadTerms().catch((err: unknown) => console.error('Failed to load terms', err))
         }
     }, [toAcademicYear, loadTerms])
 
     const loadStudents = useCallback(async () => {
-        if (!currentAcademicYear) return
+        if (!currentAcademicYear) {return}
         setLoading(true)
         try {
-            const data = await window.electronAPI.getStudentsForPromotion(fromStream, currentAcademicYear.id)
+            const data = await globalThis.electronAPI.getStudentsForPromotion(fromStream, currentAcademicYear.id)
             setStudents(data)
             setSelectedStudents([])
         } catch (error) {
@@ -92,7 +93,7 @@ export default function Promotions() {
 
     const suggestNextStream = useCallback(async () => {
         try {
-            const next = await window.electronAPI.getNextStream(fromStream)
+            const next = await globalThis.electronAPI.getNextStream(fromStream)
             if (next) {
                 setToStream(next.id)
             }
@@ -103,8 +104,8 @@ export default function Promotions() {
 
     useEffect(() => {
         if (fromStream && currentAcademicYear) {
-            loadStudents()
-            suggestNextStream()
+            loadStudents().catch((err: unknown) => console.error('Failed to load students for promotion', err))
+            suggestNextStream().catch((err: unknown) => console.error('Failed to suggest next stream', err))
         }
     }, [fromStream, currentAcademicYear, loadStudents, suggestNextStream])
 
@@ -125,7 +126,7 @@ export default function Promotions() {
     }
 
     const handlePromote = async () => {
-        if (!currentAcademicYear || !user) return
+        if (!currentAcademicYear || !user) {return}
         if (selectedStudents.length === 0) {
             alert('Please select students to promote')
             return
@@ -135,11 +136,11 @@ export default function Promotions() {
             return
         }
 
-        if (!confirm(`Promote ${selectedStudents.length} students to the selected class?`)) return
+        if (!confirm(`Promote ${selectedStudents.length} students to the selected class?`)) {return}
 
         setPromoting(true)
         try {
-            const result = await window.electronAPI.batchPromoteStudents(
+            const result = await globalThis.electronAPI.batchPromoteStudents(
                 selectedStudents,
                 fromStream,
                 toStream,
@@ -151,7 +152,7 @@ export default function Promotions() {
 
             if (result.success) {
                 alert(`Successfully promoted ${result.promoted} students!`)
-                loadStudents()
+                await loadStudents()
             } else {
                 alert(`Promoted ${result.promoted}, Failed: ${result.failed}`)
             }
@@ -161,6 +162,52 @@ export default function Promotions() {
         } finally {
             setPromoting(false)
         }
+    }
+
+    const renderStudents = () => {
+        if (loading) {
+            return <div className="text-center py-16 text-foreground/40">Loading students...</div>
+        }
+
+        if (students.length === 0) {
+            return (
+                <div className="text-center py-16 text-foreground/40">
+                    {fromStream ? 'No students found in this class' : 'Select a class to view students'}
+                </div>
+            )
+        }
+
+        return (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {students.map(student => (
+                    <button
+                        key={student.student_id}
+                        type="button"
+                        onClick={() => toggleStudent(student.student_id)}
+                        aria-label={`Toggle student ${student.student_name}`}
+                        className={`w-full text-left p-4 rounded-xl border cursor-pointer transition-all duration-300 ${selectedStudents.includes(student.student_id)
+                            ? 'bg-primary/10 border-primary/40'
+                            : 'bg-secondary/30 border-border/20 hover:border-primary/30 hover:bg-secondary/50'
+                            }`}
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors duration-300 ${selectedStudents.includes(student.student_id)
+                                ? 'bg-primary border-primary'
+                                : 'border-border/60 bg-background'
+                                }`}>
+                                {selectedStudents.includes(student.student_id) && (
+                                    <CheckCircle className="w-3 h-3 text-primary-foreground" />
+                                )}
+                            </div>
+                            <div>
+                                <p className="font-bold text-foreground">{student.student_name}</p>
+                                <p className="text-xs text-foreground/40 font-mono">{student.admission_number}</p>
+                            </div>
+                        </div>
+                    </button>
+                ))}
+            </div>
+        )
     }
 
     return (
@@ -265,48 +312,7 @@ export default function Promotions() {
                     </div>
                 </div>
 
-                {loading ? (
-                    <div className="text-center py-16 text-foreground/40">Loading students...</div>
-                ) : students.length === 0 ? (
-                    <div className="text-center py-16 text-foreground/40">
-                        {fromStream ? 'No students found in this class' : 'Select a class to view students'}
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {students.map(student => (
-                            <div
-                                key={student.student_id}
-                                onClick={() => toggleStudent(student.student_id)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                        toggleStudent(student.student_id)
-                                    }
-                                }}
-                                role="button"
-                                tabIndex={0}
-                                className={`p-4 rounded-xl border cursor-pointer transition-all duration-300 ${selectedStudents.includes(student.student_id)
-                                    ? 'bg-primary/10 border-primary/40'
-                                    : 'bg-secondary/30 border-border/20 hover:border-primary/30 hover:bg-secondary/50'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors duration-300 ${selectedStudents.includes(student.student_id)
-                                        ? 'bg-primary border-primary'
-                                        : 'border-border/60 bg-background'
-                                        }`}>
-                                        {selectedStudents.includes(student.student_id) && (
-                                            <CheckCircle className="w-3 h-3 text-primary-foreground" />
-                                        )}
-                                    </div>
-                                    <div>
-                                        <p className="font-bold text-foreground">{student.student_name}</p>
-                                        <p className="text-xs text-foreground/40 font-mono">{student.admission_number}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
+                {renderStudents()}
             </div>
         </div>
     )

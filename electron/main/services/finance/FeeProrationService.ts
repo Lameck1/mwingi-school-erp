@@ -1,103 +1,42 @@
-import Database from 'better-sqlite3'
+
+import { randomUUID } from 'node:crypto'
+
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 
-// ============================================================================
-// DATA STRUCTURES
-// ============================================================================
+import type {
+  GenerateProRatedInvoiceInput,
+  InvoiceGenerationResult,
+  InvoiceTemplate,
+  IProRateCalculator,
+  IProRatedInvoiceGenerator,
+  ITermDateValidator,
+  ProRationLogEntry,
+  ProRationResult,
+  ProrationDetail,
+  ValidationResult
+} from './FeeProrationService.types'
+import type Database from 'better-sqlite3'
 
-export interface ProRationLogEntry {
-  id: number
-  invoice_id: number
-  student_id: number
-  full_amount: number
-  pro_rated_amount: number
-  discount_percentage: number
-  enrollment_date: string
-  term_start: string
-  term_end: string
-  days_in_term: number
-  days_enrolled: number
-  created_at: string
-  invoice_number?: string
-  description?: string
-}
-
-export interface ProrationDetail extends ProRationLogEntry {
-  invoice_number: string
-  invoice_date: string
-  invoice_type: string
-  original_amount: number
-  prorated_amount: number
-}
-
-export interface GenerateProRatedInvoiceInput {
-  studentId: number
-  enrollmentDate: string
-  grade: string
-  userId: number
-}
-
-// ============================================================================
-// SEGREGATED INTERFACES (ISP)
-// ============================================================================
-
-export interface IProRateCalculator {
-  calculateProRatedFee(fullAmount: number, termStartDate: string, termEndDate: string, enrollmentDate: string): ProRationResult
-}
-
-export interface ITermDateValidator {
-  validateEnrollmentDate(termStartDate: string, termEndDate: string, enrollmentDate: string): ValidationResult
-}
-
-export interface IProRatedInvoiceGenerator {
-  generateProRatedInvoice(studentId: number, templateInvoiceId: number, enrollmentDate: string, userId: number): Promise<InvoiceGenerationResult>
-}
-
-export interface ProRationResult {
-  full_amount: number
-  pro_rated_amount: number
-  discount_percentage: number
-  days_in_term: number
-  days_enrolled: number
-  enrollment_date: string
-  calculation_method: 'DAILY' | 'WEEKLY' | 'MONTHLY'
-}
-
-export interface ValidationResult {
-  valid: boolean
-  message: string
-}
-
-export interface InvoiceGenerationResult {
-  success: boolean
-  message: string
-  invoice_id?: number
-  pro_ration_details?: ProRationResult
-}
-
-export interface InvoiceTemplate {
-  id: number
-  student_id: number
-  amount: number
-  amount_paid: number
-  due_date: string
-  invoice_date: string
-  invoice_number: string
-  description: string
-  invoice_type: string
-  term_id: number
-  class_id: number
-  status: string
-  grade?: string // For template lookup
-}
+export type {
+  GenerateProRatedInvoiceInput,
+  InvoiceGenerationResult,
+  InvoiceTemplate,
+  IProRateCalculator,
+  IProRatedInvoiceGenerator,
+  ITermDateValidator,
+  ProRationLogEntry,
+  ProRationResult,
+  ProrationDetail,
+  ValidationResult
+} from './FeeProrationService.types'
 
 // ============================================================================
 // REPOSITORY LAYER (SRP)
 // ============================================================================
 
 class InvoiceTemplateRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -113,20 +52,20 @@ class InvoiceTemplateRepository {
   async getTermDates(termId: number): Promise<{ term_start: string; term_end: string } | null> {
     const db = this.db
     const result = db.prepare(`
-      SELECT term_start, term_end FROM academic_term WHERE id = ?
-    `).get(termId) as { term_start: string; term_end: string } | undefined
+      SELECT start_date, end_date FROM academic_term WHERE id = ?
+    `).get(termId) as { start_date: string; end_date: string } | undefined
 
-    if (!result) return null
+    if (!result) {return null}
 
     return {
-      term_start: result.term_start,
-      term_end: result.term_end
+      term_start: result.start_date,
+      term_end: result.end_date
     }
   }
 }
 
 class ProRatedInvoiceRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -135,31 +74,42 @@ class ProRatedInvoiceRepository {
   async createProRatedInvoice(data: {
     student_id: number
     amount: number
+    original_amount?: number
     due_date: string
     invoice_date: string
     description: string
     invoice_type: string
     term_id: number
+    academic_term_id?: number
     class_id: number
+    created_by_user_id: number
   }): Promise<number> {
     const db = this.db
     const invoiceNumber = `INV-${Date.now()}`
+    const academicTermId = data.academic_term_id ?? data.term_id
+    const originalAmount = data.original_amount ?? data.amount
 
     const result = db.prepare(`
       INSERT INTO fee_invoice (
-        student_id, amount, amount_paid, due_date, invoice_date,
-        invoice_number, description, invoice_type, term_id, class_id, status
-      ) VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
+        student_id, term_id, academic_term_id, invoice_date, due_date,
+        total_amount, amount, amount_due, original_amount, amount_paid,
+        invoice_number, description, invoice_type, class_id, status, created_by_user_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 'PENDING', ?)
     `).run(
       data.student_id,
-      data.amount,
-      data.due_date,
+      data.term_id,
+      academicTermId,
       data.invoice_date,
+      data.due_date,
+      data.amount,
+      data.amount,
+      data.amount,
+      originalAmount,
       invoiceNumber,
       data.description,
       data.invoice_type,
-      data.term_id,
-      data.class_id
+      data.class_id,
+      data.created_by_user_id
     )
 
     return result.lastInsertRowid as number
@@ -275,16 +225,101 @@ class TermDateValidator implements ITermDateValidator {
 }
 
 class ProRatedInvoiceGenerator implements IProRatedInvoiceGenerator {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(
-    private templateRepo: InvoiceTemplateRepository,
-    private invoiceRepo: ProRatedInvoiceRepository,
-    private calculator: ProRateCalculator,
-    private validator: TermDateValidator,
+    private readonly templateRepo: InvoiceTemplateRepository,
+    private readonly invoiceRepo: ProRatedInvoiceRepository,
+    private readonly calculator: ProRateCalculator,
+    private readonly validator: TermDateValidator,
     db?: Database.Database
   ) {
     this.db = db || getDatabase()
+  }
+
+  private async loadTemplateAndTermDates(
+    templateInvoiceId: number
+  ): Promise<{ template: InvoiceTemplate; termDates: { term_start: string; term_end: string } } | InvoiceGenerationResult> {
+    const template = await this.templateRepo.getInvoiceTemplate(templateInvoiceId)
+    if (!template) {
+      return {
+        success: false,
+        message: 'Template invoice not found'
+      }
+    }
+
+    const termDates = await this.templateRepo.getTermDates(template.term_id)
+    if (!termDates) {
+      return {
+        success: false,
+        message: 'Term dates not found'
+      }
+    }
+
+    return { template, termDates }
+  }
+
+  private validateProrationDates(
+    termDates: { term_start: string; term_end: string },
+    enrollmentDate: string
+  ): ValidationResult {
+    return this.validator.validateEnrollmentDate(termDates.term_start, termDates.term_end, enrollmentDate)
+  }
+
+  private async createInvoiceAndAudit(args: {
+    studentId: number
+    userId: number
+    enrollmentDate: string
+    template: InvoiceTemplate
+    termDates: { term_start: string; term_end: string }
+    proRation: ProRationResult
+  }): Promise<number> {
+    const { studentId, userId, enrollmentDate, template, termDates, proRation } = args
+
+    const invoiceId = await this.invoiceRepo.createProRatedInvoice({
+      student_id: studentId,
+      amount: proRation.pro_rated_amount,
+      original_amount: proRation.full_amount,
+      due_date: template.due_date,
+      invoice_date: new Date().toISOString().split('T')[0],
+      description: `${template.description} (Pro-rated: ${proRation.discount_percentage.toFixed(1)}% discount)`,
+      invoice_type: template.invoice_type,
+      term_id: template.term_id,
+      academic_term_id: template.term_id,
+      class_id: template.class_id,
+      created_by_user_id: userId
+    })
+
+    await this.invoiceRepo.recordProRationLog({
+      invoice_id: invoiceId,
+      student_id: studentId,
+      full_amount: proRation.full_amount,
+      pro_rated_amount: proRation.pro_rated_amount,
+      discount_percentage: proRation.discount_percentage,
+      enrollment_date: enrollmentDate,
+      term_start: termDates.term_start,
+      term_end: termDates.term_end,
+      days_in_term: proRation.days_in_term,
+      days_enrolled: proRation.days_enrolled
+    })
+
+    logAudit(userId, 'CREATE_PRORATED_INVOICE', 'fee_invoice', invoiceId, null, {
+      student_id: studentId,
+      full_amount: proRation.full_amount,
+      pro_rated_amount: proRation.pro_rated_amount,
+      discount_percentage: proRation.discount_percentage
+    })
+
+    return invoiceId
+  }
+
+  private buildSuccess(invoiceId: number, proRation: ProRationResult): InvoiceGenerationResult {
+    return {
+      success: true,
+      message: `Pro-rated invoice created: ${(proRation.pro_rated_amount / 100).toFixed(2)} KES (${proRation.discount_percentage.toFixed(1)}% discount)`,
+      invoice_id: invoiceId,
+      pro_ration_details: proRation
+    }
   }
 
   async generateProRatedInvoice(
@@ -293,36 +328,14 @@ class ProRatedInvoiceGenerator implements IProRatedInvoiceGenerator {
     enrollmentDate: string,
     userId: number
   ): Promise<InvoiceGenerationResult> {
-    const db = this.db
-
     try {
-      // Get template invoice
-      const template = await this.templateRepo.getInvoiceTemplate(templateInvoiceId)
-
-      if (!template) {
-        return {
-          success: false,
-          message: 'Template invoice not found'
-        }
+      const loaded = await this.loadTemplateAndTermDates(templateInvoiceId)
+      if (!('template' in loaded)) {
+        return loaded
       }
 
-      // Get term dates
-      const termDates = await this.templateRepo.getTermDates(template.term_id)
-
-      if (!termDates) {
-        return {
-          success: false,
-          message: 'Term dates not found'
-        }
-      }
-
-      // Validate enrollment date
-      const validation = this.validator.validateEnrollmentDate(
-        termDates.term_start,
-        termDates.term_end,
-        enrollmentDate
-      )
-
+      const { template, termDates } = loaded
+      const validation = this.validateProrationDates(termDates, enrollmentDate)
       if (!validation.valid) {
         return {
           success: false,
@@ -330,7 +343,6 @@ class ProRatedInvoiceGenerator implements IProRatedInvoiceGenerator {
         }
       }
 
-      // Calculate pro-rated fee
       const proRation = this.calculator.calculateProRatedFee(
         template.amount,
         termDates.term_start,
@@ -338,66 +350,27 @@ class ProRatedInvoiceGenerator implements IProRatedInvoiceGenerator {
         enrollmentDate
       )
 
-      // Create pro-rated invoice
-      const invoiceId = await this.invoiceRepo.createProRatedInvoice({
-        student_id: studentId,
-        amount: proRation.pro_rated_amount,
-        due_date: template.due_date,
-        invoice_date: new Date().toISOString().split('T')[0],
-        description: `${template.description} (Pro-rated: ${proRation.discount_percentage.toFixed(1)}% discount)`,
-        invoice_type: template.invoice_type,
-        term_id: template.term_id,
-        class_id: template.class_id
-      })
-
-      // Record proration log
-      await this.invoiceRepo.recordProRationLog({
-        invoice_id: invoiceId,
-        student_id: studentId,
-        full_amount: proRation.full_amount,
-        pro_rated_amount: proRation.pro_rated_amount,
-        discount_percentage: proRation.discount_percentage,
-        enrollment_date: enrollmentDate,
-        term_start: termDates.term_start,
-        term_end: termDates.term_end,
-        days_in_term: proRation.days_in_term,
-        days_enrolled: proRation.days_enrolled
-      })
-
-      // Audit log
-      logAudit(
+      const invoiceId = await this.createInvoiceAndAudit({
+        studentId,
         userId,
-        'CREATE_PRORATED_INVOICE',
-        'fee_invoice',
-        invoiceId,
-        null,
-        {
-          student_id: studentId,
-          full_amount: proRation.full_amount,
-          pro_rated_amount: proRation.pro_rated_amount,
-          discount_percentage: proRation.discount_percentage
-        }
-      )
+        enrollmentDate,
+        template,
+        termDates,
+        proRation
+      })
 
-      return {
-        success: true,
-        message: `Pro-rated invoice created: ${(proRation.pro_rated_amount / 100).toFixed(2)} KES (${proRation.discount_percentage.toFixed(1)}% discount)`,
-        invoice_id: invoiceId,
-        pro_ration_details: proRation
-      }
-
+      return this.buildSuccess(invoiceId, proRation)
     } catch (error) {
       throw new Error(`Failed to generate pro-rated invoice: ${(error as Error).message}`)
     }
   }
 }
-
 // ============================================================================
 // FACADE SERVICE (Composition, DIP)
 // ============================================================================
 
 export class FeeProrationService implements IProRateCalculator, ITermDateValidator, IProRatedInvoiceGenerator {
-  private db: Database.Database
+  private readonly db: Database.Database
   private readonly calculator: ProRateCalculator
   private readonly validator: TermDateValidator
   private readonly invoiceGenerator: ProRatedInvoiceGenerator
@@ -464,8 +437,8 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
 
       // Get term dates
       const term = db.prepare(`
-        SELECT * FROM academic_term WHERE is_current = 1
-      `).get() as { start_date: string, end_date: string } | undefined
+        SELECT id, start_date, end_date FROM academic_term WHERE is_current = 1
+      `).get() as { id: number; start_date: string; end_date: string } | undefined
 
       if (!term) {
         return {
@@ -476,6 +449,7 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
 
       const termStartDate = term.start_date
       const termEndDate = term.end_date
+      const termId = term.id
       const enrollment = new Date(data.enrollmentDate)
       const termStart = new Date(termStartDate)
       const termEnd = new Date(termEndDate)
@@ -484,22 +458,30 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
       const daysInTerm = Math.ceil((termEnd.getTime() - termStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
       const daysEnrolled = Math.ceil((termEnd.getTime() - enrollment.getTime()) / (1000 * 60 * 60 * 24)) + 1
       const prorationType = (daysEnrolled / daysInTerm) * 100
+      const discountPercentage = ((daysInTerm - daysEnrolled) / daysInTerm) * 100
       const proratedAmount = template.amount * (daysEnrolled / daysInTerm)
 
       // Create invoice with unique invoice number
-      const invoiceNumber = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      const invoiceToken = randomUUID().replaceAll('-', '').slice(0, 9).toUpperCase()
+      const invoiceNumber = `INV-${Date.now()}-${invoiceToken}`
       const invoiceResult = db.prepare(`
-        INSERT INTO fee_invoice (student_id, invoice_number, amount, original_amount, is_prorated, proration_percentage, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(data.studentId, invoiceNumber, proratedAmount, template.amount, 1, prorationType, new Date().toISOString())
+        INSERT INTO fee_invoice (
+          student_id, term_id, academic_term_id, invoice_number,
+          total_amount, amount, amount_due, original_amount, amount_paid,
+          is_prorated, proration_percentage, created_at, status, created_by_user_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?, 'PENDING', ?)
+      `).run(data.studentId, termId, termId, invoiceNumber, proratedAmount, proratedAmount, proratedAmount, template.amount, prorationType, new Date().toISOString(), data.userId)
 
       const invoiceId = invoiceResult.lastInsertRowid
 
       // Record proration log
       db.prepare(`
-        INSERT INTO pro_ration_log (student_id, invoice_id, enrollment_date, term_start_date, term_end_date, days_in_term, days_enrolled, proration_percentage, original_amount, prorated_amount, created_at)
+        INSERT INTO pro_ration_log (
+          student_id, invoice_id, enrollment_date, term_start, term_end,
+          days_in_term, days_enrolled, discount_percentage, full_amount, pro_rated_amount, created_at
+        )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(data.studentId, invoiceId, data.enrollmentDate, termStartDate, termEndDate, daysInTerm, daysEnrolled, prorationType, template.amount, proratedAmount, new Date().toISOString())
+      `).run(data.studentId, invoiceId, data.enrollmentDate, termStartDate, termEndDate, daysInTerm, daysEnrolled, discountPercentage, template.amount, proratedAmount, new Date().toISOString())
 
       logAudit(
         data.userId,
@@ -511,13 +493,13 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
           student_id: data.studentId,
           original_amount: template.amount,
           prorated_amount: proratedAmount,
-          proration_percentage: prorationType
+          proration_percentage: discountPercentage
         }
       )
 
       return {
         success: true,
-        message: `Pro-rated invoice created: ${(proratedAmount / 100).toFixed(2)} KES (${prorationType.toFixed(1)}% of full fee)`,
+        message: `Pro-rated invoice created: ${(proratedAmount / 100).toFixed(2)} KES (${discountPercentage.toFixed(1)}% discount)`,
         invoice_id: Number(invoiceId)
       }
     } catch (error) {
@@ -569,9 +551,9 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
     const result = db.prepare(`
       SELECT 
         fi.*,
-        pl.original_amount,
-        pl.prorated_amount,
-        pl.proration_percentage as discount_percentage,
+        pl.full_amount as original_amount,
+        pl.pro_rated_amount as prorated_amount,
+        pl.discount_percentage,
         pl.days_in_term,
         pl.days_enrolled,
         pl.enrollment_date
@@ -631,4 +613,7 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
     return Math.round(percentage * 100) / 100
   }
 }
+
+
+
 

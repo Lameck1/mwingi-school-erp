@@ -1,12 +1,13 @@
 
+import { Plus, Trash2, CheckCircle, Clock, XCircle, X } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
+
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { useAppStore, useAuthStore } from '../../stores'
-import { Plus, Trash2, CheckCircle, Clock, XCircle, X } from 'lucide-react'
 
 // Roles that can approve awards
-const APPROVER_ROLES = ['ADMIN', 'PRINCIPAL', 'DEPUTY_PRINCIPAL']
+const APPROVER_ROLES = new Set(['ADMIN', 'PRINCIPAL', 'DEPUTY_PRINCIPAL'])
 
 interface StudentAward {
   id: number
@@ -56,14 +57,15 @@ const AwardsManagement = () => {
   const [rejectionReason, setRejectionReason] = useState('')
 
   // Check if current user can approve
-  const canApprove = user?.role && APPROVER_ROLES.includes(user.role)
+  const canApprove = user?.role ? APPROVER_ROLES.has(user.role) : false
 
   const loadAwards = useCallback(async () => {
     try {
-      const awardData = await window.electronAPI.getAwards({
+      const status = filterStatus === 'all' ? undefined : filterStatus
+      const awardData = await globalThis.electronAPI.getAwards({
         academicYearId: currentAcademicYear?.id,
         termId: currentTerm?.id,
-        status: filterStatus !== 'all' ? filterStatus : undefined
+        status
       })
       setAwards(awardData || [])
     } catch (error) {
@@ -74,8 +76,8 @@ const AwardsManagement = () => {
   const loadInitialData = useCallback(async () => {
     try {
       const [categoryData, studentData] = await Promise.all([
-        window.electronAPI.getAwardCategories(),
-        window.electronAPI.getStudents({ stream_id: undefined })
+        globalThis.electronAPI.getAwardCategories(),
+        globalThis.electronAPI.getStudents({ stream_id: undefined })
       ])
 
       setCategories(categoryData || [])
@@ -90,22 +92,22 @@ const AwardsManagement = () => {
   }, [])
 
   useEffect(() => {
-    loadInitialData()
+    loadInitialData().catch((err: unknown) => console.error('Failed to load initial data:', err))
   }, [loadInitialData])
 
   useEffect(() => {
-    loadAwards()
+    loadAwards().catch((err: unknown) => console.error('Failed to load awards:', err))
   }, [loadAwards])
 
   const handleAwardStudent = async () => {
-    if (!selectedStudent || !selectedCategory) {
+    if (selectedStudent === 0 || selectedCategory === 0) {
       alert('Please select a student and award category')
       return
     }
 
     setLoading(true)
     try {
-      await window.electronAPI.awardStudent({
+      await globalThis.electronAPI.awardStudent({
         studentId: selectedStudent,
         categoryId: selectedCategory,
         academicYearId: currentAcademicYear!.id,
@@ -131,7 +133,7 @@ const AwardsManagement = () => {
   const handleApproveAward = async (awardId: number) => {
     setLoading(true)
     try {
-      await window.electronAPI.approveAward({
+      await globalThis.electronAPI.approveAward({
         awardId,
         userId: user?.id
       })
@@ -159,7 +161,7 @@ const AwardsManagement = () => {
 
     setLoading(true)
     try {
-      await window.electronAPI.rejectAward({
+      await globalThis.electronAPI.rejectAward({
         awardId: rejectingAwardId!,
         userId: user?.id,
         reason: rejectionReason
@@ -178,11 +180,11 @@ const AwardsManagement = () => {
   }
 
   const handleDeleteAward = async (awardId: number) => {
-    if (!confirm('Are you sure you want to delete this award?')) return
+    if (!confirm('Are you sure you want to delete this award?')) {return}
 
     setLoading(true)
     try {
-      await window.electronAPI.deleteAward({ awardId })
+      await globalThis.electronAPI.deleteAward({ awardId })
       setAwards(awards.filter(a => a.id !== awardId))
       alert('Award deleted successfully!')
     } catch (error) {
@@ -193,10 +195,9 @@ const AwardsManagement = () => {
     }
   }
 
-  const filteredAwards = awards.filter(award => {
-    if (filterCategory !== 0 && award.award_category_id !== filterCategory) return false
-    return true
-  })
+  const filteredAwards = awards.filter(
+    (award) => filterCategory === 0 || award.award_category_id === filterCategory
+  )
 
   const categoryMap = new Map(categories.map(c => [c.id, c]))
 
@@ -245,7 +246,7 @@ const AwardsManagement = () => {
           {categories.slice(0, 8).map(cat => (
             <div key={cat.id} className="p-4 rounded-lg bg-white/5 border border-white/10">
               <p className="font-semibold text-sm">{cat.name}</p>
-              <p className="text-xs text-foreground/60 mt-1">{cat.category_type.replace(/_/g, ' ')}</p>
+              <p className="text-xs text-foreground/60 mt-1">{cat.category_type.replaceAll('_', ' ')}</p>
             </div>
           ))}
         </div>

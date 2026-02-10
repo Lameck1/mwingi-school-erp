@@ -5,8 +5,21 @@
 
 describe('Email Validation Utilities', () => {
   const validateEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    return emailRegex.test(email)
+    if (email.length === 0 || email.includes(' ')) {
+      return false
+    }
+
+    const atIndex = email.indexOf('@')
+    if (atIndex <= 0 || atIndex !== email.lastIndexOf('@')) {
+      return false
+    }
+
+    const domain = email.slice(atIndex + 1)
+    if (domain.length === 0 || domain.startsWith('.') || domain.endsWith('.')) {
+      return false
+    }
+
+    return domain.includes('.')
   }
 
   describe('Email Format Validation', () => {
@@ -142,28 +155,28 @@ describe('Date Calculation Utilities', () => {
 
 describe('GPA Calculation Utilities', () => {
   const calculateGPA = (marks: number[], maxMark: number = 100): number => {
-    if (marks.length === 0) return 0
+    if (marks.length === 0) {return 0}
     const sum = marks.reduce((a, b) => a + b, 0)
     const average = sum / marks.length
     // Convert to 4.0 scale
-    return (average / maxMark) * 4.0
+    return (average / maxMark) * 4
   }
 
   const calculateWeightedGPA = (
     subjects: Array<{ mark: number; weight: number }>,
     maxMark: number = 100
   ): number => {
-    if (subjects.length === 0) return 0
+    if (subjects.length === 0) {return 0}
     const totalWeight = subjects.reduce((sum, s) => sum + s.weight, 0)
     const weightedSum = subjects.reduce((sum, s) => sum + (s.mark * s.weight) / maxMark, 0)
-    return (weightedSum / totalWeight) * 4.0
+    return (weightedSum / totalWeight) * 4
   }
 
   const getGradeFromGPA = (gpa: number): string => {
-    if (gpa >= 3.5) return 'A'
-    if (gpa >= 3.0) return 'B'
-    if (gpa >= 2.5) return 'C'
-    if (gpa >= 2.0) return 'D'
+    if (gpa >= 3.5) {return 'A'}
+    if (gpa >= 3) {return 'B'}
+    if (gpa >= 2.5) {return 'C'}
+    if (gpa >= 2) {return 'D'}
     return 'E'
   }
 
@@ -183,7 +196,7 @@ describe('GPA Calculation Utilities', () => {
     it('should handle perfect marks', () => {
       const marks = [100, 100, 100]
       const gpa = calculateGPA(marks)
-      expect(gpa).toBe(4.0)
+      expect(gpa).toBe(4)
     })
 
     it('should handle minimum marks', () => {
@@ -207,8 +220,8 @@ describe('GPA Calculation Utilities', () => {
         { mark: 80, weight: 1 }
       ]
       const gpa = calculateWeightedGPA(subjects)
-      expect(gpa).toBeGreaterThan(3.0)
-      expect(gpa).toBeLessThan(4.0)
+      expect(gpa).toBeGreaterThan(3)
+      expect(gpa).toBeLessThan(4)
     })
 
     it('should handle equal weights', () => {
@@ -243,12 +256,12 @@ describe('GPA Calculation Utilities', () => {
   describe('Grade Assignment from GPA', () => {
     it('should assign grade A for high GPA', () => {
       expect(getGradeFromGPA(3.8)).toBe('A')
-      expect(getGradeFromGPA(4.0)).toBe('A')
+      expect(getGradeFromGPA(4)).toBe('A')
     })
 
     it('should assign grade B for good GPA', () => {
       expect(getGradeFromGPA(3.2)).toBe('B')
-      expect(getGradeFromGPA(3.0)).toBe('B')
+      expect(getGradeFromGPA(3)).toBe('B')
     })
 
     it('should assign grade C for average GPA', () => {
@@ -275,7 +288,7 @@ describe('GPA Calculation Utilities', () => {
 
 describe('String and Number Utilities', () => {
   const truncateString = (str: string, maxLength: number, suffix: string = '...'): string => {
-    if (str.length <= maxLength) return str
+    if (str.length <= maxLength) {return str}
     return str.substring(0, maxLength - suffix.length) + suffix
   }
 
@@ -341,7 +354,7 @@ describe('Array Utilities', () => {
   const sum = (arr: number[]): number => arr.reduce((a, b) => a + b, 0)
   const average = (arr: number[]): number => (arr.length === 0 ? 0 : sum(arr) / arr.length)
   const median = (arr: number[]): number => {
-    if (arr.length === 0) return 0
+    if (arr.length === 0) {return 0}
     const sorted = [...arr].sort((a, b) => a - b)
     const mid = Math.floor(sorted.length / 2)
     return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2

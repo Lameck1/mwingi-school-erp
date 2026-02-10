@@ -1,6 +1,9 @@
-import { app, BrowserWindow, screen } from 'electron'
-import * as fs from 'fs'
-import * as path from 'path'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+
+import { app, screen } from '../electron-env'
+
+import type { BrowserWindow, Display } from 'electron'
 
 interface WindowState {
     x: number
@@ -19,9 +22,9 @@ const DEFAULT_STATE: WindowState = {
 }
 
 export class WindowStateManager {
-    private state: WindowState
+    private readonly state: WindowState
     private window: BrowserWindow | null = null
-    private stateFilePath: string
+    private readonly stateFilePath: string
     private saveTimeout: ReturnType<typeof setTimeout> | null = null
 
     constructor(windowName: string = 'main') {
@@ -56,7 +59,7 @@ export class WindowStateManager {
     private isValidState(state: WindowState): boolean {
         const displays = screen.getAllDisplays()
 
-        return displays.some(display => {
+        return displays.some((display: Display) => {
             const { x, y, width, height } = display.bounds
             return (
                 state.x >= x &&
@@ -88,7 +91,7 @@ export class WindowStateManager {
      * Update state from window
      */
     private updateState(): void {
-        if (!this.window || this.window.isDestroyed()) return
+        if (!this.window || this.window.isDestroyed()) {return}
 
         const isMaximized = this.window.isMaximized()
 

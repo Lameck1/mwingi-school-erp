@@ -1,5 +1,7 @@
-import Database from 'better-sqlite3-multiple-ciphers';
 import { getDatabase } from '../../database';
+
+import type Database from 'better-sqlite3';
+
 
 /**
  * Profit and Loss Service
@@ -32,7 +34,7 @@ export interface CategoryBalance {
 }
 
 export class ProfitAndLossService {
-  private db: Database.Database;
+  private readonly db: Database.Database;
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase();
@@ -144,9 +146,9 @@ export class ProfitAndLossService {
           ? (expenseVariance / prior.total_expenses) * 100 
           : 0,
         net_profit_variance: netProfitVariance,
-        net_profit_variance_percent: prior.net_profit !== 0 
-          ? (netProfitVariance / prior.net_profit) * 100 
-          : 0
+        net_profit_variance_percent: prior.net_profit === 0
+          ? 0
+          : (netProfitVariance / prior.net_profit) * 100
       }
     };
   }
@@ -235,27 +237,8 @@ export class ProfitAndLossService {
     };
 
     for (const account of expenseAccounts) {
-      const code = account.account_code;
-      
-      if (code.startsWith('501') || code.startsWith('502')) {
-        categories['Salaries & Wages'] += account.balance;
-      } else if (code.startsWith('503') || code.startsWith('504') || code.startsWith('505')) {
-        categories['Statutory Deductions'] += account.balance;
-      } else if (code.startsWith('510')) {
-        categories['Food & Catering'] += account.balance;
-      } else if (code.startsWith('520') || code === '5210') {
-        categories['Transport'] += account.balance;
-      } else if (code.startsWith('53')) {
-        categories['Utilities'] += account.balance;
-      } else if (code.startsWith('54')) {
-        categories['Supplies'] += account.balance;
-      } else if (code === '5500') {
-        categories['Repairs & Maintenance'] += account.balance;
-      } else if (code === '5600') {
-        categories['Depreciation'] += account.balance;
-      } else {
-        categories['Other Expenses'] += account.balance;
-      }
+      const category = this.resolveExpenseCategory(account.account_code)
+      categories[category] += account.balance
     }
 
     return Object.entries(categories)
@@ -266,5 +249,21 @@ export class ProfitAndLossService {
         percentage: totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0
       }))
       .sort((a, b) => b.amount - a.amount);
+  }
+
+  private resolveExpenseCategory(code: string): string {
+    const categoryMatchers: ReadonlyArray<{ category: string; matches: (accountCode: string) => boolean }> = [
+      { category: 'Salaries & Wages', matches: (accountCode) => accountCode.startsWith('501') || accountCode.startsWith('502') },
+      { category: 'Statutory Deductions', matches: (accountCode) => accountCode.startsWith('503') || accountCode.startsWith('504') || accountCode.startsWith('505') },
+      { category: 'Food & Catering', matches: (accountCode) => accountCode.startsWith('510') },
+      { category: 'Transport', matches: (accountCode) => accountCode.startsWith('520') || accountCode === '5210' },
+      { category: 'Utilities', matches: (accountCode) => accountCode.startsWith('53') },
+      { category: 'Supplies', matches: (accountCode) => accountCode.startsWith('54') },
+      { category: 'Repairs & Maintenance', matches: (accountCode) => accountCode === '5500' },
+      { category: 'Depreciation', matches: (accountCode) => accountCode === '5600' }
+    ]
+
+    const matchedCategory = categoryMatchers.find((matcher) => matcher.matches(code))
+    return matchedCategory?.category || 'Other Expenses'
   }
 }

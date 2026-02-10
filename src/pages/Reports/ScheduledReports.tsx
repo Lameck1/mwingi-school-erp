@@ -1,24 +1,14 @@
-import { useState, useEffect } from 'react'
 import {
     Calendar, Clock, Mail, Plus, Edit, Trash2,
     FileText
 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Modal } from '../../components/ui/Modal'
 import { useAuthStore } from '../../stores'
 
-interface ScheduledReport {
-    id: number
-    report_name: string
-    report_type: string
-    schedule_type: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'TERM_END' | 'YEAR_END'
-    day_of_week: number | null
-    day_of_month: number | null
-    time_of_day: string
-    recipients: string // JSON
-    is_active: boolean
-    last_run_at: string | null
-}
+import type { ScheduledReport } from '../../types/electron-api/ReportsAPI'
 
 const REPORT_TYPES = [
     { value: 'FEE_COLLECTION', label: 'Fee Collection Summary' },
@@ -26,6 +16,16 @@ const REPORT_TYPES = [
     { value: 'EXPENSE_SUMMARY', label: 'Expense Summary' },
     { value: 'TRIAL_BALANCE', label: 'Trial Balance' },
     { value: 'STUDENT_LIST', label: 'Student List' },
+]
+
+const DAY_OPTIONS = [
+    { label: 'S', value: 0 },
+    { label: 'M', value: 1 },
+    { label: 'T', value: 2 },
+    { label: 'W', value: 3 },
+    { label: 'T', value: 4 },
+    { label: 'F', value: 5 },
+    { label: 'S', value: 6 }
 ]
 
 export default function ScheduledReports() {
@@ -48,13 +48,13 @@ export default function ScheduledReports() {
     const [recipientInput, setRecipientInput] = useState('')
 
     useEffect(() => {
-        loadSchedules()
+        void loadSchedules()
     }, [])
 
     const loadSchedules = async () => {
         setLoading(true)
         try {
-            const data = await (window.electronAPI as unknown).getScheduledReports()
+            const data = await globalThis.electronAPI.getScheduledReports()
             setSchedules(data)
         } catch (error) {
             console.error('Failed to load schedules:', error)
@@ -64,7 +64,7 @@ export default function ScheduledReports() {
     }
 
     const handleSave = async () => {
-        if (!user) return
+        if (!user) {return}
         if (!editingSchedule.report_name) {
             alert('Report name is required')
             return
@@ -73,13 +73,13 @@ export default function ScheduledReports() {
         setSaving(true)
         try {
             if (editingSchedule.id) {
-                await (window.electronAPI as unknown).updateScheduledReport(editingSchedule.id, editingSchedule, user.id)
+                await globalThis.electronAPI.updateScheduledReport(editingSchedule.id, editingSchedule, user.id)
             } else {
-                await (window.electronAPI as unknown).createScheduledReport(editingSchedule, user.id)
+                await globalThis.electronAPI.createScheduledReport(editingSchedule, user.id)
             }
             setShowModal(false)
-            loadSchedules()
-        } catch (error) {
+            await loadSchedules()
+        } catch {
             alert('Failed to save schedule')
         } finally {
             setSaving(false)
@@ -87,12 +87,12 @@ export default function ScheduledReports() {
     }
 
     const handleDelete = async (id: number) => {
-        if (!confirm('Are you sure you want to delete this schedule?')) return
+        if (!confirm('Are you sure you want to delete this schedule?')) {return}
 
         try {
-            await (window.electronAPI as unknown).deleteScheduledReport(id, user!.id)
-            loadSchedules()
-        } catch (error) {
+            await globalThis.electronAPI.deleteScheduledReport(id, user!.id)
+            await loadSchedules()
+        } catch {
             alert('Failed to delete schedule')
         }
     }
@@ -106,7 +106,7 @@ export default function ScheduledReports() {
     }
 
     const addRecipient = () => {
-        if (!recipientInput || !recipientInput.includes('@')) return
+        if (!recipientInput || !recipientInput.includes('@')) {return}
         const current = getRecipients()
         setEditingSchedule({
             ...editingSchedule,
@@ -159,13 +159,17 @@ export default function ScheduledReports() {
                                     setEditingSchedule(schedule)
                                     setShowModal(true)
                                 }}
+                                type="button"
                                 className="p-1.5 rounded bg-secondary/80 hover:bg-secondary text-foreground"
+                                aria-label={`Edit ${schedule.report_name}`}
                             >
                                 <Edit className="w-4 h-4" />
                             </button>
                             <button
                                 onClick={() => handleDelete(schedule.id)}
+                                type="button"
                                 className="p-1.5 rounded bg-red-500/10 hover:bg-red-500/20 text-red-500"
+                                aria-label={`Delete ${schedule.report_name}`}
                             >
                                 <Trash2 className="w-4 h-4" />
                             </button>
@@ -235,8 +239,9 @@ export default function ScheduledReports() {
             >
                 <div className="space-y-4">
                     <div className="space-y-2">
-                        <label className="text-sm font-bold text-foreground/60">Schedule Name</label>
+                        <label htmlFor="scheduled-report-name" className="text-sm font-bold text-foreground/60">Schedule Name</label>
                         <input
+                            id="scheduled-report-name"
                             type="text"
                             value={editingSchedule.report_name || ''}
                             onChange={(e) => setEditingSchedule({ ...editingSchedule, report_name: e.target.value })}
@@ -246,8 +251,9 @@ export default function ScheduledReports() {
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-sm font-bold text-foreground/60">Report Type</label>
+                        <label htmlFor="scheduled-report-type" className="text-sm font-bold text-foreground/60">Report Type</label>
                         <select
+                            id="scheduled-report-type"
                             value={editingSchedule.report_type}
                             onChange={(e) => setEditingSchedule({ ...editingSchedule, report_type: e.target.value })}
                             className="input w-full"
@@ -260,20 +266,22 @@ export default function ScheduledReports() {
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-sm font-bold text-foreground/60">Frequency</label>
-                            <select
-                                value={editingSchedule.schedule_type}
-                                onChange={(e) => setEditingSchedule({ ...editingSchedule, schedule_type: e.target.value as unknown })}
-                                className="input w-full"
-                            >
+                            <label htmlFor="scheduled-report-frequency" className="text-sm font-bold text-foreground/60">Frequency</label>
+                        <select
+                            id="scheduled-report-frequency"
+                            value={editingSchedule.schedule_type}
+                            onChange={(e) => setEditingSchedule({ ...editingSchedule, schedule_type: e.target.value as ScheduledReport['schedule_type'] })}
+                            className="input w-full"
+                        >
                                 <option value="DAILY">Daily</option>
                                 <option value="WEEKLY">Weekly</option>
                                 <option value="MONTHLY">Monthly</option>
                             </select>
                         </div>
                         <div className="space-y-2">
-                            <label className="text-sm font-bold text-foreground/60">Time</label>
+                            <label htmlFor="scheduled-report-time" className="text-sm font-bold text-foreground/60">Time</label>
                             <input
+                                id="scheduled-report-time"
                                 type="time"
                                 value={editingSchedule.time_of_day}
                                 onChange={(e) => setEditingSchedule({ ...editingSchedule, time_of_day: e.target.value })}
@@ -284,18 +292,20 @@ export default function ScheduledReports() {
 
                     {editingSchedule.schedule_type === 'WEEKLY' && (
                         <div className="space-y-2">
-                            <label className="text-sm font-bold text-foreground/60">Day of Week</label>
+                            <p className="text-sm font-bold text-foreground/60">Day of Week</p>
                             <div className="flex gap-2">
-                                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                                {DAY_OPTIONS.map((day) => (
                                     <button
-                                        key={i}
-                                        onClick={() => setEditingSchedule({ ...editingSchedule, day_of_week: i })}
-                                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${editingSchedule.day_of_week === i
+                                        key={day.value}
+                                        type="button"
+                                        onClick={() => setEditingSchedule({ ...editingSchedule, day_of_week: day.value })}
+                                        aria-label={`Set schedule day to index ${day.value}`}
+                                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${editingSchedule.day_of_week === day.value
                                             ? 'bg-primary text-primary-foreground shadow-lg scale-110'
                                             : 'bg-secondary text-foreground/60 hover:bg-secondary/80'
                                             }`}
                                     >
-                                        {day}
+                                        {day.label}
                                     </button>
                                 ))}
                             </div>
@@ -303,9 +313,10 @@ export default function ScheduledReports() {
                     )}
 
                     <div className="space-y-2">
-                        <label className="text-sm font-bold text-foreground/60">Recipients</label>
+                        <label htmlFor="scheduled-report-recipient" className="text-sm font-bold text-foreground/60">Recipients</label>
                         <div className="flex gap-2">
                             <input
+                                id="scheduled-report-recipient"
                                 type="email"
                                 value={recipientInput}
                                 onChange={(e) => setRecipientInput(e.target.value)}
@@ -313,7 +324,7 @@ export default function ScheduledReports() {
                                 placeholder="email@example.com"
                                 onKeyDown={(e) => e.key === 'Enter' && addRecipient()}
                             />
-                            <button onClick={addRecipient} className="btn btn-secondary px-3">
+                            <button type="button" onClick={addRecipient} className="btn btn-secondary px-3" aria-label="Add recipient">
                                 <Plus className="w-4 h-4" />
                             </button>
                         </div>
@@ -321,7 +332,7 @@ export default function ScheduledReports() {
                             {getRecipients().map((email: string) => (
                                 <span key={email} className="inline-flex items-center gap-2 bg-secondary/50 px-2 by-1 rounded-[6px] text-[10px] font-bold border border-border/10 text-foreground/60">
                                     {email}
-                                    <button onClick={() => removeRecipient(email)} className="hover:text-destructive transition-colors duration-200">
+                                    <button type="button" onClick={() => removeRecipient(email)} className="hover:text-destructive transition-colors duration-200" aria-label={`Remove recipient ${email}`}>
                                         <Trash2 className="w-3 h-3" />
                                     </button>
                                 </span>
@@ -330,8 +341,8 @@ export default function ScheduledReports() {
                     </div>
 
                     <div className="flex justify-end gap-3 pt-4">
-                        <button onClick={() => setShowModal(false)} className="btn btn-secondary">Cancel</button>
-                        <button onClick={handleSave} disabled={saving} className="btn btn-primary">
+                        <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">Cancel</button>
+                        <button type="button" onClick={handleSave} disabled={saving} className="btn btn-primary">
                             {saving ? 'Saving...' : 'Save Schedule'}
                         </button>
                     </div>

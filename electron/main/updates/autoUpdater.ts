@@ -1,13 +1,18 @@
-import { autoUpdater, UpdateInfo, ProgressInfo } from 'electron-updater'
-import { BrowserWindow, dialog, ipcMain } from 'electron'
 import log from 'electron-log'
+import { autoUpdater, type UpdateInfo, type ProgressInfo } from 'electron-updater'
+
+import { dialog, ipcMain } from '../electron-env'
+
+import type { BrowserWindow } from 'electron'
 
 // Configure logging
 autoUpdater.logger = log
 // log.transports.file.level = 'info' // Commented out to avoid type error if log types mismatch
 
+const UPDATE_STATUS_CHANNEL = 'update-status'
+
 export class AutoUpdateManager {
-    private mainWindow: BrowserWindow
+    private readonly mainWindow: BrowserWindow
     private isUpdateAvailable = false
     private downloadProgress = 0
 
@@ -24,24 +29,24 @@ export class AutoUpdateManager {
 
         // Check for updates on app start (after 5 seconds)
         setTimeout(() => {
-            this.checkForUpdates(true)
+            void this.checkForUpdates(true)
         }, 5000)
 
         // Check for updates every 4 hours
         setInterval(() => {
-            this.checkForUpdates(true)
+            void this.checkForUpdates(true)
         }, 4 * 60 * 60 * 1000)
 
         // Event handlers
         autoUpdater.on('checking-for-update', () => {
             log.info('Checking for updates...')
-            this.sendToRenderer('update-status', { status: 'checking' })
+            this.sendToRenderer(UPDATE_STATUS_CHANNEL, { status: 'checking' })
         })
 
         autoUpdater.on('update-available', (info: UpdateInfo) => {
             log.info('Update available:', info.version)
             this.isUpdateAvailable = true
-            this.sendToRenderer('update-status', {
+            this.sendToRenderer(UPDATE_STATUS_CHANNEL, {
                 status: 'available',
                 version: info.version,
                 releaseNotes: info.releaseNotes
@@ -53,12 +58,12 @@ export class AutoUpdateManager {
 
         autoUpdater.on('update-not-available', () => {
             log.info('No updates available')
-            this.sendToRenderer('update-status', { status: 'not-available' })
+            this.sendToRenderer(UPDATE_STATUS_CHANNEL, { status: 'not-available' })
         })
 
         autoUpdater.on('download-progress', (progress: ProgressInfo) => {
             this.downloadProgress = progress.percent
-            this.sendToRenderer('update-status', {
+            this.sendToRenderer(UPDATE_STATUS_CHANNEL, {
                 status: 'downloading',
                 progress: Math.round(progress.percent),
                 bytesPerSecond: progress.bytesPerSecond,
@@ -69,7 +74,7 @@ export class AutoUpdateManager {
 
         autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
             log.info('Update downloaded:', info.version)
-            this.sendToRenderer('update-status', {
+            this.sendToRenderer(UPDATE_STATUS_CHANNEL, {
                 status: 'downloaded',
                 version: info.version
             })
@@ -80,7 +85,7 @@ export class AutoUpdateManager {
 
         autoUpdater.on('error', (error: Error) => {
             log.error('Update error:', error)
-            this.sendToRenderer('update-status', {
+            this.sendToRenderer(UPDATE_STATUS_CHANNEL, {
                 status: 'error',
                 error: error.message
             })
@@ -113,13 +118,13 @@ export class AutoUpdateManager {
     }
 
     async downloadUpdate(): Promise<void> {
-        if (!this.isUpdateAvailable) return
+        if (!this.isUpdateAvailable) {return}
 
         try {
             await autoUpdater.downloadUpdate()
         } catch (error) {
             log.error('Failed to download update:', error)
-            this.sendToRenderer('update-status', {
+            this.sendToRenderer(UPDATE_STATUS_CHANNEL, {
                 status: 'error',
                 error: 'Download failed'
             })
@@ -131,7 +136,7 @@ export class AutoUpdateManager {
     }
 
     private showUpdateNotification(info: UpdateInfo): void {
-        if (this.mainWindow.isDestroyed()) return
+        if (this.mainWindow.isDestroyed()) {return}
 
         dialog.showMessageBox(this.mainWindow, {
             type: 'info',
@@ -140,15 +145,18 @@ export class AutoUpdateManager {
             detail: 'Would you like to download it now?',
             buttons: ['Download', 'Later'],
             defaultId: 0
-        }).then(({ response }) => {
+        }).then(({ response }: { response: number }) => {
             if (response === 0) {
-                this.downloadUpdate()
+                return this.downloadUpdate()
             }
+            return null
+        }).catch((error: unknown) => {
+            log.error('Failed to show update notification dialog:', error)
         })
     }
 
     private promptInstall(info: UpdateInfo): void {
-        if (this.mainWindow.isDestroyed()) return
+        if (this.mainWindow.isDestroyed()) {return}
 
         dialog.showMessageBox(this.mainWindow, {
             type: 'info',
@@ -157,10 +165,13 @@ export class AutoUpdateManager {
             detail: 'The application will restart to install the update.',
             buttons: ['Install Now', 'Install on Exit'],
             defaultId: 0
-        }).then(({ response }) => {
+        }).then(({ response }: { response: number }) => {
             if (response === 0) {
                 this.installUpdate()
             }
+            return null
+        }).catch((error: unknown) => {
+            log.error('Failed to show install prompt dialog:', error)
         })
     }
 

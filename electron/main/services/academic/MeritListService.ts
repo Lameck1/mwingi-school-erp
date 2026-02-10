@@ -35,6 +35,7 @@ export interface SubjectDifficulty {
   pass_rate: number
   difficulty_index: number
   discrimination_index: number
+  verdict: string
 }
 
 export interface PerformanceImprovement {
@@ -87,6 +88,26 @@ interface ImprovementRow {
   name: string;
   previous_average: number;
   current_average: number;
+}
+
+interface MeritListRecordPayload {
+  academicYearId: number
+  termId: number
+  streamId: number
+  examId: number
+  generatedByUserId: number
+  generatedDate: string
+  totalStudents: number
+}
+
+const getSubjectDifficultyVerdict = (mean: number): string => {
+  if (mean >= 70) {
+    return 'Easy'
+  }
+  if (mean >= 50) {
+    return 'Moderate'
+  }
+  return 'Difficult'
 }
 
 export class MeritListService {
@@ -144,6 +165,100 @@ export class MeritListService {
   /**
    * Generate class merit list with proper ranking
    */
+  private fetchStudentResultsForMeritList(examId: number, streamId: number): StudentResultRow[] {
+    return this.db.prepare(`
+      SELECT 
+        s.id,
+        s.name,
+        s.admission_number,
+        COUNT(er.id) as subject_count,
+        SUM(er.score) as total_marks,
+        AVG(er.score) as average_marks
+      FROM student s
+      JOIN stream st ON s.stream_id = st.id
+      JOIN exam_result er ON s.id = er.student_id
+      WHERE er.exam_id = ? 
+        AND st.id = ?
+        AND s.is_active = 1
+      GROUP BY s.id
+      ORDER BY average_marks DESC, total_marks DESC
+    `).all(examId, streamId) as StudentResultRow[]
+  }
+
+  private createMeritListRecord(payload: MeritListRecordPayload): number {
+    const {
+      academicYearId,
+      termId,
+      streamId,
+      examId,
+      generatedByUserId,
+      generatedDate,
+      totalStudents
+    } = payload
+
+    const result = this.db.prepare(`
+      INSERT INTO merit_list 
+      (academic_year_id, term_id, stream_id, exam_id, list_type, generated_by_user_id, generated_date, total_students)
+      VALUES (?, ?, ?, ?, 'overall', ?, ?, ?)
+    `).run(
+      academicYearId,
+      termId,
+      streamId,
+      examId,
+      generatedByUserId,
+      generatedDate,
+      totalStudents
+    )
+
+    return result.lastInsertRowid as number
+  }
+
+  private getCbcGradingScale(): GradingScaleRow[] {
+    return this.db.prepare(`
+      SELECT * FROM grading_scale 
+      WHERE curriculum = 'CBC'
+      ORDER BY min_score DESC
+    `).all() as GradingScaleRow[]
+  }
+
+  private insertMeritListEntries(
+    meritListId: number,
+    rankings: StudentRanking[],
+    gradingScale: GradingScaleRow[]
+  ): StudentRanking[] {
+    const entryInsert = this.db.prepare(`
+      INSERT INTO merit_list_entry 
+      (merit_list_id, student_id, position, total_marks, average_marks, grade, percentage, class_position, tied_count)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    const insertedRankings: StudentRanking[] = []
+    for (const ranking of rankings) {
+      const grade = this.getGrade(ranking.average_marks, gradingScale)
+      const percentage = (ranking.average_marks / 100) * 100
+
+      entryInsert.run(
+        meritListId,
+        ranking.student_id,
+        ranking.position,
+        ranking.total_marks,
+        ranking.average_marks,
+        grade,
+        percentage,
+        ranking.position,
+        ranking.tied_with.length + 1
+      )
+
+      insertedRankings.push({
+        ...ranking,
+        grade,
+        percentage
+      })
+    }
+
+    return insertedRankings
+  }
+
   async generateClassMeritList(
     academicYearId: number,
     termId: number,
@@ -152,88 +267,26 @@ export class MeritListService {
     generatedByUserId: number
   ): Promise<MeritListResult> {
     try {
-      // Get all student results for this exam and stream
-      const studentResults = this.db.prepare(`
-        SELECT 
-          s.id,
-          s.name,
-          s.admission_number,
-          COUNT(er.id) as subject_count,
-          SUM(er.score) as total_marks,
-          AVG(er.score) as average_marks
-        FROM student s
-        JOIN stream st ON s.stream_id = st.id
-        JOIN exam_result er ON s.id = er.student_id
-        WHERE er.exam_id = ? 
-          AND st.id = ?
-          AND s.is_active = 1
-        GROUP BY s.id
-        ORDER BY average_marks DESC, total_marks DESC
-      `).all(examId, streamId) as StudentResultRow[]
+      const studentResults = this.fetchStudentResultsForMeritList(examId, streamId)
 
       if (studentResults.length === 0) {
         throw new Error('No exam results found for this class/stream')
       }
 
-      // Create merit list record
-      const meritListInsert = this.db.prepare(`
-        INSERT INTO merit_list 
-        (academic_year_id, term_id, stream_id, exam_id, list_type, generated_by_user_id, generated_date, total_students)
-        VALUES (?, ?, ?, ?, 'overall', ?, ?, ?)
-      `)
-
       const now = new Date().toISOString()
-      const meritListId = meritListInsert.run(
+      const meritListId = this.createMeritListRecord({
         academicYearId,
         termId,
         streamId,
         examId,
         generatedByUserId,
-        now,
-        studentResults.length
-      ).lastInsertRowid as number
+        generatedDate: now,
+        totalStudents: studentResults.length
+      })
 
-      // Calculate rankings
       const rankings = this.calculateRankings(studentResults)
-
-      // Get grading scale
-      const gradingScale = this.db.prepare(`
-        SELECT * FROM grading_scale 
-        WHERE curriculum = 'CBC'
-        ORDER BY min_score DESC
-      `).all() as GradingScaleRow[]
-
-      // Insert merit list entries
-      const entryInsert = this.db.prepare(`
-        INSERT INTO merit_list_entry 
-        (merit_list_id, student_id, position, total_marks, average_marks, grade, percentage, class_position, tied_count)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-
-      const insertedRankings: StudentRanking[] = []
-
-      for (const ranking of rankings) {
-        const grade = this.getGrade(ranking.average_marks, gradingScale)
-        const percentage = (ranking.average_marks / 100) * 100
-
-        entryInsert.run(
-          meritListId,
-          ranking.student_id,
-          ranking.position,
-          ranking.total_marks,
-          ranking.average_marks,
-          grade,
-          percentage,
-          ranking.position,
-          ranking.tied_with.length + 1
-        )
-
-        insertedRankings.push({
-          ...ranking,
-          grade,
-          percentage
-        })
-      }
+      const gradingScale = this.getCbcGradingScale()
+      const insertedRankings = this.insertMeritListEntries(meritListId, rankings, gradingScale)
 
       return {
         id: meritListId,
@@ -261,23 +314,92 @@ export class MeritListService {
     const results = this.db.prepare(`
       SELECT 
         s.id as student_id,
-        s.name as student_name,
+        TRIM(COALESCE(s.first_name, '') || ' ' || COALESCE(s.last_name, '')) as student_name,
         s.admission_number,
         er.score as marks,
         (er.score / 100) * 100 as percentage
-      FROM student s
-      JOIN exam_result er ON s.id = er.student_id
-      WHERE er.exam_id = ? 
+      FROM exam_result er
+      JOIN exam ex ON er.exam_id = ex.id
+      JOIN student s ON er.student_id = s.id
+      JOIN enrollment e ON e.student_id = s.id
+        AND e.stream_id = ?
+        AND e.term_id = ex.term_id
+        AND e.academic_year_id = ex.academic_year_id
+        AND e.status = 'ACTIVE'
+      WHERE er.exam_id = ?
         AND er.subject_id = ?
-        AND s.stream_id = ?
         AND er.score IS NOT NULL
       ORDER BY er.score DESC
-    `).all(examId, subjectId, streamId) as SubjectMeritListRow[]
+    `).all(streamId, examId, subjectId) as SubjectMeritListRow[]
 
     return results.map((r, index) => ({
       ...r,
       position: index + 1
     }))
+  }
+
+  /**
+   * Calculate subject difficulty metrics
+   */
+  async getSubjectDifficulty(examId: number, subjectId: number, streamId: number): Promise<SubjectDifficulty> {
+    const rows = this.db.prepare(`
+      SELECT er.score as marks
+      FROM exam_result er
+      JOIN exam ex ON er.exam_id = ex.id
+      JOIN student s ON er.student_id = s.id
+      JOIN enrollment e ON e.student_id = s.id
+        AND e.stream_id = ?
+        AND e.term_id = ex.term_id
+        AND e.academic_year_id = ex.academic_year_id
+        AND e.status = 'ACTIVE'
+      WHERE er.exam_id = ?
+        AND er.subject_id = ?
+        AND er.score IS NOT NULL
+    `).all(streamId, examId, subjectId) as Array<{ marks: number }>
+
+    if (rows.length === 0) {
+      return {
+        subject_id: subjectId,
+        subject_name: 'Unknown',
+        mean_score: 0,
+        median_score: 0,
+        pass_rate: 0,
+        difficulty_index: 0,
+        discrimination_index: 0,
+        verdict: 'Insufficient data'
+      }
+    }
+
+    const scores = rows.map(r => Number(r.marks)).filter(n => !Number.isNaN(n))
+    const mean = scores.reduce((sum, v) => sum + v, 0) / scores.length
+    const sorted = [...scores].sort((a, b) => a - b)
+    const mid = Math.floor(sorted.length / 2)
+    const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+    const passCount = scores.filter(s => s >= 50).length
+    const passRate = (passCount / scores.length) * 100
+
+    // Simple difficulty index: higher mean => easier subject
+    const difficultyIndex = mean
+    // Simple discrimination: difference between top 27% and bottom 27% mean
+    const band = Math.max(1, Math.floor(scores.length * 0.27))
+    const topMean = sorted.slice(-band).reduce((sum, v) => sum + v, 0) / band
+    const bottomMean = sorted.slice(0, band).reduce((sum, v) => sum + v, 0) / band
+    const discriminationIndex = topMean - bottomMean
+
+    const subject = this.db.prepare(`SELECT name FROM subject WHERE id = ?`).get(subjectId) as { name?: string } | undefined
+
+    const verdict = getSubjectDifficultyVerdict(mean)
+
+    return {
+      subject_id: subjectId,
+      subject_name: subject?.name || 'Unknown',
+      mean_score: Number(mean.toFixed(2)),
+      median_score: Number(median.toFixed(2)),
+      pass_rate: Number(passRate.toFixed(2)),
+      difficulty_index: Number(difficultyIndex.toFixed(2)),
+      discrimination_index: Number(discriminationIndex.toFixed(2)),
+      verdict
+    }
   }
 
   /**
@@ -293,10 +415,14 @@ export class MeritListService {
       let query = `
         SELECT 
           s.id,
-          s.name,
+          TRIM(COALESCE(s.first_name, '') || ' ' || COALESCE(s.last_name, '')) as name,
           COALESCE(prev.average_marks, 0) as previous_average,
           COALESCE(curr.average_marks, 0) as current_average
         FROM student s
+        JOIN enrollment en ON en.student_id = s.id
+          AND en.academic_year_id = ?
+          AND en.term_id = ?
+          AND en.status = 'ACTIVE'
         LEFT JOIN (
           SELECT student_id, AVG(mean_score) as average_marks
           FROM report_card_summary rcs
@@ -314,10 +440,10 @@ export class MeritListService {
         WHERE s.is_active = 1
       `
 
-      const params = [previousTermId, academicYearId, currentTermId, academicYearId]
+      const params = [academicYearId, currentTermId, previousTermId, academicYearId, currentTermId, academicYearId]
 
       if (streamId) {
-        query += ` AND s.stream_id = ?`
+        query += ` AND en.stream_id = ?`
         params.push(streamId)
       }
 
@@ -412,14 +538,14 @@ export class MeritListService {
   }
 
   private scoreToGrade(score: number): string {
-    if (score >= 80) return 'A'
-    if (score >= 75) return 'A-'
-    if (score >= 70) return 'B+'
-    if (score >= 65) return 'B'
-    if (score >= 60) return 'B-'
-    if (score >= 55) return 'C+'
-    if (score >= 50) return 'C'
-    if (score >= 45) return 'C-'
+    if (score >= 80) {return 'A'}
+    if (score >= 75) {return 'A-'}
+    if (score >= 70) {return 'B+'}
+    if (score >= 65) {return 'B'}
+    if (score >= 60) {return 'B-'}
+    if (score >= 55) {return 'C+'}
+    if (score >= 50) {return 'C'}
+    if (score >= 45) {return 'C-'}
     return 'E'
   }
 }
