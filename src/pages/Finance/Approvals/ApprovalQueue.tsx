@@ -56,7 +56,7 @@ export default function ApprovalQueuePage() {
   }, [filter]);
 
   useEffect(() => {
-    void loadApprovals();
+    loadApprovals().catch((err: unknown) => console.error('Failed to load approvals:', err));
   }, [loadApprovals]);
 
   const handleApprove = async (approvalId: number) => {
@@ -72,7 +72,7 @@ export default function ApprovalQueuePage() {
       );
 
       if (result.success) {
-        void loadApprovals();
+        loadApprovals().catch((err: unknown) => console.error('Failed to reload approvals:', err));
         setSelectedApproval(null);
         setReviewNotes('');
       } else {
@@ -101,7 +101,7 @@ export default function ApprovalQueuePage() {
       );
 
       if (result.success) {
-        void loadApprovals();
+        loadApprovals().catch((err: unknown) => console.error('Failed to reload approvals:', err));
         setSelectedApproval(null);
         setReviewNotes('');
       } else {

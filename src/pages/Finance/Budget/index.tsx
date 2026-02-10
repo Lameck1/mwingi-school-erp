@@ -61,7 +61,7 @@ export default function BudgetList() {
     }, [currentAcademicYear])
 
     useEffect(() => {
-        void loadBudgets()
+        loadBudgets().catch((err: unknown) => console.error('Failed to load budgets:', err))
     }, [loadBudgets])
 
     const columns: Column<Budget>[] = [

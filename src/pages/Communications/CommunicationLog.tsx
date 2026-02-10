@@ -66,7 +66,7 @@ export default function CommunicationLog() {
     }, [typeFilter, statusFilter, searchQuery])
 
     useEffect(() => {
-        void loadLogs()
+        loadLogs().catch((err: unknown) => console.error('Failed to load logs:', err))
     }, [loadLogs])
 
 

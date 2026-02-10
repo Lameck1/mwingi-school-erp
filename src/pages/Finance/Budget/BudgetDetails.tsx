@@ -54,7 +54,7 @@ export default function BudgetDetails() {
     }, [id, navigate])
 
     useEffect(() => {
-        void loadBudget()
+        loadBudget().catch((err: unknown) => console.error('Failed to load budget:', err))
     }, [loadBudget])
 
     const handleSubmitForApproval = async () => {
@@ -63,7 +63,7 @@ export default function BudgetDetails() {
         try {
             const result = await globalThis.electronAPI.submitBudgetForApproval(budget.id, user.id)
             if (result.success) {
-                void loadBudget()
+                loadBudget().catch((err: unknown) => console.error('Failed to reload budget:', err))
             }
         } catch (error) {
             console.error('Failed to submit budget:', error)
@@ -78,7 +78,7 @@ export default function BudgetDetails() {
         try {
             const result = await globalThis.electronAPI.approveBudget(budget.id, user.id)
             if (result.success) {
-                void loadBudget()
+                loadBudget().catch((err: unknown) => console.error('Failed to reload budget:', err))
             }
         } catch (error) {
             console.error('Failed to approve budget:', error)

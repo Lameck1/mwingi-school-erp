@@ -20,7 +20,7 @@ export default function Backup() {
     }, [])
 
     useEffect(() => {
-        void loadBackups()
+        loadBackups().catch((err: unknown) => console.error('Failed to load backups:', err))
     }, [loadBackups])
 
     const handleBackup = async () => {
@@ -34,7 +34,7 @@ export default function Backup() {
                 const msg = `Snapshot synchronized to storage path: ${res.path}`
                 setResult({ type: 'success', message: msg })
                 showToast('Database snapshot established', 'success')
-                void loadBackups()
+                loadBackups().catch((err: unknown) => console.error('Failed to reload backups:', err))
             } else {
                 setResult({ type: 'error', message: 'Synchronization sequence failed' })
                 showToast('Backup orchestration failed', 'error')

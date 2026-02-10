@@ -49,8 +49,8 @@ const JSSTransition: React.FC = () => {
   }, [filters.academic_year]);
 
   useEffect(() => {
-    void loadEligibleStudents();
-    void loadFeeStructures();
+    loadEligibleStudents().catch((err: unknown) => console.error('Failed to load students:', err));
+    loadFeeStructures().catch((err: unknown) => console.error('Failed to load fee structures:', err));
   }, [loadEligibleStudents, loadFeeStructures]);
 
   const handleSelectAll = () => {
