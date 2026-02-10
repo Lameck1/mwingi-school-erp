@@ -249,7 +249,8 @@ describe('Workflows Integration Tests', () => {
     `)
 
     approvalService = new ApprovalWorkflowService(db)
-    paymentService = new PaymentService(db)
+    // PaymentService expects better-sqlite3-multiple-ciphers type but plain better-sqlite3 is API-compatible
+    paymentService = new PaymentService(db as any)
   })
 
   afterEach(() => {
@@ -257,8 +258,8 @@ describe('Workflows Integration Tests', () => {
   })
 
   describe('Payment Workflow', () => {
-    it('should create payment without errors', async () => {
-      const result = await paymentService.recordPayment({
+    it('should create payment without errors', () => {
+      const result = paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
         transaction_date: '2026-01-20',
@@ -271,8 +272,8 @@ describe('Workflows Integration Tests', () => {
       expect(result).toBeDefined()
     })
 
-    it('should allocate payment to invoices', async () => {
-      await paymentService.recordPayment({
+    it('should allocate payment to invoices', () => {
+      paymentService.recordPayment({
         student_id: 1,
         amount: 50000,
         transaction_date: '2026-01-20',
@@ -282,12 +283,12 @@ describe('Workflows Integration Tests', () => {
         term_id: 1
       })
 
-      const payments = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').all(1) as unknown[]
+      const payments = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').all(1)
       expect(payments.length).toBeGreaterThan(0)
     })
 
-    it('should handle partial payments', async () => {
-      const result1 = await paymentService.recordPayment({
+    it('should handle partial payments', () => {
+      const result1 = paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
         transaction_date: '2026-01-15',
@@ -297,7 +298,7 @@ describe('Workflows Integration Tests', () => {
         term_id: 1
       })
 
-      const result2 = await paymentService.recordPayment({
+      const result2 = paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
         transaction_date: '2026-01-20',
@@ -311,8 +312,8 @@ describe('Workflows Integration Tests', () => {
       expect(result2).toBeDefined()
     })
 
-    it('should update invoice status after payment', async () => {
-      await paymentService.recordPayment({
+    it('should update invoice status after payment', () => {
+      paymentService.recordPayment({
         student_id: 1,
         amount: 50000,
         transaction_date: '2026-01-20',
@@ -322,12 +323,12 @@ describe('Workflows Integration Tests', () => {
         term_id: 1
       })
 
-      const invoice = db.prepare('SELECT * FROM fee_invoice WHERE id = ?').get(1) as unknown
+      const invoice = db.prepare('SELECT * FROM fee_invoice WHERE id = ?').get(1) as { amount_paid: number }
       expect(invoice.amount_paid).toBeGreaterThanOrEqual(0)
     })
 
-    it('should handle multiple payments for same student', async () => {
-      await paymentService.recordPayment({
+    it('should handle multiple payments for same student', () => {
+      paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
         transaction_date: '2026-01-15',
@@ -337,7 +338,7 @@ describe('Workflows Integration Tests', () => {
         term_id: 1
       })
 
-      await paymentService.recordPayment({
+      paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
         transaction_date: '2026-01-20',
@@ -347,12 +348,12 @@ describe('Workflows Integration Tests', () => {
         term_id: 1
       })
 
-      const payments = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction WHERE student_id = ?').get(1) as unknown
+      const payments = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction WHERE student_id = ?').get(1) as { count: number }
       expect(payments.count).toBeGreaterThanOrEqual(2)
     })
 
-    it('should handle payments for multiple students', async () => {
-      await paymentService.recordPayment({
+    it('should handle payments for multiple students', () => {
+      paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
         transaction_date: '2026-01-15',
@@ -362,7 +363,7 @@ describe('Workflows Integration Tests', () => {
         term_id: 1
       })
 
-      await paymentService.recordPayment({
+      paymentService.recordPayment({
         student_id: 2,
         amount: 30000,
         transaction_date: '2026-01-20',
@@ -372,8 +373,8 @@ describe('Workflows Integration Tests', () => {
         term_id: 1
       })
 
-      const payment1 = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').get(1) as unknown
-      const payment2 = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').get(2) as unknown
+      const payment1 = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').get(1)
+      const payment2 = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').get(2)
 
       expect(payment1).toBeDefined()
       expect(payment2).toBeDefined()
@@ -381,8 +382,8 @@ describe('Workflows Integration Tests', () => {
   })
 
   describe('Approval Workflow', () => {
-    it('should create approval request', async () => {
-      const result = await approvalService.createApprovalRequest({
+    it('should create approval request', () => {
+      const result = approvalService.createApprovalRequest({
         request_type: 'PAYMENT',
         entity_type: 'fee_invoice',
         entity_id: 1,
@@ -394,8 +395,8 @@ describe('Workflows Integration Tests', () => {
       expect(result.success).toBe(true)
     })
 
-    it('should approve low-amount requests at level 1', async () => {
-      const req = await approvalService.createApprovalRequest({
+    it('should approve low-amount requests at level 1', () => {
+      const req = approvalService.createApprovalRequest({
         request_type: 'PAYMENT',
         entity_type: 'fee_invoice',
         entity_id: 1,
@@ -405,13 +406,13 @@ describe('Workflows Integration Tests', () => {
       })
 
       expect(req.requestId!).toBeDefined()
-      const result = await approvalService.approveRequest(req.requestId!, 1, 'Approved', 2)
+      const result = approvalService.approveRequest(req.requestId!, 1, 'Approved', 2)
 
       expect(result.success).toBe(true)
     })
 
-    it('should escalate high-amount requests to level 2', async () => {
-      const req = await approvalService.createApprovalRequest({
+    it('should escalate high-amount requests to level 2', () => {
+      const req = approvalService.createApprovalRequest({
         request_type: 'PAYMENT',
         entity_type: 'fee_invoice',
         entity_id: 3,
@@ -423,8 +424,8 @@ describe('Workflows Integration Tests', () => {
       expect(req.success).toBe(true)
     })
 
-    it('should retrieve approval history', async () => {
-      const req = await approvalService.createApprovalRequest({
+    it('should retrieve approval history', () => {
+      const req = approvalService.createApprovalRequest({
         request_type: 'PAYMENT',
         entity_type: 'fee_invoice',
         entity_id: 1,
@@ -434,14 +435,14 @@ describe('Workflows Integration Tests', () => {
       })
 
       expect(req.requestId!).toBeDefined()
-      const history = await approvalService.getRequestHistory(req.requestId!)
+      const history = approvalService.getRequestHistory(req.requestId!)
 
       expect(history).toBeDefined()
       expect(history).toHaveProperty('request')
     })
 
-    it('should get pending requests', async () => {
-      await approvalService.createApprovalRequest({
+    it('should get pending requests', () => {
+      approvalService.createApprovalRequest({
         request_type: 'PAYMENT',
         entity_type: 'fee_invoice',
         entity_id: 1,
@@ -450,14 +451,14 @@ describe('Workflows Integration Tests', () => {
         requested_by: 1
       })
 
-      const pending = await approvalService.getPendingRequests()
+      const pending = approvalService.getPendingRequests()
 
       expect(Array.isArray(pending)).toBe(true)
       expect(pending.length).toBeGreaterThan(0)
     })
 
-    it('should reject requests', async () => {
-      const req = await approvalService.createApprovalRequest({
+    it('should reject requests', () => {
+      const req = approvalService.createApprovalRequest({
         request_type: 'PAYMENT',
         entity_type: 'fee_invoice',
         entity_id: 1,
@@ -466,16 +467,16 @@ describe('Workflows Integration Tests', () => {
         requested_by: 1
       })
 
-      const result = await approvalService.rejectRequest(req.requestId!, 1, 'Insufficient budget', 2)
+      const result = approvalService.rejectRequest(req.requestId!, 1, 'Insufficient budget', 2)
 
       expect(result.success).toBe(true)
     })
   })
 
   describe('Integrated Workflows', () => {
-    it('should complete payment workflow end-to-end', async () => {
+    it('should complete payment workflow end-to-end', () => {
       // Create approval request
-      const approval = await approvalService.createApprovalRequest({
+      const approval = approvalService.createApprovalRequest({
         request_type: 'PAYMENT',
         entity_type: 'fee_invoice',
         entity_id: 1,
@@ -487,11 +488,11 @@ describe('Workflows Integration Tests', () => {
       expect(approval.success).toBe(true)
 
       // Approve request
-      const approved = await approvalService.approveRequest(approval.requestId!, 1, 'Approved', 2)
+      const approved = approvalService.approveRequest(approval.requestId!, 1, 'Approved', 2)
       expect(approved.success).toBe(true)
 
       // Record payment
-      const payment = await paymentService.recordPayment({
+      const payment = paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
         transaction_date: '2026-01-20',
@@ -504,9 +505,9 @@ describe('Workflows Integration Tests', () => {
       expect(payment).toBeDefined()
     })
 
-    it('should handle multiple workflow stages', async () => {
+    it('should handle multiple workflow stages', () => {
       // Create first approval
-      const req1 = await approvalService.createApprovalRequest({
+      const req1 = approvalService.createApprovalRequest({
         request_type: 'PAYMENT',
         entity_type: 'fee_invoice',
         entity_id: 1,
@@ -516,7 +517,7 @@ describe('Workflows Integration Tests', () => {
       })
 
       // Create second approval
-      const req2 = await approvalService.createApprovalRequest({
+      const req2 = approvalService.createApprovalRequest({
         request_type: 'PAYMENT',
         entity_type: 'fee_invoice',
         entity_id: 2,
@@ -529,11 +530,11 @@ describe('Workflows Integration Tests', () => {
       expect(req2.success).toBe(true)
 
       // Approve both
-      await approvalService.approveRequest(req1.requestId!, 1, 'Approved', 2)
-      await approvalService.approveRequest(req2.requestId!, 1, 'Approved', 2)
+      approvalService.approveRequest(req1.requestId!, 1, 'Approved', 2)
+      approvalService.approveRequest(req2.requestId!, 1, 'Approved', 2)
 
       // Record payments
-      await paymentService.recordPayment({
+      paymentService.recordPayment({
         student_id: 1,
         amount: 30000,
         transaction_date: '2026-01-20',
@@ -543,7 +544,7 @@ describe('Workflows Integration Tests', () => {
         term_id: 1
       })
 
-      await paymentService.recordPayment({
+      paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
         transaction_date: '2026-01-20',
@@ -553,12 +554,12 @@ describe('Workflows Integration Tests', () => {
         term_id: 1
       })
 
-      const payments = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction').get() as unknown
+      const payments = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction').get() as { count: number }
       expect(payments.count).toBeGreaterThanOrEqual(2)
     })
 
-    it('should handle workflow rejections gracefully', async () => {
-      const req = await approvalService.createApprovalRequest({
+    it('should handle workflow rejections gracefully', () => {
+      const req = approvalService.createApprovalRequest({
         request_type: 'PAYMENT',
         entity_type: 'fee_invoice',
         entity_id: 1,
@@ -567,17 +568,17 @@ describe('Workflows Integration Tests', () => {
         requested_by: 1
       })
 
-      const rejected = await approvalService.rejectRequest(req.requestId!, 1, 'Not approved', 2)
+      const rejected = approvalService.rejectRequest(req.requestId!, 1, 'Not approved', 2)
 
       expect(rejected.success).toBe(true)
 
       // Verify no payment recorded
-      const payments = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction').get() as unknown
-      expect(payments.count).toBe(0)
+      const payments2 = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction').get() as { count: number }
+      expect(payments2.count).toBe(0)
     })
 
-    it('should maintain workflow audit trail', async () => {
-      const req = await approvalService.createApprovalRequest({
+    it('should maintain workflow audit trail', () => {
+      const req = approvalService.createApprovalRequest({
         request_type: 'PAYMENT',
         entity_type: 'fee_invoice',
         entity_id: 1,
@@ -586,9 +587,9 @@ describe('Workflows Integration Tests', () => {
         requested_by: 1
       })
 
-      await approvalService.approveRequest(req.requestId!, 1, 'Approved', 2)
+      approvalService.approveRequest(req.requestId!, 1, 'Approved', 2)
 
-      await paymentService.recordPayment({
+      paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
         transaction_date: '2026-01-20',
@@ -599,12 +600,12 @@ describe('Workflows Integration Tests', () => {
       })
 
       // Verify request was recorded
-      const request = db.prepare('SELECT * FROM approval_request WHERE id = ?').get(req.requestId!) as unknown
+      const request = db.prepare('SELECT * FROM approval_request WHERE id = ?').get(req.requestId!)
       expect(request).toBeDefined()
     })
 
-    it('should handle concurrent workflow operations', async () => {
-      const results = await Promise.all([
+    it('should handle concurrent workflow operations', () => {
+      const results = [
         approvalService.createApprovalRequest({
           request_type: 'PAYMENT',
           entity_type: 'fee_invoice',
@@ -621,14 +622,14 @@ describe('Workflows Integration Tests', () => {
           description: 'Concurrent 2',
           requested_by: 1
         })
-      ])
+      ]
 
       expect(results[0].success).toBe(true)
       expect(results[1].success).toBe(true)
     })
 
-    it('should ensure data consistency across workflows', async () => {
-      const req = await approvalService.createApprovalRequest({
+    it('should ensure data consistency across workflows', () => {
+      const req = approvalService.createApprovalRequest({
         request_type: 'PAYMENT',
         entity_type: 'fee_invoice',
         entity_id: 1,
@@ -637,9 +638,9 @@ describe('Workflows Integration Tests', () => {
         requested_by: 1
       })
 
-      await approvalService.approveRequest(req.requestId!, 1, 'Approved', 2)
+      approvalService.approveRequest(req.requestId!, 1, 'Approved', 2)
 
-      await paymentService.recordPayment({
+      paymentService.recordPayment({
         student_id: 1,
         amount: 50000,
         transaction_date: '2026-01-20',
@@ -650,15 +651,15 @@ describe('Workflows Integration Tests', () => {
       })
 
       // Verify both records exist and are consistent
-      const approval = db.prepare('SELECT * FROM approval_request WHERE id = ?').get(req.requestId!) as unknown
-      const payment = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').get(1) as unknown
+      const approval = db.prepare('SELECT * FROM approval_request WHERE id = ?').get(req.requestId!) as { amount: number }
+      const payment = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').get(1) as { amount: number }
 
       expect(approval.amount).toBe(50000)
       expect(payment.amount).toBe(50000)
     })
 
-    it('should handle workflow state transitions', async () => {
-      const req = await approvalService.createApprovalRequest({
+    it('should handle workflow state transitions', () => {
+      const req = approvalService.createApprovalRequest({
         request_type: 'PAYMENT',
         entity_type: 'fee_invoice',
         entity_id: 1,
@@ -668,14 +669,14 @@ describe('Workflows Integration Tests', () => {
       })
 
       // Move from PENDING to APPROVED
-      await approvalService.approveRequest(req.requestId!, 1, 'Approved', 2)
+      approvalService.approveRequest(req.requestId!, 1, 'Approved', 2)
 
-      const history = await approvalService.getRequestHistory(req.requestId!)
+      const history = approvalService.getRequestHistory(req.requestId!)
       expect(history.request).toBeDefined()
     })
 
-    it('should scale to multiple concurrent workflows', async () => {
-      const requests = await Promise.all([
+    it('should scale to multiple concurrent workflows', () => {
+      const requests = [
         approvalService.createApprovalRequest({
           request_type: 'PAYMENT',
           entity_type: 'fee_invoice',
@@ -700,18 +701,18 @@ describe('Workflows Integration Tests', () => {
           description: 'Scale test 3',
           requested_by: 1
         })
-      ])
+      ]
 
       expect(requests.every(r => r.success)).toBe(true)
 
-      const approvals = db.prepare('SELECT COUNT(*) as count FROM approval_request').get() as unknown
+      const approvals = db.prepare('SELECT COUNT(*) as count FROM approval_request').get() as { count: number }
       expect(approvals.count).toBeGreaterThanOrEqual(3)
     })
   })
 
   describe('edge cases', () => {
-    it('should handle workflow with missing approver', async () => {
-      const req = await approvalService.createApprovalRequest({
+    it('should handle workflow with missing approver', () => {
+      const req = approvalService.createApprovalRequest({
         request_type: 'PAYMENT',
         entity_type: 'fee_invoice',
         entity_id: 1,
@@ -723,8 +724,8 @@ describe('Workflows Integration Tests', () => {
       expect(req.success).toBe(true)
     })
 
-    it('should handle workflow with zero amount', async () => {
-      const req = await approvalService.createApprovalRequest({
+    it('should handle workflow with zero amount', () => {
+      const req = approvalService.createApprovalRequest({
         request_type: 'PAYMENT',
         entity_type: 'fee_invoice',
         entity_id: 1,
@@ -736,8 +737,8 @@ describe('Workflows Integration Tests', () => {
       expect(req).toBeDefined()
     })
 
-    it('should handle workflow with large amounts', async () => {
-      const req = await approvalService.createApprovalRequest({
+    it('should handle workflow with large amounts', () => {
+      const req = approvalService.createApprovalRequest({
         request_type: 'PAYMENT',
         entity_type: 'fee_invoice',
         entity_id: 3,
@@ -749,8 +750,8 @@ describe('Workflows Integration Tests', () => {
       expect(req.success).toBe(true)
     })
 
-    it('should maintain workflow integrity with special characters', async () => {
-      const req = await approvalService.createApprovalRequest({
+    it('should maintain workflow integrity with special characters', () => {
+      const req = approvalService.createApprovalRequest({
         request_type: 'PAYMENT',
         entity_type: 'fee_invoice',
         entity_id: 1,

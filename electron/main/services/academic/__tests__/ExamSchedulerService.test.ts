@@ -8,7 +8,7 @@
  * - electron/main/__tests__/integration/workflows.integration.test.ts
  */
 
-import { vi, describe, it, expect } from 'vitest'
+import { vi, describe, it, expect, afterEach } from 'vitest'
 
 // Mock the database module before importing the service
 vi.mock('../../../database', () => ({
@@ -156,8 +156,7 @@ describe('ExamSchedulerService_Enhanced', () => {
 
     it('should complete assignInvigilators workflow', async () => {
       try {
-        const staffAvailability = new Map([[1, ['09:00-11:00']]]);
-        const result = await ExamSchedulerService_Enhanced.assignInvigilators(1, staffAvailability);
+        const result = await ExamSchedulerService_Enhanced.assignInvigilators(1, 2);
         expect(result == null || Array.isArray(result) || typeof result === 'object').toBe(true);
       } catch (error) {
         expect(error).toBeDefined();
@@ -174,6 +173,7 @@ describe('ExamSchedulerService_Enhanced', () => {
             start_time: '09:00',
             end_time: '10:00',
             venue_id: 1,
+            invigilators: 2,
             max_capacity: 50,
           }
         ]);

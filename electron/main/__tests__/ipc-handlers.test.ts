@@ -1,6 +1,6 @@
 import { vi, describe, test, expect, beforeEach, type Mock } from 'vitest';
 
-import { app as _app, BrowserWindow as _BrowserWindow, dialog as _dialog, ipcMain } from '../electron-env'
+import { ipcMain } from '../electron-env'
 import { registerAllIpcHandlers } from '../ipc/index';
 
 // Mock ServiceContainer
@@ -106,7 +106,7 @@ describe('IPC Handlers Security Tests', () => {
 
     // Get the mock database instance
     const { getDatabase } = await import('../database');
-    mockDb = getDatabase() as unknown;
+    mockDb = getDatabase() as unknown as { prepare: Mock; transaction: Mock };
 
     // Register all handlers
     registerAllIpcHandlers();

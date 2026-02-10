@@ -110,7 +110,7 @@ describe('PaymentService', () => {
 
     describe('recordPayment', () => {
         it('should record a valid payment', async () => {
-            const result = await service.recordPayment({
+            const result = service.recordPayment({
                 student_id: 1,
                 amount: 15000,
                 transaction_date: '2024-01-15',
@@ -124,7 +124,7 @@ describe('PaymentService', () => {
         })
 
         it('should reject payment with invalid student', async () => {
-            const result = await service.recordPayment({
+            const result = service.recordPayment({
                 student_id: 999,
                 amount: 15000,
                 transaction_date: '2024-01-15',
@@ -138,7 +138,7 @@ describe('PaymentService', () => {
         })
 
         it('should reject payment with zero amount', async () => {
-            const result = await service.recordPayment({
+            const result = service.recordPayment({
                 student_id: 1,
                 amount: 0,
                 transaction_date: '2024-01-15',
@@ -152,7 +152,7 @@ describe('PaymentService', () => {
         })
 
         it('should validate required fields', async () => {
-            const result = await service.recordPayment({
+            const result = service.recordPayment({
                 student_id: 0,
                 amount: 0,
                 transaction_date: '',

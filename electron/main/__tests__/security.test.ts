@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'vitest'
+
 // Simple unit tests for security fixes
 
 describe('Security Fix Validation', () => {
@@ -17,11 +19,11 @@ describe('Security Fix Validation', () => {
     
     test('User update field validation', () => {
       // Test that only allowed fields can be updated
-      const allowedFields = ['full_name', 'email', 'role'];
+      const allowedFields = new Set(['full_name', 'email', 'role']);
       
       // This represents the validation logic from ipc-handlers.ts line ~784
       const validateUpdateFields = (data: Record<string, unknown>) => {
-        return Object.keys(data).filter(key => allowedFields.includes(key));
+        return Object.keys(data).filter(key => allowedFields.has(key));
       };
       
       const validUpdate = { full_name: 'John Doe', email: 'john@example.com' };
