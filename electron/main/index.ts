@@ -83,6 +83,23 @@ function createWindow() {
         }
     })
 
+    // Security: Block external navigation attempts
+    mainWindow!.webContents.on('will-navigate', (event, url) => {
+        // Allow navigation to local files and dev server only
+        const isLocalFile = url.startsWith('file://')
+        const isDevServer = VITE_DEV_SERVER_URL && url.startsWith(VITE_DEV_SERVER_URL)
+        if (!isLocalFile && !isDevServer) {
+            console.warn(`Blocked navigation to external URL: ${url}`)
+            event.preventDefault()
+        }
+    })
+
+    // Security: Block new window creation (popups)
+    mainWindow!.webContents.setWindowOpenHandler(({ url }) => {
+        console.warn(`Blocked popup window request for: ${url}`)
+        return { action: 'deny' }
+    })
+
     // Load the app
     if (VITE_DEV_SERVER_URL) {
         mainWindow!.loadURL(VITE_DEV_SERVER_URL).catch((err: Error) => console.error('Failed to load dev URL:', err.message))
