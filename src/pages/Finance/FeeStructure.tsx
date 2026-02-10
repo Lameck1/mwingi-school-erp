@@ -70,7 +70,7 @@ export default function FeeStructure() {
 
 
     useEffect(() => {
-        void loadInitialData()
+        loadInitialData().catch((err: unknown) => console.error('Failed to load fee structure data', err))
     }, [loadInitialData])
 
     useEffect(() => {

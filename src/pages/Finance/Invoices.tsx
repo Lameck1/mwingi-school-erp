@@ -43,7 +43,7 @@ export default function Invoices() {
     }, [showToast])
 
     useEffect(() => {
-        void loadInvoices()
+        loadInvoices().catch((err: unknown) => console.error('Failed to load invoices', err))
     }, [loadInvoices])
 
     const viewInvoice = async (invoice: Invoice) => {

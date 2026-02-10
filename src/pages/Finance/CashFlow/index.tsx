@@ -39,7 +39,7 @@ export default function CashFlow() {
     }, [dateRange])
 
     useEffect(() => {
-        void loadData()
+        loadData().catch((err: unknown) => console.error('Failed to load cash flow data', err))
     }, [loadData])
 
     const handleExport = async () => {

@@ -90,7 +90,7 @@ export default function FeeExemptions() {
     }, [statusFilter])
 
     useEffect(() => {
-        void loadData()
+        loadData().catch((err: unknown) => console.error('Failed to load exemption data', err))
     }, [loadData])
 
     useEffect(() => {
@@ -113,7 +113,7 @@ export default function FeeExemptions() {
     }, [statusFilter])
 
     useEffect(() => {
-        void loadExemptions()
+        loadExemptions().catch((err: unknown) => console.error('Failed to load exemptions', err))
     }, [loadExemptions])
 
     const handleYearChange = async (yearId: number) => {
@@ -154,7 +154,7 @@ export default function FeeExemptions() {
                 fee_category_id: 0, exemption_percentage: '', exemption_reason: '', notes: ''
             })
             setSelectedStudent(null)
-            void loadData()
+            loadData().catch((err: unknown) => console.error('Failed to reload data', err))
         } else {
             alert(`Error: ${result.errors?.join(', ')}`)
         }
@@ -172,7 +172,7 @@ export default function FeeExemptions() {
             setShowRevokeModal(false)
             setSelectedExemption(null)
             setRevokeReason('')
-            void loadData()
+            loadData().catch((err: unknown) => console.error('Failed to reload data', err))
         } else {
             alert(`Error: ${result.errors?.join(', ')}`)
         }

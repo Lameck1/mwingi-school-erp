@@ -419,7 +419,7 @@ export default function Students() {
                 onSuccess={() => {
                     setShowImport(false)
                     showToast('Students imported successfully', 'success')
-                    void loadStudents()
+                    loadStudents().catch((err: unknown) => console.error('Failed to reload students after import', err))
                 }}
                 entityType="STUDENT"
                 title="Import Students"

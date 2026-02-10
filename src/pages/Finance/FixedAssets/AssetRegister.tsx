@@ -49,7 +49,7 @@ export default function AssetRegister() {
     }, [])
 
     useEffect(() => {
-        void loadAssets('')
+        loadAssets('').catch((err: unknown) => console.error('Failed to load assets', err))
     }, [loadAssets])
 
     const handleCreate = async (e: React.FormEvent) => {
@@ -75,7 +75,7 @@ export default function AssetRegister() {
                     serial_number: '',
                     location: ''
                 })
-                void loadAssets(search)
+                loadAssets(search).catch((err: unknown) => console.error('Failed to reload assets', err))
             } else {
                 alert('Failed to create asset: ' + result.errors?.join(', '))
             }
