@@ -1,6 +1,6 @@
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 
 try {
     const reportPath = path.resolve(process.argv[2] || 'lint_output.json');

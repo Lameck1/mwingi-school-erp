@@ -14,7 +14,7 @@ module.exports = {
       comment: 'Renderer/UI must not couple directly to Electron main internals.',
       from: {
         path: '^src/',
-        pathNot: '(__tests__|\\.test\\.(ts|tsx)$|\\.spec\\.(ts|tsx)$)',
+        pathNot: String.raw`(__tests__|\.test\.(ts|tsx)$|\.spec\.(ts|tsx)$)`,
       },
       to: { path: '^electron/main/' },
     },
@@ -39,14 +39,14 @@ module.exports = {
       from: {
         orphan: true,
         pathNot: [
-          '\\.d\\.ts$',
-          '\\.test\\.(ts|tsx)$',
-          '\\.spec\\.(ts|tsx)$',
+          String.raw`\.d\.ts$`,
+          String.raw`\.test\.(ts|tsx)$`,
+          String.raw`\.spec\.(ts|tsx)$`,
           '^scripts/',
           '^tests/',
-          '^src/main\\.tsx$',
-          '^electron/main/index\\.ts$',
-          '^electron/preload/index\\.ts$',
+          String.raw`^src/main\.tsx$`,
+          String.raw`^electron/main/index\.ts$`,
+          String.raw`^electron/preload/index\.ts$`,
         ],
       },
       to: {},
@@ -64,7 +64,7 @@ module.exports = {
     },
     includeOnly: '^src|^electron',
     exclude: {
-      path: '^dist|^dist-electron|^coverage|^release|^release2|^release3|\\.d\\.ts$',
+      path: String.raw`^dist|^dist-electron|^coverage|^release|^release2|^release3|\.d\.ts$`,
     },
     reporterOptions: {
       dot: {

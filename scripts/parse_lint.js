@@ -1,5 +1,5 @@
 
-const fs = require('fs');
+const fs = require('node:fs');
 const report = JSON.parse(fs.readFileSync('lint_output.json', 'utf8'));
 
 console.log('--- ERRORS ---');

@@ -1,5 +1,5 @@
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const lintPath = path.resolve('lint-after-fix.json');
 if (!fs.existsSync(lintPath)) {
@@ -26,7 +26,7 @@ const tagRegex = /<(input|select|textarea|Input|Select)\b/;
 const controlTagRegex = /<(button|select)\b/;
 
 function extractAttr(line, attr) {
-  const re = new RegExp(`${attr}\\s*=\\s*(["'])(.*?)\\1`);
+  const re = new RegExp(String.raw`${attr}\s*=\s*(["'])(.*?)\1`);
   const m = line.match(re);
   return m ? m[2] : null;
 }

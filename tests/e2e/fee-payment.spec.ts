@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import path from 'path'
+import path from 'node:path'
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright'
 
 // Skip E2E if not in E2E environment
