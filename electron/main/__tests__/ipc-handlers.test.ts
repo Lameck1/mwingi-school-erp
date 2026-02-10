@@ -1,6 +1,7 @@
-import { app, BrowserWindow, dialog, ipcMain } from '../electron-env'
-import { registerAllIpcHandlers } from '../ipc/index';
 import { vi, describe, test, expect, beforeEach, type Mock } from 'vitest';
+
+import { app as _app, BrowserWindow as _BrowserWindow, dialog as _dialog, ipcMain } from '../electron-env'
+import { registerAllIpcHandlers } from '../ipc/index';
 
 // Mock ServiceContainer
 vi.mock('../services/base/ServiceContainer', () => ({
@@ -61,7 +62,7 @@ vi.mock('bcryptjs', () => ({
 }));
 
 // Mock database module
-vi.mock('../database/index', () => {
+vi.mock('../database', () => {
   const mockDb = {
     prepare: vi.fn(),
     transaction: vi.fn((fn) => () => fn()),
@@ -104,7 +105,7 @@ describe('IPC Handlers Security Tests', () => {
     vi.clearAllMocks();
 
     // Get the mock database instance
-    const { getDatabase } = await import('../database/index');
+    const { getDatabase } = await import('../database');
     mockDb = getDatabase() as unknown;
 
     // Register all handlers

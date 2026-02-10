@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import Database from 'better-sqlite3'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
 import { ApprovalWorkflowService } from '../ApprovalWorkflowService'
 
 // Mock audit utilities
@@ -109,12 +110,12 @@ describe('ApprovalWorkflowService', () => {
         ('EXPENSE', 30000, NULL, 2, 'PRINCIPAL');
     `)
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     service = new ApprovalWorkflowService(db as any)
   })
 
   afterEach(() => {
-    if (db) db.close()
+    if (db) {db.close()}
   })
 
   describe('createApprovalRequest', () => {

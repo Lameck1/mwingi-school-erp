@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import Database from 'better-sqlite3-multiple-ciphers'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
 import { StudentLedgerService } from '../../reports/StudentLedgerService'
 
 vi.mock('../../../database/utils/audit', () => ({
@@ -161,7 +162,7 @@ describe('StudentLedgerService', () => {
   })
 
   afterEach(() => {
-    if (db) db.close()
+    if (db) {db.close()}
   })
 
   // generateStudentLedger tests (12 tests)
@@ -274,7 +275,7 @@ describe('StudentLedgerService', () => {
 
   it('should return numeric opening balance', async () => {
     const balance = await service.verifyOpeningBalance(1, '2025-01-01')
-    expect(typeof balance === 'number' || balance !== undefined).toBe(true)
+    expect(typeof balance === 'number' || balance != null).toBe(true)
   })
 
   it('should verify opening balance for term 2', async () => {
@@ -291,6 +292,6 @@ describe('StudentLedgerService', () => {
 
   it('should verify opening balance consistency', async () => {
     const balance = await service.verifyOpeningBalance(2, '2025-01-01')
-    expect(balance !== null && balance !== undefined).toBe(true)
+    expect(balance != null).toBe(true)
   })
 })

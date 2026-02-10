@@ -5,7 +5,7 @@ describe('Validation Utilities', () => {
     it('should validate positive amounts', () => {
       const result = validateAmount(1000)
       expect(result.success).toBe(true)
-      expect(result.data).toBe(100000) // Converted to cents
+      expect(result.data).toBe(1000) // Already in cents
     })
 
     it('should validate zero amount', () => {
@@ -27,7 +27,7 @@ describe('Validation Utilities', () => {
     })
 
     it('should reject undefined values', () => {
-      const result = validateAmount(undefined)
+      const result = validateAmount()
       expect(result.success).toBe(false)
     })
 
@@ -38,22 +38,22 @@ describe('Validation Utilities', () => {
       expect(result.data).toBe(0)
     })
 
-    it('should convert decimal amounts to cents correctly', () => {
+    it('should round decimal cents correctly', () => {
       const result = validateAmount(50.75)
       expect(result.success).toBe(true)
-      expect(result.data).toBe(5075) // 50.75 * 100
+      expect(result.data).toBe(51) // Rounded to integer cents
     })
 
     it('should handle very large amounts', () => {
       const result = validateAmount(999999999.99)
       expect(result.success).toBe(true)
-      expect(result.data).toBe(99999999999)
+      expect(result.data).toBe(1000000000)
     })
 
     it('should handle string numbers', () => {
       const result = validateAmount('1500')
       expect(result.success).toBe(true)
-      expect(result.data).toBe(150000)
+      expect(result.data).toBe(1500)
     })
 
     it('should reject non-numeric strings', () => {
@@ -61,10 +61,10 @@ describe('Validation Utilities', () => {
       expect(result.success).toBe(false)
     })
 
-    it('should round cents correctly', () => {
-      const result = validateAmount(10.555) // Should round to 1056
+    it('should round fractional cents correctly', () => {
+      const result = validateAmount(10.555) // Should round to 11
       expect(result.success).toBe(true)
-      expect(result.data).toBe(1056) // Rounded
+      expect(result.data).toBe(11) // Rounded
     })
   })
 
@@ -97,7 +97,7 @@ describe('Validation Utilities', () => {
     })
 
     it('should reject undefined values', () => {
-      const result = validateDate(undefined)
+      const result = validateDate()
       expect(result.success).toBe(false)
     })
 
@@ -163,7 +163,7 @@ describe('Validation Utilities', () => {
     })
 
     it('should reject undefined values', () => {
-      const result = validateId(undefined)
+      const result = validateId()
       expect(result.success).toBe(false)
     })
 
@@ -260,7 +260,7 @@ describe('Validation Utilities', () => {
     })
 
     it('should handle undefined values', () => {
-      const result = sanitizeString(undefined)
+      const result = sanitizeString()
       expect(result).toBe('')
     })
 
@@ -323,10 +323,10 @@ describe('Validation Utilities', () => {
     })
 
     it('should roundtrip amount conversion', () => {
-      const original = 2500.75
-      const validated = validateAmount(original)
-      const restored = formatFromCents(validated.data)
-      expect(restored).toBe(original)
+      const originalCents = 250075
+      const validated = validateAmount(originalCents)
+      const restored = formatFromCents(validated.data || 0)
+      expect(restored).toBe(2500.75)
     })
 
     it('should sanitize user input before validation', () => {

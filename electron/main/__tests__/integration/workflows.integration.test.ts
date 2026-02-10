@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { PaymentService } from '../../services/finance/PaymentService'
 import { ApprovalWorkflowService } from '../../services/workflow/ApprovalWorkflowService'
 
@@ -39,15 +40,19 @@ describe('Workflows Integration Tests', () => {
 
       CREATE TABLE fee_invoice (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        invoice_number TEXT NOT NULL UNIQUE,
         student_id INTEGER NOT NULL,
-        invoice_number TEXT UNIQUE NOT NULL,
-        amount INTEGER NOT NULL,
+        term_id INTEGER NOT NULL,
+        invoice_date DATE NOT NULL,
+        due_date DATE NOT NULL,
+        total_amount INTEGER NOT NULL,
         amount_paid INTEGER DEFAULT 0,
-        status TEXT DEFAULT 'OUTSTANDING',
-        due_date DATE,
-        invoice_date DATE,
+        status TEXT DEFAULT 'PENDING',
+        notes TEXT,
+        created_by_user_id INTEGER NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (student_id) REFERENCES student(id)
+        FOREIGN KEY (student_id) REFERENCES student(id),
+        FOREIGN KEY (created_by_user_id) REFERENCES user(id)
       );
 
       CREATE TABLE payment (
@@ -72,33 +77,55 @@ describe('Workflows Integration Tests', () => {
 
       CREATE TABLE transaction_category (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        category_name TEXT NOT NULL
+        category_name TEXT NOT NULL,
+        category_type TEXT NOT NULL,
+        parent_category_id INTEGER,
+        is_system BOOLEAN DEFAULT 0,
+        is_active BOOLEAN DEFAULT 1
       );
 
       CREATE TABLE ledger_transaction (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        transaction_ref TEXT,
+        transaction_ref TEXT NOT NULL UNIQUE,
         transaction_date DATE NOT NULL,
         transaction_type TEXT NOT NULL,
-        category_id INTEGER,
+        category_id INTEGER NOT NULL,
         amount INTEGER NOT NULL,
-        debit_credit TEXT,
+        debit_credit TEXT NOT NULL,
         student_id INTEGER,
-        recorded_by_user_id INTEGER,
-        is_voided BOOLEAN DEFAULT 0,
-        description TEXT,
+        staff_id INTEGER,
+        invoice_id INTEGER,
         payment_method TEXT,
-        reference TEXT,
-        recorded_by INTEGER,
-        cheque_number TEXT,
-        bank_name TEXT,
-        is_approved BOOLEAN DEFAULT 0,
-        approval_status TEXT,
-        void_reason TEXT,
+        payment_reference TEXT,
+        description TEXT,
+        term_id INTEGER,
+        recorded_by_user_id INTEGER NOT NULL,
+        is_voided BOOLEAN DEFAULT 0,
+        voided_reason TEXT,
+        voided_by_user_id INTEGER,
+        voided_at DATETIME,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (category_id) REFERENCES transaction_category(id),
         FOREIGN KEY (student_id) REFERENCES student(id),
+        FOREIGN KEY (invoice_id) REFERENCES fee_invoice(id),
         FOREIGN KEY (recorded_by_user_id) REFERENCES user(id)
+      );
+
+      CREATE TABLE receipt (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        receipt_number TEXT NOT NULL UNIQUE,
+        transaction_id INTEGER NOT NULL UNIQUE,
+        receipt_date DATE NOT NULL,
+        student_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+        amount_in_words TEXT,
+        payment_method TEXT NOT NULL,
+        payment_reference TEXT,
+        printed_count INTEGER DEFAULT 0,
+        created_by_user_id INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (transaction_id) REFERENCES ledger_transaction(id),
+        FOREIGN KEY (student_id) REFERENCES student(id)
       );
 
       CREATE TABLE credit_transaction (
@@ -203,12 +230,15 @@ describe('Workflows Integration Tests', () => {
         ('Student', 'One', 'STU-001'),
         ('Student', 'Two', 'STU-002');
 
-      INSERT INTO transaction_category (category_name) VALUES ('INCOME'), ('EXPENSE'), ('FEE_PAYMENT');
+      INSERT INTO transaction_category (category_name, category_type, is_system, is_active) VALUES
+        ('School Fees', 'INCOME', 1, 1),
+        ('INCOME', 'INCOME', 1, 1),
+        ('EXPENSE', 'EXPENSE', 1, 1);
 
-      INSERT INTO fee_invoice (student_id, invoice_number, amount, status, invoice_date, created_at) VALUES
-        (1, 'INV-2026-001', 50000, 'OUTSTANDING', '2026-01-05', '2026-01-05 10:00:00'),
-        (1, 'INV-2026-002', 30000, 'OUTSTANDING', '2026-01-10', '2026-01-10 10:00:00'),
-        (2, 'INV-2026-003', 60000, 'OUTSTANDING', '2026-01-15', '2026-01-15 10:00:00');
+      INSERT INTO fee_invoice (student_id, invoice_number, term_id, invoice_date, due_date, total_amount, amount_paid, status, created_by_user_id, created_at) VALUES
+        (1, 'INV-2026-001', 1, '2026-01-05', '2026-02-05', 50000, 0, 'OUTSTANDING', 1, '2026-01-05 10:00:00'),
+        (1, 'INV-2026-002', 1, '2026-01-10', '2026-02-10', 30000, 0, 'OUTSTANDING', 1, '2026-01-10 10:00:00'),
+        (2, 'INV-2026-003', 1, '2026-01-15', '2026-02-15', 60000, 0, 'OUTSTANDING', 1, '2026-01-15 10:00:00');
 
       INSERT INTO approval_configuration (request_type, min_amount, max_amount, required_level, approver_role) VALUES
         ('PAYMENT', 0, 50000, 1, 'BURSAR'),
@@ -223,7 +253,7 @@ describe('Workflows Integration Tests', () => {
   })
 
   afterEach(() => {
-    if (db) db.close()
+    if (db) {db.close()}
   })
 
   describe('Payment Workflow', () => {
@@ -231,10 +261,11 @@ describe('Workflows Integration Tests', () => {
       const result = await paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
-        payment_date: '2026-01-20',
+        transaction_date: '2026-01-20',
         payment_method: 'MPESA',
-        reference: 'TEST001',
-        recorded_by: 1
+        payment_reference: 'TEST001',
+        recorded_by_user_id: 1,
+        term_id: 1
       })
 
       expect(result).toBeDefined()
@@ -244,10 +275,11 @@ describe('Workflows Integration Tests', () => {
       await paymentService.recordPayment({
         student_id: 1,
         amount: 50000,
-        payment_date: '2026-01-20',
+        transaction_date: '2026-01-20',
         payment_method: 'MPESA',
-        reference: 'TEST002',
-        recorded_by: 1
+        payment_reference: 'TEST002',
+        recorded_by_user_id: 1,
+        term_id: 1
       })
 
       const payments = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').all(1) as unknown[]
@@ -258,19 +290,21 @@ describe('Workflows Integration Tests', () => {
       const result1 = await paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
-        payment_date: '2026-01-15',
+        transaction_date: '2026-01-15',
         payment_method: 'CASH',
-        reference: 'TEST003',
-        recorded_by: 1
+        payment_reference: 'TEST003',
+        recorded_by_user_id: 1,
+        term_id: 1
       })
 
       const result2 = await paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
-        payment_date: '2026-01-20',
+        transaction_date: '2026-01-20',
         payment_method: 'CASH',
-        reference: 'TEST004',
-        recorded_by: 1
+        payment_reference: 'TEST004',
+        recorded_by_user_id: 1,
+        term_id: 1
       })
 
       expect(result1).toBeDefined()
@@ -281,10 +315,11 @@ describe('Workflows Integration Tests', () => {
       await paymentService.recordPayment({
         student_id: 1,
         amount: 50000,
-        payment_date: '2026-01-20',
+        transaction_date: '2026-01-20',
         payment_method: 'MPESA',
-        reference: 'TEST005',
-        recorded_by: 1
+        payment_reference: 'TEST005',
+        recorded_by_user_id: 1,
+        term_id: 1
       })
 
       const invoice = db.prepare('SELECT * FROM fee_invoice WHERE id = ?').get(1) as unknown
@@ -295,19 +330,21 @@ describe('Workflows Integration Tests', () => {
       await paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
-        payment_date: '2026-01-15',
+        transaction_date: '2026-01-15',
         payment_method: 'MPESA',
-        reference: 'TEST006',
-        recorded_by: 1
+        payment_reference: 'TEST006',
+        recorded_by_user_id: 1,
+        term_id: 1
       })
 
       await paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
-        payment_date: '2026-01-20',
+        transaction_date: '2026-01-20',
         payment_method: 'BANK',
-        reference: 'TEST007',
-        recorded_by: 1
+        payment_reference: 'TEST007',
+        recorded_by_user_id: 1,
+        term_id: 1
       })
 
       const payments = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction WHERE student_id = ?').get(1) as unknown
@@ -318,19 +355,21 @@ describe('Workflows Integration Tests', () => {
       await paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
-        payment_date: '2026-01-15',
+        transaction_date: '2026-01-15',
         payment_method: 'MPESA',
-        reference: 'TEST008',
-        recorded_by: 1
+        payment_reference: 'TEST008',
+        recorded_by_user_id: 1,
+        term_id: 1
       })
 
       await paymentService.recordPayment({
         student_id: 2,
         amount: 30000,
-        payment_date: '2026-01-20',
+        transaction_date: '2026-01-20',
         payment_method: 'BANK',
-        reference: 'TEST009',
-        recorded_by: 1
+        payment_reference: 'TEST009',
+        recorded_by_user_id: 1,
+        term_id: 1
       })
 
       const payment1 = db.prepare('SELECT * FROM ledger_transaction WHERE student_id = ?').get(1) as unknown
@@ -455,10 +494,11 @@ describe('Workflows Integration Tests', () => {
       const payment = await paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
-        payment_date: '2026-01-20',
+        transaction_date: '2026-01-20',
         payment_method: 'MPESA',
-        reference: 'TEST010',
-        recorded_by: 1
+        payment_reference: 'TEST010',
+        recorded_by_user_id: 1,
+        term_id: 1
       })
 
       expect(payment).toBeDefined()
@@ -496,19 +536,21 @@ describe('Workflows Integration Tests', () => {
       await paymentService.recordPayment({
         student_id: 1,
         amount: 30000,
-        payment_date: '2026-01-20',
+        transaction_date: '2026-01-20',
         payment_method: 'BANK',
-        reference: 'TEST011',
-        recorded_by: 1
+        payment_reference: 'TEST011',
+        recorded_by_user_id: 1,
+        term_id: 1
       })
 
       await paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
-        payment_date: '2026-01-20',
+        transaction_date: '2026-01-20',
         payment_method: 'BANK',
-        reference: 'TEST012',
-        recorded_by: 1
+        payment_reference: 'TEST012',
+        recorded_by_user_id: 1,
+        term_id: 1
       })
 
       const payments = db.prepare('SELECT COUNT(*) as count FROM ledger_transaction').get() as unknown
@@ -549,10 +591,11 @@ describe('Workflows Integration Tests', () => {
       await paymentService.recordPayment({
         student_id: 1,
         amount: 25000,
-        payment_date: '2026-01-20',
+        transaction_date: '2026-01-20',
         payment_method: 'MPESA',
-        reference: 'TEST013',
-        recorded_by: 1
+        payment_reference: 'TEST013',
+        recorded_by_user_id: 1,
+        term_id: 1
       })
 
       // Verify request was recorded
@@ -599,10 +642,11 @@ describe('Workflows Integration Tests', () => {
       await paymentService.recordPayment({
         student_id: 1,
         amount: 50000,
-        payment_date: '2026-01-20',
+        transaction_date: '2026-01-20',
         payment_method: 'MPESA',
-        reference: 'TEST014',
-        recorded_by: 1
+        payment_reference: 'TEST014',
+        recorded_by_user_id: 1,
+        term_id: 1
       })
 
       // Verify both records exist and are consistent

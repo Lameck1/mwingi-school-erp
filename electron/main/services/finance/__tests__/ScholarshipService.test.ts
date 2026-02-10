@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import Database from 'better-sqlite3'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
 import { ScholarshipService } from '../ScholarshipService'
 
 // Mock audit utilities
@@ -82,7 +83,7 @@ describe('ScholarshipService', () => {
   })
 
   afterEach(() => {
-    if (db) db.close()
+    if (db) {db.close()}
   })
 
   describe('createScholarship', () => {

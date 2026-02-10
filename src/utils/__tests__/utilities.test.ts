@@ -5,8 +5,21 @@
 
 describe('Email Validation Utilities', () => {
   const validateEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    return emailRegex.test(email)
+    if (email.length === 0 || email.includes(' ')) {
+      return false
+    }
+
+    const atIndex = email.indexOf('@')
+    if (atIndex <= 0 || atIndex !== email.lastIndexOf('@')) {
+      return false
+    }
+
+    const domain = email.slice(atIndex + 1)
+    if (domain.length === 0 || domain.startsWith('.') || domain.endsWith('.')) {
+      return false
+    }
+
+    return domain.includes('.')
   }
 
   describe('Email Format Validation', () => {
@@ -142,7 +155,7 @@ describe('Date Calculation Utilities', () => {
 
 describe('GPA Calculation Utilities', () => {
   const calculateGPA = (marks: number[], maxMark: number = 100): number => {
-    if (marks.length === 0) return 0
+    if (marks.length === 0) {return 0}
     const sum = marks.reduce((a, b) => a + b, 0)
     const average = sum / marks.length
     // Convert to 4.0 scale
@@ -153,17 +166,17 @@ describe('GPA Calculation Utilities', () => {
     subjects: Array<{ mark: number; weight: number }>,
     maxMark: number = 100
   ): number => {
-    if (subjects.length === 0) return 0
+    if (subjects.length === 0) {return 0}
     const totalWeight = subjects.reduce((sum, s) => sum + s.weight, 0)
     const weightedSum = subjects.reduce((sum, s) => sum + (s.mark * s.weight) / maxMark, 0)
     return (weightedSum / totalWeight) * 4.0
   }
 
   const getGradeFromGPA = (gpa: number): string => {
-    if (gpa >= 3.5) return 'A'
-    if (gpa >= 3.0) return 'B'
-    if (gpa >= 2.5) return 'C'
-    if (gpa >= 2.0) return 'D'
+    if (gpa >= 3.5) {return 'A'}
+    if (gpa >= 3.0) {return 'B'}
+    if (gpa >= 2.5) {return 'C'}
+    if (gpa >= 2.0) {return 'D'}
     return 'E'
   }
 
@@ -275,7 +288,7 @@ describe('GPA Calculation Utilities', () => {
 
 describe('String and Number Utilities', () => {
   const truncateString = (str: string, maxLength: number, suffix: string = '...'): string => {
-    if (str.length <= maxLength) return str
+    if (str.length <= maxLength) {return str}
     return str.substring(0, maxLength - suffix.length) + suffix
   }
 
@@ -341,7 +354,7 @@ describe('Array Utilities', () => {
   const sum = (arr: number[]): number => arr.reduce((a, b) => a + b, 0)
   const average = (arr: number[]): number => (arr.length === 0 ? 0 : sum(arr) / arr.length)
   const median = (arr: number[]): number => {
-    if (arr.length === 0) return 0
+    if (arr.length === 0) {return 0}
     const sorted = [...arr].sort((a, b) => a - b)
     const mid = Math.floor(sorted.length / 2)
     return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2

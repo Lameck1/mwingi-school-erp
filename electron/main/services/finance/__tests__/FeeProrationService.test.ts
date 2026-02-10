@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import Database from 'better-sqlite3'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
 import { FeeProrationService } from '../FeeProrationService'
 
 // Mock audit utilities to avoid database initialization issues
@@ -42,28 +43,38 @@ describe('FeeProrationService', () => {
       CREATE TABLE fee_invoice (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id INTEGER NOT NULL,
+        term_id INTEGER NOT NULL,
+        academic_term_id INTEGER,
         invoice_number TEXT UNIQUE NOT NULL,
-        amount REAL NOT NULL,
-        amount_paid REAL DEFAULT 0,
-        status TEXT DEFAULT 'OUTSTANDING',
-        is_prorated BOOLEAN DEFAULT 0,
+        invoice_date DATE,
+        due_date DATE,
+        total_amount INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+        amount_due INTEGER NOT NULL,
+        original_amount INTEGER,
+        amount_paid INTEGER DEFAULT 0,
+        description TEXT,
+        invoice_type TEXT,
+        class_id INTEGER,
+        status TEXT DEFAULT 'PENDING',
+        is_prorated INTEGER DEFAULT 0,
         proration_percentage REAL,
-        original_amount REAL,
+        created_by_user_id INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE pro_ration_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        student_id INTEGER NOT NULL,
         invoice_id INTEGER NOT NULL,
-        enrollment_date DATE NOT NULL,
-        term_start_date DATE NOT NULL,
-        term_end_date DATE NOT NULL,
+        student_id INTEGER NOT NULL,
+        full_amount INTEGER NOT NULL,
+        pro_rated_amount INTEGER NOT NULL,
+        discount_percentage REAL NOT NULL,
+        enrollment_date TEXT NOT NULL,
+        term_start TEXT NOT NULL,
+        term_end TEXT NOT NULL,
         days_in_term INTEGER NOT NULL,
         days_enrolled INTEGER NOT NULL,
-        proration_percentage REAL NOT NULL,
-        original_amount REAL NOT NULL,
-        prorated_amount REAL NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -88,7 +99,7 @@ describe('FeeProrationService', () => {
   })
 
   afterEach(() => {
-    if (db) db.close()
+    if (db) {db.close()}
   })
 
   describe('generateProRatedInvoice', () => {

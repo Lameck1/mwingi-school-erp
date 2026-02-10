@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { CreditAutoApplicationService } from '../CreditAutoApplicationService'
 
 // Mock audit utilities
@@ -62,7 +63,7 @@ describe('CreditAutoApplicationService', () => {
   })
 
   afterEach(() => {
-    if (db) db.close()
+    if (db) {db.close()}
   })
 
   describe('autoApplyCredits', () => {
@@ -220,7 +221,7 @@ describe('CreditAutoApplicationService', () => {
 
       const transactions = await service.getCreditTransactions(3)
 
-      expect(transactions === undefined || Array.isArray(transactions)).toBe(true)
+      expect(transactions == null || Array.isArray(transactions)).toBe(true)
     })
   })
 

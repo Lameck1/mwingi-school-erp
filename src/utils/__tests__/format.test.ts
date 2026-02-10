@@ -1,4 +1,4 @@
-import { formatCurrency, formatDate, formatDateTime } from '../format'
+import { formatCurrency, formatCurrencyFromCents, formatDate, formatDateTime } from '../format'
 
 describe('Format Utilities', () => {
   describe('formatCurrency', () => {
@@ -15,7 +15,7 @@ describe('Format Utilities', () => {
 
     it('should include decimal places', () => {
       const result = formatCurrency(1500.50)
-      expect(result).toMatch(/\d+\.\d{2}/)
+      expect(result).toContain('.50')
     })
 
     it('should handle zero amount', () => {
@@ -25,15 +25,15 @@ describe('Format Utilities', () => {
     })
 
     it('should handle null values', () => {
-      expect(formatCurrency(null)).toBe('KES 0.00')
+      expect(formatCurrency(null)).toBe('Ksh 0.00')
     })
 
     it('should handle undefined values', () => {
-      expect(formatCurrency(undefined)).toBe('KES 0.00')
+      expect(formatCurrency()).toBe('Ksh 0.00')
     })
 
     it('should handle NaN values', () => {
-      expect(formatCurrency(NaN)).toBe('KES 0.00')
+      expect(formatCurrency(NaN)).toBe('Ksh 0.00')
     })
 
     it('should format decimal amounts', () => {
@@ -50,6 +50,19 @@ describe('Format Utilities', () => {
     it('should handle small decimal amounts', () => {
       const result = formatCurrency(0.01)
       expect(result).toContain('0.01')
+    })
+  })
+
+  describe('formatCurrencyFromCents', () => {
+    it('should convert cents to shillings and format correctly', () => {
+      const result = formatCurrencyFromCents(150000)
+      expect(result).toContain('1,500.00')
+      expect(result).toContain('Ksh')
+    })
+
+    it('should handle null or undefined values', () => {
+      expect(formatCurrencyFromCents(null)).toBe('Ksh 0.00')
+      expect(formatCurrencyFromCents()).toBe('Ksh 0.00')
     })
   })
 
@@ -72,7 +85,7 @@ describe('Format Utilities', () => {
     })
 
     it('should handle undefined values', () => {
-      expect(formatDate(undefined)).toBe('N/A')
+      expect(formatDate()).toBe('N/A')
     })
 
     it('should handle empty strings', () => {
@@ -126,7 +139,7 @@ describe('Format Utilities', () => {
     })
 
     it('should handle undefined values', () => {
-      expect(formatDateTime(undefined)).toBe('N/A')
+      expect(formatDateTime()).toBe('N/A')
     })
 
     it('should handle empty strings', () => {

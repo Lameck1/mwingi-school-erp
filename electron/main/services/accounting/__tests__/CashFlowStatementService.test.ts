@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import Database from 'better-sqlite3-multiple-ciphers'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
 import { CashFlowStatementService } from '../../reports/CashFlowStatementService'
 
 vi.mock('../../../../database/utils/audit', () => ({
@@ -150,7 +151,7 @@ describe('CashFlowStatementService', () => {
   })
 
   afterEach(() => {
-    if (db) db.close()
+    if (db) {db.close()}
   })
 
   // generateCashFlowStatement tests (4 tests)

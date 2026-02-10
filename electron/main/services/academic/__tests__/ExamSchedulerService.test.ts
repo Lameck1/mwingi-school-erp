@@ -129,7 +129,7 @@ describe('ExamSchedulerService_Enhanced', () => {
     it('should complete detectClashes workflow', async () => {
       try {
         const result = await ExamSchedulerService_Enhanced.detectClashes(1);
-        expect(result === null || Array.isArray(result)).toBe(true);
+        expect(result == null || Array.isArray(result)).toBe(true);
       } catch (error) {
         expect(error).toBeDefined();
       }
@@ -138,7 +138,7 @@ describe('ExamSchedulerService_Enhanced', () => {
     it('should complete getTimetableStats workflow', async () => {
       try {
         const result = await ExamSchedulerService_Enhanced.getTimetableStats(1);
-        expect(result === null || typeof result === 'object').toBe(true);
+        expect(result == null || typeof result === 'object').toBe(true);
       } catch (error) {
         expect(error).toBeDefined();
       }
@@ -148,7 +148,7 @@ describe('ExamSchedulerService_Enhanced', () => {
       try {
         const venueCapacities = new Map([[1, 50], [2, 40]]);
         const result = await ExamSchedulerService_Enhanced.allocateVenues(1, venueCapacities);
-        expect(result === null || Array.isArray(result)).toBe(true);
+        expect(result == null || Array.isArray(result)).toBe(true);
       } catch (error) {
         expect(error).toBeDefined();
       }
@@ -158,7 +158,7 @@ describe('ExamSchedulerService_Enhanced', () => {
       try {
         const staffAvailability = new Map([[1, ['09:00-11:00']]]);
         const result = await ExamSchedulerService_Enhanced.assignInvigilators(1, staffAvailability);
-        expect(result === null || Array.isArray(result) || typeof result === 'object').toBe(true);
+        expect(result == null || Array.isArray(result) || typeof result === 'object').toBe(true);
       } catch (error) {
         expect(error).toBeDefined();
       }
