@@ -2,6 +2,7 @@
  * Additional Utilities Tests
  * Tests for email validation, date calculations, GPA calculations, and helper functions
  */
+import { describe, it, expect } from 'vitest'
 
 describe('Email Validation Utilities', () => {
   const validateEmail = (email: string): boolean => {
@@ -271,7 +272,7 @@ describe('GPA Calculation Utilities', () => {
 
     it('should assign grade D for low GPA', () => {
       expect(getGradeFromGPA(2.2)).toBe('D')
-      expect(getGradeFromGPA(2.0)).toBe('D')
+      expect(getGradeFromGPA(2)).toBe('D')
     })
 
     it('should assign grade E for failing GPA', () => {
@@ -357,7 +358,7 @@ describe('Array Utilities', () => {
     if (arr.length === 0) {return 0}
     const sorted = [...arr].sort((a, b) => a - b)
     const mid = Math.floor(sorted.length / 2)
-    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+    return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
   }
 
   describe('Array Sum and Average', () => {
