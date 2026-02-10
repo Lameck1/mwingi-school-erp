@@ -90,7 +90,7 @@ export function printCurrentView(params?: { title?: string; selector?: string; o
     : document.querySelector('main')
 
   if (!(target instanceof HTMLElement)) {
-    window.print()
+    globalThis.print()
     return
   }
 

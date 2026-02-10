@@ -21,7 +21,7 @@ describe('Validation Utilities', () => {
     })
 
     it('should reject NaN values', () => {
-      const result = validateAmount(NaN)
+      const result = validateAmount(Number.NaN)
       expect(result.success).toBe(false)
       expect(result.error).toContain('positive number')
     })
@@ -153,7 +153,7 @@ describe('Validation Utilities', () => {
     })
 
     it('should reject NaN values', () => {
-      const result = validateId(NaN)
+      const result = validateId(Number.NaN)
       expect(result.success).toBe(false)
     })
 
@@ -303,7 +303,7 @@ describe('Validation Utilities', () => {
 
   describe('Validation integration', () => {
     it('should validate complete financial transaction', () => {
-      const amount = validateAmount(1500.50)
+      const amount = validateAmount(1500.5)
       const date = validateDate('2026-02-04')
       const id = validateId(5, 'Transaction ID')
 

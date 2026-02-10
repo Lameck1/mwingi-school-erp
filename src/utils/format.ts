@@ -17,7 +17,7 @@
  * @param amount - The amount to format (in whole currency units)
  * @returns Formatted currency string (e.g., "KES 34,000.00")
  */
-export function formatCurrency(amount: number | null | undefined): string {
+export function formatCurrency(amount?: number | null): string {
     if (amount === null || amount === undefined || isNaN(Number(amount))) {
         return 'Ksh 0.00'
     }
@@ -39,7 +39,7 @@ export function formatCurrency(amount: number | null | undefined): string {
  * @param cents - The amount in cents
  * @returns Formatted currency string (e.g., "KES 34,000.00")
  */
-export function formatCurrencyFromCents(cents: number | null | undefined): string {
+export function formatCurrencyFromCents(cents?: number | null): string {
     return formatCurrency(centsToShillings(cents))
 }
 
@@ -68,7 +68,7 @@ export function shillingsToCents(shillings: number | string | null | undefined):
  * @param dateString - ISO date string or Date object
  * @returns Formatted date string (e.g., "Jan 23, 2026") or "N/A"
  */
-export function formatDate(dateString: string | Date | null | undefined): string {
+export function formatDate(dateString?: string | Date | null): string {
     if (!dateString) {return 'N/A'}
 
     const date = new Date(dateString)
@@ -86,7 +86,7 @@ export function formatDate(dateString: string | Date | null | undefined): string
  * @param dateString - ISO date string or Date object
  * @returns Formatted datetime string or "N/A"
  */
-export function formatDateTime(dateString: string | Date | null | undefined): string {
+export function formatDateTime(dateString?: string | Date | null): string {
     if (!dateString) {return 'N/A'}
 
     const date = new Date(dateString)
