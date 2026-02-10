@@ -35,7 +35,7 @@ export default function Transactions() {
     }, [appliedFilter, showToast])
 
     useEffect(() => {
-        void loadTransactions()
+        loadTransactions().catch((err: unknown) => console.error('Failed to load transactions', err))
     }, [loadTransactions])
 
     const handleApplyFilter = () => {

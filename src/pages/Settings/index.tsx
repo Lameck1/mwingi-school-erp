@@ -66,7 +66,7 @@ export default function Settings() {
 
     useEffect(() => {
         if (activeTab === 'academic') {
-            void loadAcademicYears()
+            loadAcademicYears().catch((err: unknown) => console.error('Failed to load academic years', err))
         }
     }, [activeTab, loadAcademicYears])
 

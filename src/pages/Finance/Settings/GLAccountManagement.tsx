@@ -68,7 +68,7 @@ export const GLAccountManagement: React.FC = () => {
   }, [filterType]);
 
   useEffect(() => {
-    void loadAccounts();
+    loadAccounts().catch((err: unknown) => console.error('Failed to load GL accounts', err));
   }, [loadAccounts]);
 
   const filteredAccounts = accounts.filter((account) => {

@@ -59,7 +59,7 @@ export default function ReportCards() {
 
     useEffect(() => {
         if (selectedStream && currentAcademicYear && currentTerm) {
-            void loadStudents()
+            loadStudents().catch((err: unknown) => console.error('Failed to load students for report cards', err))
         }
     }, [selectedStream, currentAcademicYear, currentTerm, loadStudents])
 

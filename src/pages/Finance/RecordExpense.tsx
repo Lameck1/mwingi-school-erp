@@ -37,7 +37,7 @@ export default function RecordExpense() {
     }, [showToast])
 
     useEffect(() => {
-        void loadCategories()
+        loadCategories().catch((err: unknown) => console.error('Failed to load expense categories', err))
     }, [loadCategories])
 
     const handleCreateCategory = async () => {

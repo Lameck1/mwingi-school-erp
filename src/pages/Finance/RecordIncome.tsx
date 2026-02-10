@@ -38,7 +38,7 @@ export default function RecordIncome() {
     }, [showToast])
 
     useEffect(() => {
-        void loadCategories()
+        loadCategories().catch((err: unknown) => console.error('Failed to load income categories', err))
     }, [loadCategories])
 
     const handleCreateCategory = async () => {

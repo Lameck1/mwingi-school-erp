@@ -37,7 +37,7 @@ export default function Staff() {
         } finally { setLoading(false) }
     }, [showToast])
 
-    useEffect(() => { void loadStaff() }, [loadStaff])
+    useEffect(() => { loadStaff().catch((err: unknown) => console.error('Failed to load staff', err)) }, [loadStaff])
 
     const resetForm = () => {
         setEditing(null)

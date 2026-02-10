@@ -66,7 +66,7 @@ export default function GrantTracking() {
     }, [filterStatus, showToast])
 
     useEffect(() => {
-        void loadData()
+        loadData().catch((err: unknown) => console.error('Failed to load grants data', err))
     }, [loadData])
 
     const handleCreateGrant = async (e: React.FormEvent) => {
@@ -83,7 +83,7 @@ export default function GrantTracking() {
             }, user.id)
             showToast('Grant created successfully', 'success')
             setIsCreateModalOpen(false)
-            void loadData()
+            loadData().catch((err: unknown) => console.error('Failed to reload grants', err))
         } catch (error) {
             console.error(error)
             showToast('Failed to create grant', 'error')
@@ -111,7 +111,7 @@ export default function GrantTracking() {
                 showToast('Utilization recorded successfully', 'success')
                 setIsUtilizeModalOpen(false)
                 setUtilizationForm({ amount: '', description: '', utilizationDate: new Date().toISOString().slice(0, 10) })
-                void loadData()
+                loadData().catch((err: unknown) => console.error('Failed to reload grants', err))
             } else {
                 showToast(result.message || 'Failed to record utilization', 'error')
             }

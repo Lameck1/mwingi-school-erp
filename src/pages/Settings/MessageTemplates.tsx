@@ -38,7 +38,7 @@ export default function MessageTemplates() {
     }, [showToast])
 
     useEffect(() => {
-        void loadTemplates()
+        loadTemplates().catch((err: unknown) => console.error('Failed to load message templates', err))
     }, [loadTemplates])
 
     const handleSaveTemplate = async () => {

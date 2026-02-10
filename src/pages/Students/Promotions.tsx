@@ -67,13 +67,13 @@ export default function Promotions() {
     }, [toAcademicYear])
 
     useEffect(() => {
-        void loadStreams()
-        void loadAcademicYears()
+        loadStreams().catch((err: unknown) => console.error('Failed to load streams', err))
+        loadAcademicYears().catch((err: unknown) => console.error('Failed to load academic years', err))
     }, [loadStreams, loadAcademicYears])
 
     useEffect(() => {
         if (toAcademicYear) {
-            void loadTerms()
+            loadTerms().catch((err: unknown) => console.error('Failed to load terms', err))
         }
     }, [toAcademicYear, loadTerms])
 
@@ -104,8 +104,8 @@ export default function Promotions() {
 
     useEffect(() => {
         if (fromStream && currentAcademicYear) {
-            void loadStudents()
-            void suggestNextStream()
+            loadStudents().catch((err: unknown) => console.error('Failed to load students for promotion', err))
+            suggestNextStream().catch((err: unknown) => console.error('Failed to suggest next stream', err))
         }
     }, [fromStream, currentAcademicYear, loadStudents, suggestNextStream])
 

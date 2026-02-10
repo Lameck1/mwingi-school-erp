@@ -40,7 +40,7 @@ export default function UsersPage() {
         } finally { setLoading(false) }
     }, [showToast])
 
-    useEffect(() => { void loadData() }, [loadData])
+    useEffect(() => { loadData().catch((err: unknown) => console.error('Failed to load users', err)) }, [loadData])
 
     const handleSaveUser = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -57,7 +57,7 @@ export default function UsersPage() {
 
             setShowUserModal(false)
             resetForms()
-            void loadData()
+            loadData().catch((err: unknown) => console.error('Failed to reload users', err))
         } catch (error) {
             console.error('Failed to save user:', error)
             showToast(error instanceof Error ? error.message : 'Critical error saving user', 'error')
@@ -96,7 +96,7 @@ export default function UsersPage() {
         try {
             await globalThis.electronAPI.toggleUserStatus(user.id, !user.is_active)
             showToast(`User ${action}d successfully`, 'success')
-            void loadData()
+            loadData().catch((err: unknown) => console.error('Failed to reload users', err))
         } catch (error) {
             console.error('Failed to toggle status:', error)
             showToast('Status transition failed', 'error')

@@ -79,7 +79,7 @@ export default function TransportRouteManagement() {
     }, [showToast])
 
     useEffect(() => {
-        void loadData()
+        loadData().catch((err: unknown) => console.error('Failed to load transport data', err))
     }, [loadData])
 
     const handleCreateRoute = async (e: React.FormEvent) => {

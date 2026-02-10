@@ -53,12 +53,12 @@ export default function StudentCostAnalysis() {
     }, [showToast, currentAcademicYear, currentTerm])
 
     useEffect(() => {
-        void loadStudents()
+        loadStudents().catch((err: unknown) => console.error('Failed to load students', err))
     }, [loadStudents])
 
     useEffect(() => {
         if (selectedStudent !== '') {
-            void loadCostData(Number(selectedStudent))
+            loadCostData(Number(selectedStudent)).catch((err: unknown) => console.error('Failed to load cost data', err))
         }
     }, [selectedStudent, loadCostData])
 

@@ -49,7 +49,7 @@ export default function IntegrationsSettings() {
     }, [showToast])
 
     useEffect(() => {
-        void loadConfigs()
+        loadConfigs().catch((err: unknown) => console.error('Failed to load integration configs', err))
     }, [loadConfigs])
 
     const handleSaveSMS = async () => {

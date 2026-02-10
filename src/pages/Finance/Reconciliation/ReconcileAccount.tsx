@@ -65,19 +65,19 @@ export default function ReconcileAccount() {
     }, [selectedStatement])
 
     useEffect(() => {
-        void loadAccounts()
+        loadAccounts().catch((err: unknown) => console.error('Failed to load accounts', err))
     }, [loadAccounts])
 
     useEffect(() => {
         if (selectedAccount) {
-            void loadStatements(selectedAccount)
+            loadStatements(selectedAccount).catch((err: unknown) => console.error('Failed to load statements', err))
         }
     }, [selectedAccount, loadStatements])
 
     useEffect(() => {
         if (selectedStatement) {
-            void loadStatementDetails(selectedStatement.id)
-            void loadUnmatchedTransactions()
+            loadStatementDetails(selectedStatement.id).catch((err: unknown) => console.error('Failed to load statement details', err))
+            loadUnmatchedTransactions().catch((err: unknown) => console.error('Failed to load unmatched transactions', err))
         }
     }, [selectedStatement, loadStatementDetails, loadUnmatchedTransactions])
 
@@ -86,8 +86,8 @@ export default function ReconcileAccount() {
             await globalThis.electronAPI.matchTransaction(lineId, transactionId)
             // Refresh
             if (selectedStatement) {
-                void loadStatementDetails(selectedStatement.id)
-                void loadUnmatchedTransactions()
+                loadStatementDetails(selectedStatement.id).catch((err: unknown) => console.error('Failed to reload statement details', err))
+                loadUnmatchedTransactions().catch((err: unknown) => console.error('Failed to reload unmatched transactions', err))
             }
         } catch {
             alert('Failed to match')

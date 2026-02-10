@@ -71,7 +71,7 @@ export default function BoardingProfitability() {
     }, [showToast])
 
     useEffect(() => {
-        void loadData()
+        loadData().catch((err: unknown) => console.error('Failed to load boarding data', err))
     }, [loadData])
 
     const handleRecordExpense = async (e: React.FormEvent) => {

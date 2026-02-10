@@ -73,7 +73,7 @@ export default function Students() {
     }, [loadStudents, showToast])
 
     useEffect(() => {
-        void loadData()
+        loadData().catch((err: unknown) => console.error('Failed to load student data', err))
     }, [loadData])
 
     useEffect(() => {
@@ -91,12 +91,12 @@ export default function Students() {
     }, [])
 
     useEffect(() => {
-        void loadStudents()
+        loadStudents().catch((err: unknown) => console.error('Failed to reload students', err))
     }, [loadStudents])
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault()
-        void loadStudents()
+        loadStudents().catch((err: unknown) => console.error('Failed to search students', err))
     }
 
     const filteredStudents = students
