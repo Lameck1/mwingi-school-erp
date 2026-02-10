@@ -14,7 +14,7 @@ export const validateAmount = (amount: unknown): ValidationResult<number> => {
     if (isNaN(num) || num < 0) {
         return { success: false, error: 'Invalid amount. Must be a positive number.' }
     }
-    // Amount is already in cents from frontend - just validate and round
+    // Amount is expected to be in cents already; normalize to an integer
     return { success: true, data: Math.round(num) }
 }
 
@@ -38,6 +38,6 @@ export const validateDate = (date: unknown): ValidationResult<string> => {
 }
 
 export const sanitizeString = (str: unknown, maxLength: number = 255): string => {
-    if (typeof str !== 'string') return ''
+    if (typeof str !== 'string') {return ''}
     return str.trim().slice(0, maxLength)
 }

@@ -11,6 +11,27 @@ export interface TaxStrategy {
 }
 
 export class TaxCalculator {
+  private static readonly NHIF_BRACKETS: ReadonlyArray<{ maxSalary: number; deduction: number }> = [
+    { maxSalary: 6000, deduction: 150 },
+    { maxSalary: 8000, deduction: 300 },
+    { maxSalary: 12000, deduction: 400 },
+    { maxSalary: 15000, deduction: 500 },
+    { maxSalary: 20000, deduction: 600 },
+    { maxSalary: 25000, deduction: 750 },
+    { maxSalary: 30000, deduction: 850 },
+    { maxSalary: 35000, deduction: 900 },
+    { maxSalary: 40000, deduction: 950 },
+    { maxSalary: 45000, deduction: 1000 },
+    { maxSalary: 50000, deduction: 1100 },
+    { maxSalary: 60000, deduction: 1200 },
+    { maxSalary: 70000, deduction: 1300 },
+    { maxSalary: 80000, deduction: 1400 },
+    { maxSalary: 90000, deduction: 1500 },
+    { maxSalary: 100000, deduction: 1600 }
+  ]
+
+  private static readonly NHIF_MAX_DEDUCTION = 1700
+
   calculatePAYE(grossSalary: number): number {
     // 2024/2025 Kenya PAYE Bands (Simplified for example)
     // 24,000 - 10%
@@ -49,23 +70,8 @@ export class TaxCalculator {
   }
 
   calculateNHIF(grossSalary: number): number {
-     if (grossSalary < 6000) return 150;
-     if (grossSalary < 8000) return 300;
-     if (grossSalary < 12000) return 400;
-     if (grossSalary < 15000) return 500;
-     if (grossSalary < 20000) return 600;
-     if (grossSalary < 25000) return 750;
-     if (grossSalary < 30000) return 850;
-     if (grossSalary < 35000) return 900;
-     if (grossSalary < 40000) return 950;
-     if (grossSalary < 45000) return 1000;
-     if (grossSalary < 50000) return 1100;
-     if (grossSalary < 60000) return 1200;
-     if (grossSalary < 70000) return 1300;
-     if (grossSalary < 80000) return 1400;
-     if (grossSalary < 90000) return 1500;
-     if (grossSalary < 100000) return 1600;
-     return 1700; // 100k+
+      const bracket = TaxCalculator.NHIF_BRACKETS.find((entry) => grossSalary < entry.maxSalary)
+      return bracket?.deduction ?? TaxCalculator.NHIF_MAX_DEDUCTION
   }
 
   calculateNSSF(grossSalary: number): number {

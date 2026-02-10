@@ -4,7 +4,6 @@
  */
 
 // Academic Services
-import { StudentService } from '../academic/StudentService'
 import { AcademicSystemService } from '../academic/AcademicSystemService'
 import { AttendanceService } from '../academic/AttendanceService'
 import { ExamAnalysisService } from '../academic/ExamAnalysisService'
@@ -12,8 +11,12 @@ import { MeritListService } from '../academic/MeritListService'
 import { PerformanceAnalysisService } from '../academic/PerformanceAnalysisService'
 import { PromotionService } from '../academic/PromotionService'
 import { ReportCardService } from '../academic/ReportCardService'
-
-// Finance Services
+import { StudentService } from '../academic/StudentService'
+import { BudgetEnforcementService } from '../accounting/BudgetEnforcementService'
+import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
+import { OpeningBalanceService } from '../accounting/OpeningBalanceService'
+import { ProfitAndLossService } from '../accounting/ProfitAndLossService'
+import { ReconciliationService } from '../accounting/ReconciliationService'
 import { BudgetService } from '../finance/BudgetService'
 import { CashFlowService } from '../finance/CashFlowService'
 import { ExemptionService } from '../finance/ExemptionService'
@@ -21,25 +24,15 @@ import { FixedAssetService } from '../finance/FixedAssetService'
 import { GLAccountService } from '../finance/GLAccountService'
 import { HireService } from '../finance/HireService'
 import { PaymentService } from '../finance/PaymentService'
-
-// Accounting Services
-import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
-import { OpeningBalanceService } from '../accounting/OpeningBalanceService'
-import { ProfitAndLossService } from '../accounting/ProfitAndLossService'
-import { ReconciliationService } from '../accounting/ReconciliationService'
-import { BudgetEnforcementService } from '../accounting/BudgetEnforcementService'
-
-// Other Services
 import { InventoryService } from '../inventory/InventoryService'
-import { SystemMaintenanceService } from '../SystemMaintenanceService'
 import { NotificationService } from '../notifications/NotificationService'
+import { SystemMaintenanceService } from '../SystemMaintenanceService'
 
 type ServiceFactory<T> = () => T
-type ServiceInstance = unknown
 
 class ServiceContainer {
-    private static instance: ServiceContainer
-    private services: Map<string, ServiceInstance> = new Map()
+    private static instance: ServiceContainer | undefined
+    private services: Map<string, unknown> = new Map()
     private factories: Map<string, ServiceFactory<unknown>> = new Map()
 
     private constructor() { }

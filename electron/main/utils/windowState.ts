@@ -1,6 +1,7 @@
-import { app, BrowserWindow, screen } from 'electron'
 import * as fs from 'fs'
 import * as path from 'path'
+
+import { app, type BrowserWindow, screen } from '../electron-env'
 
 interface WindowState {
     x: number
@@ -88,7 +89,7 @@ export class WindowStateManager {
      * Update state from window
      */
     private updateState(): void {
-        if (!this.window || this.window.isDestroyed()) return
+        if (!this.window || this.window.isDestroyed()) {return}
 
         const isMaximized = this.window.isMaximized()
 

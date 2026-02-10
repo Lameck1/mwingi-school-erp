@@ -1,11 +1,13 @@
 import { db } from '../database'
-import { safeStorage } from 'electron'
+import { safeStorage } from '../electron-env'
+
+const DATABASE_NOT_INITIALIZED = 'Database not initialized'
 
 export class ConfigService {
 
     // Save configuration (encrypt if needed)
     static saveConfig(key: string, value: string, isEncrypted: boolean = false): boolean {
-        if (!db) throw new Error('Database not initialized')
+        if (!db) {throw new Error(DATABASE_NOT_INITIALIZED)}
 
         let storedValue = value
         if (isEncrypted && safeStorage.isEncryptionAvailable()) {
@@ -29,11 +31,11 @@ export class ConfigService {
 
     // Get configuration
     static getConfig(key: string): string | null {
-        if (!db) throw new Error('Database not initialized')
+        if (!db) {throw new Error(DATABASE_NOT_INITIALIZED)}
 
         const row = db.prepare('SELECT value, is_encrypted FROM system_config WHERE key = ?').get(key) as { value: string, is_encrypted: number } | undefined
 
-        if (!row) return null
+        if (!row) {return null}
 
         if (row.is_encrypted) {
             if (safeStorage.isEncryptionAvailable()) {
@@ -54,7 +56,7 @@ export class ConfigService {
 
     // Get all public configs (non-sensitive or filtered)
     static getAllConfigs(): Record<string, string> {
-        if (!db) throw new Error('Database not initialized')
+        if (!db) {throw new Error(DATABASE_NOT_INITIALIZED)}
         // Only select non-encrypted or safe to show configs if needed
         const rows = db.prepare('SELECT key, value, is_encrypted FROM system_config').all() as { key: string, value: string, is_encrypted: number }[]
 

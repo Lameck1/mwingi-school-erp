@@ -1,8 +1,9 @@
  
-import { app } from './electron-env'
-import path from 'path'
 import fs from 'fs'
-import { backupDatabase } from './database/index.js'
+import path from 'path'
+
+import { backupDatabase } from './database'
+import { app } from './electron-env'
 
 export class BackupService {
     private static BACKUP_DIR_NAME = 'backups'
@@ -11,12 +12,10 @@ export class BackupService {
 
     static async init() {
         // Run initial backup check after a short delay to ensure app is fully ready
-        setTimeout(async () => {
-            try {
-                await this.performAutoBackup()
-            } catch (error) {
+        setTimeout(() => {
+            void this.performAutoBackup().catch((error) => {
                 console.error('Auto backup failed:', error)
-            }
+            })
         }, 5000)
     }
 
@@ -54,7 +53,7 @@ export class BackupService {
             const retentionMs = this.RETENTION_DAYS * 24 * 60 * 60 * 1000
 
             files.forEach(file => {
-                if (!file.endsWith('.db')) return
+                if (!file.endsWith('.db')) {return}
 
                 const filePath = path.join(backupDir, file)
                 const stats = fs.statSync(filePath)
