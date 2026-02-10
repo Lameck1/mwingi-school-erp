@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain } from '../../electron-env'
 import ReportCardAnalyticsService from '../../services/academic/ReportCardAnalyticsService'
 
 export function registerReportCardAnalyticsHandlers() {

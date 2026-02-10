@@ -1,5 +1,5 @@
-import { ipcMain } from 'electron'
 import { getDatabase } from '../../database'
+import { ipcMain } from '../../electron-env'
 import { JSSTransitionService } from '../../services/cbc/JSSTransitionService'
 
 export function registerJSSHandlers() {

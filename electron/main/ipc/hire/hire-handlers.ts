@@ -1,5 +1,7 @@
-import { ipcMain, IpcMainInvokeEvent } from 'electron'
+import { ipcMain } from '../../electron-env'
 import { HireService } from '../../services/finance/HireService'
+
+import type { IpcMainInvokeEvent } from 'electron'
 
 // Local interfaces to avoid importing from src/ which is not in electron tsconfig
 interface HireClient {

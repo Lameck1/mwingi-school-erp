@@ -1,7 +1,8 @@
-import { IpcMainInvokeEvent } from 'electron';
 import { ipcMain } from '../../electron-env';
-import { ReconciliationService } from '../../services/accounting/ReconciliationService';
 import { BudgetEnforcementService } from '../../services/accounting/BudgetEnforcementService';
+import { ReconciliationService } from '../../services/accounting/ReconciliationService';
+
+import type { IpcMainInvokeEvent } from 'electron';
 
 /**
  * Reconciliation and Budget IPC Handlers
@@ -15,12 +16,11 @@ import { BudgetEnforcementService } from '../../services/accounting/BudgetEnforc
 export function registerReconciliationAndBudgetHandlers(): void {
   const reconciliationService = new ReconciliationService();
   const budgetService = new BudgetEnforcementService();
+  registerReconciliationHandlers(reconciliationService)
+  registerBudgetHandlers(budgetService)
+}
 
-  // ======== RECONCILIATION ========
-
-  /**
-   * Run all reconciliation checks
-   */
+function registerReconciliationHandlers(reconciliationService: ReconciliationService): void {
   ipcMain.handle(
     'reconciliation:runAll',
     async (_event: IpcMainInvokeEvent, userId: number) => {
@@ -28,9 +28,6 @@ export function registerReconciliationAndBudgetHandlers(): void {
     }
   );
 
-  /**
-   * Get reconciliation history
-   */
   ipcMain.handle(
     'reconciliation:getHistory',
     async (_event: IpcMainInvokeEvent, limit: number = 30) => {
@@ -47,21 +44,22 @@ export function registerReconciliationAndBudgetHandlers(): void {
       return await reconciliationService.getLatestReconciliationSummary();
     }
   );
+}
 
-  // ======== BUDGET ENFORCEMENT ========
+function registerBudgetHandlers(budgetService: BudgetEnforcementService): void {
+  type SetAllocationArgs = [
+    glAccountCode: string,
+    fiscalYear: number,
+    allocatedAmount: number,
+    department: string | null,
+    userId: number
+  ]
 
-  /**
-   * Set budget allocation for GL account
-   */
   ipcMain.handle(
     'budget:setAllocation',
     async (
       _event: IpcMainInvokeEvent,
-      glAccountCode: string,
-      fiscalYear: number,
-      allocatedAmount: number,
-      department: string | null,
-      userId: number
+      ...[glAccountCode, fiscalYear, allocatedAmount, department, userId]: SetAllocationArgs
     ) => {
       return await budgetService.setBudgetAllocation(
         glAccountCode,
@@ -128,9 +126,6 @@ export function registerReconciliationAndBudgetHandlers(): void {
     }
   );
 
-  /**
-   * Deactivate budget allocation
-   */
   ipcMain.handle(
     'budget:deactivateAllocation',
     async (_event: IpcMainInvokeEvent, allocationId: number, userId: number) => {

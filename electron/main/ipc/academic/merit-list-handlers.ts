@@ -1,44 +1,57 @@
 import { ipcMain } from '../../electron-env';
 import { MeritListService } from '../../services/academic/MeritListService';
 
-const service = new MeritListService();
+let cachedService: MeritListService | null = null;
+const getService = () => {
+  if (!cachedService) {
+    cachedService = new MeritListService();
+  }
+  return cachedService;
+};
 
 export function registerMeritListHandlers() {
-  ipcMain.handle('merit-list:generate', async (_event, options: any) => {
+  ipcMain.handle('merit-list:generate', async (_event, options: { academicYearId: number; termId: number; streamId: number }) => {
     try {
-      return await service.generateMeritList(options);
+      return await getService().generateMeritList(options);
     } catch (error) {
       throw new Error(`Failed to generate merit list: ${(error as Error).message}`);
     }
   });
 
-  // Broken handlers commented out until fixed/needed
-  /*
-  ipcMain.handle('merit-list:getClass', async (_event, examId: number, streamId: number) => {
+  ipcMain.handle('merit-list:getSubject', async (_event, payload: { examId: number; subjectId: number; streamId: number }) => {
     try {
-      // Missing required args: academicYearId, termId, userId
-      return await service.generateClassMeritList(0, 0, streamId, examId, 1);
-    } catch (error) {
-      throw new Error(`Failed to get class merit list: ${(error as Error).message}`);
-    }
-  });
-
-  ipcMain.handle('merit-list:getSubject', async (_event, subjectId: number, examId: number) => {
-    try {
-      // Missing streamId argument
-      return await service.getSubjectMeritList(examId, subjectId, 0);
+      return await getService().getSubjectMeritList(payload.examId, payload.subjectId, payload.streamId);
     } catch (error) {
       throw new Error(`Failed to get subject merit list: ${(error as Error).message}`);
     }
   });
 
-  ipcMain.handle('merit-list:getImprovement', async (_event, studentId: number) => {
+  ipcMain.handle('merit-list:getSubjectDifficulty', async (_event, payload: { examId: number; subjectId: number; streamId: number }) => {
     try {
-      // Missing required args
-      return await service.calculatePerformanceImprovements(0, 0, 0, undefined);
+      return await getService().getSubjectDifficulty(payload.examId, payload.subjectId, payload.streamId);
     } catch (error) {
-      throw new Error(`Failed to get improvement: ${(error as Error).message}`);
+      throw new Error(`Failed to get subject difficulty: ${(error as Error).message}`);
     }
   });
-  */
+
+  ipcMain.handle('merit-list:getMostImproved', async (_event, payload: {
+    academicYearId: number;
+    currentTermId: number;
+    comparisonTermId: number;
+    streamId?: number;
+    minimumImprovement?: number;
+  }) => {
+    try {
+      const results = await getService().calculatePerformanceImprovements(
+        payload.academicYearId,
+        payload.currentTermId,
+        payload.comparisonTermId,
+        payload.streamId
+      );
+      const threshold = payload.minimumImprovement ?? 0;
+      return results.filter(r => r.improvement_percentage >= threshold);
+    } catch (error) {
+      throw new Error(`Failed to get most improved students: ${(error as Error).message}`);
+    }
+  });
 }

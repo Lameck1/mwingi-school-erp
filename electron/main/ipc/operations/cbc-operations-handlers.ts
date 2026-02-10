@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain } from '../../electron-env'
 import { GrantTrackingService } from '../../services/operations/GrantTrackingService'
 import { StudentCostService } from '../../services/operations/StudentCostService'
 
@@ -11,8 +11,8 @@ export const registerCbcOperationsHandlers = () => {
     return grantService.createGrant(data, userId)
   })
 
-  ipcMain.handle('operations:grants:recordUtilization', (_event, grantId, amount, description, glAccountCode, utilizationDate, userId) => {
-    return grantService.recordUtilization(grantId, amount, description, glAccountCode, utilizationDate, userId)
+  ipcMain.handle('operations:grants:recordUtilization', (_event, payload) => {
+    return grantService.recordUtilization(payload)
   })
 
   ipcMain.handle('operations:grants:getSummary', (_event, grantId) => {

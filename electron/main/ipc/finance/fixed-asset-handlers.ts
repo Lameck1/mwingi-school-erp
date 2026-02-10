@@ -1,5 +1,6 @@
-import { ipcMain } from 'electron'
+import { ipcMain } from '../../electron-env'
 import { container } from '../../services/base/ServiceContainer'
+
 import type { FixedAssetService } from '../../services/finance/FixedAssetService'
 
 export function registerFixedAssetHandlers() {

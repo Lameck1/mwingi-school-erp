@@ -1,7 +1,8 @@
-import { IpcMainInvokeEvent } from 'electron'
 import { ipcMain } from '../../electron-env'
 import { container } from '../../services/base/ServiceContainer'
-import { BudgetService, BudgetFilters, CreateBudgetData } from '../../services/finance/BudgetService'
+import { type BudgetService, type BudgetFilters, type CreateBudgetData } from '../../services/finance/BudgetService'
+
+import type { IpcMainInvokeEvent } from 'electron'
 
 export function registerBudgetHandlers(): void {
     ipcMain.handle('budget:getAll', async (_event: IpcMainInvokeEvent, filters: BudgetFilters = {}) => {

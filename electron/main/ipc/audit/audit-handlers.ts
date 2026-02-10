@@ -1,5 +1,5 @@
+import { getDatabase } from '../../database'
 import { ipcMain } from '../../electron-env'
-import { getDatabase } from '../../database/index'
 
 export function registerAuditHandlers(): void {
     const db = getDatabase()
@@ -15,6 +15,7 @@ export function registerAuditHandlers(): void {
         `).all(limit)
     })
 }
+
 
 
 

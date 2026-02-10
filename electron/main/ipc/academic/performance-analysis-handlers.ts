@@ -1,7 +1,13 @@
 import { ipcMain } from '../../electron-env';
 import { PerformanceAnalysisService } from '../../services/academic/PerformanceAnalysisService';
 
-const service = new PerformanceAnalysisService();
+let cachedService: PerformanceAnalysisService | null = null;
+const getService = () => {
+  if (!cachedService) {
+    cachedService = new PerformanceAnalysisService();
+  }
+  return cachedService;
+};
 
 export function registerPerformanceAnalysisHandlers() {
   ipcMain.handle('performance:getMostImproved', async (_event, params: {
@@ -10,7 +16,7 @@ export function registerPerformanceAnalysisHandlers() {
     minThreshold?: number;
   }) => {
     try {
-      return await service.getMostImprovedStudents(
+      return await getService().getMostImprovedStudents(
         params.term1Id,
         params.term2Id,
         params.minThreshold ?? 5
@@ -22,7 +28,7 @@ export function registerPerformanceAnalysisHandlers() {
 
   ipcMain.handle('performance:getComparison', async (_event, studentId: number, term1Id: number, term2Id: number) => {
     try {
-      return await service.getStudentPerformanceComparison(studentId, term1Id, term2Id);
+      return await getService().getStudentPerformanceComparison(studentId, term1Id, term2Id);
     } catch (error) {
       throw new Error(`Failed to get performance comparison: ${error.message}`);
     }
@@ -30,7 +36,7 @@ export function registerPerformanceAnalysisHandlers() {
 
   ipcMain.handle('performance:getStruggling', async (_event, examId: number, threshold?: number) => {
     try {
-      return await service.getStrugglingStudents(examId, threshold ?? 50);
+      return await getService().getStrugglingStudents(examId, threshold ?? 50);
     } catch (error) {
       throw new Error(`Failed to get struggling students: ${error.message}`);
     }
@@ -38,7 +44,7 @@ export function registerPerformanceAnalysisHandlers() {
 
   ipcMain.handle('performance:getTrends', async (_event, studentId: number, numTerms?: number) => {
     try {
-      return await service.getPerformanceTrends(studentId, numTerms ?? 3);
+      return await getService().getPerformanceTrends(studentId, numTerms ?? 3);
     } catch (error) {
       throw new Error(`Failed to get performance trends: ${error.message}`);
     }

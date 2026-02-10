@@ -1,23 +1,24 @@
-import { ipcMain } from 'electron';
-import { getDatabase } from '../../database';
-import { logAudit } from '../../database/utils/audit';
+import { getDatabase } from '../../database'
+import { logAudit } from '../../database/utils/audit'
+import { ipcMain } from '../../electron-env'
 
-/**
- * IPC Handlers for Transaction Approvals
- * Refactored: wrapped in registration function to prevent side-effects at import time
- */
+type ApprovalRecord = {
+  journal_entry_id: number
+  status: string
+}
 
 export function registerFinanceApprovalHandlers(): void {
-  const db = getDatabase();
+  const db = getDatabase()
+  registerApprovalQueueHandler(db)
+  registerApproveHandler(db)
+  registerRejectHandler(db)
+  registerApprovalStatsHandler(db)
+}
 
-  // ============================================================================
-  // GET APPROVAL QUEUE
-  // ============================================================================
-
+function registerApprovalQueueHandler(db: ReturnType<typeof getDatabase>): void {
   ipcMain.handle('approvals:getQueue', async (_event, filter: 'PENDING' | 'ALL' = 'PENDING') => {
     try {
-      const whereClause = filter === 'PENDING' ? "AND ta.status = 'PENDING'" : '';
-
+      const whereClause = filter === 'PENDING' ? "AND ta.status = 'PENDING'" : ''
       const approvals = db.prepare(`
         SELECT
           ta.id,
@@ -44,42 +45,29 @@ export function registerFinanceApprovalHandlers(): void {
         WHERE 1=1 ${whereClause}
         GROUP BY ta.id
         ORDER BY ta.requested_at DESC
-      `).all();
+      `).all()
 
-      return {
-        success: true,
-        data: approvals
-      };
+      return { success: true, data: approvals }
     } catch (error) {
-      return {
-        success: false,
-        message: `Failed to get approval queue: ${(error as Error).message}`
-      };
+      return { success: false, message: `Failed to get approval queue: ${(error as Error).message}` }
     }
-  });
+  })
+}
 
-  // ============================================================================
-  // APPROVE TRANSACTION
-  // ============================================================================
-
+function registerApproveHandler(db: ReturnType<typeof getDatabase>): void {
   ipcMain.handle('approvals:approve', async (_event, approvalId: number, reviewNotes: string, reviewerUserId: number) => {
     try {
-      // Get approval details
       const approval = db.prepare(`
         SELECT ta.*, je.id as journal_entry_id
         FROM transaction_approval ta
         JOIN journal_entry je ON ta.journal_entry_id = je.id
         WHERE ta.id = ? AND ta.status = 'PENDING'
-      `).get(approvalId) as { journal_entry_id: number, status: string };
+      `).get(approvalId) as ApprovalRecord | undefined
 
       if (!approval) {
-        return {
-          success: false,
-          message: 'Approval request not found or already processed'
-        };
+        return { success: false, message: 'Approval request not found or already processed' }
       }
 
-      // Update approval status
       db.prepare(`
         UPDATE transaction_approval
         SET
@@ -88,9 +76,8 @@ export function registerFinanceApprovalHandlers(): void {
           reviewed_at = CURRENT_TIMESTAMP,
           review_notes = ?
         WHERE id = ?
-      `).run(reviewerUserId, reviewNotes, approvalId);
+      `).run(reviewerUserId, reviewNotes, approvalId)
 
-      // Update journal entry approval status
       db.prepare(`
         UPDATE journal_entry
         SET
@@ -101,55 +88,38 @@ export function registerFinanceApprovalHandlers(): void {
           posted_by_user_id = ?,
           posted_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(reviewerUserId, reviewerUserId, approval.journal_entry_id);
+      `).run(reviewerUserId, reviewerUserId, approval.journal_entry_id)
 
-      // Audit log
       logAudit(reviewerUserId, 'APPROVE', 'transaction_approval', approvalId, null, {
         journal_entry_id: approval.journal_entry_id,
-        review_notes: reviewNotes
-      });
+        review_notes: reviewNotes,
+      })
 
-      return {
-        success: true,
-        message: 'Transaction approved successfully'
-      };
+      return { success: true, message: 'Transaction approved successfully' }
     } catch (error) {
-      return {
-        success: false,
-        message: `Failed to approve transaction: ${(error as Error).message}`
-      };
+      return { success: false, message: `Failed to approve transaction: ${(error as Error).message}` }
     }
-  });
+  })
+}
 
-  // ============================================================================
-  // REJECT TRANSACTION
-  // ============================================================================
-
+function registerRejectHandler(db: ReturnType<typeof getDatabase>): void {
   ipcMain.handle('approvals:reject', async (_event, approvalId: number, reviewNotes: string, reviewerUserId: number) => {
     try {
       if (!reviewNotes) {
-        return {
-          success: false,
-          message: 'Review notes are required for rejection'
-        };
+        return { success: false, message: 'Review notes are required for rejection' }
       }
 
-      // Get approval details
       const approval = db.prepare(`
         SELECT ta.*, je.id as journal_entry_id
         FROM transaction_approval ta
         JOIN journal_entry je ON ta.journal_entry_id = je.id
         WHERE ta.id = ? AND ta.status = 'PENDING'
-      `).get(approvalId) as { journal_entry_id: number, status: string };
+      `).get(approvalId) as ApprovalRecord | undefined
 
       if (!approval) {
-        return {
-          success: false,
-          message: 'Approval request not found or already processed'
-        };
+        return { success: false, message: 'Approval request not found or already processed' }
       }
 
-      // Update approval status
       db.prepare(`
         UPDATE transaction_approval
         SET
@@ -158,9 +128,8 @@ export function registerFinanceApprovalHandlers(): void {
           reviewed_at = CURRENT_TIMESTAMP,
           review_notes = ?
         WHERE id = ?
-      `).run(reviewerUserId, reviewNotes, approvalId);
+      `).run(reviewerUserId, reviewNotes, approvalId)
 
-      // Update journal entry approval status
       db.prepare(`
         UPDATE journal_entry
         SET
@@ -168,9 +137,8 @@ export function registerFinanceApprovalHandlers(): void {
           approved_by_user_id = ?,
           approved_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(reviewerUserId, approval.journal_entry_id);
+      `).run(reviewerUserId, approval.journal_entry_id)
 
-      // Void the journal entry
       db.prepare(`
         UPDATE journal_entry
         SET
@@ -179,31 +147,22 @@ export function registerFinanceApprovalHandlers(): void {
           voided_by_user_id = ?,
           voided_at = CURRENT_TIMESTAMP
         WHERE id = ?
-      `).run(`Rejected: ${reviewNotes}`, reviewerUserId, approval.journal_entry_id);
+      `).run(`Rejected: ${reviewNotes}`, reviewerUserId, approval.journal_entry_id)
 
-      // Audit log
       logAudit(reviewerUserId, 'REJECT', 'transaction_approval', approvalId, null, {
         journal_entry_id: approval.journal_entry_id,
-        review_notes: reviewNotes
-      });
+        review_notes: reviewNotes,
+      })
 
-      return {
-        success: true,
-        message: 'Transaction rejected successfully'
-      };
+      return { success: true, message: 'Transaction rejected successfully' }
     } catch (error) {
-      return {
-        success: false,
-        message: `Failed to reject transaction: ${(error as Error).message}`
-      };
+      return { success: false, message: `Failed to reject transaction: ${(error as Error).message}` }
     }
-  });
+  })
+}
 
-  // ============================================================================
-  // GET APPROVAL STATISTICS
-  // ============================================================================
-
-  ipcMain.handle('approvals:getStats', async (_event) => {
+function registerApprovalStatsHandler(db: ReturnType<typeof getDatabase>): void {
+  ipcMain.handle('approvals:getStats', async () => {
     try {
       const stats = db.prepare(`
         SELECT
@@ -212,17 +171,11 @@ export function registerFinanceApprovalHandlers(): void {
           SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) as approved,
           SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) as rejected
         FROM transaction_approval
-      `).get();
+      `).get()
 
-      return {
-        success: true,
-        data: stats
-      };
+      return { success: true, data: stats }
     } catch (error) {
-      return {
-        success: false,
-        message: `Failed to get approval statistics: ${(error as Error).message}`
-      };
+      return { success: false, message: `Failed to get approval statistics: ${(error as Error).message}` }
     }
-  });
+  })
 }

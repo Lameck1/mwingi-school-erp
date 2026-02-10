@@ -1,8 +1,9 @@
-import { app, BrowserWindow, dialog, ipcMain } from '../../electron-env'
-import type { IpcMainInvokeEvent } from 'electron'
-import { getDatabase } from '../../database/index'
+import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
-import { validateAmount, validateId, validateDate, sanitizeString } from '../../utils/validation'
+import { app as _app, BrowserWindow as _BrowserWindow, dialog as _dialog, ipcMain } from '../../electron-env'
+import { validateAmount, validateId as _validateId, validateDate as _validateDate, sanitizeString } from '../../utils/validation'
+
+import type { IpcMainInvokeEvent } from 'electron'
 
 interface TransactionData {
     transaction_date: string
@@ -37,7 +38,7 @@ export function registerTransactionsHandlers(): void {
     ipcMain.handle('transaction:create', async (_event: IpcMainInvokeEvent, data: TransactionData, userId: number): Promise<{ success: boolean, id?: number | bigint, message?: string }> => {
         // --- VALIDATION ---
         const vAmount = validateAmount(data.amount)
-        if (!vAmount.success) return { success: false, message: vAmount.error! }
+        if (!vAmount.success) {return { success: false, message: vAmount.error! }}
 
         const amountCents = vAmount.data!
         const description = sanitizeString(data.description)
@@ -71,7 +72,7 @@ export function registerTransactionsHandlers(): void {
 
         const params: unknown[] = []
 
-        if (filters?.startDate && filters?.endDate) {
+        if (filters.startDate && filters.endDate) {
             query += ` AND t.transaction_date BETWEEN ? AND ?`
             params.push(filters.startDate, filters.endDate)
         }
@@ -102,12 +103,13 @@ export function registerTransactionsHandlers(): void {
         `).get(startDate, endDate) as { total: number }
 
         return {
-            totalIncome: income?.total || 0,
-            totalExpense: expense?.total || 0,
-            netBalance: (income?.total || 0) - (expense?.total || 0)
+            totalIncome: income.total || 0,
+            totalExpense: expense.total || 0,
+            netBalance: (income.total || 0) - (expense.total || 0)
         }
     })
 }
+
 
 
 

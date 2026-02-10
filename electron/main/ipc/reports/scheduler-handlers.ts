@@ -1,6 +1,7 @@
-import { IpcMainInvokeEvent } from 'electron'
 import { ipcMain } from '../../electron-env'
-import { reportScheduler, ScheduledReport } from '../../services/reports/ReportScheduler'
+import { reportScheduler, type ScheduledReport } from '../../services/reports/ReportScheduler'
+
+import type { IpcMainInvokeEvent } from 'electron'
 
 // Initialize scheduler
 reportScheduler.initialize()

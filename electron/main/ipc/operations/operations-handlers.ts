@@ -1,5 +1,5 @@
-import { ipcMain } from 'electron'
 import { getDatabase } from '../../database'
+import { ipcMain } from '../../electron-env'
 import { BoardingCostService } from '../../services/operations/BoardingCostService'
 import { TransportCostService } from '../../services/operations/TransportCostService'
 

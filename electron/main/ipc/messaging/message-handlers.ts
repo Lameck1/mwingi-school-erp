@@ -1,6 +1,7 @@
-import { ipcMain } from 'electron';
-import { getDatabase } from '../../database/index';
-import { logAudit } from '../../database/utils/audit';
+import { getDatabase } from '../../database';
+import { logAudit as _logAudit } from '../../database/utils/audit';
+import { ipcMain } from '../../electron-env';
+import { NotificationService } from '../../services/notifications/NotificationService';
 
 export function registerMessageHandlers(): void {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -75,6 +76,21 @@ export function registerMessageHandlers(): void {
                 .run(errorMessage, logId);
             return { success: false, error: errorMessage };
         }
+    });
+
+    // ======== SENDING EMAIL ========
+    ipcMain.handle('message:sendEmail', async (_event, options: { to: string; subject: string; body: string; recipientId?: number; recipientType?: string; userId: number }) => {
+        const service = new NotificationService();
+        const recipientType = (options.recipientType ?? 'GUARDIAN') as 'STUDENT' | 'STAFF' | 'GUARDIAN';
+        const result = await service.send({
+            recipientType,
+            recipientId: options.recipientId || 0,
+            channel: 'EMAIL',
+            to: options.to,
+            subject: options.subject,
+            message: options.body
+        }, options.userId);
+        return result;
     });
 
     // ======== MESSAGE LOGS ========

@@ -1,5 +1,5 @@
-import { ipcMain } from 'electron'
 import { getDatabase } from '../../database'
+import { ipcMain } from '../../electron-env'
 import { CBCStrandService } from '../../services/cbc/CBCStrandService'
 
 export function registerCBCHandlers() {

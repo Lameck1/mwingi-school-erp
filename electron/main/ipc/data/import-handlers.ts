@@ -1,7 +1,10 @@
-import { IpcMainInvokeEvent, dialog } from 'electron'
-import { ipcMain } from '../../electron-env'
-import { dataImportService, ImportConfig } from '../../services/data/DataImportService'
 import * as fs from 'fs'
+
+import { ipcMain, dialog, BrowserWindow } from '../../electron-env'
+import { dataImportService, type ImportConfig } from '../../services/data/DataImportService'
+
+import type { IpcMainInvokeEvent } from 'electron'
+
 
 export function registerDataImportHandlers(): void {
     // Import from file
@@ -42,10 +45,9 @@ export function registerDataImportHandlers(): void {
     ipcMain.handle('data:downloadTemplate', async (event: IpcMainInvokeEvent, entityType: string) => {
         try {
             const buffer = await dataImportService.generateTemplateFile(entityType)
-            const { BrowserWindow } = await import('electron')
             const win = BrowserWindow.fromWebContents(event.sender)
 
-            const { filePath } = await dialog.showSaveDialog(win!, {
+            const { filePath } = await dialog.showSaveDialog(win, {
                 title: `Download ${entityType} Import Template`,
                 defaultPath: `${entityType.toLowerCase()}_import_template.xlsx`,
                 filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }]
