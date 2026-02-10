@@ -46,7 +46,7 @@ export const GLAccountManagement: React.FC = () => {
   const loadAccounts = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await window.electronAPI.getGLAccounts(
+      const result = await globalThis.electronAPI.getGLAccounts(
         filterType !== 'ALL' ? { type: filterType } : undefined
       );
       const data = (result?.data ?? []) as unknown as Array<Record<string, unknown>>;
@@ -169,15 +169,7 @@ export const GLAccountManagement: React.FC = () => {
               {filteredAccounts.map((account) => (
                 <tr
                   key={account.code}
-                  className="hover:bg-gray-50 cursor-pointer"
-                  onClick={() => setSelectedAccount(account)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      setSelectedAccount(account)
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
+                  className="hover:bg-gray-50"
                 >
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {account.code}
@@ -208,7 +200,11 @@ export const GLAccountManagement: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                    <button className="text-blue-600 hover:text-blue-900 mr-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAccount(account)}
+                      className="text-blue-600 hover:text-blue-900 mr-3"
+                    >
                       View
                     </button>
                   </td>
@@ -230,14 +226,7 @@ export const GLAccountManagement: React.FC = () => {
         <div
           className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50"
           onClick={() => setSelectedAccount(null)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              setSelectedAccount(null)
-            }
-          }}
-          role="button"
-          tabIndex={0}
-          aria-label="Close account details dialog"
+          aria-hidden="true"
         >
           <div
             className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full"

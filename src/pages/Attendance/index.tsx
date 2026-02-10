@@ -96,7 +96,7 @@ export default function Attendance() {
 
     const loadStreams = async () => {
         try {
-            const data = await window.electronAPI.getStreams()
+            const data = await globalThis.electronAPI.getStreams()
             setStreams(data)
         } catch (error) {
             console.error('Failed to load streams:', error)
@@ -108,12 +108,12 @@ export default function Attendance() {
         setLoading(true)
         try {
             // Get enrolled students
-            const enrolled = await window.electronAPI.getStudentsForAttendance(
+            const enrolled = await globalThis.electronAPI.getStudentsForAttendance(
                 selectedStream, currentAcademicYear.id, currentTerm.id
             )
 
             // Get existing attendance for this date
-            const existing = await window.electronAPI.getAttendanceByDate(
+            const existing = await globalThis.electronAPI.getAttendanceByDate(
                 selectedStream, selectedDate, currentAcademicYear.id, currentTerm.id
             )
 
@@ -182,7 +182,7 @@ export default function Attendance() {
                 notes: s.notes || undefined
             }))
 
-            const result = await window.electronAPI.markAttendance(
+            const result = await globalThis.electronAPI.markAttendance(
                 entries, selectedStream, selectedDate, currentAcademicYear.id, currentTerm.id, user.id
             )
 

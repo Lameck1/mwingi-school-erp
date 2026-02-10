@@ -37,9 +37,9 @@ export default function FinancialReports() {
         setLoading(true)
         try {
             const [summaryData, revenue, expenses] = await Promise.all([
-                window.electronAPI.getTransactionSummary(dateRange.startDate, dateRange.endDate),
-                window.electronAPI.getRevenueByCategory(dateRange.startDate, dateRange.endDate),
-                window.electronAPI.getExpenseByCategory(dateRange.startDate, dateRange.endDate)
+                globalThis.electronAPI.getTransactionSummary(dateRange.startDate, dateRange.endDate),
+                globalThis.electronAPI.getRevenueByCategory(dateRange.startDate, dateRange.endDate),
+                globalThis.electronAPI.getExpenseByCategory(dateRange.startDate, dateRange.endDate)
             ])
             setSummary(summaryData)
             setRevenueData(revenue as ChartData[])
@@ -166,8 +166,8 @@ export default function FinancialReports() {
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie data={revenueData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5}>
-                                            {revenueData.map((_, index) => (
-                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                            {revenueData.map((item, index) => (
+                                                <Cell key={item.name} fill={COLORS[index % COLORS.length]} />
                                             ))}
                                         </Pie>
                                         <Tooltip

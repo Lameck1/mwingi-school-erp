@@ -55,7 +55,7 @@ export default function GrantTracking() {
     const loadData = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await window.electronAPI.getGrantsByStatus(filterStatus)
+            const data = await globalThis.electronAPI.getGrantsByStatus(filterStatus)
             setGrants(data)
         } catch (error) {
             console.error(error)
@@ -76,7 +76,7 @@ export default function GrantTracking() {
             return
         }
         try {
-            await window.electronAPI.createGrant({
+            await globalThis.electronAPI.createGrant({
                 ...createForm,
                 amount_allocated: shillingsToCents(createForm.amount_allocated),
                 amount_received: shillingsToCents(createForm.amount_received)
@@ -98,7 +98,7 @@ export default function GrantTracking() {
             return
         }
         try {
-            const result = await window.electronAPI.recordGrantUtilization({
+            const result = await globalThis.electronAPI.recordGrantUtilization({
                 grantId: selectedGrant.id,
                 amount: shillingsToCents(utilizationForm.amount),
                 description: utilizationForm.description,
@@ -123,10 +123,10 @@ export default function GrantTracking() {
 
     const handleExportNEMIS = async () => {
         try {
-            const csv = await window.electronAPI.generateNEMISExport(new Date().getFullYear())
+            const csv = await globalThis.electronAPI.generateNEMISExport(new Date().getFullYear())
             const blob = new Blob([csv], { type: 'text/csv' })
-            const url = window.URL.createObjectURL(blob)
-            const a = document.createElement('a')
+            const url = globalThis.URL.createObjectURL(blob)
+            const a = globalThis.document.createElement('a')
             a.href = url
             a.download = `nemis_export_${new Date().getFullYear()}.csv`
             a.click()

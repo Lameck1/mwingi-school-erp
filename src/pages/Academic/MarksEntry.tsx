@@ -51,8 +51,8 @@ export default function MarksEntry() {
         if (!currentAcademicYear || !currentTerm || !user) {return}
         try {
             const [examsData, allocationsData] = await Promise.all([
-                window.electronAPI.getAcademicExams(currentAcademicYear.id, currentTerm.id),
-                window.electronAPI.getTeacherAllocations(currentAcademicYear.id, currentTerm.id)
+                globalThis.electronAPI.getAcademicExams(currentAcademicYear.id, currentTerm.id),
+                globalThis.electronAPI.getTeacherAllocations(currentAcademicYear.id, currentTerm.id)
             ])
 
             setExams(examsData)
@@ -75,7 +75,7 @@ export default function MarksEntry() {
 
         setLoading(true)
         try {
-            const data = await window.electronAPI.getAcademicResults(
+            const data = await globalThis.electronAPI.getAcademicResults(
                 selectedExam, alloc.subject_id, alloc.stream_id, user!.id
             )
             setResults(data.map((r) => ({
@@ -116,7 +116,7 @@ export default function MarksEntry() {
 
         setSaving(true)
         try {
-            await window.electronAPI.saveAcademicResults(selectedExam, results, user.id)
+            await globalThis.electronAPI.saveAcademicResults(selectedExam, results, user.id)
             alert('Results saved successfully!')
         } catch (error) {
             console.error('Failed to save results:', error)
@@ -132,7 +132,7 @@ export default function MarksEntry() {
 
         setProcessing(true)
         try {
-            await window.electronAPI.processAcademicResults(selectedExam, user.id)
+            await globalThis.electronAPI.processAcademicResults(selectedExam, user.id)
             alert('Results processed successfully! Ranks have been updated.')
         } catch (error) {
             console.error('Failed to process results:', error)
@@ -211,7 +211,7 @@ export default function MarksEntry() {
                                                 type="number"
                                                 min="0"
                                                 max="100"
-                                                value={row.score === null ? '' : row.score}
+                                                value={row.score ?? ''}
                                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleScoreChange(row.student_id, 'score', e.target.value === '' ? null : Number(e.target.value))}
                                                 className="w-full bg-sidebar border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50 text-sm text-center"
                                                 placeholder="0-100"

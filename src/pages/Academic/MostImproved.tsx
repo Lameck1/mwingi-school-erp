@@ -46,8 +46,8 @@ const MostImproved = () => {
     try {
       if (currentAcademicYear) {
         const [termsData, streamsData] = await Promise.all([
-          window.electronAPI.getTermsByYear(currentAcademicYear.id),
-          window.electronAPI.getStreams()
+          globalThis.electronAPI.getTermsByYear(currentAcademicYear.id),
+          globalThis.electronAPI.getStreams()
         ])
 
         setTerms(termsData?.map(t => ({ id: t.id, name: t.term_name })) || [])
@@ -79,7 +79,7 @@ const MostImproved = () => {
 
     setLoading(true)
     try {
-      const students = await window.electronAPI.getMostImprovedStudents({
+      const students = await globalThis.electronAPI.getMostImprovedStudents({
         academicYearId: currentAcademicYear!.id,
         currentTermId: selectedCurrentTerm,
         comparisonTermId: selectedComparisonTerm,
@@ -106,7 +106,7 @@ const MostImproved = () => {
       // Generate certificates for selected students
       await Promise.all(
         improvedStudents.map(student =>
-          window.electronAPI.generateCertificate({
+          globalThis.electronAPI.generateCertificate({
             studentId: student.student_id,
             studentName: student.student_name,
             awardCategory: selectedAward,
@@ -133,7 +133,7 @@ const MostImproved = () => {
         alert('Please sign in again to send emails.')
         return
       }
-      await window.electronAPI.emailParents({
+      await globalThis.electronAPI.emailParents({
         students: improvedStudents,
         awardCategory: selectedAward,
         templateType: 'improvement_award'
@@ -166,8 +166,8 @@ const MostImproved = () => {
     ].map(row => row.join(',')).join('\n')
 
     const blob = new Blob([csvContent], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
+    const url = globalThis.URL.createObjectURL(blob)
+    const a = globalThis.document.createElement('a')
     a.href = url
     a.download = `Most_Improved_Students.csv`
     a.click()

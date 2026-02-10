@@ -73,7 +73,7 @@ export default function Reports() {
         setLoading(true)
         try {
             // Load student statistics
-            const students = await window.electronAPI.getStudents({})
+            const students = await globalThis.electronAPI.getStudents({})
             const currentStudents = Array.isArray(students) ? students : []
             const dayScholars = currentStudents.filter((s) => s.student_type === 'DAY_SCHOLAR').length
             const boarders = currentStudents.filter((s) => s.student_type === 'BOARDER').length
@@ -84,11 +84,11 @@ export default function Reports() {
             })
 
             // Load financial summary
-            const summary = await window.electronAPI.getTransactionSummary(dateRange.start, dateRange.end)
+            const summary = await globalThis.electronAPI.getTransactionSummary(dateRange.start, dateRange.end)
             setFinancialSummary(summary || { totalIncome: 0, totalExpense: 0, netBalance: 0 })
 
             // Load fee collection data
-            const feeData = await window.electronAPI.getFeeCollectionReport(dateRange.start, dateRange.end)
+            const feeData = await globalThis.electronAPI.getFeeCollectionReport(dateRange.start, dateRange.end)
             const currentFeeData = Array.isArray(feeData) ? feeData : []
 
             // Group by month
@@ -96,7 +96,7 @@ export default function Reports() {
             currentFeeData.forEach((item) => {
                 if (!item.payment_date) {return}
                 const d = new Date(item.payment_date)
-                if (isNaN(d.getTime())) {return}
+                if (Number.isNaN(d.getTime())) {return}
                 const month = d.toLocaleDateString('en-US', { month: 'short' })
                 monthlyData[month] = (monthlyData[month] || 0) + item.amount
             })
@@ -124,11 +124,11 @@ export default function Reports() {
             )
 
             // Load defaulters
-            const defaulterData = await window.electronAPI.getDefaulters()
+            const defaulterData = await globalThis.electronAPI.getDefaulters()
             setDefaulters(Array.isArray(defaulterData) ? (defaulterData) : [])
 
             // Load daily collections
-            const dailyData = await window.electronAPI.getDailyCollection(selectedDate)
+            const dailyData = await globalThis.electronAPI.getDailyCollection(selectedDate)
             setDailyCollections(Array.isArray(dailyData) ? (dailyData as DailyCollectionItem[]) : [])
         } catch (error) {
             console.error('Failed to load report data:', error)
@@ -162,7 +162,7 @@ export default function Reports() {
 
         try {
             const message = `Fee Reminder: ${student.first_name} has an outstanding balance of ${formatCurrencyFromCents(student.balance)}. Please settle at your earliest convenience. Thank you.`
-            const result = await window.electronAPI.sendSMS({
+            const result = await globalThis.electronAPI.sendSMS({
                 to: student.guardian_phone,
                 message,
                 recipientId: Number(student.id),
@@ -199,7 +199,7 @@ export default function Reports() {
 
             try {
                 const message = `Fee Reminder: ${student.first_name} has an outstanding balance of ${formatCurrencyFromCents(student.balance)}. Please settle at your earliest convenience. Thank you.`
-                const result = await window.electronAPI.sendSMS({
+                const result = await globalThis.electronAPI.sendSMS({
                     to: student.guardian_phone,
                     message,
                     recipientId: Number(student.id),
@@ -553,8 +553,10 @@ export default function Reports() {
                                 </thead>
                                 <tbody>
                                     {dailyCollections.length > 0 ? (
-                                        dailyCollections.map((col, idx) => (
-                                            <tr key={idx} className="border-b border-border/10 hover:bg-secondary/5 transition-colors">
+                                        dailyCollections.map((col) => {
+                                            const rowKey = col.payment_reference || `${col.admission_number}-${col.amount}-${col.date ?? selectedDate}-${col.payment_method}`
+                                            return (
+                                            <tr key={rowKey} className="border-b border-border/10 hover:bg-secondary/5 transition-colors">
                                                 <td className="py-5 px-6 text-xs font-mono text-foreground/60">08:00 AM+</td>
                                                 <td className="py-5 px-6">
                                                     <div className="text-sm font-bold text-foreground uppercase tracking-tight">{col.student_name}</div>
@@ -568,7 +570,8 @@ export default function Reports() {
                                                 <td className="py-5 px-6 text-xs font-mono text-foreground/40">{col.payment_reference || 'INTERNAL_REF'}</td>
                                                 <td className="py-5 px-6 text-right text-sm font-bold text-primary">{formatCurrencyFromCents(col.amount)}</td>
                                             </tr>
-                                        ))
+                                            )
+                                        })
                                     ) : (
                                         <tr>
                                             <td colSpan={5} className="py-20 text-center">

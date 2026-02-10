@@ -24,7 +24,7 @@ export default function TrialBalancePage() {
     setError(null);
 
     try {
-      const result = await window.electronAPI.getTrialBalance(startDate, endDate) as { success: boolean; data: TrialBalanceReport; message?: string };
+      const result = await globalThis.electronAPI.getTrialBalance(startDate, endDate) as { success: boolean; data: TrialBalanceReport; message?: string };
 
       if (result.success) {
         setTrialBalance(result.data);

@@ -33,10 +33,10 @@ export default function Inventory() {
     const loadData = async () => {
         try {
             const [itemsData, lowStockData, catsData, suppliersData] = await Promise.all([
-                window.electronAPI.getInventory(),
-                window.electronAPI.getLowStockItems(),
-                window.electronAPI.getInventoryCategories(),
-                window.electronAPI.getSuppliers()
+                globalThis.electronAPI.getInventory(),
+                globalThis.electronAPI.getLowStockItems(),
+                globalThis.electronAPI.getInventoryCategories(),
+                globalThis.electronAPI.getSuppliers()
             ])
             setItems(itemsData)
             setLowStock(lowStockData)
@@ -52,7 +52,7 @@ export default function Inventory() {
     const handleAddItem = async (e: React.FormEvent) => {
         e.preventDefault()
         try {
-            await window.electronAPI.createInventoryItem({
+            await globalThis.electronAPI.createInventoryItem({
                 item_code: newItem.item_code,
                 item_name: newItem.item_name,
                 category_id: Number(newItem.category_id),
@@ -78,7 +78,7 @@ export default function Inventory() {
         try {
             if (!user) {throw new Error('User not authenticated')}
 
-            await window.electronAPI.recordStockMovement({
+            await globalThis.electronAPI.recordStockMovement({
                 item_id: selectedItem.id,
                 movement_type: stockAction,
                 quantity: stockMovement.quantity,

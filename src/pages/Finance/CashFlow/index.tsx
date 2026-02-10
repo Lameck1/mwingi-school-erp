@@ -26,10 +26,10 @@ export default function CashFlow() {
     const loadData = useCallback(async () => {
         setLoading(true)
         try {
-            const stmt = await window.electronAPI.getCashFlowStatement(dateRange.start, dateRange.end)
+            const stmt = await globalThis.electronAPI.getCashFlowStatement(dateRange.start, dateRange.end)
             setStatement(stmt)
 
-            const fc = await window.electronAPI.getForecast(6)
+            const fc = await globalThis.electronAPI.getForecast(6)
             setForecast(fc)
         } catch (error) {
             console.error(error)

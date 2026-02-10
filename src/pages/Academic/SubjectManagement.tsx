@@ -47,7 +47,7 @@ export default function SubjectManagement() {
   const loadSubjects = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await window.electronAPI.getAcademicSubjectsAdmin()
+      const data = await globalThis.electronAPI.getAcademicSubjectsAdmin()
       setSubjects(data || [])
     } catch (error) {
       console.error('Failed to load subjects:', error)
@@ -93,7 +93,7 @@ export default function SubjectManagement() {
     setSaving(true)
     try {
       if (editing) {
-        await window.electronAPI.updateAcademicSubject(editing.id, {
+        await globalThis.electronAPI.updateAcademicSubject(editing.id, {
           code: form.code.trim().toUpperCase(),
           name: form.name.trim(),
           curriculum: form.curriculum,
@@ -102,7 +102,7 @@ export default function SubjectManagement() {
         }, user.id)
         showToast('Subject updated', 'success')
       } else {
-        await window.electronAPI.createAcademicSubject({
+        await globalThis.electronAPI.createAcademicSubject({
           code: form.code.trim().toUpperCase(),
           name: form.name.trim(),
           curriculum: form.curriculum,
@@ -128,7 +128,7 @@ export default function SubjectManagement() {
     if (!confirm(`${desired ? 'Activate' : 'Deactivate'} subject "${subject.name}"?`)) {return}
     setSaving(true)
     try {
-      await window.electronAPI.setAcademicSubjectActive(subject.id, desired, user.id)
+      await globalThis.electronAPI.setAcademicSubjectActive(subject.id, desired, user.id)
       await loadSubjects()
       showToast(`Subject ${desired ? 'activated' : 'deactivated'}`, 'success')
     } catch (error) {

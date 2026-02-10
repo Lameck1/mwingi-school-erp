@@ -18,15 +18,15 @@ export default function FeePayment() {
     useEffect(() => {
         const studentId = searchParams.get('student')
         if (studentId) {
-            void loadStudent(parseInt(studentId))
+            void loadStudent(Number.parseInt(studentId, 10))
         }
     }, [searchParams])
 
     const loadStudent = async (studentId: number) => {
         try {
-            const student = await window.electronAPI.getStudentById(studentId)
-            const balance = await window.electronAPI.getStudentBalance(studentId)
-            const studentPayments = await window.electronAPI.getPaymentsByStudent(studentId)
+            const student = await globalThis.electronAPI.getStudentById(studentId)
+            const balance = await globalThis.electronAPI.getStudentBalance(studentId)
+            const studentPayments = await globalThis.electronAPI.getPaymentsByStudent(studentId)
             setSelectedStudent({ ...student, balance })
             setPayments(studentPayments)
         } catch (error) {

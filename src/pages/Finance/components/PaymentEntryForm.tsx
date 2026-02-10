@@ -71,7 +71,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
             let resultData: PaymentSuccess;
 
             if (useCredit) {
-                const invoices = await window.electronAPI.getInvoicesByStudent(selectedStudent.id)
+                const invoices = await globalThis.electronAPI.getInvoicesByStudent(selectedStudent.id)
                 const pending = invoices.find(inv => inv.balance > 0)
 
                 if (!pending) {
@@ -86,7 +86,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                     return
                 }
 
-                const result = await window.electronAPI.payWithCredit({
+                const result = await globalThis.electronAPI.payWithCredit({
                     studentId: selectedStudent.id,
                     invoiceId: pending.id,
                     amount  // Send cents, not shillings
@@ -104,7 +104,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                     receiptNumber: 'N/A'
                 }
             } else {
-                const result = await window.electronAPI.recordPayment({
+                const result = await globalThis.electronAPI.recordPayment({
                     student_id: selectedStudent.id,
                     amount,
                     payment_method: formData.payment_method,
@@ -195,7 +195,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
         try {
             const message = `Payment Received: ${selectedStudent.first_name} ${selectedStudent.last_name}. Amount: ${formatCurrencyFromCents(success.amount)}. Receipt: ${success.receiptNumber}. Bal: ${formatCurrencyFromCents(selectedStudent.balance || 0)}. Thank you.`
 
-            const result = await window.electronAPI.sendSMS({
+            const result = await globalThis.electronAPI.sendSMS({
                 to: selectedStudent.guardian_phone,
                 message,
                 recipientId: selectedStudent.id,

@@ -28,7 +28,7 @@ export default function PayrollRun() {
     const loadHistory = async () => {
         setLoadingHistory(true)
         try {
-            const api = window.electronAPI
+            const api = globalThis.electronAPI
             const data = await api.getPayrollHistory()
             setHistory(data)
         } catch (err) {
@@ -42,7 +42,7 @@ export default function PayrollRun() {
         setRunning(true)
         setError('')
         try {
-            const api = window.electronAPI
+            const api = globalThis.electronAPI
             const response = await api.getPayrollDetails(periodId)
             if (response.success) {
                 setPayrollData(response.results || [])
@@ -72,7 +72,7 @@ export default function PayrollRun() {
                 setError('User not authenticated')
                 return
             }
-            const api = window.electronAPI
+            const api = globalThis.electronAPI
             const result = await api.runPayroll(month, year, user.id)
             if (result.success) {
                 setPayrollData(result.results || [])
@@ -160,8 +160,8 @@ export default function PayrollRun() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border/20">
-                                {payrollData.map((p, i) => (
-                                    <tr key={i} className="group hover:bg-secondary/40 transition-colors">
+                                {payrollData.map((p) => (
+                                    <tr key={p.staff_id} className="group hover:bg-secondary/40 transition-colors">
                                         <td className="px-4 py-5">
                                             <p className="font-bold text-foreground group-hover:text-primary transition-colors">{p.staff_name}</p>
                                             <p className="text-[10px] text-foreground/40 italic">ID: {p.staff_id}</p>
@@ -239,7 +239,7 @@ export default function PayrollRun() {
                                     aria-label="Select Month"
                                     className="input bg-secondary/30 border-border/20 py-3"
                                 >
-                                    {months.map((m, i) => (<option key={i} value={i + 1}>{m}</option>))}
+                                    {months.map((m, i) => (<option key={m} value={i + 1}>{m}</option>))}
                                 </select>
                             </div>
                             <div className="space-y-2">
@@ -346,7 +346,7 @@ export default function PayrollRun() {
         }
 
         try {
-            const api = window.electronAPI
+            const api = globalThis.electronAPI
             const message = `Salary Notification: Your salary for ${selectedPeriod?.period_name} has been processed. Net Pay: ${formatCurrencyFromCents(staff.net_salary)}. Thank you.`
             const result = await api.sendSMS({
                 to: staff.phone,
@@ -376,7 +376,7 @@ export default function PayrollRun() {
         setNotifying(true)
         let sent = 0
         let failed = 0
-        const api = window.electronAPI
+        const api = globalThis.electronAPI
 
         for (const staff of payrollData) {
             if (!staff.phone) {

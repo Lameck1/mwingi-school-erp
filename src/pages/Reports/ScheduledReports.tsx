@@ -18,6 +18,16 @@ const REPORT_TYPES = [
     { value: 'STUDENT_LIST', label: 'Student List' },
 ]
 
+const DAY_OPTIONS = [
+    { label: 'S', value: 0 },
+    { label: 'M', value: 1 },
+    { label: 'T', value: 2 },
+    { label: 'W', value: 3 },
+    { label: 'T', value: 4 },
+    { label: 'F', value: 5 },
+    { label: 'S', value: 6 }
+]
+
 export default function ScheduledReports() {
     const { user } = useAuthStore()
 
@@ -44,7 +54,7 @@ export default function ScheduledReports() {
     const loadSchedules = async () => {
         setLoading(true)
         try {
-            const data = await window.electronAPI.getScheduledReports()
+            const data = await globalThis.electronAPI.getScheduledReports()
             setSchedules(data)
         } catch (error) {
             console.error('Failed to load schedules:', error)
@@ -63,9 +73,9 @@ export default function ScheduledReports() {
         setSaving(true)
         try {
             if (editingSchedule.id) {
-                await window.electronAPI.updateScheduledReport(editingSchedule.id, editingSchedule, user.id)
+                await globalThis.electronAPI.updateScheduledReport(editingSchedule.id, editingSchedule, user.id)
             } else {
-                await window.electronAPI.createScheduledReport(editingSchedule, user.id)
+                await globalThis.electronAPI.createScheduledReport(editingSchedule, user.id)
             }
             setShowModal(false)
             await loadSchedules()
@@ -80,7 +90,7 @@ export default function ScheduledReports() {
         if (!confirm('Are you sure you want to delete this schedule?')) {return}
 
         try {
-            await window.electronAPI.deleteScheduledReport(id, user!.id)
+            await globalThis.electronAPI.deleteScheduledReport(id, user!.id)
             await loadSchedules()
         } catch {
             alert('Failed to delete schedule')
@@ -284,18 +294,18 @@ export default function ScheduledReports() {
                         <div className="space-y-2">
                             <p className="text-sm font-bold text-foreground/60">Day of Week</p>
                             <div className="flex gap-2">
-                                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                                {DAY_OPTIONS.map((day) => (
                                     <button
-                                        key={i}
+                                        key={day.value}
                                         type="button"
-                                        onClick={() => setEditingSchedule({ ...editingSchedule, day_of_week: i })}
-                                        aria-label={`Set schedule day to index ${i}`}
-                                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${editingSchedule.day_of_week === i
+                                        onClick={() => setEditingSchedule({ ...editingSchedule, day_of_week: day.value })}
+                                        aria-label={`Set schedule day to index ${day.value}`}
+                                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${editingSchedule.day_of_week === day.value
                                             ? 'bg-primary text-primary-foreground shadow-lg scale-110'
                                             : 'bg-secondary text-foreground/60 hover:bg-secondary/80'
                                             }`}
                                     >
-                                        {day}
+                                        {day.label}
                                     </button>
                                 ))}
                             </div>

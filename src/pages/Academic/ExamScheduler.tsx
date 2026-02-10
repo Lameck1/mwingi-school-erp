@@ -58,7 +58,7 @@ const ExamScheduler = () => {
 
   const loadInitialData = useCallback(async () => {
     try {
-      const examsData = await window.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id })
+      const examsData = await globalThis.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id })
       setExams(examsData || [])
     } catch (error) {
       console.error('Failed to load initial data:', error)
@@ -81,7 +81,7 @@ const ExamScheduler = () => {
 
     setLoading(true)
     try {
-      const result = await window.electronAPI.generateExamTimetable({
+      const result = await globalThis.electronAPI.generateExamTimetable({
         examId: selectedExam,
         startDate,
         endDate,
@@ -111,10 +111,10 @@ const ExamScheduler = () => {
 
     setLoading(true)
     try {
-      const clashData = await window.electronAPI.detectExamClashes({ examId: selectedExam }) as ClashReport[]
+      const clashData = await globalThis.electronAPI.detectExamClashes({ examId: selectedExam }) as ClashReport[]
       setClashes(clashData || [])
 
-      if (clashData && clashData.length === 0) {
+      if (clashData?.length === 0) {
         alert('No clashes detected!')
       }
     } catch (error) {
@@ -136,7 +136,7 @@ const ExamScheduler = () => {
     }
 
     try {
-      await window.electronAPI.exportExamTimetableToPDF({
+      await globalThis.electronAPI.exportExamTimetableToPDF({
         examId: selectedExam,
         slots
       })
@@ -254,8 +254,8 @@ const ExamScheduler = () => {
             Scheduling Clashes Detected
           </h3>
           <div className="space-y-3">
-            {clashes.map((clash, idx) => (
-              <div key={idx} className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
+            {clashes.map((clash) => (
+              <div key={`${clash.subject1_id}-${clash.subject2_id}-${clash.clash_type}`} className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
                 <p className="font-semibold">
                   {clash.subject1_name} vs {clash.subject2_name}
                 </p>

@@ -64,10 +64,10 @@ const ReportCardGeneration: React.FC = () => {
   const loadExams = async () => {
     try {
       // Changed to use typed getExams from AcademicAPI
-      const year = await window.electronAPI.getCurrentAcademicYear()
-      const term = await window.electronAPI.getCurrentTerm()
+      const year = await globalThis.electronAPI.getCurrentAcademicYear()
+      const term = await globalThis.electronAPI.getCurrentTerm()
       if (year && term) {
-        const examsData = await window.electronAPI.getAcademicExams(year.id, term.id)
+        const examsData = await globalThis.electronAPI.getAcademicExams(year.id, term.id)
         setExams(examsData || [])
       }
     } catch (error) {
@@ -77,7 +77,7 @@ const ReportCardGeneration: React.FC = () => {
 
   const loadStreams = async () => {
     try {
-      const streamsData = await window.electronAPI.getStreams()
+      const streamsData = await globalThis.electronAPI.getStreams()
       setStreams(streamsData.map(s => ({ id: s.id, name: s.stream_name })) || [])
     } catch (error) {
       console.error('Failed to load streams:', error)
@@ -86,7 +86,7 @@ const ReportCardGeneration: React.FC = () => {
 
   const loadEmailTemplates = async () => {
     try {
-      const templates = await window.electronAPI.getNotificationTemplates()
+      const templates = await globalThis.electronAPI.getNotificationTemplates()
       // Filter for report card type if property exists, otherwise all
       const rcTemplates = templates.filter(t => t.category === 'GENERAL' || t.template_name?.toLowerCase().includes('report'))
       setEmailTemplates(rcTemplates.map(t => ({
@@ -116,12 +116,12 @@ const ReportCardGeneration: React.FC = () => {
 
     try {
       // Get students for stream - using StudentAPI
-      const students = await window.electronAPI.getStudents({ stream_id: selectedStream, is_active: true })
+      const students = await globalThis.electronAPI.getStudents({ stream_id: selectedStream, is_active: true })
 
       setProgress(prev => ({ ...prev, total: students.length }))
 
       // Generate report cards - using new AcademicAPI method
-      const results = await window.electronAPI.generateBatchReportCards({
+      const results = await globalThis.electronAPI.generateBatchReportCards({
         exam_id: selectedExam,
         stream_id: selectedStream
       })
@@ -130,7 +130,7 @@ const ReportCardGeneration: React.FC = () => {
       if (sendEmail) {
         setProgress(prev => ({ ...prev, status: 'emailing' }))
 
-        await window.electronAPI.emailReportCards({
+        await globalThis.electronAPI.emailReportCards({
           exam_id: selectedExam,
           stream_id: selectedStream,
           template_id: selectedTemplate,
@@ -140,7 +140,7 @@ const ReportCardGeneration: React.FC = () => {
 
       // If merge PDFs requested
       if (mergePDFs) {
-        await window.electronAPI.mergeReportCards({
+        await globalThis.electronAPI.mergeReportCards({
           exam_id: selectedExam,
           stream_id: selectedStream,
           output_path: `ReportCards_${selectedExam}_${selectedStream}.pdf`
@@ -207,7 +207,7 @@ const ReportCardGeneration: React.FC = () => {
               </label>
               <select id="field-193"
                 value={selectedExam ?? ''}
-                onChange={(e) => setSelectedExam(e.target.value ? parseInt(e.target.value) : null)}
+                onChange={(e) => setSelectedExam(e.target.value ? Number.parseInt(e.target.value, 10) : null)}
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Select Exam</option>
@@ -226,7 +226,7 @@ const ReportCardGeneration: React.FC = () => {
               </label>
               <select id="field-212"
                 value={selectedStream ?? ''}
-                onChange={(e) => setSelectedStream(e.target.value ? parseInt(e.target.value) : null)}
+                onChange={(e) => setSelectedStream(e.target.value ? Number.parseInt(e.target.value, 10) : null)}
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Select Stream</option>
@@ -395,8 +395,8 @@ const ReportCardGeneration: React.FC = () => {
           <div className="bg-white rounded-lg shadow-md p-6">
             <h3 className="font-semibold text-slate-900 mb-4">Generated Files</h3>
             <div className="space-y-2">
-              {generatedFiles.map((file, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded border border-slate-200">
+              {generatedFiles.map((file) => (
+                <div key={file} className="flex items-center justify-between p-3 bg-slate-50 rounded border border-slate-200">
                   <span className="text-sm text-slate-700">{file}</span>
                   <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
                     Download

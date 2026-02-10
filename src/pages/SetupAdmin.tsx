@@ -18,7 +18,7 @@ const SetupAdmin: React.FC = () => {
 
   useEffect(() => {
     const checkExistingUsers = async () => {
-      const hasUsers = await window.electronAPI.hasUsers()
+      const hasUsers = await globalThis.electronAPI.hasUsers()
       if (hasUsers) {
         navigate('/login')
       }
@@ -43,7 +43,7 @@ const SetupAdmin: React.FC = () => {
     }
     setLoading(true)
     try {
-      const result = await window.electronAPI.setupAdmin({
+      const result = await globalThis.electronAPI.setupAdmin({
         username: form.username,
         password: form.password,
         full_name: form.full_name,

@@ -27,7 +27,7 @@ export default function MessageTemplates() {
     const loadTemplates = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await window.electronAPI.getNotificationTemplates()
+            const data = await globalThis.electronAPI.getNotificationTemplates()
             setTemplates(data)
         } catch (error) {
             console.error('Failed to load templates:', error)
@@ -58,7 +58,7 @@ export default function MessageTemplates() {
                 body: editingTemplate.body
             }
 
-            const result = await window.electronAPI.createNotificationTemplate(payload, user.id)
+            const result = await globalThis.electronAPI.createNotificationTemplate(payload, user.id)
             if (result.success) {
                 setShowTemplateModal(false)
                 setEditingTemplate({ template_type: 'SMS', category: 'GENERAL' })

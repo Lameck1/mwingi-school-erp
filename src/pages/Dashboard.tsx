@@ -38,13 +38,13 @@ export default function Dashboard() {
     const loadDashboardData = async () => {
         try {
             const [data, feeData, categoryData, logs] = await Promise.all([
-                window.electronAPI.getDashboardData(),
-                window.electronAPI.getFeeCollectionReport(
+                globalThis.electronAPI.getDashboardData(),
+                globalThis.electronAPI.getFeeCollectionReport(
                     new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
                     new Date().toISOString().slice(0, 10)
                 ),
-                window.electronAPI.getFeeCategoryBreakdown(),
-                window.electronAPI.getAuditLog(6)
+                globalThis.electronAPI.getFeeCategoryBreakdown(),
+                globalThis.electronAPI.getAuditLog(6)
             ])
 
             setDashboardData(data)
@@ -55,7 +55,7 @@ export default function Dashboard() {
             if (Array.isArray(feeData)) {
                 feeData.forEach((item: FeeCollectionItem) => {
                     const date = new Date(item.payment_date)
-                    if (isNaN(date.getTime())) {return} // Skip invalid dates
+                    if (Number.isNaN(date.getTime())) {return} // Skip invalid dates
 
                     const month = date.toLocaleDateString('en-US', { month: 'short' })
                     const amount = Number(item.amount) || 0
@@ -146,8 +146,8 @@ export default function Dashboard() {
 
             {/* High-Impact Stat Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-                {stats.map((stat, index) => (
-                    <div key={index} className="stat-card group">
+                {stats.map((stat) => (
+                    <div key={stat.label} className="stat-card group">
                         <div className="flex items-start justify-between relative z-10">
                             <div>
                                 <p className="stat-card-label">{stat.label}</p>
@@ -267,7 +267,7 @@ export default function Dashboard() {
                         </p>
                         <div className="mt-8 space-y-3">
                             {feeCategories.slice(0, 4).map((cat, i) => (
-                                <div key={i} className="flex items-center justify-between text-[11px]">
+                                <div key={cat.name} className="flex items-center justify-between text-[11px]">
                                     <div className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
                                         <span className="text-foreground/70">{cat.name}</span>
@@ -289,8 +289,8 @@ export default function Dashboard() {
                                     dataKey="value"
                                     stroke="none"
                                 >
-                                    {feeCategories.map((_, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    {feeCategories.map((cat, index) => (
+                                        <Cell key={cat.name} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
                                 <Tooltip

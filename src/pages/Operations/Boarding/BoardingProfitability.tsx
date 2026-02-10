@@ -49,7 +49,7 @@ export default function BoardingProfitability() {
         setLoading(true)
         try {
             // Fetch facilities with their profitability data
-            const data = await window.electronAPI.getBoardingFacilities()
+            const data = await globalThis.electronAPI.getBoardingFacilities()
             setFacilities(data)
             
             // Calculate aggregate summary
@@ -81,9 +81,9 @@ export default function BoardingProfitability() {
                 showToast('User not authenticated', 'error')
                 return
             }
-            await window.electronAPI.recordBoardingExpense({
+            await globalThis.electronAPI.recordBoardingExpense({
                 ...expenseForm,
-                facility_id: parseInt(expenseForm.facility_id),
+                facility_id: Number.parseInt(expenseForm.facility_id, 10),
                 amount_cents: shillingsToCents(expenseForm.amount),
                 fiscal_year: new Date().getFullYear(), // Default to current year
                 term: 1, // Default to Term 1 or fetch current term

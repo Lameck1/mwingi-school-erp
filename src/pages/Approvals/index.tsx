@@ -54,9 +54,9 @@ export default function Approvals() {
         try {
             const [requestsData, countsData] = await Promise.all([
                 filter === 'pending'
-                    ? window.electronAPI.getPendingApprovals()
-                    : window.electronAPI.getAllApprovals(),
-                window.electronAPI.getApprovalCounts()
+                    ? globalThis.electronAPI.getPendingApprovals()
+                    : globalThis.electronAPI.getAllApprovals(),
+                globalThis.electronAPI.getApprovalCounts()
             ])
             setRequests(requestsData as ApprovalRequest[])
             setCounts(countsData as ApprovalCounts)
@@ -75,7 +75,7 @@ export default function Approvals() {
         if (!user) {return}
         setProcessing(true)
         try {
-            const result = await window.electronAPI.approveRequest(request.id, user.id)
+            const result = await globalThis.electronAPI.approveRequest(request.id, user.id)
             if (result.success) {
                 void loadData()
             } else {
@@ -97,7 +97,7 @@ export default function Approvals() {
 
         setProcessing(true)
         try {
-            const result = await window.electronAPI.rejectRequest(selectedRequest.id, user.id, rejectReason)
+            const result = await globalThis.electronAPI.rejectRequest(selectedRequest.id, user.id, rejectReason)
             if (result.success) {
                 setShowRejectModal(false)
                 setRejectReason('')
@@ -122,8 +122,8 @@ export default function Approvals() {
         if (loading) {
             return (
                 <>
-                    {[1, 2, 3].map(i => (
-                        <div key={i} className="h-24 bg-secondary/30 animate-pulse rounded-xl" />
+                    {[1, 2, 3].map((value) => (
+                        <div key={value} className="h-24 bg-secondary/30 animate-pulse rounded-xl" />
                     ))}
                 </>
             )

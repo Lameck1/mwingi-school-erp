@@ -49,7 +49,7 @@ const MeritLists = () => {
 
   const loadInitialData = async () => {
     try {
-      const streamsData = await window.electronAPI.getStreams();
+      const streamsData = await globalThis.electronAPI.getStreams();
       setStreams(streamsData);
     } catch (error) {
       console.error('Failed to load initial data:', error);
@@ -64,7 +64,7 @@ const MeritLists = () => {
 
     setLoading(true);
     try {
-      const list = await window.electronAPI.generateMeritList({
+      const list = await globalThis.electronAPI.generateMeritList({
         academicYearId: currentAcademicYear.id,
         termId: currentTerm.id,
         streamId: selectedStream,
@@ -137,8 +137,8 @@ const MeritLists = () => {
       ].map(row => row.join(',')).join('\n');
 
       const blob = new Blob([csvContent], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const url = globalThis.URL.createObjectURL(blob);
+      const a = globalThis.document.createElement('a');
       a.href = url;
       a.download = `Merit_List_${currentTerm?.term_name}.csv`;
       a.click();

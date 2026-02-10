@@ -32,7 +32,7 @@ export default function BudgetDetails() {
 
     const loadBudget = useCallback(async () => {
         const budgetId = Number(id)
-        if (!id || isNaN(budgetId)) {
+        if (!id || Number.isNaN(budgetId)) {
             console.warn('Invalid budget ID in URL:', id)
             navigate('/budget')
             return
@@ -40,7 +40,7 @@ export default function BudgetDetails() {
 
         setLoading(true)
         try {
-            const data = await window.electronAPI.getBudgetById(budgetId)
+            const data = await globalThis.electronAPI.getBudgetById(budgetId)
             if (!data) {
                 console.warn('Budget not found for ID:', budgetId)
                 return
@@ -61,7 +61,7 @@ export default function BudgetDetails() {
         if (!budget || !user) {return}
         setActionLoading(true)
         try {
-            const result = await window.electronAPI.submitBudgetForApproval(budget.id, user.id)
+            const result = await globalThis.electronAPI.submitBudgetForApproval(budget.id, user.id)
             if (result.success) {
                 void loadBudget()
             }
@@ -76,7 +76,7 @@ export default function BudgetDetails() {
         if (!budget || !user) {return}
         setActionLoading(true)
         try {
-            const result = await window.electronAPI.approveBudget(budget.id, user.id)
+            const result = await globalThis.electronAPI.approveBudget(budget.id, user.id)
             if (result.success) {
                 void loadBudget()
             }
@@ -92,8 +92,8 @@ export default function BudgetDetails() {
             <div className="space-y-8 pb-10">
                 <div className="h-20 bg-white/5 animate-pulse rounded-xl" />
                 <div className="grid grid-cols-4 gap-6">
-                    {[1, 2, 3, 4].map(i => (
-                        <div key={i} className="h-32 bg-white/5 animate-pulse rounded-xl" />
+                    {[1, 2, 3, 4].map((value) => (
+                        <div key={value} className="h-32 bg-white/5 animate-pulse rounded-xl" />
                     ))}
                 </div>
             </div>

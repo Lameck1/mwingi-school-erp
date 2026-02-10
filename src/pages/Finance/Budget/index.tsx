@@ -39,7 +39,7 @@ export default function BudgetList() {
     const loadBudgets = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await window.electronAPI.getBudgets({
+            const data = await globalThis.electronAPI.getBudgets({
                 academic_year_id: currentAcademicYear?.id
             })
             setBudgets(data)

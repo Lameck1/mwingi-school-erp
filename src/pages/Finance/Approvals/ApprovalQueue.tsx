@@ -41,7 +41,7 @@ export default function ApprovalQueuePage() {
     setError(null);
 
     try {
-      const result = await window.electronAPI.getApprovalQueue(filter);
+      const result = await globalThis.electronAPI.getApprovalQueue(filter);
 
       if (result.success) {
         setApprovals(result.data);
@@ -65,7 +65,7 @@ export default function ApprovalQueuePage() {
       return;
     }
     try {
-      const result = await window.electronAPI.approveTransaction(
+      const result = await globalThis.electronAPI.approveTransaction(
         approvalId,
         reviewNotes || 'Approved',
         user.id
@@ -94,7 +94,7 @@ export default function ApprovalQueuePage() {
     }
 
     try {
-      const result = await window.electronAPI.rejectTransaction(
+      const result = await globalThis.electronAPI.rejectTransaction(
         approvalId,
         reviewNotes,
         user.id

@@ -32,7 +32,7 @@ export default function UsersPage() {
     const loadData = useCallback(async () => {
         setLoading(true)
         try {
-            const usersData = await window.electronAPI.getUsers()
+            const usersData = await globalThis.electronAPI.getUsers()
             setUsers(usersData)
         } catch (error) {
             console.error('Failed to load users:', error)
@@ -48,10 +48,10 @@ export default function UsersPage() {
         try {
             if (isEditing && selectedUser) {
                 const { password, ...updateData } = userData
-                await window.electronAPI.updateUser(selectedUser.id, updateData as UpdateUserData)
+                await globalThis.electronAPI.updateUser(selectedUser.id, updateData as UpdateUserData)
                 showToast('User profile updated successfully', 'success')
             } else {
-                await window.electronAPI.createUser(userData)
+                await globalThis.electronAPI.createUser(userData)
                 showToast('New user account established', 'success')
             }
 
@@ -77,7 +77,7 @@ export default function UsersPage() {
 
         setSaving(true)
         try {
-            await window.electronAPI.resetUserPassword(selectedUser.id, passwordData.newPassword)
+            await globalThis.electronAPI.resetUserPassword(selectedUser.id, passwordData.newPassword)
             setShowPasswordModal(false)
             resetForms()
             showToast('Security credentials updated successfully', 'success')
@@ -94,7 +94,7 @@ export default function UsersPage() {
         if (!confirm(`Are you sure you want to ${action} user "${user.username}"?`)) {return}
 
         try {
-            await window.electronAPI.toggleUserStatus(user.id, !user.is_active)
+            await globalThis.electronAPI.toggleUserStatus(user.id, !user.is_active)
             showToast(`User ${action}d successfully`, 'success')
             void loadData()
         } catch (error) {

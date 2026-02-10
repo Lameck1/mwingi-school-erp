@@ -43,21 +43,21 @@ export default function FeeStructure() {
     const loadInitialData = useCallback(async () => {
         try {
             const [y, s, c] = await Promise.all([
-                window.electronAPI.getAcademicYears(),
-                window.electronAPI.getStreams(),
-                window.electronAPI.getFeeCategories()
+                globalThis.electronAPI.getAcademicYears(),
+                globalThis.electronAPI.getStreams(),
+                globalThis.electronAPI.getFeeCategories()
             ])
             setYears(y)
             setStreams(s)
             setCategories(c)
 
             // Auto-select current year/term if possible
-            const currentYear = await window.electronAPI.getCurrentAcademicYear()
+            const currentYear = await globalThis.electronAPI.getCurrentAcademicYear()
             if (currentYear) {
                 setSelectedYear(currentYear.id.toString())
-                const termList = await window.electronAPI.getTermsByYear(currentYear.id)
+                const termList = await globalThis.electronAPI.getTermsByYear(currentYear.id)
                 setTerms(termList)
-                const currentTerm = await window.electronAPI.getCurrentTerm()
+                const currentTerm = await globalThis.electronAPI.getCurrentTerm()
                 if (currentTerm) {setSelectedTerm(currentTerm.id.toString())}
                 else if (termList.length > 0) {setSelectedTerm(termList[0].id.toString())}
             }
@@ -77,7 +77,7 @@ export default function FeeStructure() {
         const loadStructure = async () => {
             setLoading(true)
             try {
-                const data = await window.electronAPI.getFeeStructure(Number(selectedYear), Number(selectedTerm))
+                const data = await globalThis.electronAPI.getFeeStructure(Number(selectedYear), Number(selectedTerm))
                 const map: Record<string, number> = {}
                 data.forEach((item: FeeStructureItem) => {
                     // Handle both FeeStructure and FeeStructureItem formats
@@ -200,7 +200,7 @@ export default function FeeStructure() {
                 }
             }
 
-            await window.electronAPI.saveFeeStructure(data, Number(selectedYear), Number(selectedTerm))
+            await globalThis.electronAPI.saveFeeStructure(data, Number(selectedYear), Number(selectedTerm))
             showToast('Fee structure saved successfully', 'success')
         } catch (error) {
             console.error(error)
@@ -213,10 +213,10 @@ export default function FeeStructure() {
     const handleCreateCategory = async () => {
         if (!newCategoryName.trim()) {return}
         try {
-            await window.electronAPI.createFeeCategory(newCategoryName, '')
+            await globalThis.electronAPI.createFeeCategory(newCategoryName, '')
             setNewCategoryName('')
             setShowNewCategory(false)
-            const c = await window.electronAPI.getFeeCategories()
+            const c = await globalThis.electronAPI.getFeeCategories()
             setCategories(c)
             showToast('Category created', 'success')
         } catch (error) {
@@ -233,7 +233,7 @@ export default function FeeStructure() {
                 return
             }
 
-            const result = await window.electronAPI.generateBatchInvoices(Number(selectedYear), Number(selectedTerm), user.id)
+            const result = await globalThis.electronAPI.generateBatchInvoices(Number(selectedYear), Number(selectedTerm), user.id)
 
             if (result.success) {
                 showToast(`Successfully generated ${result.count} invoices`, 'success')
@@ -285,7 +285,12 @@ export default function FeeStructure() {
                             value={selectedYear}
                             onChange={e => {
                                 setSelectedYear(e.target.value)
-                                void window.electronAPI.getTermsByYear(Number(e.target.value)).then(terms => setTerms(terms))
+                                globalThis.electronAPI
+                                    .getTermsByYear(Number(e.target.value))
+                                    .then(terms => setTerms(terms))
+                                    .catch((error) => {
+                                        console.error('Failed to load terms:', error)
+                                    })
                             }}
                             className="input w-full bg-secondary/30 border-border/20 focus:border-primary/50 transition-all font-medium py-2.5"
                         >

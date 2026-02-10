@@ -26,7 +26,7 @@ export default function ProfitAndLossPage() {
     setError(null);
 
     try {
-      const result = await window.electronAPI.getProfitAndLoss(startDate, endDate) as { success: boolean; data: ProfitAndLossReport; message?: string };
+      const result = await globalThis.electronAPI.getProfitAndLoss(startDate, endDate) as { success: boolean; data: ProfitAndLossReport; message?: string };
 
       if (result.success) {
         setProfitAndLoss(result.data);
@@ -104,8 +104,8 @@ export default function ProfitAndLossPage() {
             <div className="mb-8">
               <h2 className="text-xl font-bold mb-4 text-green-700">REVENUE</h2>
               <div className="space-y-2">
-                {profitAndLoss.revenue_by_category.map((item, index) => (
-                  <div key={index} className="flex justify-between py-2 border-b border-gray-100">
+                {profitAndLoss.revenue_by_category.map((item) => (
+                  <div key={`${item.category}-${item.amount}`} className="flex justify-between py-2 border-b border-gray-100">
                     <div className="flex-1">
                       <span className="text-gray-900">{item.category}</span>
                       <span className="text-gray-500 text-sm ml-2">({formatPercentage(item.percentage)})</span>
@@ -126,8 +126,8 @@ export default function ProfitAndLossPage() {
             <div className="mb-8">
               <h2 className="text-xl font-bold mb-4 text-red-700">EXPENSES</h2>
               <div className="space-y-2">
-                {profitAndLoss.expenses_by_category.map((item, index) => (
-                  <div key={index} className="flex justify-between py-2 border-b border-gray-100">
+                {profitAndLoss.expenses_by_category.map((item) => (
+                  <div key={`${item.category}-${item.amount}`} className="flex justify-between py-2 border-b border-gray-100">
                     <div className="flex-1">
                       <span className="text-gray-900">{item.category}</span>
                       <span className="text-gray-500 text-sm ml-2">({formatPercentage(item.percentage)})</span>

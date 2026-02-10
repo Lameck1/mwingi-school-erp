@@ -14,7 +14,7 @@ export default function AuditLog() {
     const loadLogs = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await window.electronAPI.getAuditLog(200)
+            const data = await globalThis.electronAPI.getAuditLog(200)
             setLogs(data)
         } catch (error) {
             console.error('Failed to load audit logs:', error)

@@ -21,7 +21,7 @@ export default function BalanceSheetPage() {
     setError(null);
 
     try {
-      const result = await window.electronAPI.getBalanceSheet(asOfDate) as { success: boolean; data: BalanceSheetReport; message?: string };
+      const result = await globalThis.electronAPI.getBalanceSheet(asOfDate) as { success: boolean; data: BalanceSheetReport; message?: string };
 
       if (result.success) {
         setBalanceSheet(result.data);

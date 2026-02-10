@@ -35,7 +35,7 @@ export default function ReportCards() {
 
     const loadStreams = async () => {
         try {
-            const data = await window.electronAPI.getStreams()
+            const data = await globalThis.electronAPI.getStreams()
             setStreams(data)
         } catch (error) {
             console.error('Failed to load streams:', error)
@@ -46,7 +46,7 @@ export default function ReportCards() {
         if (!currentAcademicYear || !currentTerm) {return}
         setLoading(true)
         try {
-            const data = await window.electronAPI.getStudentsForReportCards(
+            const data = await globalThis.electronAPI.getStudentsForReportCards(
                 selectedStream, currentAcademicYear.id, currentTerm.id
             )
             setStudents(data)
@@ -67,7 +67,7 @@ export default function ReportCards() {
         if (!currentAcademicYear || !currentTerm) {return}
         setGenerating(true)
         try {
-            const data = await window.electronAPI.generateReportCard(
+            const data = await globalThis.electronAPI.generateReportCard(
                 studentId, currentAcademicYear.id, currentTerm.id
             )
             if (data) {
@@ -344,8 +344,8 @@ export default function ReportCards() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {previewData.grades.map((g, i) => (
-                                            <tr key={i} className="border-t border-border/20">
+                                        {previewData.grades.map((g) => (
+                                            <tr key={`${g.subject_name}-${g.grade_letter}`} className="border-t border-border/20">
                                                 <td className="py-2 text-foreground font-medium">{g.subject_name}</td>
                                                 <td className="py-2 text-center font-mono">{g.average}%</td>
                                                 <td className="py-2 text-center font-bold text-primary">{g.grade_letter}</td>

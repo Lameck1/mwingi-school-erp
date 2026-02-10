@@ -38,7 +38,7 @@ export default function BankAccounts() {
     const loadAccounts = async () => {
         setLoading(true)
         try {
-            const data = await window.electronAPI.getBankAccounts()
+            const data = await globalThis.electronAPI.getBankAccounts()
             setAccounts(data as BankAccount[])
         } catch (error) {
             console.error('Failed to load bank accounts:', error)
@@ -51,7 +51,7 @@ export default function BankAccounts() {
         e.preventDefault()
         setSaving(true)
         try {
-            const result = await window.electronAPI.createBankAccount({
+            const result = await globalThis.electronAPI.createBankAccount({
                 ...formData,
                 opening_balance: shillingsToCents(formData.opening_balance) // Whole currency units -> cents
             })
@@ -114,8 +114,8 @@ export default function BankAccounts() {
             {/* Accounts List */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {loading && (
-                    [1, 2, 3].map(i => (
-                        <div key={i} className="h-40 bg-secondary/30 animate-pulse rounded-xl" />
+                    [1, 2, 3].map((value) => (
+                        <div key={value} className="h-40 bg-secondary/30 animate-pulse rounded-xl" />
                     ))
                 )}
                 {!loading && accounts.length === 0 && (

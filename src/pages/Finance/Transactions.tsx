@@ -22,9 +22,9 @@ export default function Transactions() {
         setLoading(true)
         try {
             const filterParams: Partial<Transaction> = {}
-            if (appliedFilter.category_id) {filterParams.category_id = parseInt(appliedFilter.category_id)}
+            if (appliedFilter.category_id) {filterParams.category_id = Number.parseInt(appliedFilter.category_id, 10)}
             if (appliedFilter.startDate) {filterParams.transaction_date = appliedFilter.startDate}
-            const results = await window.electronAPI.getTransactions(filterParams)
+            const results = await globalThis.electronAPI.getTransactions(filterParams)
             setTransactions(results)
         } catch (error) {
             console.error('Failed to load transactions:', error)

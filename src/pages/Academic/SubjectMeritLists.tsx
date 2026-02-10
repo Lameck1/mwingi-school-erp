@@ -57,9 +57,9 @@ const SubjectMeritLists = () => {
   const loadInitialData = useCallback(async () => {
     try {
       const [examsData, streamsData, subjectsData] = await Promise.all([
-        window.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
-        window.electronAPI.getStreams(),
-        window.electronAPI.getAcademicSubjects()
+        globalThis.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
+        globalThis.electronAPI.getStreams(),
+        globalThis.electronAPI.getAcademicSubjects()
       ])
 
       setExams(examsData || [])
@@ -83,12 +83,12 @@ const SubjectMeritLists = () => {
     setLoading(true)
     try {
       const [rankings_, difficulty_] = await Promise.all([
-        window.electronAPI.getSubjectMeritList({
+        globalThis.electronAPI.getSubjectMeritList({
           examId: selectedExam,
           subjectId: selectedSubject,
           streamId: selectedStream
         }),
-        window.electronAPI.getSubjectDifficulty({
+        globalThis.electronAPI.getSubjectDifficulty({
           examId: selectedExam,
           subjectId: selectedSubject,
           streamId: selectedStream
@@ -129,8 +129,8 @@ const SubjectMeritLists = () => {
     ].map(row => row.join(',')).join('\n')
 
     const blob = new Blob([csvContent], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
+    const url = globalThis.URL.createObjectURL(blob)
+    const a = globalThis.document.createElement('a')
     a.href = url
     a.download = `${subjectName}_Merit_List.csv`
     a.click()

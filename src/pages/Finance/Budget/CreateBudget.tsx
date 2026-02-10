@@ -16,6 +16,15 @@ interface TransactionCategory {
     category_type: 'INCOME' | 'EXPENSE'
 }
 
+type BudgetLineItem = CreateBudgetLineItemData & { tempId: string }
+
+const createLineItem = (): BudgetLineItem => ({
+    tempId: globalThis.crypto.randomUUID(),
+    category_id: 0,
+    description: '',
+    budgeted_amount: 0
+})
+
 export default function CreateBudget() {
     const navigate = useNavigate()
     const { currentAcademicYear, currentTerm } = useAppStore()
@@ -28,9 +37,7 @@ export default function CreateBudget() {
     // Form state
     const [budgetName, setBudgetName] = useState('')
     const [notes, setNotes] = useState('')
-    const [lineItems, setLineItems] = useState<CreateBudgetLineItemData[]>([
-        { category_id: 0, description: '', budgeted_amount: 0 }
-    ])
+    const [lineItems, setLineItems] = useState<BudgetLineItem[]>([createLineItem()])
 
     useEffect(() => {
         void loadCategories()
@@ -38,7 +45,7 @@ export default function CreateBudget() {
 
     const loadCategories = async () => {
         try {
-            const data = await window.electronAPI.getTransactionCategories()
+            const data = await globalThis.electronAPI.getTransactionCategories()
             setCategories(data)
         } catch (err) {
             console.error('Failed to load categories:', err)
@@ -46,7 +53,7 @@ export default function CreateBudget() {
     }
 
     const addLineItem = () => {
-        setLineItems([...lineItems, { category_id: 0, description: '', budgeted_amount: 0 }])
+        setLineItems([...lineItems, createLineItem()])
     }
 
     const removeLineItem = (index: number) => {
@@ -93,12 +100,12 @@ export default function CreateBudget() {
 
         setLoading(true)
         try {
-            const result = await window.electronAPI.createBudget({
+            const result = await globalThis.electronAPI.createBudget({
                 budget_name: budgetName,
                 academic_year_id: currentAcademicYear.id,
                 term_id: currentTerm?.id,
                 notes: notes || undefined,
-                line_items: validLineItems.map(item => ({
+                line_items: validLineItems.map(({ tempId: _tempId, ...item }) => ({
                     ...item,
                     budgeted_amount: shillingsToCents(item.budgeted_amount) // Whole currency units
                 }))
@@ -202,7 +209,7 @@ export default function CreateBudget() {
 
                     <div className="space-y-4">
                         {lineItems.map((item, index) => (
-                            <div key={index} className="flex items-start gap-4 p-4 bg-white/[0.02] rounded-xl border border-white/5">
+                            <div key={item.tempId} className="flex items-start gap-4 p-4 bg-white/[0.02] rounded-xl border border-white/5">
                                 <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div className="space-y-1">
                                         <label htmlFor="field-208" className="text-[10px] font-bold text-foreground/40 uppercase tracking-wider">

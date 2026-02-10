@@ -55,7 +55,7 @@ export default function Settings() {
     const loadAcademicYears = useCallback(async () => {
         setLoadingYears(true)
         try {
-            const years = await window.electronAPI.getAcademicYears()
+            const years = await globalThis.electronAPI.getAcademicYears()
             setAcademicYears(years)
         } catch {
             showToast('Failed to load academic cycles', 'error')
@@ -73,8 +73,8 @@ export default function Settings() {
     const handleSave = async () => {
         setSaving(true)
         try {
-            await window.electronAPI.updateSettings(formData)
-            const updated = await window.electronAPI.getSettings()
+            await globalThis.electronAPI.updateSettings(formData)
+            const updated = await globalThis.electronAPI.getSettings()
             setSchoolSettings(updated)
             showToast('School settings synchronized successfully', 'success')
         } catch (error) {
@@ -89,7 +89,7 @@ export default function Settings() {
         }
         setSaving(true)
         try {
-            await window.electronAPI.createAcademicYear(newYearData)
+            await globalThis.electronAPI.createAcademicYear(newYearData)
             showToast('Academic cycle established successfully', 'success')
             setShowYearModal(false)
             setNewYearData({ year_name: '', start_date: '', end_date: '', is_current: false })
@@ -104,7 +104,7 @@ export default function Settings() {
     const handleActivateYear = async (id: number) => {
         setSaving(true)
         try {
-            await window.electronAPI.activateAcademicYear(id)
+            await globalThis.electronAPI.activateAcademicYear(id)
             showToast('Academic session activated successfully', 'success')
             await loadAcademicYears()
         } catch {
@@ -359,10 +359,10 @@ export default function Settings() {
                                               }
                                               setSaving(true)
                                               try {
-                                                  const result = await window.electronAPI.normalizeCurrencyScale(user.id)
+                                                  const result = await globalThis.electronAPI.normalizeCurrencyScale(user.id)
                                                   if (result.success) {
                                                       showToast('Currency values normalized successfully.', 'success')
-                                                      window.location.reload()
+                                                      globalThis.location.reload()
                                                   } else {
                                                       showToast(result.message, 'error')
                                                   }
@@ -403,11 +403,11 @@ export default function Settings() {
                                                 }
                                                 setSaving(true)
                                                 try {
-                                                    const result = await window.electronAPI.resetAndSeedDatabase(user.id)
+                                                    const result = await globalThis.electronAPI.resetAndSeedDatabase(user.id)
                                                     if (result.success) {
                                                         showToast(result.message || 'Environment reset and seeded for 2026 successfully!', 'success')
                                                         // Refresh global state after toast fires
-                                                        setTimeout(() => window.location.reload(), 600)
+                                                        setTimeout(() => globalThis.location.reload(), 600)
                                                     } else {
                                                         showToast(result.message, 'error')
                                                     }
@@ -442,8 +442,8 @@ export default function Settings() {
                                                 'Standardized 2026 Fee Structures',
                                                 'Opening Inventory Balances',
                                                 'Sample Staff & Departmental Roster'
-                                            ].map((item, i) => (
-                                                <li key={i} className="flex items-center gap-2 text-sm font-medium text-foreground/60">
+                                            ].map((item) => (
+                                                <li key={item} className="flex items-center gap-2 text-sm font-medium text-foreground/60">
                                                     <CheckCircle2 className="w-4 h-4 text-emerald-500/60" />
                                                     {item}
                                                 </li>
@@ -459,8 +459,8 @@ export default function Settings() {
                                                 'Class Streams and Levels',
                                                 'Statutory Tax/Pension Rates',
                                                 'API & SMS Integrations'
-                                            ].map((item, i) => (
-                                                <li key={i} className="flex items-center gap-2 text-sm font-medium text-foreground/60">
+                                            ].map((item) => (
+                                                <li key={item} className="flex items-center gap-2 text-sm font-medium text-foreground/60">
                                                     <CheckCircle2 className="w-4 h-4 text-primary/60" />
                                                     {item}
                                                 </li>

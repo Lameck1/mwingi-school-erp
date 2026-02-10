@@ -45,7 +45,7 @@ const CBCStrandManagement: React.FC = () => {
     try {
       setLoading(true);
       // Fetch strands from IPC (CBC handlers)
-      const strandsResult = await window.electronAPI.getCBCStrands();
+      const strandsResult = await globalThis.electronAPI.getCBCStrands();
       const strandsData: CBCStrand[] = strandsResult?.data || [];
       setStrands(strandsData);
 
@@ -86,7 +86,7 @@ const CBCStrandManagement: React.FC = () => {
             <label htmlFor="field-82" className="block text-sm font-medium text-gray-700 mb-1">Fiscal Year</label>
             <select id="field-82"
               value={fiscalYear}
-              onChange={(e) => setFiscalYear(parseInt(e.target.value))}
+              onChange={(e) => setFiscalYear(Number.parseInt(e.target.value, 10))}
               className="border rounded px-3 py-2"
               aria-label="Fiscal year"
             >
@@ -99,7 +99,7 @@ const CBCStrandManagement: React.FC = () => {
             <label htmlFor="field-95" className="block text-sm font-medium text-gray-700 mb-1">Term</label>
             <select id="field-95"
               value={term}
-              onChange={(e) => setTerm(parseInt(e.target.value))}
+              onChange={(e) => setTerm(Number.parseInt(e.target.value, 10))}
               className="border rounded px-3 py-2"
               aria-label="Term"
             >

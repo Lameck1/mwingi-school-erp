@@ -37,11 +37,11 @@ export default function StudentForm() {
         const loadData = async () => {
             setLoading(true)
             try {
-                const streamsData = await window.electronAPI.getStreams()
+                const streamsData = await globalThis.electronAPI.getStreams()
                 setStreams(streamsData)
 
                 if (id) {
-                    const student = await window.electronAPI.getStudentById(parseInt(id))
+                    const student = await globalThis.electronAPI.getStudentById(Number.parseInt(id, 10))
                     if (student) {
                         setFormData({
                             admission_number: student.admission_number || '',
@@ -84,14 +84,14 @@ export default function StudentForm() {
 
         try {
             if (isEdit) {
-                await window.electronAPI.updateStudent(parseInt(id!), {
+                await globalThis.electronAPI.updateStudent(Number.parseInt(id!, 10), {
                     ...formData,
-                    stream_id: parseInt(formData.stream_id)
+                    stream_id: Number.parseInt(formData.stream_id, 10)
                 })
             } else {
-                await window.electronAPI.createStudent({
+                await globalThis.electronAPI.createStudent({
                     ...formData,
-                    stream_id: parseInt(formData.stream_id)
+                    stream_id: Number.parseInt(formData.stream_id, 10)
                 })
             }
             navigate('/students')

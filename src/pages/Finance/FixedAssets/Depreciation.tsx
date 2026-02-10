@@ -20,7 +20,7 @@ export default function Depreciation() {
 
     const loadAssets = async () => {
         try {
-            const data = await window.electronAPI.getAssets({ status: 'ACTIVE' })
+            const data = await globalThis.electronAPI.getAssets({ status: 'ACTIVE' })
             setAssets(data)
         } catch (error) {
             console.error('Failed to load assets', error)
@@ -38,7 +38,7 @@ export default function Depreciation() {
         try {
             // Using a dummy period ID = 1 for now if no period management exists in UI
             // Ideally should select a financial period
-            const result = await window.electronAPI.runDepreciation(asset.id, 1, user.id)
+            const result = await globalThis.electronAPI.runDepreciation(asset.id, 1, user.id)
 
             if (result.success) {
                 alert('Depreciation posted successfully')

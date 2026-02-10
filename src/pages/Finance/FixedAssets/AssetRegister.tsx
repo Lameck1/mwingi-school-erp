@@ -39,7 +39,7 @@ export default function AssetRegister() {
     const loadAssets = useCallback(async (searchQuery: string) => {
         setLoading(true)
         try {
-            const data = await window.electronAPI.getAssets({ search: searchQuery })
+            const data = await globalThis.electronAPI.getAssets({ search: searchQuery })
             setAssets(data)
         } catch (error) {
             console.error('Failed to load assets', error)
@@ -59,7 +59,7 @@ export default function AssetRegister() {
             return
         }
         try {
-            const result = await window.electronAPI.createAsset({
+            const result = await globalThis.electronAPI.createAsset({
                 ...createForm,
                 acquisition_cost: shillingsToCents(createForm.acquisition_cost), // Whole currency units -> cents
             }, user.id)

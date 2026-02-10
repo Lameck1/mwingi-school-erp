@@ -59,11 +59,11 @@ export default function FeeExemptions() {
         setLoading(true)
         try {
             const [exemptionsRes, yearsRes, categoriesRes, studentsRes, statsRes] = await Promise.all([
-                window.electronAPI.getExemptions({ status: statusFilter || undefined }),
-                window.electronAPI.getAcademicYears(),
-                window.electronAPI.getFeeCategories(),
-                window.electronAPI.getStudents(),
-                window.electronAPI.getExemptionStats()
+                globalThis.electronAPI.getExemptions({ status: statusFilter || undefined }),
+                globalThis.electronAPI.getAcademicYears(),
+                globalThis.electronAPI.getFeeCategories(),
+                globalThis.electronAPI.getStudents(),
+                globalThis.electronAPI.getExemptionStats()
             ])
             setExemptions(exemptionsRes)
             setAcademicYears(yearsRes)
@@ -75,7 +75,7 @@ export default function FeeExemptions() {
             const currentYear = yearsRes.find((y: AcademicYear) => y.is_current)
             if (currentYear) {
                 setFormData(prev => ({ ...prev, academic_year_id: currentYear.id }))
-                const termsRes = await window.electronAPI.getTermsByYear(currentYear.id)
+                const termsRes = await globalThis.electronAPI.getTermsByYear(currentYear.id)
                 setTerms(termsRes)
                 const currentTerm = termsRes.find((t: Term) => t.is_current)
                 if (currentTerm) {
@@ -108,7 +108,7 @@ export default function FeeExemptions() {
 
 
     const loadExemptions = useCallback(async () => {
-        const exemptionsRes = await window.electronAPI.getExemptions({ status: statusFilter || undefined })
+        const exemptionsRes = await globalThis.electronAPI.getExemptions({ status: statusFilter || undefined })
         setExemptions(exemptionsRes)
     }, [statusFilter])
 
@@ -118,7 +118,7 @@ export default function FeeExemptions() {
 
     const handleYearChange = async (yearId: number) => {
         setFormData(prev => ({ ...prev, academic_year_id: yearId, term_id: 0 }))
-        const termsRes = await window.electronAPI.getTermsByYear(yearId)
+        const termsRes = await globalThis.electronAPI.getTermsByYear(yearId)
         setTerms(termsRes)
     }
 
@@ -136,12 +136,12 @@ export default function FeeExemptions() {
             return
         }
 
-        const result = await window.electronAPI.createExemption({
+        const result = await globalThis.electronAPI.createExemption({
             student_id: formData.student_id,
             academic_year_id: formData.academic_year_id,
             term_id: formData.term_id || undefined,
             fee_category_id: formData.fee_category_id || undefined,
-            exemption_percentage: parseFloat(formData.exemption_percentage),
+            exemption_percentage: Number.parseFloat(formData.exemption_percentage),
             exemption_reason: formData.exemption_reason,
             notes: formData.notes || undefined
         }, user.id)
@@ -166,7 +166,7 @@ export default function FeeExemptions() {
             return
         }
 
-        const result = await window.electronAPI.revokeExemption(selectedExemption.id, revokeReason, user.id)
+        const result = await globalThis.electronAPI.revokeExemption(selectedExemption.id, revokeReason, user.id)
         if (result.success) {
             alert('Exemption revoked successfully')
             setShowRevokeModal(false)
@@ -334,20 +334,14 @@ export default function FeeExemptions() {
                                         {filteredStudents.length > 0 && (
                                             <div className="absolute z-10 w-full bg-white border rounded-lg shadow-lg mt-1 max-h-40 overflow-auto">
                                                 {filteredStudents.map(s => (
-                                                    <div
+                                                    <button
                                                         key={s.id}
+                                                        type="button"
                                                         onClick={() => handleSelectStudent(s)}
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === 'Enter' || e.key === ' ') {
-                                                                handleSelectStudent(s)
-                                                            }
-                                                        }}
-                                                        tabIndex={0}
-                                                        role="button"
-                                                        className="p-2 hover:bg-gray-100 cursor-pointer"
+                                                        className="w-full text-left p-2 hover:bg-gray-100"
                                                     >
                                                         {s.first_name} {s.last_name} ({s.admission_number})
-                                                    </div>
+                                                    </button>
                                                 ))}
                                             </div>
                                         )}
@@ -360,7 +354,7 @@ export default function FeeExemptions() {
                                     <label htmlFor="field-352" className="block text-sm font-medium mb-1">Academic Year *</label>
                                     <select id="field-352"
                                         value={formData.academic_year_id}
-                                        onChange={(e) => handleYearChange(parseInt(e.target.value))}
+                                        onChange={(e) => handleYearChange(Number.parseInt(e.target.value, 10))}
                                         className="w-full border rounded-lg p-2"
                                         required
                                         aria-label="Academic year"
@@ -375,7 +369,7 @@ export default function FeeExemptions() {
                                     <label htmlFor="field-367" className="block text-sm font-medium mb-1">Term (Optional)</label>
                                     <select id="field-367"
                                         value={formData.term_id}
-                                        onChange={(e) => setFormData({ ...formData, term_id: parseInt(e.target.value) })}
+                                        onChange={(e) => setFormData({ ...formData, term_id: Number.parseInt(e.target.value, 10) })}
                                         className="w-full border rounded-lg p-2"
                                         aria-label="Term"
                                     >
@@ -392,7 +386,7 @@ export default function FeeExemptions() {
                                     <label htmlFor="field-384" className="block text-sm font-medium mb-1">Fee Category (Optional)</label>
                                     <select id="field-384"
                                         value={formData.fee_category_id}
-                                        onChange={(e) => setFormData({ ...formData, fee_category_id: parseInt(e.target.value) })}
+                                        onChange={(e) => setFormData({ ...formData, fee_category_id: Number.parseInt(e.target.value, 10) })}
                                         className="w-full border rounded-lg p-2"
                                         aria-label="Fee category"
                                     >

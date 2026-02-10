@@ -71,10 +71,10 @@ export default function AssetHire() {
         setLoading(true)
         try {
             const [bookingsRes, clientsRes, assetsRes, statsRes] = await Promise.all([
-                window.electronAPI.getHireBookings(),
-                window.electronAPI.getHireClients(),
-                window.electronAPI.getHireAssets({ isActive: true }),
-                window.electronAPI.getHireStats()
+                globalThis.electronAPI.getHireBookings(),
+                globalThis.electronAPI.getHireClients(),
+                globalThis.electronAPI.getHireAssets({ isActive: true }),
+                globalThis.electronAPI.getHireStats()
             ])
             setBookings(bookingsRes)
             setClients(clientsRes)
@@ -98,7 +98,7 @@ export default function AssetHire() {
         }
 
         // Check availability
-        const available = await window.electronAPI.checkHireAvailability(
+        const available = await globalThis.electronAPI.checkHireAvailability(
             bookingForm.asset_id,
             bookingForm.hire_date,
             bookingForm.return_date || undefined
@@ -108,9 +108,9 @@ export default function AssetHire() {
             return
         }
 
-        const result = await window.electronAPI.createHireBooking({
+        const result = await globalThis.electronAPI.createHireBooking({
             ...bookingForm,
-            distance_km: bookingForm.distance_km ? parseFloat(bookingForm.distance_km) : undefined,
+            distance_km: bookingForm.distance_km ? Number.parseFloat(bookingForm.distance_km) : undefined,
             total_amount: shillingsToCents(bookingForm.total_amount)
         }, user.id)
 
@@ -129,7 +129,7 @@ export default function AssetHire() {
 
     const handleCreateClient = async (e: React.FormEvent) => {
         e.preventDefault()
-        const result = await window.electronAPI.createHireClient(clientForm)
+        const result = await globalThis.electronAPI.createHireClient(clientForm)
         if (result.success) {
             alert('Client created successfully!')
             setShowClientModal(false)
@@ -144,7 +144,7 @@ export default function AssetHire() {
         e.preventDefault()
         if (!user || !selectedBooking) {return}
 
-        const result = await window.electronAPI.recordHirePayment(
+        const result = await globalThis.electronAPI.recordHirePayment(
             selectedBooking.id,
             {
                 ...paymentForm,
@@ -165,7 +165,7 @@ export default function AssetHire() {
     }
 
     const handleUpdateStatus = async (bookingId: number, status: string) => {
-        const result = await window.electronAPI.updateHireBookingStatus(bookingId, status)
+        const result = await globalThis.electronAPI.updateHireBookingStatus(bookingId, status)
         if (result.success) {
             void loadData()
         } else {
@@ -174,14 +174,14 @@ export default function AssetHire() {
     }
 
     const handlePrintReceipt = async (booking: HireBooking) => {
-        const payments = await window.electronAPI.getHirePaymentsByBooking(booking.id)
+        const payments = await globalThis.electronAPI.getHirePaymentsByBooking(booking.id)
         const latestPayment = payments[0]
         if (!latestPayment) {
             alert('No payments to print')
             return
         }
 
-        const settings = await window.electronAPI.getSchoolSettings()
+        const settings = await globalThis.electronAPI.getSchoolSettings()
         printDocument({
             title: `Hire Receipt - ${latestPayment.receipt_number}`,
             template: 'receipt',
@@ -448,7 +448,7 @@ export default function AssetHire() {
                                     <label htmlFor="field-448" className="block text-sm font-medium mb-1">Asset *</label>
                                     <select id="field-448"
                                         value={bookingForm.asset_id}
-                                        onChange={(e) => setBookingForm({ ...bookingForm, asset_id: parseInt(e.target.value) })}
+                                        onChange={(e) => setBookingForm({ ...bookingForm, asset_id: Number.parseInt(e.target.value, 10) })}
                                         className="w-full border rounded-lg p-2"
                                         required
                                         aria-label="Select asset"
@@ -463,7 +463,7 @@ export default function AssetHire() {
                                     <label htmlFor="field-463" className="block text-sm font-medium mb-1">Client *</label>
                                     <select id="field-463"
                                         value={bookingForm.client_id}
-                                        onChange={(e) => setBookingForm({ ...bookingForm, client_id: parseInt(e.target.value) })}
+                                        onChange={(e) => setBookingForm({ ...bookingForm, client_id: Number.parseInt(e.target.value, 10) })}
                                         className="w-full border rounded-lg p-2"
                                         required
                                         aria-label="Select client"

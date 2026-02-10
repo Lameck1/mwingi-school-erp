@@ -46,7 +46,7 @@ export default function Students() {
     const loadStudents = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await window.electronAPI.getStudents({
+            const data = await globalThis.electronAPI.getStudents({
                 ...filters,
                 search: searchRef.current || undefined
             })
@@ -62,7 +62,7 @@ export default function Students() {
     const loadData = useCallback(async () => {
         try {
             const [streamsData] = await Promise.all([
-                window.electronAPI.getStreams()
+                globalThis.electronAPI.getStreams()
             ])
             setStreams(streamsData)
             await loadStudents()
@@ -84,7 +84,7 @@ export default function Students() {
     }, [location.search])
 
     useEffect(() => {
-        const unsubscribe = window.electronAPI.onOpenImportDialog(() => {
+        const unsubscribe = globalThis.electronAPI.onOpenImportDialog(() => {
             setShowImport(true)
         })
         return () => unsubscribe()
@@ -112,7 +112,7 @@ export default function Students() {
     const handlePrintStatement = async (student: Student) => {
         setPrintingId(student.id)
         try {
-            const result = await window.electronAPI.getStudentLedgerReport(student.id) as unknown as StudentLedgerResult
+            const result = await globalThis.electronAPI.getStudentLedgerReport(student.id) as unknown as StudentLedgerResult
             if (result && !result.error) {
                 printDocument({
                     title: `Statement - ${student.first_name} ${student.last_name}`,

@@ -23,13 +23,13 @@ export default function ExamManagement() {
     const [saving, setSaving] = useState(false)
 
     const [newExamName, setNewExamName] = useState('')
-    const [newExamWeight, setNewExamWeight] = useState(1.0)
+    const [newExamWeight, setNewExamWeight] = useState(1)
 
     const loadExams = useCallback(async () => {
         if (!currentAcademicYear || !currentTerm) {return}
         setLoading(true)
         try {
-            const data = await window.electronAPI.getAcademicExams(currentAcademicYear.id, currentTerm.id)
+            const data = await globalThis.electronAPI.getAcademicExams(currentAcademicYear.id, currentTerm.id)
             setExams(data)
         } catch (error) {
             console.error('Failed to load exams:', error)
@@ -47,7 +47,7 @@ export default function ExamManagement() {
 
         setSaving(true)
         try {
-            await window.electronAPI.createAcademicExam({
+            await globalThis.electronAPI.createAcademicExam({
                 academic_year_id: currentAcademicYear.id,
                 term_id: currentTerm.id,
                 name: newExamName,
@@ -55,7 +55,7 @@ export default function ExamManagement() {
             }, user.id)
 
             setNewExamName('')
-            setNewExamWeight(1.0)
+            setNewExamWeight(1)
             await loadExams()
         } catch (error) {
             console.error('Failed to create exam:', error)
@@ -69,7 +69,7 @@ export default function ExamManagement() {
         if (!user || !confirm('Are you sure you want to delete this exam? All results for this exam will be removed.')) {return}
 
         try {
-            await window.electronAPI.deleteAcademicExam(id, user.id)
+            await globalThis.electronAPI.deleteAcademicExam(id, user.id)
             await loadExams()
         } catch (error) {
             console.error('Failed to delete exam:', error)

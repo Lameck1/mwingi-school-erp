@@ -29,7 +29,7 @@ export default function Staff() {
 
     const loadStaff = useCallback(async () => {
         try {
-            const data = await window.electronAPI.getStaff(false)
+            const data = await globalThis.electronAPI.getStaff(false)
             setStaff(data)
         } catch (error) {
             console.error('Failed to load staff:', error)
@@ -101,10 +101,10 @@ export default function Staff() {
             }
 
             if (editing) {
-                await window.electronAPI.updateStaff(editing.id, payload)
+                await globalThis.electronAPI.updateStaff(editing.id, payload)
                 showToast('Staff record updated', 'success')
             } else {
-                await window.electronAPI.createStaff(payload)
+                await globalThis.electronAPI.createStaff(payload)
                 showToast('Staff record created', 'success')
             }
             setShowModal(false)
@@ -120,7 +120,7 @@ export default function Staff() {
         if (!confirm(`${desired ? 'Activate' : 'Deactivate'} ${member.first_name} ${member.last_name}?`)) {return}
         setSaving(true)
         try {
-            await window.electronAPI.setStaffActive(member.id, desired)
+            await globalThis.electronAPI.setStaffActive(member.id, desired)
             await loadStaff()
             showToast(`Staff ${desired ? 'activated' : 'deactivated'}`, 'success')
         } catch (error) {

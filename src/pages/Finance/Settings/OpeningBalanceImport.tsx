@@ -19,6 +19,54 @@ interface ImportedBalance {
   debitCredit: 'DEBIT' | 'CREDIT';
 }
 
+const findFirstIndex = (values: string[], candidates: string[]): number => {
+  for (const candidate of candidates) {
+    const idx = values.indexOf(candidate);
+    if (idx >= 0) {
+      return idx;
+    }
+  }
+  return -1;
+};
+
+const parseCsvBalances = (text: string): { balances: ImportedBalance[]; error?: string } => {
+  const lines = text.split(/\r?\n/).filter(line => line.trim());
+  if (lines.length < 2) {
+    return { balances: [], error: 'CSV file must have a header row and at least one data row' };
+  }
+
+  const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const typeIdx = header.indexOf('type');
+  const idIdx = findFirstIndex(header, ['identifier', 'id', 'code']);
+  const nameIdx = header.indexOf('name');
+  const amountIdx = header.indexOf('amount');
+  const dcIdx = findFirstIndex(header, ['debit_credit', 'debitcredit', 'dc']);
+
+  if (typeIdx === -1 || idIdx === -1 || amountIdx === -1) {
+    return { balances: [], error: 'CSV must have columns: type, identifier, amount (and optionally: name, debit_credit)' };
+  }
+
+  const parsed: ImportedBalance[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.trim());
+    if (cols.length < Math.max(typeIdx, idIdx, amountIdx) + 1) {continue;}
+
+    const type = cols[typeIdx].toUpperCase() as 'STUDENT' | 'GL_ACCOUNT';
+    const amount = Number.parseFloat(cols[amountIdx]);
+    if (Number.isNaN(amount) || amount <= 0) {continue;}
+
+    parsed.push({
+      type: type === 'GL_ACCOUNT' ? 'GL_ACCOUNT' : 'STUDENT',
+      identifier: cols[idIdx],
+      name: nameIdx >= 0 ? cols[nameIdx] : cols[idIdx],
+      amount,
+      debitCredit: dcIdx >= 0 && cols[dcIdx].toUpperCase().startsWith('C') ? 'CREDIT' : 'DEBIT'
+    });
+  }
+
+  return { balances: parsed };
+};
+
 export const OpeningBalanceImport: React.FC = () => {
   const { user } = useAuthStore();
   const { currentAcademicYear } = useAppStore();
@@ -43,70 +91,32 @@ export const OpeningBalanceImport: React.FC = () => {
       }
     };
 
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
+    globalThis.addEventListener('keydown', handleEscape);
+    return () => globalThis.removeEventListener('keydown', handleEscape);
   }, [showAddModal]);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {return;}
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const text = e.target?.result as string;
-        if (!text) {return;}
-
-        const lines = text.split('\n').filter(line => line.trim());
-        if (lines.length < 2) {
-          alert('CSV file must have a header row and at least one data row');
-          return;
-        }
-
-        // Parse header to detect columns
-        const header = lines[0].split(',').map(h => h.trim().toLowerCase());
-        const typeIdx = header.findIndex(h => h === 'type');
-        const idIdx = header.findIndex(h => h === 'identifier' || h === 'id' || h === 'code');
-        const nameIdx = header.findIndex(h => h === 'name');
-        const amountIdx = header.findIndex(h => h === 'amount');
-        const dcIdx = header.findIndex(h => h === 'debit_credit' || h === 'debitcredit' || h === 'dc');
-
-        if (typeIdx === -1 || idIdx === -1 || amountIdx === -1) {
-          alert('CSV must have columns: type, identifier, amount (and optionally: name, debit_credit)');
-          return;
-        }
-
-        const parsed: ImportedBalance[] = [];
-        for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].split(',').map(c => c.trim());
-          if (cols.length < Math.max(typeIdx, idIdx, amountIdx) + 1) {continue;}
-
-          const type = cols[typeIdx].toUpperCase() as 'STUDENT' | 'GL_ACCOUNT';
-          const amount = parseFloat(cols[amountIdx]);
-          if (isNaN(amount) || amount <= 0) {continue;}
-
-          parsed.push({
-            type: type === 'GL_ACCOUNT' ? 'GL_ACCOUNT' : 'STUDENT',
-            identifier: cols[idIdx],
-            name: nameIdx >= 0 ? cols[nameIdx] : cols[idIdx],
-            amount,
-            debitCredit: dcIdx >= 0 && cols[dcIdx].toUpperCase().startsWith('C') ? 'CREDIT' : 'DEBIT',
-          });
-        }
-
-        if (parsed.length === 0) {
-          alert('No valid rows found in CSV file');
-          return;
-        }
-
-        setBalances(parsed);
-        setVerified(false);
-      } catch (err) {
-        console.error('CSV parse error:', err);
-        alert('Failed to parse CSV file. Ensure it is a valid CSV format.');
+    try {
+      const text = await file.text();
+      const { balances: parsed, error } = parseCsvBalances(text);
+      if (error) {
+        alert(error);
+        return;
       }
-    };
-    reader.readAsText(file);
+
+      if (parsed.length === 0) {
+        alert('No valid rows found in CSV file');
+        return;
+      }
+
+      setBalances(parsed);
+      setVerified(false);
+    } catch (err) {
+      console.error('CSV parse error:', err);
+      alert('Failed to parse CSV file. Ensure it is a valid CSV format.');
+    }
   };
 
   const handleAddBalance = () => {
@@ -202,10 +212,10 @@ export const OpeningBalanceImport: React.FC = () => {
         }));
 
       if (studentBalances.length > 0) {
-        await window.electronAPI.importStudentOpeningBalances(studentBalances, currentAcademicYear.id, 'csv_import', user.id);
+        await globalThis.electronAPI.importStudentOpeningBalances(studentBalances, currentAcademicYear.id, 'csv_import', user.id);
       }
       if (glBalances.length > 0) {
-        await window.electronAPI.importGLOpeningBalances(glBalances, user.id);
+        await globalThis.electronAPI.importGLOpeningBalances(glBalances, user.id);
       }
 
       alert('Opening balances imported successfully!');
@@ -372,7 +382,7 @@ export const OpeningBalanceImport: React.FC = () => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {balances.map((balance, index) => (
-                <tr key={index} className="hover:bg-gray-50">
+                <tr key={`${balance.type}-${balance.identifier}-${balance.debitCredit}-${balance.amount}`} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${balance.type === 'STUDENT'
@@ -429,18 +439,17 @@ export const OpeningBalanceImport: React.FC = () => {
       {/* Add Balance Modal */}
       {showAddModal && (
         <div
-          className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setShowAddModal(false)
-            }
-          }}
-          aria-hidden="true"
+          className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 relative"
         >
-          <div
-            className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full"
-            role="dialog"
-            aria-modal="true"
+          <button
+            type="button"
+            aria-label="Close add balance modal"
+            onClick={() => setShowAddModal(false)}
+            className="absolute inset-0"
+          />
+          <dialog
+            open
+            className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full relative z-10"
             aria-labelledby="opening-balance-modal-title"
           >
             <h3 id="opening-balance-modal-title" className="text-lg font-semibold text-gray-900 mb-4">
@@ -531,7 +540,7 @@ export const OpeningBalanceImport: React.FC = () => {
                   onChange={(e) =>
                     setNewBalance({
                       ...newBalance,
-                      amount: parseFloat(e.target.value) || 0,
+                      amount: Number.parseFloat(e.target.value) || 0,
                     })
                   }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -553,7 +562,7 @@ export const OpeningBalanceImport: React.FC = () => {
                 Add Entry
               </button>
             </div>
-          </div>
+          </dialog>
         </div>
       )}
     </div>

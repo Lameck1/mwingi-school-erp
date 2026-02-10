@@ -32,7 +32,7 @@ export default function Invoices() {
 
     const loadInvoices = useCallback(async () => {
         try {
-            const data = await window.electronAPI.getInvoices()
+            const data = await globalThis.electronAPI.getInvoices()
             setInvoices(data)
         } catch (error) {
             console.error('Failed to load invoices:', error)
@@ -48,7 +48,7 @@ export default function Invoices() {
 
     const viewInvoice = async (invoice: Invoice) => {
         try {
-            const items = await window.electronAPI.getInvoiceItems(invoice.id)
+            const items = await globalThis.electronAPI.getInvoiceItems(invoice.id)
             setInvoiceItems(items)
             setSelectedInvoice(invoice)
         } catch (error) {
@@ -161,8 +161,8 @@ export default function Invoices() {
             />
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {stats.map((stat, i) => (
-                    <StatCard key={i} {...stat} />
+                {stats.map((stat) => (
+                    <StatCard key={stat.label} {...stat} />
                 ))}
             </div>
 
@@ -209,8 +209,8 @@ export default function Invoices() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border/10">
-                                    {invoiceItems.map((item, index) => (
-                                        <tr key={index} className="hover:bg-primary/5 transition-colors">
+                                    {invoiceItems.map((item) => (
+                                        <tr key={item.id} className="hover:bg-primary/5 transition-colors">
                                             <td className="px-6 py-4 text-sm text-foreground/80">{item.category_name}</td>
                                             <td className="px-6 py-4 text-sm font-mono text-foreground text-right">{formatCurrencyFromCents(item.amount)}</td>
                                         </tr>

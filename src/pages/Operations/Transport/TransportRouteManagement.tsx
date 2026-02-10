@@ -60,7 +60,7 @@ export default function TransportRouteManagement() {
     const loadData = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await window.electronAPI.getTransportRoutes()
+            const data = await globalThis.electronAPI.getTransportRoutes()
             setRoutes(data)
 
             const totalRoutes = data.length
@@ -85,10 +85,10 @@ export default function TransportRouteManagement() {
     const handleCreateRoute = async (e: React.FormEvent) => {
         e.preventDefault()
         try {
-            await window.electronAPI.createTransportRoute({
+            await globalThis.electronAPI.createTransportRoute({
                 route_name: createForm.route_name,
-                distance_km: parseFloat(createForm.distance_km),
-                estimated_students: parseInt(createForm.estimated_students),
+                distance_km: Number.parseFloat(createForm.distance_km),
+                estimated_students: Number.parseInt(createForm.estimated_students, 10),
                 budget_per_term_cents: shillingsToCents(createForm.budget_per_term)
             })
             showToast('Route created successfully', 'success')
@@ -108,9 +108,9 @@ export default function TransportRouteManagement() {
                 showToast('User not authenticated', 'error')
                 return
             }
-            await window.electronAPI.recordTransportExpense({
+            await globalThis.electronAPI.recordTransportExpense({
                 ...expenseForm,
-                route_id: parseInt(expenseForm.route_id),
+                route_id: Number.parseInt(expenseForm.route_id, 10),
                 amount_cents: shillingsToCents(expenseForm.amount),
                 fiscal_year: new Date().getFullYear(),
                 term: 1, // Default to Term 1

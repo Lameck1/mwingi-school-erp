@@ -34,7 +34,7 @@ export default function Promotions() {
 
     const loadStreams = useCallback(async () => {
         try {
-            const data = await window.electronAPI.getPromotionStreams()
+            const data = await globalThis.electronAPI.getPromotionStreams()
             setStreams(data)
         } catch (error) {
             console.error('Failed to load streams:', error)
@@ -43,7 +43,7 @@ export default function Promotions() {
 
     const loadAcademicYears = useCallback(async () => {
         try {
-            const data = await window.electronAPI.getAcademicYears()
+            const data = await globalThis.electronAPI.getAcademicYears()
             setAcademicYears(data)
             // Default to next academic year if available
             if (data.length > 1) {
@@ -56,7 +56,7 @@ export default function Promotions() {
 
     const loadTerms = useCallback(async () => {
         try {
-            const data = await window.electronAPI.getTermsByYear(toAcademicYear)
+            const data = await globalThis.electronAPI.getTermsByYear(toAcademicYear)
             setTerms(data)
             if (data.length > 0) {
                 setToTerm(data[0].id)
@@ -81,7 +81,7 @@ export default function Promotions() {
         if (!currentAcademicYear) {return}
         setLoading(true)
         try {
-            const data = await window.electronAPI.getStudentsForPromotion(fromStream, currentAcademicYear.id)
+            const data = await globalThis.electronAPI.getStudentsForPromotion(fromStream, currentAcademicYear.id)
             setStudents(data)
             setSelectedStudents([])
         } catch (error) {
@@ -93,7 +93,7 @@ export default function Promotions() {
 
     const suggestNextStream = useCallback(async () => {
         try {
-            const next = await window.electronAPI.getNextStream(fromStream)
+            const next = await globalThis.electronAPI.getNextStream(fromStream)
             if (next) {
                 setToStream(next.id)
             }
@@ -140,7 +140,7 @@ export default function Promotions() {
 
         setPromoting(true)
         try {
-            const result = await window.electronAPI.batchPromoteStudents(
+            const result = await globalThis.electronAPI.batchPromoteStudents(
                 selectedStudents,
                 fromStream,
                 toStream,
@@ -180,18 +180,12 @@ export default function Promotions() {
         return (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {students.map(student => (
-                    <div
+                    <button
                         key={student.student_id}
+                        type="button"
                         onClick={() => toggleStudent(student.student_id)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                                toggleStudent(student.student_id)
-                            }
-                        }}
-                        role="button"
-                        tabIndex={0}
                         aria-label={`Toggle student ${student.student_name}`}
-                        className={`p-4 rounded-xl border cursor-pointer transition-all duration-300 ${selectedStudents.includes(student.student_id)
+                        className={`w-full text-left p-4 rounded-xl border cursor-pointer transition-all duration-300 ${selectedStudents.includes(student.student_id)
                             ? 'bg-primary/10 border-primary/40'
                             : 'bg-secondary/30 border-border/20 hover:border-primary/30 hover:bg-secondary/50'
                             }`}
@@ -210,7 +204,7 @@ export default function Promotions() {
                                 <p className="text-xs text-foreground/40 font-mono">{student.admission_number}</p>
                             </div>
                         </div>
-                    </div>
+                    </button>
                 ))}
             </div>
         )

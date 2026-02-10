@@ -36,7 +36,7 @@ export default function CommunicationLog() {
         setLoading(true)
         try {
             // Use existing getMessageLogs API which takes a limit parameter
-            const data = await window.electronAPI.getMessageLogs(100)
+            const data = await globalThis.electronAPI.getMessageLogs(100)
 
             // Apply client-side filtering since the API doesn't support it
             let filteredData = data || []

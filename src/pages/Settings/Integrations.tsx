@@ -25,7 +25,7 @@ export default function IntegrationsSettings() {
 
     const loadConfigs = useCallback(async () => {
         try {
-            const all = await window.electronAPI.getAllConfigs()
+            const all = await globalThis.electronAPI.getAllConfigs()
 
             setSmsConfig(prev => ({
                 ...prev,
@@ -56,10 +56,10 @@ export default function IntegrationsSettings() {
         setLoading(true)
         try {
             await Promise.all([
-                window.electronAPI.saveSecureConfig('sms.provider', smsConfig.provider),
-                window.electronAPI.saveSecureConfig('sms.api_key', smsConfig.api_key),
-                window.electronAPI.saveSecureConfig('sms.username', smsConfig.username),
-                window.electronAPI.saveSecureConfig('sms.sender_id', smsConfig.sender_id)
+                globalThis.electronAPI.saveSecureConfig('sms.provider', smsConfig.provider),
+                globalThis.electronAPI.saveSecureConfig('sms.api_key', smsConfig.api_key),
+                globalThis.electronAPI.saveSecureConfig('sms.username', smsConfig.username),
+                globalThis.electronAPI.saveSecureConfig('sms.sender_id', smsConfig.sender_id)
             ])
             showToast('SMS Gateway settings saved securely', 'success')
         } catch {
@@ -73,10 +73,10 @@ export default function IntegrationsSettings() {
         setLoading(true)
         try {
             await Promise.all([
-                window.electronAPI.saveSecureConfig('smtp.host', smtpConfig.host),
-                window.electronAPI.saveSecureConfig('smtp.port', smtpConfig.port),
-                window.electronAPI.saveSecureConfig('smtp.user', smtpConfig.user),
-                window.electronAPI.saveSecureConfig('smtp.pass', smtpConfig.pass)
+                globalThis.electronAPI.saveSecureConfig('smtp.host', smtpConfig.host),
+                globalThis.electronAPI.saveSecureConfig('smtp.port', smtpConfig.port),
+                globalThis.electronAPI.saveSecureConfig('smtp.user', smtpConfig.user),
+                globalThis.electronAPI.saveSecureConfig('smtp.pass', smtpConfig.pass)
             ])
             showToast('SMTP settings saved securely', 'success')
         } catch {

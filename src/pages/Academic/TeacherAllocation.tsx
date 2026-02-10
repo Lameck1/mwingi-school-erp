@@ -55,13 +55,13 @@ export default function TeacherAllocation() {
             if (currentAcademicYear && currentTerm) {
                 setLoading(true)
                 const [allocationsData, streamsData, subjectsData] = await Promise.all([
-                    window.electronAPI.getTeacherAllocations(
+                    globalThis.electronAPI.getTeacherAllocations(
                         currentAcademicYear.id,
                         currentTerm.id,
                         selectedStream || undefined
                     ),
-                    window.electronAPI.getStreams(),
-                    window.electronAPI.getAcademicSubjects()
+                    globalThis.electronAPI.getStreams(),
+                    globalThis.electronAPI.getAcademicSubjects()
                 ])
 
                 setAllocations(allocationsData || [])
@@ -78,7 +78,7 @@ export default function TeacherAllocation() {
     const loadInitialData = useCallback(async () => {
         try {
             const [staffData] = await Promise.all([
-                window.electronAPI.getStaff(),
+                globalThis.electronAPI.getStaff(),
             ])
             setStaff(staffData)
         } catch (error) {
@@ -102,7 +102,7 @@ export default function TeacherAllocation() {
 
         setSaving(true)
         try {
-            await window.electronAPI.allocateTeacher({
+            await globalThis.electronAPI.allocateTeacher({
                 academic_year_id: currentAcademicYear.id,
                 term_id: currentTerm.id,
                 stream_id: selectedStream,

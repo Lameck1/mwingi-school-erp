@@ -23,7 +23,7 @@ export default function StudentCostAnalysis() {
 
     const loadStudents = useCallback(async () => {
         try {
-            const data = await window.electronAPI.getStudents({ is_active: true })
+            const data = await globalThis.electronAPI.getStudents({ is_active: true })
             setStudents(data)
         } catch (error) {
             console.error(error)
@@ -39,10 +39,10 @@ export default function StudentCostAnalysis() {
                 return
             }
 
-            const breakdown = await window.electronAPI.calculateStudentCost(studentId, currentTerm.id, currentAcademicYear.id)
+            const breakdown = await globalThis.electronAPI.calculateStudentCost(studentId, currentTerm.id, currentAcademicYear.id)
             setCostData(breakdown)
 
-            const vsRevenue = await window.electronAPI.getStudentCostVsRevenue(studentId, currentTerm.id)
+            const vsRevenue = await globalThis.electronAPI.getStudentCostVsRevenue(studentId, currentTerm.id)
             setCostVsRevenue(vsRevenue)
         } catch (error) {
             console.error(error)
@@ -130,8 +130,8 @@ export default function StudentCostAnalysis() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border/10">
-                                {pieData.map((item, index) => (
-                                    <tr key={index}>
+                                {pieData.map((item) => (
+                                    <tr key={item.name}>
                                         <td className="py-3">{item.name}</td>
                                         <td className="py-3 text-right">{formatCurrencyFromCents(item.value)}</td>
                                         <td className="py-3 text-right">{((item.value / costData.total_cost) * 100).toFixed(1)}%</td>
@@ -163,8 +163,8 @@ export default function StudentCostAnalysis() {
                                         paddingAngle={5}
                                         dataKey="value"
                                     >
-                                        {pieData.map((_, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        {pieData.map((item, index) => (
+                                            <Cell key={item.name} fill={COLORS[index % COLORS.length]} />
                                         ))}
                                     </Pie>
                                     <Tooltip formatter={(value: number) => formatCurrencyFromCents(value)} />

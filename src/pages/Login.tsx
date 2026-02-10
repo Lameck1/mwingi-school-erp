@@ -18,7 +18,7 @@ export default function Login() {
     useEffect(() => {
         const checkSetup = async () => {
             try {
-                const hasUsers = await window.electronAPI.hasUsers()
+                const hasUsers = await globalThis.electronAPI.hasUsers()
                 if (!hasUsers) {
                     navigate('/setup')
                 }
@@ -35,7 +35,7 @@ export default function Login() {
         setLoading(true)
 
         try {
-            const result = await window.electronAPI.login(username, password)
+            const result = await globalThis.electronAPI.login(username, password)
 
             if (result.success && result.user) {
                 login(result.user)
@@ -45,9 +45,9 @@ export default function Login() {
                 void (async () => {
                     try {
                         const [settings, academicYear, currentTerm] = await Promise.all([
-                            window.electronAPI.getSettings(),
-                            window.electronAPI.getCurrentAcademicYear(),
-                            window.electronAPI.getCurrentTerm(),
+                            globalThis.electronAPI.getSettings(),
+                            globalThis.electronAPI.getCurrentAcademicYear(),
+                            globalThis.electronAPI.getCurrentTerm(),
                         ])
                         if (settings) {setSchoolSettings(settings)}
                         if (academicYear) {setCurrentAcademicYear(academicYear)}

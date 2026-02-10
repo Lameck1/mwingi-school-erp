@@ -16,7 +16,7 @@ export default function ReconcileAccount() {
 
     const loadAccounts = useCallback(async () => {
         try {
-            const data = await window.electronAPI.getAccounts()
+            const data = await globalThis.electronAPI.getAccounts()
             setAccounts(data)
             if (data.length > 0 && !selectedAccount) {setSelectedAccount(data[0].id)}
         } catch (error) {
@@ -26,7 +26,7 @@ export default function ReconcileAccount() {
 
     const loadStatements = useCallback(async (accountId: number) => {
         try {
-            const data = await window.electronAPI.getStatements(accountId)
+            const data = await globalThis.electronAPI.getStatements(accountId)
             setStatements(data)
         } catch (error) {
             console.error('Failed to load statements', error)
@@ -35,7 +35,7 @@ export default function ReconcileAccount() {
 
     const loadStatementDetails = useCallback(async (statementId: number) => {
         try {
-            const result = await window.electronAPI.getStatementWithLines(statementId)
+            const result = await globalThis.electronAPI.getStatementWithLines(statementId)
             if (result) {
                 setLines(result.lines)
             }
@@ -54,7 +54,7 @@ export default function ReconcileAccount() {
             end.setDate(0) // End of month
 
             // Fetch broader range? Just current month for now
-            const data = await window.electronAPI.getUnmatchedTransactions(
+            const data = await globalThis.electronAPI.getUnmatchedTransactions(
                 start.toISOString().slice(0, 10),
                 end.toISOString().slice(0, 10)
             )
@@ -83,7 +83,7 @@ export default function ReconcileAccount() {
 
     const handleMatch = async (lineId: number, transactionId: number) => {
         try {
-            await window.electronAPI.matchTransaction(lineId, transactionId)
+            await globalThis.electronAPI.matchTransaction(lineId, transactionId)
             // Refresh
             if (selectedStatement) {
                 void loadStatementDetails(selectedStatement.id)
@@ -194,7 +194,7 @@ export default function ReconcileAccount() {
                                             // Ideally select bank line first, then click here to match
                                             // For simplicity, prompting for ID match or assume selection state
                                             const lineId = prompt('Enter Bank Line ID to match:')
-                                            if (lineId) {void handleMatch(parseInt(lineId), txn.id)}
+                                            if (lineId) {void handleMatch(Number.parseInt(lineId, 10), txn.id)}
                                         }}
                                         className="hidden group-hover:block w-full mt-2 btn btn-xs btn-secondary text-center"
                                     >

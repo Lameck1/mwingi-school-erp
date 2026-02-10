@@ -23,7 +23,7 @@ const JSSTransition: React.FC = () => {
   const loadEligibleStudents = useCallback(async () => {
     try {
       setLoading(true);
-      const result = await window.electronAPI.getEligibleStudents(filters.from_grade, filters.academic_year);
+      const result = await globalThis.electronAPI.getEligibleStudents(filters.from_grade, filters.academic_year);
       const students: EligibleStudent[] = result?.data ?? [];
       setEligibleStudents(students);
     } catch (error) {
@@ -37,7 +37,7 @@ const JSSTransition: React.FC = () => {
     try {
       // Load fee structures for each JSS grade
       const results = await Promise.all(
-        [7, 8, 9].map(grade => window.electronAPI.getJSSFeeStructure(grade, filters.academic_year))
+        [7, 8, 9].map(grade => globalThis.electronAPI.getJSSFeeStructure(grade, filters.academic_year))
       );
       const structures: JSSFeeStructure[] = results
         .map(r => r?.data)
@@ -88,7 +88,7 @@ const JSSTransition: React.FC = () => {
 
     try {
       setProcessing(true);
-      const result = await window.electronAPI.bulkTransition({
+      const result = await globalThis.electronAPI.bulkTransition({
         student_ids: Array.from(selectedStudents),
         from_grade: filters.from_grade,
         to_grade: filters.to_grade,
@@ -138,7 +138,7 @@ const JSSTransition: React.FC = () => {
               id="from_grade"
               title="From Grade"
               value={filters.from_grade}
-              onChange={(e) => setFilters({ ...filters, from_grade: parseInt(e.target.value) })}
+              onChange={(e) => setFilters({ ...filters, from_grade: Number.parseInt(e.target.value, 10) })}
               className="w-full border rounded px-3 py-2"
             >
               <option value={6}>Grade 6 (Primary)</option>
@@ -152,7 +152,7 @@ const JSSTransition: React.FC = () => {
               id="to_grade"
               title="To Grade"
               value={filters.to_grade}
-              onChange={(e) => setFilters({ ...filters, to_grade: parseInt(e.target.value) })}
+              onChange={(e) => setFilters({ ...filters, to_grade: Number.parseInt(e.target.value, 10) })}
               className="w-full border rounded px-3 py-2"
             >
               <option value={7}>Grade 7 (JSS)</option>
@@ -166,7 +166,7 @@ const JSSTransition: React.FC = () => {
               id="academic_year"
               title="Academic Year"
               value={filters.academic_year}
-              onChange={(e) => setFilters({ ...filters, academic_year: parseInt(e.target.value) })}
+              onChange={(e) => setFilters({ ...filters, academic_year: Number.parseInt(e.target.value, 10) })}
               className="w-full border rounded px-3 py-2"
             >
               <option value={2025}>2025</option>
