@@ -92,11 +92,11 @@ const AwardsManagement = () => {
   }, [])
 
   useEffect(() => {
-    void loadInitialData()
+    loadInitialData().catch((err: unknown) => console.error('Failed to load initial data:', err))
   }, [loadInitialData])
 
   useEffect(() => {
-    void loadAwards()
+    loadAwards().catch((err: unknown) => console.error('Failed to load awards:', err))
   }, [loadAwards])
 
   const handleAwardStudent = async () => {

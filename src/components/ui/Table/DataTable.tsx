@@ -61,7 +61,15 @@ function filterAndSortRows<T extends { id: number | string }>(
         const term = searchTerm.toLowerCase()
         result = result.filter((row) => visibleColumns.some((column) => {
             const value = getNestedValue(row, String(column.key))
-            return String(value ?? '').toLowerCase().includes(term)
+            let strValue: string
+            if (value == null) {
+                strValue = ''
+            } else if (typeof value === 'object') {
+                strValue = JSON.stringify(value)
+            } else {
+                strValue = String(value)
+            }
+            return strValue.toLowerCase().includes(term)
         }))
     }
 
@@ -410,9 +418,17 @@ function DataTableGrid<T extends { id: number | string }>({
                             )}
                             {controller.visibleColumns.map((column) => {
                                 const value = getNestedValue(row, String(column.key))
+                                let displayValue: string
+                                if (value == null) {
+                                    displayValue = '-'
+                                } else if (typeof value === 'object') {
+                                    displayValue = JSON.stringify(value)
+                                } else {
+                                    displayValue = String(value)
+                                }
                                 return (
                                     <td key={String(column.key)} className={`${cellPadding} text-sm text-foreground/70 ${getAlignmentClass(column.align)}`}>
-                                        {column.render ? column.render(value, row, index) : String(value ?? '-')}
+                                        {column.render ? column.render(value, row, index) : displayValue}
                                     </td>
                                 )
                             })}

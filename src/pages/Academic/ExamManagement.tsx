@@ -39,7 +39,7 @@ export default function ExamManagement() {
     }, [currentAcademicYear, currentTerm])
 
     useEffect(() => {
-        void loadExams()
+        loadExams().catch((err: unknown) => console.error('Failed to load exams:', err))
     }, [loadExams])
 
     const handleCreate = async () => {

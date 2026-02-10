@@ -177,7 +177,7 @@ export default function App() {
     const hydrateSession = useAuthStore((state) => state.hydrateSession)
 
     React.useEffect(() => {
-        void hydrateSession()
+        hydrateSession().catch((err: unknown) => console.error('Session hydration failed:', err))
     }, [hydrateSession])
 
     return (
