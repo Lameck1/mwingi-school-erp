@@ -23,5 +23,8 @@ export interface StaffMember {
 
 export interface StaffAPI {
   getStaff(activeOnly?: boolean): Promise<StaffMember[]>
+  getStaffById?: (id: number) => Promise<StaffMember | undefined>
   createStaff(data: Partial<StaffMember>): Promise<{ success: boolean; id: number }>
+  updateStaff: (id: number, data: Partial<StaffMember>) => Promise<{ success: boolean }>
+  setStaffActive: (id: number, isActive: boolean) => Promise<{ success: boolean }>
 }

@@ -3,25 +3,22 @@ export interface EligibleStudent {
   admission_number: string
   full_name: string
   current_grade: number
-  boarding_status: 'DAY' | 'BOARDER'
-  outstanding_balance: number
+  boarding_status: 'DAY_SCHOLAR' | 'BOARDER'
+  outstanding_balance_cents: number
 }
 
 export interface JSSFeeStructure {
   id: number
   fiscal_year: number
-  jss_grade: number
-  tuition_fee: number
-  boarding_fee: number
-  activity_fee: number
-  total_fee: number
-  tuition_fee_cents?: number
+  grade: number
+  tuition_fee_cents: number
   boarding_fee_cents?: number
   activity_fee_cents?: number
   exam_fee_cents?: number
   library_fee_cents?: number
   lab_fee_cents?: number
   ict_fee_cents?: number
+  is_active?: boolean
 }
 
 export interface TransitionResult {
@@ -53,13 +50,13 @@ export interface SingleTransitionData {
 export interface JSSFeeStructureInput {
     grade: number;
     fiscal_year: number;
-    tuition_fee: number;
-    boarding_fee?: number;
-    activity_fee?: number;
-    exam_fee?: number;
-    library_fee?: number;
-    lab_fee?: number;
-    ict_fee?: number;
+    tuition_fee_cents: number;
+    boarding_fee_cents?: number;
+    activity_fee_cents?: number;
+    exam_fee_cents?: number;
+    library_fee_cents?: number;
+    lab_fee_cents?: number;
+    ict_fee_cents?: number;
 }
 
 export interface TransitionSummary {

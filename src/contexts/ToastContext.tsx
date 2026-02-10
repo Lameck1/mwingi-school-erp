@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback } from 'react'
-import { Toast, ToastType } from '../components/ui/Toast'
+import React, { createContext, useCallback, useContext, useRef, useState } from 'react'
+
+import { Toast, type ToastType } from '../components/ui/Toast'
 
 interface ToastMessage {
     id: string
@@ -13,21 +14,26 @@ interface ToastContextType {
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined)
 
-export function ToastProvider({ children }: { children: React.ReactNode }) {
+export function ToastProvider({ children }: Readonly<{ children: React.ReactNode }>) {
     const [toasts, setToasts] = useState<ToastMessage[]>([])
+    const fallbackIdCounter = useRef(0)
+
+    const removeToastById = (id: string) => {
+        setToasts(prev => prev.filter(toast => toast.id !== id))
+    }
 
     const showToast = useCallback((message: string, type: ToastType = 'info') => {
-        const id = Math.random().toString(36).substring(7)
+        fallbackIdCounter.current += 1
+        const hasRandomUuid = typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function'
+        const id = hasRandomUuid ? globalThis.crypto.randomUUID() : `toast-${Date.now()}-${fallbackIdCounter.current}`
         setToasts(prev => [...prev, { id, message, type }])
-        
-        // Auto-remove toast after 5 seconds
         setTimeout(() => {
-            setToasts(prev => prev.filter(toast => toast.id !== id))
+            removeToastById(id)
         }, 5000)
     }, [])
 
     const removeToast = useCallback((id: string) => {
-        setToasts(prev => prev.filter(toast => toast.id !== id))
+        removeToastById(id)
     }, [])
 
     return (

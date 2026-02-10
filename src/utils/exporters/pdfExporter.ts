@@ -1,9 +1,11 @@
 /**
  * PDF Export Utility
- * Uses jsPDF (already installed) for generating professional PDF reports
+ * Uses jsPDF (lazy loaded) for generating professional PDF reports
  */
 
-import jsPDF from 'jspdf'
+import { formatCurrencyFromCents } from '../format'
+
+import type { jsPDF } from 'jspdf'
 
 export interface PDFColumn {
     key: string
@@ -30,7 +32,8 @@ export interface PDFExportOptions {
     showPageNumbers?: boolean
 }
 
-export function exportToPDF(options: PDFExportOptions): void {
+export async function exportToPDF(options: PDFExportOptions): Promise<void> {
+    const { default: jsPDF } = await import('jspdf')
     const {
         filename,
         title,
@@ -180,11 +183,12 @@ export function exportToPDF(options: PDFExportOptions): void {
         xPosition = margin + 2
         columns.forEach((col, i) => {
             const value = formatValue(row[col.key], col.format)
-            const textX = col.align === 'right'
-                ? xPosition + columnWidths[i] - 4
-                : col.align === 'center'
-                    ? xPosition + columnWidths[i] / 2
-                    : xPosition
+            let textX = xPosition
+            if (col.align === 'right') {
+                textX = xPosition + columnWidths[i] - 4
+            } else if (col.align === 'center') {
+                textX = xPosition + columnWidths[i] / 2
+            }
 
             doc.text(value, textX, yPosition + 5, {
                 align: col.align || 'left',
@@ -225,13 +229,11 @@ function addPageNumber(doc: jsPDF, pageWidth: number, pageHeight: number): void 
 }
 
 function formatValue(value: unknown, format?: PDFColumn['format']): string {
-    if (value === null || value === undefined) return '-'
+    if (value === null || value === undefined) {return '-'}
 
     switch (format) {
-        case 'currency': {
-            const amount = Number(value) / 100  // Convert cents to shillings
-            return `KES ${amount.toLocaleString('en-KE', { minimumFractionDigits: 2 })}`
-        }
+        case 'currency':
+            return formatCurrencyFromCents(Number(value))
         case 'number':
             return Number(value).toLocaleString()
         case 'date':

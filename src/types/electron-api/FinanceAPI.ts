@@ -106,7 +106,9 @@ export interface PaymentRecordData {
   amount: number
   payment_method: string
   payment_reference?: string
+  description?: string
   transaction_date: string
+  term_id: number
 }
 
 export interface FinanceApprovalRequest {
@@ -135,7 +137,7 @@ export interface FinanceAPI {
   getInvoices: (_filters?: Partial<Invoice>) => Promise<Invoice[]>
 
   // Payments
-  recordPayment: (_data: PaymentRecordData, _userId: number) => Promise<{ success: boolean; transactionRef?: string; receipt_number?: string; errors?: string[] }>
+  recordPayment: (_data: PaymentRecordData, _userId: number) => Promise<{ success: boolean; transactionRef?: string; receipt_number?: string; errors?: string[]; message?: string }>
   getPaymentsByStudent: (_studentId: number) => Promise<Payment[]>
   payWithCredit: (_data: { studentId: number; invoiceId: number; amount: number }, _userId: number) => Promise<{ success: boolean; message?: string }>
 
@@ -157,8 +159,8 @@ export interface FinanceAPI {
 
   // Approvals
   getApprovalQueue: (filter: 'PENDING' | 'ALL') => Promise<{ success: boolean; data: FinanceApprovalRequest[]; message?: string }>
-  approveTransaction: (id: number, notes: string) => Promise<{ success: boolean; message?: string }>
-  rejectTransaction: (id: number, notes: string) => Promise<{ success: boolean; message?: string }>
+  approveTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) => Promise<{ success: boolean; message?: string }>
+  rejectTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) => Promise<{ success: boolean; message?: string }>
 
   // Manual Fixes
 }
