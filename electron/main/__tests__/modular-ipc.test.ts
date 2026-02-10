@@ -74,7 +74,7 @@ vi.mock('../database', () => {
   mockDb.prepare.mockImplementation(() => {
     const mockStatement = {
       all: vi.fn(() => []),
-      get: vi.fn(() => ({ id: 1, username: 'test', password_hash: 'hashed' })),
+      get: vi.fn(() => ({ id: 1, username: 'test', password_hash: 'mock-hash-value' })), // NOSONAR - test fixture
       run: vi.fn(() => ({ changes: 1, lastInsertRowid: 1 }))
     };
 
@@ -151,8 +151,8 @@ describe('Modular IPC Handlers Security Tests', () => {
         expect.stringContaining('SET full_name = COALESCE(?, full_name)')
       );
 
-      // Test invalid field (should be ignored)
-      await handler({}, 1, { full_name: 'John Doe', password: 'hackattempt', is_active: false });
+      // Test invalid field (should be ignored) - not a real password
+      await handler({}, 1, { full_name: 'John Doe', password: 'test-disallowed-field', is_active: false }); // NOSONAR
 
       expect(mockDb.prepare).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE user')

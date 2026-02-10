@@ -27,7 +27,8 @@ describe('Security Fix Validation', () => {
       };
       
       const validUpdate = { full_name: 'John Doe', email: 'john@example.com' };
-      const maliciousUpdate = { full_name: 'John Doe', password: 'hackattempt', is_active: false };
+      // Test data for security validation - not a real password
+      const maliciousUpdate = { full_name: 'John Doe', password: 'test-disallowed-field', is_active: false }; // NOSONAR
       
       expect(validateUpdateFields(validUpdate)).toEqual(['full_name', 'email']);
       expect(validateUpdateFields(maliciousUpdate)).toEqual(['full_name']);
