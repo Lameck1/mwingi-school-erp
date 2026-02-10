@@ -29,11 +29,18 @@
     "types": [
       "node",
       "react",
-      "react-dom"
+      "react-dom",
+      "vitest/globals",
+      "jest"
     ]
   },
   "include": [
     "src"
+  ],
+  "exclude": [
+    "src/**/__tests__/**",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
   ],
   "references": [
     {
