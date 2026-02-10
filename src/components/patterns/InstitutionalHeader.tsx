@@ -12,7 +12,7 @@ export const InstitutionalHeader: React.FC<InstitutionalHeaderProps> = ({ varian
     useEffect(() => {
         const loadSettings = async () => {
             try {
-                const data = await window.electronAPI.getSchoolSettings()
+                const data = await globalThis.electronAPI.getSchoolSettings()
                 setSettings(data)
             } catch (error) {
                 console.error('Failed to load school settings for header:', error)

@@ -48,13 +48,13 @@ function isSupportedFile(fileName: string): boolean {
 function mapTemplateToMappings(template: ImportTemplate): ImportMapping[] {
     return template.columns.map((column) => ({
         sourceColumn: column.name,
-        targetField: column.name.toLowerCase().replace(/\s+/g, '_'),
+        targetField: column.name.toLowerCase().replaceAll(/\s+/g, '_'),
         required: column.required
     }))
 }
 
 async function fetchTemplateMappings(entityType: string): Promise<ImportMapping[]> {
-    const template = await window.electronAPI.getImportTemplate(entityType) as ImportTemplate
+    const template = await globalThis.electronAPI.getImportTemplate(entityType) as ImportTemplate
     return mapTemplateToMappings(template)
 }
 
@@ -69,16 +69,10 @@ function UploadStep({ fileInputRef, onFileSelect, onDownloadTemplate }: Readonly
 
     return (
         <div className="space-y-4">
-            <div
-                className="border-2 border-dashed border-white/10 rounded-xl p-10 text-center hover:border-primary/50 transition-colors cursor-pointer bg-white/5"
+            <button
+                type="button"
+                className="w-full border-2 border-dashed border-white/10 rounded-xl p-10 text-center hover:border-primary/50 transition-colors cursor-pointer bg-white/5"
                 onClick={openPicker}
-                onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                        openPicker()
-                    }
-                }}
-                role="button"
-                tabIndex={0}
             >
                 <FileSpreadsheet className="w-12 h-12 mx-auto mb-4 text-primary" />
                 <p className="font-medium text-white mb-1">Click to upload CSV or Excel</p>
@@ -91,7 +85,7 @@ function UploadStep({ fileInputRef, onFileSelect, onDownloadTemplate }: Readonly
                     onChange={onFileSelect}
                     aria-label="Upload CSV or Excel file"
                 />
-            </div>
+            </button>
 
             <div className="flex justify-between items-center bg-blue-500/10 p-4 rounded-lg border border-blue-500/20">
                 <div className="flex items-center gap-3">
@@ -201,8 +195,8 @@ function ResultStep({ importResult, onDone }: Readonly<ResultStepProps>) {
                         Errors ({importResult.errors.length})
                     </div>
                     <div className="max-h-32 overflow-y-auto divide-y divide-red-500/10">
-                        {importResult.errors.map((errorItem, index) => (
-                            <div key={index} className="px-4 py-2 text-xs text-red-300">
+                        {importResult.errors.map((errorItem) => (
+                            <div key={`${errorItem.row}-${errorItem.message}`} className="px-4 py-2 text-xs text-red-300">
                                 Row {errorItem.row}: {errorItem.message}
                             </div>
                         ))}
@@ -275,7 +269,7 @@ function useImportDialogController(
         },
         handleDownloadTemplate: async () => {
             try {
-                const result = await window.electronAPI.downloadImportTemplate(entityType)
+                const result = await globalThis.electronAPI.downloadImportTemplate(entityType)
                 if (result.success) { alert(`Template downloaded to: ${result.filePath}`) }
             } catch (downloadError) {
                 console.error(downloadError)
@@ -289,7 +283,7 @@ function useImportDialogController(
             try {
                 const mappings = await fetchTemplateMappings(entityType)
                 const config = { entityType, mappings, skipDuplicates: true, duplicateKey: entityType === 'STUDENT' ? 'admission_number' : 'id' }
-                const importResponse = await window.electronAPI.importData((file as File & { path: string }).path, config, user.id)
+                const importResponse = await globalThis.electronAPI.importData((file as File & { path: string }).path, config, user.id)
                 const result = importResponse as ImportResult
                 setImportResult(result)
                 setStep('RESULT')

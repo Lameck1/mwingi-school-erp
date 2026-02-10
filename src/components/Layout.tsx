@@ -158,9 +158,9 @@ function useLoadGlobalSettings(): Pick<LayoutModel, 'schoolName' | 'currentAcade
         void (async () => {
             try {
                 const [settings, year, term] = await Promise.all([
-                    window.electronAPI.getSettings(),
-                    window.electronAPI.getCurrentAcademicYear(),
-                    window.electronAPI.getCurrentTerm()
+                    globalThis.electronAPI.getSettings(),
+                    globalThis.electronAPI.getCurrentAcademicYear(),
+                    globalThis.electronAPI.getCurrentTerm()
                 ])
                 setSchoolSettings(settings)
                 setCurrentAcademicYear(year)
@@ -179,32 +179,32 @@ function useLoadGlobalSettings(): Pick<LayoutModel, 'schoolName' | 'currentAcade
 
 function useElectronLayoutEvents(navigate: ReturnType<typeof useNavigate>, showToast: ReturnType<typeof useToast>['showToast']) {
     useEffect(() => {
-        const unsubscribeNavigate = window.electronAPI.onNavigate((path) => navigate(path))
-        const unsubscribePrint = window.electronAPI.onTriggerPrint(() => printCurrentView({ title: 'Page Print Preview' }))
-        const unsubscribeImport = window.electronAPI.onOpenImportDialog(() => navigate('/students?import=1'))
-        const unsubscribeBackup = window.electronAPI.onBackupDatabase((filePath) => {
+        const unsubscribeNavigate = globalThis.electronAPI.onNavigate((path) => navigate(path))
+        const unsubscribePrint = globalThis.electronAPI.onTriggerPrint(() => printCurrentView({ title: 'Page Print Preview' }))
+        const unsubscribeImport = globalThis.electronAPI.onOpenImportDialog(() => navigate('/students?import=1'))
+        const unsubscribeBackup = globalThis.electronAPI.onBackupDatabase((filePath) => {
             void (async () => {
                 try {
-                    const result = await window.electronAPI.createBackupTo(filePath)
+                    const result = await globalThis.electronAPI.createBackupTo(filePath)
                     showToast(result.success ? 'Backup saved successfully' : 'Backup failed', result.success ? 'success' : 'error')
                 } catch (error) {
                     showToast(error instanceof Error ? error.message : 'Backup failed', 'error')
                 }
             })()
         })
-        const unsubscribeCheckUpdates = window.electronAPI.onCheckForUpdates(() => {
-            window.electronAPI.checkForUpdates().catch((error) => {
+        const unsubscribeCheckUpdates = globalThis.electronAPI.onCheckForUpdates(() => {
+            globalThis.electronAPI.checkForUpdates().catch((error) => {
                 showToast(error instanceof Error ? error.message : 'Update check failed', 'error')
             })
         })
-        const unsubscribeUpdateStatus = window.electronAPI.onUpdateStatus((data: UpdateStatus) => {
+        const unsubscribeUpdateStatus = globalThis.electronAPI.onUpdateStatus((data: UpdateStatus) => {
             if (data.status === 'available') { showToast(`Update available: v${data.version}`, 'info'); return }
             if (data.status === 'downloading') { showToast(`Downloading update: ${data.progress}%`, 'info'); return }
             if (data.status === 'downloaded') { showToast(`Update ready: v${data.version}`, 'success'); return }
             if (data.status === 'error') { showToast(data.error, 'error'); return }
             if (data.status === 'not-available') { showToast('No updates available', 'info') }
         })
-        const unsubscribeDbError = window.electronAPI.onDatabaseError((message) => showToast(message, 'error'))
+        const unsubscribeDbError = globalThis.electronAPI.onDatabaseError((message) => showToast(message, 'error'))
 
         return () => {
             unsubscribeNavigate()
@@ -445,16 +445,10 @@ function SidebarBackdrop({ isOpen, closeSidebar }: Readonly<SidebarBackdropProps
     }
 
     return (
-        <div
+        <button
+            type="button"
             className="fixed inset-0 bg-background/60 backdrop-blur-sm z-40 lg:hidden animate-in fade-in duration-300"
             onClick={closeSidebar}
-            onKeyDown={(event) => {
-                if (event.key === 'Escape' || event.key === 'Enter' || event.key === ' ') {
-                    closeSidebar()
-                }
-            }}
-            role="button"
-            tabIndex={0}
             aria-label="Close sidebar"
         />
     )

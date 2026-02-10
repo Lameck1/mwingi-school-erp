@@ -1,3 +1,5 @@
+/* eslint-disable max-lines */
+
 import {
     ChevronDown,
     ChevronLeft,
@@ -257,6 +259,11 @@ function useDataTableController<T extends { id: number | string }>(props: Readon
 }
 
 function DataTableLoadingState() {
+    const skeletonKeys = useMemo(
+        () => Array.from({ length: 5 }, () => globalThis.crypto.randomUUID()),
+        []
+    )
+
     return (
         <div className="w-full space-y-4">
             <div className="flex justify-between items-center">
@@ -264,8 +271,8 @@ function DataTableLoadingState() {
                 <Skeleton className="h-10 w-32" />
             </div>
             <div className="space-y-2">
-                {Array.from({ length: 5 }).map((_, index) => (
-                    <Skeleton key={index} className="h-12 w-full" />
+                {skeletonKeys.map((key) => (
+                    <Skeleton key={key} className="h-12 w-full" />
                 ))}
             </div>
         </div>
@@ -436,6 +443,11 @@ function DataTablePagination({
     onPageChange,
     onPageSizeChange
 }: Readonly<PaginationProps>) {
+    const pageNumbers = useMemo(
+        () => Array.from({ length: totalPages }, (_, index) => index + 1),
+        [totalPages]
+    )
+
     if (totalPages <= 1) {
         return null
     }
@@ -459,13 +471,13 @@ function DataTablePagination({
                     <ChevronLeft className="w-4 h-4" />
                 </button>
                 <div className="flex items-center gap-1">
-                    {Array.from({ length: totalPages }).map((_, index) => (
+                    {pageNumbers.map((pageNumber) => (
                         <button
-                            key={index}
-                            onClick={() => onPageChange(index + 1)}
-                            className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${page === index + 1 ? 'bg-primary text-primary-foreground shadow-lg' : 'hover:bg-secondary'}`}
+                            key={pageNumber}
+                            onClick={() => onPageChange(pageNumber)}
+                            className={`w-8 h-8 rounded-lg text-xs font-medium transition-all ${page === pageNumber ? 'bg-primary text-primary-foreground shadow-lg' : 'hover:bg-secondary'}`}
                         >
-                            {index + 1}
+                            {pageNumber}
                         </button>
                     ))}
                 </div>

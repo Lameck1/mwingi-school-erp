@@ -29,28 +29,22 @@ export function Dropdown({ trigger, items, align = 'right' }: Readonly<DropdownP
 
     return (
         <div className="relative" ref={containerRef}>
-            <div
+            <button
+                type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        setIsOpen(!isOpen)
-                    }
-                }}
-                role="button"
-                tabIndex={0}
                 className="cursor-pointer"
             >
                 {trigger}
-            </div>
+            </button>
 
             {isOpen && (
                 <div
                     className={`absolute top-full mt-2 z-[100] min-w-[160px] bg-popover border border-border rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in duration-300 ${align === 'right' ? 'right-0' : 'left-0'}`}
                 >
                     <div className="py-1">
-                        {items.map((item, index) => (
+                        {items.map((item) => (
                             <button
-                                key={index}
+                                key={`${item.label}-${item.variant ?? 'default'}`}
                                 onClick={() => {
                                     item.onClick()
                                     setIsOpen(false)

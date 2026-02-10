@@ -31,12 +31,12 @@ export function Modal({
             if (e.key === 'Escape') {onClose()}
         }
         if (isOpen) {
-            document.addEventListener('keydown', handleEsc)
-            document.body.style.overflow = 'hidden'
+            globalThis.document.addEventListener('keydown', handleEsc)
+            globalThis.document.body.style.overflow = 'hidden'
         }
         return () => {
-            document.removeEventListener('keydown', handleEsc)
-            document.body.style.overflow = 'unset'
+            globalThis.document.removeEventListener('keydown', handleEsc)
+            globalThis.document.body.style.overflow = 'unset'
         }
     }, [isOpen, onClose])
 
@@ -44,16 +44,10 @@ export function Modal({
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
-            <div
+            <button
+                type="button"
                 className="absolute inset-0 bg-background/80 backdrop-blur-sm animate-in fade-in duration-300"
                 onClick={onClose}
-                onKeyDown={(e) => {
-                    if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
-                        onClose()
-                    }
-                }}
-                role="button"
-                tabIndex={0}
                 aria-label="Close modal"
             />
 
@@ -76,6 +70,6 @@ export function Modal({
                 </div>
             </div>
         </div>,
-        document.body
+        globalThis.document.body
     )
 }

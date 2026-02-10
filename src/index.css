@@ -1,6 +1,8 @@
+/* stylelint-disable at-rule-no-unknown */
 @import "tailwindcss/base";
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
+/* stylelint-enable at-rule-no-unknown */
 
 @layer base {
   :root {

@@ -10,17 +10,17 @@ export function OfflineIndicator() {
         const handleOnline = () => setIsOnline(true)
         const handleOffline = () => setIsOnline(false)
 
-        window.addEventListener('online', handleOnline)
-        window.addEventListener('offline', handleOffline)
+            globalThis.addEventListener('online', handleOnline)
+            globalThis.addEventListener('offline', handleOffline)
 
         // Listen for database errors from main process
-        const unsubscribe = window.electronAPI.onDatabaseError((message) => {
+        const unsubscribe = globalThis.electronAPI.onDatabaseError((message) => {
             setDbError(message)
         })
 
         return () => {
-            window.removeEventListener('online', handleOnline)
-            window.removeEventListener('offline', handleOffline)
+                globalThis.removeEventListener('online', handleOnline)
+                globalThis.removeEventListener('offline', handleOffline)
             unsubscribe()
         }
     }, [])
@@ -29,7 +29,7 @@ export function OfflineIndicator() {
         setRetrying(true)
         setTimeout(() => {
             setRetrying(false)
-            window.location.reload()
+                globalThis.location.reload()
         }, 1000)
     }
 
