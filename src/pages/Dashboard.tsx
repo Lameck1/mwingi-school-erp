@@ -1,19 +1,20 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { useAppStore } from '../stores'
-import { Tooltip as UITooltip } from '../components/ui/Tooltip'
-import { FeeCollectionItem } from '../types/electron-api/ReportsAPI'
-import { AuditLogEntry } from '../types/electron-api/AuditAPI'
 import {
     Users, Wallet, UserCog,
     CreditCard, UserPlus, FileText, AlertCircle,
     BarChart3, Shield
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     PieChart, Pie, Cell
 } from 'recharts'
-import { formatCurrency, formatDateTime } from '../utils/format'
+
+import { Tooltip as UITooltip } from '../components/ui/Tooltip'
+import { useAppStore } from '../stores'
+import { type AuditLogEntry } from '../types/electron-api/AuditAPI'
+import { type FeeCollectionItem } from '../types/electron-api/ReportsAPI'
+import { formatCurrencyFromCents, formatDateTime } from '../utils/format'
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#334155', '#ec4899']
 
@@ -31,7 +32,7 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        loadDashboardData()
+        void loadDashboardData()
     }, [])
 
     const loadDashboardData = async () => {
@@ -54,7 +55,7 @@ export default function Dashboard() {
             if (Array.isArray(feeData)) {
                 feeData.forEach((item: FeeCollectionItem) => {
                     const date = new Date(item.payment_date)
-                    if (isNaN(date.getTime())) return // Skip invalid dates
+                    if (isNaN(date.getTime())) {return} // Skip invalid dates
 
                     const month = date.toLocaleDateString('en-US', { month: 'short' })
                     const amount = Number(item.amount) || 0
@@ -83,13 +84,13 @@ export default function Dashboard() {
         },
         {
             label: 'Fees Collected',
-            value: formatCurrency(dashboardData?.feeCollected || 0),
+            value: formatCurrencyFromCents(dashboardData?.feeCollected || 0),
             icon: Wallet,
             color: 'from-emerald-500/20 to-teal-500/20 text-emerald-400',
         },
         {
             label: 'Outstanding Total',
-            value: formatCurrency(dashboardData?.outstandingBalance || 0),
+            value: formatCurrencyFromCents(dashboardData?.outstandingBalance || 0),
             icon: AlertCircle,
             color: 'from-amber-500/20 to-orange-500/20 text-amber-400',
         },
@@ -207,7 +208,7 @@ export default function Dashboard() {
                                         boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
                                     }}
                                     itemStyle={{ color: 'var(--primary)', fontSize: '12px', fontWeight: 'bold' }}
-                                    formatter={(value: number) => [formatCurrency(value), 'Revenue']}
+                                    formatter={(value: number) => [formatCurrencyFromCents(value), 'Revenue']}
                                 />
                                 <Bar dataKey="total" fill="url(#barGradient)" radius={[6, 6, 0, 0]} />
                             </BarChart>
@@ -295,7 +296,7 @@ export default function Dashboard() {
                                 <Tooltip
                                     contentStyle={{ backgroundColor: 'var(--popover)', border: '1px solid var(--border)', borderRadius: '12px' }}
                                     itemStyle={{ color: 'var(--foreground)' }}
-                                    formatter={(value: number) => [formatCurrency(value), 'Allocation']}
+                                    formatter={(value: number) => [formatCurrencyFromCents(value), 'Allocation']}
                                 />
                             </PieChart>
                         </ResponsiveContainer>

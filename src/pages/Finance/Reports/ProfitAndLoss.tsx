@@ -1,35 +1,23 @@
-import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { formatCurrency } from '../../../utils/format';
-import { ElectronAPI } from '../../../types/electron-api';
+import { useState, useEffect } from 'react';
 
-interface CategoryBalance {
-  category: string;
-  amount: number;
-  percentage: number;
-}
+import { formatCurrencyFromCents } from '../../../utils/format';
 
-interface ProfitAndLoss {
-  period_start: string;
-  period_end: string;
-  revenue_by_category: CategoryBalance[];
-  expenses_by_category: CategoryBalance[];
-  total_revenue: number;
-  total_expenses: number;
-  net_profit: number;
-}
+import type { ProfitAndLossReport } from '../../../types/electron-api';
+
+const formatPercentage = (percentage: number): string => `${percentage.toFixed(1)}%`;
 
 export default function ProfitAndLossPage() {
   const [startDate, setStartDate] = useState<string>(
     format(new Date(new Date().getFullYear(), 0, 1), 'yyyy-MM-dd')
   );
   const [endDate, setEndDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
-  const [profitAndLoss, setProfitAndLoss] = useState<ProfitAndLoss | null>(null);
+  const [profitAndLoss, setProfitAndLoss] = useState<ProfitAndLossReport | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadProfitAndLoss();
+    void loadProfitAndLoss();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -38,7 +26,7 @@ export default function ProfitAndLossPage() {
     setError(null);
 
     try {
-      const result = await window.electronAPI.getProfitAndLoss(startDate, endDate);
+      const result = await window.electronAPI.getProfitAndLoss(startDate, endDate) as { success: boolean; data: ProfitAndLossReport; message?: string };
 
       if (result.success) {
         setProfitAndLoss(result.data);
@@ -50,10 +38,6 @@ export default function ProfitAndLossPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatPercentage = (percentage: number): string => {
-    return `${percentage.toFixed(1)}%`;
   };
 
   if (loading) {
@@ -75,8 +59,8 @@ export default function ProfitAndLossPage() {
 
       <div className="bg-white rounded-lg shadow p-4 mb-6">
         <div className="flex items-center gap-4">
-          <label className="text-sm font-medium text-gray-700">Period:</label>
-          <input
+          <label htmlFor="field-64" className="text-sm font-medium text-gray-700">Period:</label>
+          <input id="field-64"
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
@@ -127,13 +111,13 @@ export default function ProfitAndLossPage() {
                       <span className="text-gray-500 text-sm ml-2">({formatPercentage(item.percentage)})</span>
                     </div>
                     <div className="text-gray-900 font-medium">
-                      {formatCurrency(item.amount)}
+                      {formatCurrencyFromCents(item.amount)}
                     </div>
                   </div>
                 ))}
                 <div className="flex justify-between py-3 border-t-2 border-gray-900 font-bold">
                   <span>Total Revenue</span>
-                  <span className="text-green-700">{formatCurrency(profitAndLoss.total_revenue)}</span>
+                  <span className="text-green-700">{formatCurrencyFromCents(profitAndLoss.total_revenue)}</span>
                 </div>
               </div>
             </div>
@@ -149,13 +133,13 @@ export default function ProfitAndLossPage() {
                       <span className="text-gray-500 text-sm ml-2">({formatPercentage(item.percentage)})</span>
                     </div>
                     <div className="text-gray-900 font-medium">
-                      {formatCurrency(item.amount)}
+                      {formatCurrencyFromCents(item.amount)}
                     </div>
                   </div>
                 ))}
                 <div className="flex justify-between py-3 border-t-2 border-gray-900 font-bold">
                   <span>Total Expenses</span>
-                  <span className="text-red-700">{formatCurrency(profitAndLoss.total_expenses)}</span>
+                  <span className="text-red-700">{formatCurrencyFromCents(profitAndLoss.total_expenses)}</span>
                 </div>
               </div>
             </div>
@@ -167,7 +151,7 @@ export default function ProfitAndLossPage() {
                   {profitAndLoss.net_profit >= 0 ? 'NET PROFIT' : 'NET LOSS'}
                 </h2>
                 <div className={`text-2xl font-bold ${profitAndLoss.net_profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                  {formatCurrency(Math.abs(profitAndLoss.net_profit))}
+                  {formatCurrencyFromCents(Math.abs(profitAndLoss.net_profit))}
                 </div>
               </div>
               {profitAndLoss.total_revenue > 0 && (
@@ -182,4 +166,3 @@ export default function ProfitAndLossPage() {
     </div>
   );
 }
-

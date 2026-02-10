@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useCallback } from 'react'
-import { shillingsToCents } from '../../utils/format'
-import { useAuthStore } from '../../stores'
 import { Plus, Check, Loader2, ArrowRightCircle, Wallet, Tag, CreditCard, FileText, Calendar } from 'lucide-react'
-import { useToast } from '../../contexts/ToastContext'
+import React, { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { TransactionCategory } from '../../types/electron-api/FinanceAPI'
+
+import { useToast } from '../../contexts/ToastContext'
+import { useAuthStore } from '../../stores'
+import { type TransactionCategory } from '../../types/electron-api/FinanceAPI'
+import { shillingsToCents } from '../../utils/format'
 
 export default function RecordIncome() {
     const { user } = useAuthStore()
@@ -37,11 +38,11 @@ export default function RecordIncome() {
     }, [showToast])
 
     useEffect(() => {
-        loadCategories()
+        void loadCategories()
     }, [loadCategories])
 
     const handleCreateCategory = async () => {
-        if (!newCategory.trim()) return
+        if (!newCategory.trim()) {return}
         try {
             setLoading(true)
             await window.electronAPI.createTransactionCategory(newCategory, 'INCOME')

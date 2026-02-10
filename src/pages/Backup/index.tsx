@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
 import { Download, Upload, CheckCircle, Loader2, Database, ShieldAlert, History, FileStack, HardDrive } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+
 import { useToast } from '../../contexts/ToastContext'
 
 export default function Backup() {
@@ -19,7 +20,7 @@ export default function Backup() {
     }, [])
 
     useEffect(() => {
-        loadBackups()
+        void loadBackups()
     }, [loadBackups])
 
     const handleBackup = async () => {
@@ -33,7 +34,7 @@ export default function Backup() {
                 const msg = `Snapshot synchronized to storage path: ${res.path}`
                 setResult({ type: 'success', message: msg })
                 showToast('Database snapshot established', 'success')
-                loadBackups()
+                void loadBackups()
             } else {
                 setResult({ type: 'error', message: 'Synchronization sequence failed' })
                 showToast('Backup orchestration failed', 'error')
@@ -46,7 +47,7 @@ export default function Backup() {
     }
 
     const handleRestore = async (filename?: string) => {
-        if (!confirm('CRITICAL: This will overwrite all active environmental data. This action is irreversible. Proceed?')) return
+        if (!confirm('CRITICAL: This will overwrite all active environmental data. This action is irreversible. Proceed?')) {return}
 
         if (!filename) {
             showToast('Identify a source artifact for restoration', 'error')
@@ -70,7 +71,7 @@ export default function Backup() {
             const msg = error instanceof Error ? error.message : 'Critical restoration failure'
             setResult({ type: 'error', message: msg })
             showToast('Restoration orchestration failed', 'error')
-        } finally { setBacking(false) }
+        } finally { setRestoring(false) }
     }
 
     return (

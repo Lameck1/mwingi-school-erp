@@ -1,18 +1,21 @@
-import { useState, useEffect } from 'react'
 import { Clock, PlayCircle, TrendingDown } from 'lucide-react'
+import { useState, useEffect } from 'react'
+
 import { PageHeader } from '../../../components/patterns/PageHeader'
+import { useToast } from '../../../contexts/ToastContext'
 import { useAuthStore, useAppStore } from '../../../stores'
-import { formatCurrency } from '../../../utils/format'
-import { FixedAsset } from '../../../types/electron-api/FixedAssetAPI'
+import { type FixedAsset } from '../../../types/electron-api/FixedAssetAPI'
+import { formatCurrencyFromCents } from '../../../utils/format'
 
 export default function Depreciation() {
     const { user } = useAuthStore()
     const { currentAcademicYear } = useAppStore()
+    const { showToast } = useToast()
     const [assets, setAssets] = useState<FixedAsset[]>([])
     const [processing, setProcessing] = useState<number | null>(null)
 
     useEffect(() => {
-        loadAssets()
+        void loadAssets()
     }, [])
 
     const loadAssets = async () => {
@@ -25,21 +28,25 @@ export default function Depreciation() {
     }
 
     const handleRunDepreciation = async (asset: FixedAsset) => {
-        if (!confirm(`Run depreciation for ${asset.asset_name}? This action cannot be undone.`)) return
+        if (!confirm(`Run depreciation for ${asset.asset_name}? This action cannot be undone.`)) {return}
+        if (!user?.id) {
+            showToast('You must be signed in to run depreciation', 'error')
+            return
+        }
 
         setProcessing(asset.id)
         try {
             // Using a dummy period ID = 1 for now if no period management exists in UI
             // Ideally should select a financial period
-            const result = await window.electronAPI.runDepreciation(asset.id, 1, user?.id || 1)
+            const result = await window.electronAPI.runDepreciation(asset.id, 1, user.id)
 
             if (result.success) {
                 alert('Depreciation posted successfully')
-                loadAssets()
+                void loadAssets()
             } else {
                 alert('Failed: ' + result.error)
             }
-        } catch (error) {
+        } catch {
             alert('Error processing depreciation')
         } finally {
             setProcessing(null)
@@ -63,7 +70,7 @@ export default function Depreciation() {
                         <div>
                             <p className="text-sm font-bold text-foreground/60 uppercase tracking-wider">Total Book Value</p>
                             <h3 className="text-2xl font-bold text-white font-mono">
-                                {formatCurrency(assets.reduce((sum, a) => sum + a.current_value, 0))}
+                                {formatCurrencyFromCents(assets.reduce((sum, a) => sum + a.current_value, 0))}
                             </h3>
                         </div>
                     </div>
@@ -96,12 +103,12 @@ export default function Depreciation() {
                                         <div className="text-[10px] text-foreground/40 font-mono">{asset.asset_code}</div>
                                     </td>
                                     <td className="px-4 py-4 text-sm text-foreground/70">{asset.category_name}</td>
-                                    <td className="px-4 py-4 text-right font-mono text-sm text-foreground/60">{formatCurrency(asset.acquisition_cost)}</td>
+                                    <td className="px-4 py-4 text-right font-mono text-sm text-foreground/60">{formatCurrencyFromCents(asset.acquisition_cost)}</td>
                                     <td className="px-4 py-4 text-right font-mono text-sm text-amber-400/80">
-                                        {formatCurrency(asset.accumulated_depreciation)}
+                                        {formatCurrencyFromCents(asset.accumulated_depreciation)}
                                     </td>
                                     <td className="px-4 py-4 text-right font-mono font-bold text-white">
-                                        {formatCurrency(asset.current_value)}
+                                        {formatCurrencyFromCents(asset.current_value)}
                                     </td>
                                     <td className="px-4 py-4 text-center">
                                         <button

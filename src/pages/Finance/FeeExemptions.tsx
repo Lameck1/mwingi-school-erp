@@ -1,9 +1,27 @@
 import React, { useState, useEffect, useCallback } from 'react'
+
 import { useAuthStore } from '../../stores'
-import { FeeExemption, ExemptionStats } from '../../types/electron-api/ExemptionAPI'
-import { AcademicYear, Term } from '../../types/electron-api/AcademicAPI'
-import { Student } from '../../types/electron-api/StudentAPI'
-import { FeeCategory } from '../../types/electron-api/FinanceAPI'
+import { type AcademicYear, type Term } from '../../types/electron-api/AcademicAPI'
+import { type FeeExemption, type ExemptionStats } from '../../types/electron-api/ExemptionAPI'
+import { type FeeCategory } from '../../types/electron-api/FinanceAPI'
+import { type Student } from '../../types/electron-api/StudentAPI'
+
+const getReasonBadgeColor = (reason: string): string => {
+    const lowerReason = reason.toLowerCase()
+    if (lowerReason.includes('scholarship')) {
+        return 'bg-blue-100 text-blue-800'
+    }
+    if (lowerReason.includes('staff')) {
+        return 'bg-purple-100 text-purple-800'
+    }
+    if (lowerReason.includes('bursary')) {
+        return 'bg-green-100 text-green-800'
+    }
+    if (lowerReason.includes('orphan')) {
+        return 'bg-orange-100 text-orange-800'
+    }
+    return 'bg-gray-100 text-gray-800'
+}
 
 export default function FeeExemptions() {
     const { user } = useAuthStore()
@@ -72,7 +90,7 @@ export default function FeeExemptions() {
     }, [statusFilter])
 
     useEffect(() => {
-        loadData()
+        void loadData()
     }, [loadData])
 
     useEffect(() => {
@@ -95,7 +113,7 @@ export default function FeeExemptions() {
     }, [statusFilter])
 
     useEffect(() => {
-        loadExemptions()
+        void loadExemptions()
     }, [loadExemptions])
 
     const handleYearChange = async (yearId: number) => {
@@ -136,7 +154,7 @@ export default function FeeExemptions() {
                 fee_category_id: 0, exemption_percentage: '', exemption_reason: '', notes: ''
             })
             setSelectedStudent(null)
-            loadData()
+            void loadData()
         } else {
             alert(`Error: ${result.errors?.join(', ')}`)
         }
@@ -154,19 +172,10 @@ export default function FeeExemptions() {
             setShowRevokeModal(false)
             setSelectedExemption(null)
             setRevokeReason('')
-            loadData()
+            void loadData()
         } else {
             alert(`Error: ${result.errors?.join(', ')}`)
         }
-    }
-
-    const getReasonBadgeColor = (reason: string) => {
-        const lowerReason = reason.toLowerCase()
-        if (lowerReason.includes('scholarship')) return 'bg-blue-100 text-blue-800'
-        if (lowerReason.includes('staff')) return 'bg-purple-100 text-purple-800'
-        if (lowerReason.includes('bursary')) return 'bg-green-100 text-green-800'
-        if (lowerReason.includes('orphan')) return 'bg-orange-100 text-orange-800'
-        return 'bg-gray-100 text-gray-800'
     }
 
     if (loading) {
@@ -307,7 +316,7 @@ export default function FeeExemptions() {
                         <form onSubmit={handleCreate} className="space-y-4">
                             {/* Student Search */}
                             <div className="relative">
-                                <label className="block text-sm font-medium mb-1">Student *</label>
+                                <label htmlFor="field-311" className="block text-sm font-medium mb-1">Student *</label>
                                 {selectedStudent ? (
                                     <div className="flex items-center justify-between p-2 border rounded-lg bg-blue-50">
                                         <span>{selectedStudent.first_name} {selectedStudent.last_name} ({selectedStudent.admission_number})</span>
@@ -315,7 +324,7 @@ export default function FeeExemptions() {
                                     </div>
                                 ) : (
                                     <>
-                                        <input
+                                        <input id="field-311"
                                             type="text"
                                             value={studentSearch}
                                             onChange={(e) => setStudentSearch(e.target.value)}
@@ -348,8 +357,8 @@ export default function FeeExemptions() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Academic Year *</label>
-                                    <select
+                                    <label htmlFor="field-352" className="block text-sm font-medium mb-1">Academic Year *</label>
+                                    <select id="field-352"
                                         value={formData.academic_year_id}
                                         onChange={(e) => handleYearChange(parseInt(e.target.value))}
                                         className="w-full border rounded-lg p-2"
@@ -363,8 +372,8 @@ export default function FeeExemptions() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Term (Optional)</label>
-                                    <select
+                                    <label htmlFor="field-367" className="block text-sm font-medium mb-1">Term (Optional)</label>
+                                    <select id="field-367"
                                         value={formData.term_id}
                                         onChange={(e) => setFormData({ ...formData, term_id: parseInt(e.target.value) })}
                                         className="w-full border rounded-lg p-2"
@@ -380,8 +389,8 @@ export default function FeeExemptions() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Fee Category (Optional)</label>
-                                    <select
+                                    <label htmlFor="field-384" className="block text-sm font-medium mb-1">Fee Category (Optional)</label>
+                                    <select id="field-384"
                                         value={formData.fee_category_id}
                                         onChange={(e) => setFormData({ ...formData, fee_category_id: parseInt(e.target.value) })}
                                         className="w-full border rounded-lg p-2"
@@ -394,8 +403,8 @@ export default function FeeExemptions() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium mb-1">Exemption Percentage *</label>
-                                    <input
+                                    <label htmlFor="field-398" className="block text-sm font-medium mb-1">Exemption Percentage *</label>
+                                    <input id="field-398"
                                         type="number"
                                         value={formData.exemption_percentage}
                                         onChange={(e) => setFormData({ ...formData, exemption_percentage: e.target.value })}
@@ -409,8 +418,8 @@ export default function FeeExemptions() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium mb-1">Reason *</label>
-                                <select
+                                <label htmlFor="field-413" className="block text-sm font-medium mb-1">Reason *</label>
+                                <select id="field-413"
                                     value={formData.exemption_reason}
                                     onChange={(e) => setFormData({ ...formData, exemption_reason: e.target.value })}
                                     className="w-full border rounded-lg p-2"
@@ -428,8 +437,8 @@ export default function FeeExemptions() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium mb-1">Notes</label>
-                                <textarea
+                                <label htmlFor="field-432" className="block text-sm font-medium mb-1">Notes</label>
+                                <textarea id="field-432"
                                     value={formData.notes}
                                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                                     className="w-full border rounded-lg p-2"
@@ -467,8 +476,8 @@ export default function FeeExemptions() {
                             Are you sure you want to revoke the {selectedExemption.exemption_percentage}% exemption for {selectedExemption.student_name}?
                         </p>
                         <div className="mb-4">
-                            <label className="block text-sm font-medium mb-1">Reason for Revocation *</label>
-                            <textarea
+                            <label htmlFor="field-471" className="block text-sm font-medium mb-1">Reason for Revocation *</label>
+                            <textarea id="field-471"
                                 value={revokeReason}
                                 onChange={(e) => setRevokeReason(e.target.value)}
                                 className="w-full border rounded-lg p-2"

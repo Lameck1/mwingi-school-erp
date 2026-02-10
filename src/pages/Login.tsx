@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAuthStore, useAppStore } from '../stores'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+
+import { useAuthStore, useAppStore } from '../stores'
 
 export default function Login() {
     const navigate = useNavigate()
@@ -14,6 +15,20 @@ export default function Login() {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
 
+    useEffect(() => {
+        const checkSetup = async () => {
+            try {
+                const hasUsers = await window.electronAPI.hasUsers()
+                if (!hasUsers) {
+                    navigate('/setup')
+                }
+            } catch (err) {
+                console.error('Failed to check setup state:', err)
+            }
+        }
+        void checkSetup()
+    }, [navigate])
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setError('')
@@ -24,19 +39,23 @@ export default function Login() {
 
             if (result.success && result.user) {
                 login(result.user)
-
-                // Load app data
-                const [settings, academicYear, currentTerm] = await Promise.all([
-                    window.electronAPI.getSettings(),
-                    window.electronAPI.getCurrentAcademicYear(),
-                    window.electronAPI.getCurrentTerm(),
-                ])
-
-                setSchoolSettings(settings)
-                setCurrentAcademicYear(academicYear)
-                setCurrentTerm(currentTerm)
-
                 navigate('/')
+
+                // Load app data in background; don't block login
+                void (async () => {
+                    try {
+                        const [settings, academicYear, currentTerm] = await Promise.all([
+                            window.electronAPI.getSettings(),
+                            window.electronAPI.getCurrentAcademicYear(),
+                            window.electronAPI.getCurrentTerm(),
+                        ])
+                        if (settings) {setSchoolSettings(settings)}
+                        if (academicYear) {setCurrentAcademicYear(academicYear)}
+                        if (currentTerm) {setCurrentTerm(currentTerm)}
+                    } catch (err) {
+                        console.error('Post-login bootstrap failed:', err)
+                    }
+                })()
             } else {
                 setError(result.error || 'Login failed')
             }
@@ -71,8 +90,9 @@ export default function Login() {
 
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <div>
-                            <label className="label">Username</label>
+                            <label className="label" htmlFor="login-username">Username</label>
                             <input
+                                id="login-username"
                                 type="text"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
@@ -84,9 +104,10 @@ export default function Login() {
                         </div>
 
                         <div>
-                            <label className="label">Password</label>
+                            <label className="label" htmlFor="login-password">Password</label>
                             <div className="relative">
                                 <input
+                                    id="login-password"
                                     type={showPassword ? 'text' : 'password'}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
@@ -122,8 +143,7 @@ export default function Login() {
                     </form>
 
                     <div className="mt-6 pt-6 border-t border-gray-100 text-center text-sm text-gray-500">
-                        <p>Default credentials:</p>
-                        <p className="font-mono mt-1">admin / admin123</p>
+                        <p>Use your assigned credentials to sign in.</p>
                     </div>
                 </div>
 

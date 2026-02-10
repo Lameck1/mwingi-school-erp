@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react'
 import {
     TrendingUp, DollarSign, Activity,
     Download
 } from 'lucide-react'
+import React, { useState, useEffect, useCallback } from 'react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts'
+
 import { PageHeader } from '../../../components/patterns/PageHeader'
 import { StatCard } from '../../../components/patterns/StatCard'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts'
-import { formatCurrency } from '../../../utils/format'
+import { type CashFlowStatement, type FinancialForecast } from '../../../types/electron-api'
 import { exportToPDF } from '../../../utils/exporters'
-import { CashFlowStatement, FinancialForecast } from '../../../types/electron-api'
+import { formatCurrencyFromCents } from '../../../utils/format'
 
 export default function CashFlow() {
     const [loading, setLoading] = useState(false)
@@ -38,12 +39,12 @@ export default function CashFlow() {
     }, [dateRange])
 
     useEffect(() => {
-        loadData()
+        void loadData()
     }, [loadData])
 
-    const handleExport = () => {
-        if (!statement) return
-        exportToPDF({
+    const handleExport = async () => {
+        if (!statement) {return}
+        await exportToPDF({
             filename: `cash-flow-${dateRange.start}`,
             title: 'Statement of Cash Flows',
             subtitle: `Period: ${dateRange.start} to ${dateRange.end}`,
@@ -140,9 +141,9 @@ export default function CashFlow() {
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             {/* Summary Cards */}
                             <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <StatCard label="Net Operating Cash" value={formatCurrency(statement.op_net)} icon={Activity} color={statement.op_net >= 0 ? "text-green-400" : "text-red-400"} />
-                                <StatCard label="Net Investing Cash" value={formatCurrency(statement.inv_net)} icon={TrendingUp} color="text-blue-400" />
-                                <StatCard label="Net Change" value={formatCurrency(statement.net_change)} icon={DollarSign} color={statement.net_change >= 0 ? "text-green-400" : "text-red-400"} />
+                                <StatCard label="Net Operating Cash" value={formatCurrencyFromCents(statement.op_net)} icon={Activity} color={statement.op_net >= 0 ? "text-green-400" : "text-red-400"} />
+                                <StatCard label="Net Investing Cash" value={formatCurrencyFromCents(statement.inv_net)} icon={TrendingUp} color="text-blue-400" />
+                                <StatCard label="Net Change" value={formatCurrencyFromCents(statement.net_change)} icon={DollarSign} color={statement.net_change >= 0 ? "text-green-400" : "text-red-400"} />
                             </div>
 
                             {/* Detail Table */}
@@ -158,7 +159,7 @@ export default function CashFlow() {
                                     </Section>
                                     <div className="pt-4 border-t border-border/20 flex justify-between items-center text-lg font-bold text-foreground">
                                         <span>Net Increase / (Decrease) in Cash</span>
-                                        <span>{formatCurrency(statement.net_change)}</span>
+                                        <span>{formatCurrencyFromCents(statement.net_change)}</span>
                                     </div>
                                 </div>
                             </div>
@@ -171,10 +172,10 @@ export default function CashFlow() {
                                         <BarChart data={waterfallData}>
                                             <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
                                             <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} />
-                                            <YAxis stroke="#94a3b8" fontSize={10} tickFormatter={(val) => (val / 1000).toFixed(0) + 'k'} />
+                                            <YAxis stroke="#94a3b8" fontSize={10} tickFormatter={(val) => (val / 100000).toFixed(0) + 'k'} />
                                             <Tooltip
                                                 contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155' }}
-                                                formatter={(val: number) => formatCurrency(val)}
+                                                formatter={(val: number) => formatCurrencyFromCents(val)}
                                             />
                                             <Bar dataKey="param" fill="#3b82f6" />
                                         </BarChart>
@@ -192,10 +193,10 @@ export default function CashFlow() {
                                     <LineChart data={forecastChartData}>
                                         <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
                                         <XAxis dataKey="month" stroke="#94a3b8" />
-                                        <YAxis stroke="#94a3b8" tickFormatter={(val) => (val).toFixed(0)} />
+                                        <YAxis stroke="#94a3b8" tickFormatter={(val) => (val / 100).toFixed(0)} />
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155' }}
-                                            formatter={(val: number) => formatCurrency(val)}
+                                            formatter={(val: number) => formatCurrencyFromCents(val)}
                                         />
                                         <Legend />
                                         <Line type="monotone" dataKey="Actual" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
@@ -214,7 +215,7 @@ export default function CashFlow() {
     )
 }
 
-function Section({ title, net, children }: { title: string, net: number, children: React.ReactNode }) {
+function Section({ title, net, children }: Readonly<{ title: string; net: number; children: React.ReactNode }>) {
     return (
         <div className="space-y-2">
             <h4 className="text-sm font-bold text-foreground/60 uppercase tracking-wider">{title}</h4>
@@ -222,18 +223,18 @@ function Section({ title, net, children }: { title: string, net: number, childre
                 {children}
                 <div className="flex justify-between items-center pt-2 font-bold text-foreground">
                     <span>Net Cash from {title.replace('Activities', '')}</span>
-                    <span className={net >= 0 ? 'text-emerald-500' : 'text-red-500'}>{formatCurrency(net)}</span>
+                    <span className={net >= 0 ? 'text-emerald-500' : 'text-red-500'}>{formatCurrencyFromCents(net)}</span>
                 </div>
             </div>
         </div>
     )
 }
 
-function Row({ label, amount }: { label: string, amount: number }) {
+function Row({ label, amount }: Readonly<{ label: string; amount: number }>) {
     return (
         <div className="flex justify-between items-center text-sm">
             <span className="text-foreground/80">{label}</span>
-            <span className="font-mono">{formatCurrency(amount)}</span>
+            <span className="font-mono">{formatCurrencyFromCents(amount)}</span>
         </div>
     )
 }

@@ -32,10 +32,10 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         this.setState({ hasError: false, error: null })
     }
 
-    render(): React.ReactNode {
+    render(): JSX.Element {
         if (this.state.hasError) {
             if (this.props.fallback) {
-                return this.props.fallback
+                return <>{this.props.fallback}</>
             }
             return (
                 <div className="flex flex-col items-center justify-center min-h-[400px] p-8 text-center">
@@ -61,6 +61,6 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             )
         }
 
-        return this.props.children
+        return <>{this.props.children}</>
     }
 }

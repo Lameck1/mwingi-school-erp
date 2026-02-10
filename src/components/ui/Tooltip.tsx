@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react'
+
 import { cn } from '../../utils/cn'
 
 interface TooltipProps {
@@ -29,7 +30,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
     }
 
     const hideTooltip = () => {
-        if (timeoutRef.current) clearTimeout(timeoutRef.current)
+        if (timeoutRef.current) {clearTimeout(timeoutRef.current)}
         setIsVisible(false)
         // Wait for animation to finish before unmounting
         setTimeout(() => setShouldRender(false), 150)

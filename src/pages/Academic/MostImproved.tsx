@@ -1,9 +1,10 @@
 
+import { Download, Mail, Award } from 'lucide-react'
 import { useState, useCallback, useEffect } from 'react'
+
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
-import { useAppStore } from '../../stores'
-import { Download, Mail, Award } from 'lucide-react'
+import { useAppStore, useAuthStore } from '../../stores'
 
 interface ImprovedStudent {
   student_id: number
@@ -20,6 +21,7 @@ interface ImprovedStudent {
 
 const MostImproved = () => {
   const { currentAcademicYear, currentTerm } = useAppStore()
+  const { user } = useAuthStore()
 
   const [terms, setTerms] = useState<{ id: number; name: string }[]>([])
   const [streams, setStreams] = useState<{ id: number; stream_name: string }[]>([])
@@ -66,7 +68,7 @@ const MostImproved = () => {
   }, [currentAcademicYear, currentTerm])
 
   useEffect(() => {
-    loadInitialData()
+    void loadInitialData()
   }, [loadInitialData])
 
   const handleGenerateMostImproved = async () => {
@@ -127,11 +129,15 @@ const MostImproved = () => {
     }
 
     try {
+      if (!user?.id) {
+        alert('Please sign in again to send emails.')
+        return
+      }
       await window.electronAPI.emailParents({
         students: improvedStudents,
         awardCategory: selectedAward,
         templateType: 'improvement_award'
-      })
+      }, user.id)
       alert(`Emails sent to ${improvedStudents.length} parents!`)
     } catch (error) {
       console.error('Failed to send emails:', error)
@@ -165,6 +171,73 @@ const MostImproved = () => {
     a.href = url
     a.download = `Most_Improved_Students.csv`
     a.click()
+  }
+
+  const renderMostImprovedContent = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center h-64 text-foreground/40">
+          <p>Analyzing improvements...</p>
+        </div>
+      )
+    }
+
+    if (improvedStudents.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 text-foreground/40">
+          <p>Select terms and click "Identify Most Improved" to generate list</p>
+        </div>
+      )
+    }
+
+    return (
+      <div>
+        <div className="mb-4 pb-4 border-b border-white/10">
+          <h2 className="text-xl font-bold">Most Improved Students</h2>
+          <p className="text-sm text-foreground/60 mt-1">
+            Total: {improvedStudents.length} students | Minimum Improvement: {minimumImprovement}%
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className="pb-4 pt-2 font-bold text-foreground/60">Rank</th>
+                <th className="pb-4 pt-2 font-bold text-foreground/60">Adm No</th>
+                <th className="pb-4 pt-2 font-bold text-foreground/60">Student Name</th>
+                <th className="pb-4 pt-2 font-bold text-foreground/60">Previous Avg</th>
+                <th className="pb-4 pt-2 font-bold text-foreground/60">Current Avg</th>
+                <th className="pb-4 pt-2 font-bold text-foreground/60">Improvement</th>
+                <th className="pb-4 pt-2 font-bold text-foreground/60">Grade Change</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {improvedStudents.map((student, index) => (
+                <tr key={student.student_id} className="hover:bg-white/[0.02]">
+                  <td className="py-4 pr-4">
+                    <span className="inline-block px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 font-bold text-sm">
+                      #{index + 1}
+                    </span>
+                  </td>
+                  <td className="py-4 pr-4">{student.admission_number}</td>
+                  <td className="py-4 pr-4 font-medium">{student.student_name}</td>
+                  <td className="py-4 pr-4">{student.previous_term_average.toFixed(2)}</td>
+                  <td className="py-4 pr-4">{student.current_term_average.toFixed(2)}</td>
+                  <td className="py-4 pr-4">
+                    <span className="inline-block px-2 py-1 rounded bg-green-500/20 text-green-400 font-bold">
+                      +{student.improvement_percentage.toFixed(1)}%
+                    </span>
+                  </td>
+                  <td className="py-4 pr-4">
+                    <span className="text-sm">{student.grade_improvement}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -206,8 +279,8 @@ const MostImproved = () => {
             ]}
           />
           <div>
-            <label className="block text-sm font-medium mb-2">Min. Improvement (%)</label>
-            <input
+            <label htmlFor="field-215" className="block text-sm font-medium mb-2">Min. Improvement (%)</label>
+            <input id="field-215"
               type="number"
               value={minimumImprovement}
               onChange={(e) => setMinimumImprovement(Number(e.target.value))}
@@ -263,62 +336,7 @@ const MostImproved = () => {
       )}
 
       <div className="premium-card min-h-[400px]">
-        {loading ? (
-          <div className="flex items-center justify-center h-64 text-foreground/40">
-            <p>Analyzing improvements...</p>
-          </div>
-        ) : improvedStudents.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-foreground/40">
-            <p>Select terms and click "Identify Most Improved" to generate list</p>
-          </div>
-        ) : (
-          <div>
-            <div className="mb-4 pb-4 border-b border-white/10">
-              <h2 className="text-xl font-bold">Most Improved Students</h2>
-              <p className="text-sm text-foreground/60 mt-1">
-                Total: {improvedStudents.length} students | Minimum Improvement: {minimumImprovement}%
-              </p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="border-b border-white/10">
-                    <th className="pb-4 pt-2 font-bold text-foreground/60">Rank</th>
-                    <th className="pb-4 pt-2 font-bold text-foreground/60">Adm No</th>
-                    <th className="pb-4 pt-2 font-bold text-foreground/60">Student Name</th>
-                    <th className="pb-4 pt-2 font-bold text-foreground/60">Previous Avg</th>
-                    <th className="pb-4 pt-2 font-bold text-foreground/60">Current Avg</th>
-                    <th className="pb-4 pt-2 font-bold text-foreground/60">Improvement</th>
-                    <th className="pb-4 pt-2 font-bold text-foreground/60">Grade Change</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {improvedStudents.map((student, index) => (
-                    <tr key={student.student_id} className="hover:bg-white/[0.02]">
-                      <td className="py-4 pr-4">
-                        <span className="inline-block px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 font-bold text-sm">
-                          #{index + 1}
-                        </span>
-                      </td>
-                      <td className="py-4 pr-4">{student.admission_number}</td>
-                      <td className="py-4 pr-4 font-medium">{student.student_name}</td>
-                      <td className="py-4 pr-4">{student.previous_term_average.toFixed(2)}</td>
-                      <td className="py-4 pr-4">{student.current_term_average.toFixed(2)}</td>
-                      <td className="py-4 pr-4">
-                        <span className="inline-block px-2 py-1 rounded bg-green-500/20 text-green-400 font-bold">
-                          +{student.improvement_percentage.toFixed(1)}%
-                        </span>
-                      </td>
-                      <td className="py-4 pr-4">
-                        <span className="text-sm">{student.grade_improvement}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+        {renderMostImprovedContent()}
       </div>
     </div>
   )

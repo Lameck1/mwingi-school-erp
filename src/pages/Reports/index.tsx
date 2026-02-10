@@ -1,13 +1,17 @@
-import { useState, useEffect, ElementType } from 'react'
 import {
     Download, FileText, Users, TrendingUp, TrendingDown,
     Calendar, AlertCircle, MessageSquare, Loader2, Search, Printer
 } from 'lucide-react'
-import { StatCard } from '../../components/patterns/StatCard'
-import { formatCurrency } from '../../utils/format'
-import { InstitutionalHeader } from '../../components/patterns/InstitutionalHeader'
+import { useState, useEffect, type ElementType } from 'react'
+import { useLocation } from 'react-router-dom'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell } from 'recharts'
+
+import { InstitutionalHeader } from '../../components/patterns/InstitutionalHeader'
+import { StatCard } from '../../components/patterns/StatCard'
+import { useAuthStore } from '../../stores'
 import { exportToPDF, downloadCSV } from '../../utils/exporters'
+import { formatCurrencyFromCents } from '../../utils/format'
+import { printCurrentView } from '../../utils/print'
 
 const COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed']
 const COLOR_CLASSES = ['bg-blue-600', 'bg-emerald-600', 'bg-amber-600', 'bg-red-600', 'bg-violet-600']
@@ -29,7 +33,7 @@ interface Defaulter {
     admission_number: string
     first_name: string
     last_name: string
-    stream_name: string
+    stream_name?: string
     total_amount: number
     amount_paid: number
     balance: number
@@ -39,7 +43,7 @@ interface Defaulter {
 interface DailyCollectionItem {
     admission_number: string
     student_name: string;
-    stream_name: string;
+    stream_name?: string;
     amount: number;
     payment_method: string;
     payment_reference?: string
@@ -47,6 +51,8 @@ interface DailyCollectionItem {
 }
 
 export default function Reports() {
+    const { user } = useAuthStore()
+    const location = useLocation()
     const [loading, setLoading] = useState(false)
     const [dateRange, setDateRange] = useState({
         start: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
@@ -88,9 +94,9 @@ export default function Reports() {
             // Group by month
             const monthlyData: Record<string, number> = {}
             currentFeeData.forEach((item) => {
-                if (!item.payment_date) return
+                if (!item.payment_date) {return}
                 const d = new Date(item.payment_date)
-                if (isNaN(d.getTime())) return
+                if (isNaN(d.getTime())) {return}
                 const month = d.toLocaleDateString('en-US', { month: 'short' })
                 monthlyData[month] = (monthlyData[month] || 0) + item.amount
             })
@@ -119,11 +125,11 @@ export default function Reports() {
 
             // Load defaulters
             const defaulterData = await window.electronAPI.getDefaulters()
-            setDefaulters(Array.isArray(defaulterData) ? defaulterData : [])
+            setDefaulters(Array.isArray(defaulterData) ? (defaulterData) : [])
 
             // Load daily collections
             const dailyData = await window.electronAPI.getDailyCollection(selectedDate)
-            setDailyCollections(Array.isArray(dailyData) ? dailyData : [])
+            setDailyCollections(Array.isArray(dailyData) ? (dailyData as DailyCollectionItem[]) : [])
         } catch (error) {
             console.error('Failed to load report data:', error)
         } finally {
@@ -132,24 +138,36 @@ export default function Reports() {
     }
 
     useEffect(() => {
-        loadReportData()
+        void loadReportData()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [dateRange, selectedDate])
+
+    useEffect(() => {
+        const params = new URLSearchParams(location.search)
+        const tab = params.get('tab')
+        if (tab === 'fee-collection' || tab === 'defaulters' || tab === 'daily-collection' || tab === 'students' || tab === 'financial') {
+            setActiveTab(tab)
+        }
+    }, [location.search])
 
     const handleSendReminder = async (student: Defaulter) => {
         if (!student.guardian_phone) {
             alert('Guardian phone number missing')
             return
         }
+        if (!user?.id) {
+            alert('You must be signed in to send reminders')
+            return
+        }
 
         try {
-            const message = `Fee Reminder: ${student.first_name} has an outstanding balance of KES ${student.balance}. Please settle at your earliest convenience. Thank you.`
+            const message = `Fee Reminder: ${student.first_name} has an outstanding balance of ${formatCurrencyFromCents(student.balance)}. Please settle at your earliest convenience. Thank you.`
             const result = await window.electronAPI.sendSMS({
                 to: student.guardian_phone,
                 message,
                 recipientId: Number(student.id),
                 recipientType: 'STUDENT',
-                userId: 1
+                userId: user.id
             })
 
             if (result.success) {
@@ -157,13 +175,17 @@ export default function Reports() {
             } else {
                 alert('Failed to send: ' + result.error)
             }
-        } catch (error) {
+        } catch {
             alert('Error sending reminder')
         }
     }
 
     const handleBulkReminders = async () => {
-        if (!confirm(`Send reminders to ${defaulters.length} guardians?`)) return
+        if (!confirm(`Send reminders to ${defaulters.length} guardians?`)) {return}
+        if (!user?.id) {
+            alert('You must be signed in to send reminders')
+            return
+        }
 
         setSendingBulk(true)
         let sentCount = 0
@@ -176,17 +198,17 @@ export default function Reports() {
             }
 
             try {
-                const message = `Fee Reminder: ${student.first_name} has an outstanding balance of KES ${student.balance}. Please settle at your earliest convenience. Thank you.`
+                const message = `Fee Reminder: ${student.first_name} has an outstanding balance of ${formatCurrencyFromCents(student.balance)}. Please settle at your earliest convenience. Thank you.`
                 const result = await window.electronAPI.sendSMS({
-                to: student.guardian_phone,
-                message,
-                recipientId: Number(student.id),
-                recipientType: 'STUDENT',
-                userId: 1
-            })
-                if (result.success) sentCount++
-                else failedCount++
-            } catch (error) {
+                    to: student.guardian_phone,
+                    message,
+                    recipientId: Number(student.id),
+                    recipientType: 'STUDENT',
+                    userId: user.id
+                })
+                if (result.success) {sentCount++}
+                else {failedCount++}
+            } catch {
                 failedCount++
             }
         }
@@ -195,9 +217,9 @@ export default function Reports() {
         alert(`Finished: ${sentCount} sent, ${failedCount} failed.`)
     }
 
-    const handleExportPDF = () => {
+    const handleExportPDF = async () => {
         if (activeTab === 'defaulters' && defaulters.length > 0) {
-            exportToPDF({
+            await exportToPDF({
                 filename: `fee-defaulters-${new Date().toISOString().slice(0, 10)}`,
                 title: 'Fee Defaulters Report',
                 subtitle: `Period: ${dateRange.start} to ${dateRange.end}`,
@@ -220,7 +242,7 @@ export default function Reports() {
                 }))
             })
         } else if (activeTab === 'financial' && financialSummary) {
-            exportToPDF({
+            await exportToPDF({
                 filename: `financial-summary-${new Date().toISOString().slice(0, 10)}`,
                 title: 'Financial Summary Report',
                 subtitle: `Period: ${dateRange.start} to ${dateRange.end}`,
@@ -240,7 +262,7 @@ export default function Reports() {
                 ]
             })
         } else if (activeTab === 'daily-collection' && dailyCollections.length > 0) {
-            exportToPDF({
+            await exportToPDF({
                 filename: `daily-collection-${selectedDate}`,
                 title: 'Daily Collection Report',
                 subtitle: `Date: ${selectedDate}`,
@@ -423,7 +445,7 @@ export default function Reports() {
                                             <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 'bold' }} />
                                             <Tooltip
                                                 contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}
-                                                formatter={(v: number) => formatCurrency(v)}
+                                                formatter={(v: number) => formatCurrencyFromCents(v)}
                                             />
                                             <Bar dataKey="amount" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                                         </BarChart>
@@ -486,7 +508,7 @@ export default function Reports() {
             )}
 
             {activeTab === 'daily-collection' && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div id="daily-collection-print-area" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="premium-card flex flex-col md:flex-row md:items-center justify-between gap-4 border-primary/20 bg-primary/5">
                         <div className="flex items-center gap-4">
                             <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary shadow-inner">
@@ -504,7 +526,13 @@ export default function Reports() {
                         </div>
                         </div>
                         <div className="flex gap-3">
-                            <button onClick={() => window.print()} className="btn btn-secondary flex items-center gap-2 px-6">
+                            <button
+                                onClick={() => printCurrentView({
+                                    title: `Daily Collection Report - ${selectedDate}`,
+                                    selector: '#daily-collection-print-area'
+                                })}
+                                className="btn btn-secondary flex items-center gap-2 px-6"
+                            >
                                 <Printer className="w-4 h-4" />
                                 <span className="text-[10px] font-bold uppercase tracking-widest">Print DCR</span>
                             </button>
@@ -538,7 +566,7 @@ export default function Reports() {
                                                     </span>
                                                 </td>
                                                 <td className="py-5 px-6 text-xs font-mono text-foreground/40">{col.payment_reference || 'INTERNAL_REF'}</td>
-                                                <td className="py-5 px-6 text-right text-sm font-bold text-primary">{formatCurrency(col.amount)}</td>
+                                                <td className="py-5 px-6 text-right text-sm font-bold text-primary">{formatCurrencyFromCents(col.amount)}</td>
                                             </tr>
                                         ))
                                     ) : (
@@ -554,7 +582,7 @@ export default function Reports() {
                                         <tr className="bg-primary/5 border-t border-primary/20">
                                             <td colSpan={4} className="py-5 px-6 text-sm font-bold text-foreground text-right uppercase tracking-[0.2em]">Daily Audit Aggregate:</td>
                                             <td className="py-5 px-6 text-right text-xl font-bold text-primary">
-                                                {formatCurrency(dailyCollections.reduce((sum, c) => sum + c.amount, 0))}
+                                                {formatCurrencyFromCents(dailyCollections.reduce((sum, c) => sum + c.amount, 0))}
                                             </td>
                                         </tr>
                                     </tfoot>
@@ -604,9 +632,9 @@ export default function Reports() {
                                             <td className="py-4 px-2 font-mono text-xs text-foreground/60">{d.admission_number}</td>
                                             <td className="py-4 px-2 text-sm font-bold text-foreground uppercase tracking-tight">{d.first_name} {d.last_name}</td>
                                             <td className="py-4 px-2 text-[10px] font-bold text-foreground/40 uppercase">{d.stream_name || 'UNASSIGNED'}</td>
-                                            <td className="py-4 px-2 text-right text-xs font-medium text-foreground/60">{formatCurrency(d.total_amount)}</td>
-                                            <td className="py-4 px-2 text-right text-xs font-medium text-emerald-500/80">{formatCurrency(d.amount_paid)}</td>
-                                            <td className="py-4 px-2 text-right text-sm font-bold text-rose-500">{formatCurrency(d.balance)}</td>
+                                            <td className="py-4 px-2 text-right text-xs font-medium text-foreground/60">{formatCurrencyFromCents(d.total_amount)}</td>
+                                            <td className="py-4 px-2 text-right text-xs font-medium text-emerald-500/80">{formatCurrencyFromCents(d.amount_paid)}</td>
+                                            <td className="py-4 px-2 text-right text-sm font-bold text-rose-500">{formatCurrencyFromCents(d.balance)}</td>
                                             <td className="py-4 px-2 text-center">
                                                 <button
                                                     onClick={() => handleSendReminder(d)}
@@ -657,15 +685,15 @@ export default function Reports() {
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="p-8 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl shadow-inner group transition-all hover:bg-emerald-500/10">
                             <p className="text-[10px] font-bold uppercase text-emerald-500/60 tracking-widest mb-2">Aggregate Income</p>
-                            <p className="text-3xl font-bold text-emerald-500 tracking-tight">{formatCurrency(financialSummary?.totalIncome || 0)}</p>
+                            <p className="text-3xl font-bold text-emerald-500 tracking-tight">{formatCurrencyFromCents(financialSummary?.totalIncome || 0)}</p>
                         </div>
                         <div className="p-8 bg-rose-500/5 border border-rose-500/10 rounded-2xl shadow-inner group transition-all hover:bg-rose-500/10">
                             <p className="text-[10px] font-bold uppercase text-rose-500/60 tracking-widest mb-2">Aggregate Expenditure</p>
-                            <p className="text-3xl font-bold text-rose-500 tracking-tight">{formatCurrency(financialSummary?.totalExpense || 0)}</p>
+                            <p className="text-3xl font-bold text-rose-500 tracking-tight">{formatCurrencyFromCents(financialSummary?.totalExpense || 0)}</p>
                         </div>
                         <div className="p-8 bg-primary/5 border border-primary/10 rounded-2xl shadow-inner group transition-all hover:bg-primary/10">
                             <p className="text-[10px] font-bold uppercase text-primary/60 tracking-widest mb-2">Net Institutional Liquidity</p>
-                            <p className="text-3xl font-bold text-primary tracking-tight">{formatCurrency(financialSummary?.netBalance || 0)}</p>
+                            <p className="text-3xl font-bold text-primary tracking-tight">{formatCurrencyFromCents(financialSummary?.netBalance || 0)}</p>
                         </div>
                     </div>
                 </div>

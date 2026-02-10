@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from 'react'
 import { ClipboardList, Filter, Download, Calendar, Tag } from 'lucide-react'
+import { useEffect, useState, useCallback } from 'react'
+
 import { useToast } from '../../contexts/ToastContext'
-import { Transaction } from '../../types/electron-api/FinanceAPI'
-import { formatCurrency, formatDate } from '../../utils/format'
+import { type Transaction } from '../../types/electron-api/FinanceAPI'
+import { formatCurrencyFromCents, formatDate } from '../../utils/format'
 
 export default function Transactions() {
     const { showToast } = useToast()
@@ -21,8 +22,8 @@ export default function Transactions() {
         setLoading(true)
         try {
             const filterParams: Partial<Transaction> = {}
-            if (appliedFilter.category_id) filterParams.category_id = parseInt(appliedFilter.category_id)
-            if (appliedFilter.startDate) filterParams.transaction_date = appliedFilter.startDate
+            if (appliedFilter.category_id) {filterParams.category_id = parseInt(appliedFilter.category_id)}
+            if (appliedFilter.startDate) {filterParams.transaction_date = appliedFilter.startDate}
             const results = await window.electronAPI.getTransactions(filterParams)
             setTransactions(results)
         } catch (error) {
@@ -34,11 +35,73 @@ export default function Transactions() {
     }, [appliedFilter, showToast])
 
     useEffect(() => {
-        loadTransactions()
+        void loadTransactions()
     }, [loadTransactions])
 
     const handleApplyFilter = () => {
         setAppliedFilter(filter)
+    }
+
+    const renderTransactionsTable = () => {
+        if (loading) {
+            return (
+                <div className="flex flex-col items-center justify-center py-24 gap-4">
+                    <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+                    <p className="text-xs font-bold uppercase tracking-widest text-foreground/40">Fetching Ledger Records...</p>
+                </div>
+            )
+        }
+
+        if (transactions.length === 0) {
+            return (
+                <div className="text-center py-24 bg-secondary/5 rounded-3xl border border-dashed border-border/40 m-4">
+                    <ClipboardList className="w-16 h-16 text-foreground/10 mx-auto mb-4" />
+                    <h3 className="text-xl font-bold text-foreground/80 font-heading">Void Ledger</h3>
+                    <p className="text-foreground/40 font-medium italic mb-6">No financial transactions identified within the specified parameters</p>
+                </div>
+            )
+        }
+
+        return (
+            <div className="overflow-x-auto">
+                <table className="data-table">
+                    <thead>
+                        <tr className="border-b border-border/40">
+                            <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40 px-6">Ref Identity</th>
+                            <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Chronology</th>
+                            <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Narrative Description</th>
+                            <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Capital Magnitude</th>
+                            <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40 text-right px-8">Categorisation</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/10">
+                        {transactions.map((txn) => (
+                            <tr key={txn.id} className="group hover:bg-secondary/20 transition-colors">
+                                <td className="py-4 px-6">
+                                    <span className="font-mono text-[11px] font-bold text-primary/60 tracking-wider">#{txn.reference}</span>
+                                </td>
+                                <td className="py-4">
+                                    <span className="text-sm font-medium text-foreground/60">{formatDate(txn.transaction_date)}</span>
+                                </td>
+                                <td className="py-4">
+                                    <span className="text-sm font-bold text-foreground/80">{txn.description || 'Fee Payment'}</span>
+                                </td>
+                                <td className="py-4">
+                                    <span className={`text-sm font-bold ${txn.amount < 0 ? 'text-destructive' : 'text-emerald-500'}`}>
+                                        {formatCurrencyFromCents(txn.amount)}
+                                    </span>
+                                </td>
+                                <td className="py-4 text-right px-8">
+                                    <span className="px-3 py-1 bg-secondary/40 text-[10px] font-bold uppercase tracking-widest rounded-lg border border-border/20 text-foreground/40 group-hover:text-foreground/70 transition-colors">
+                                        Vector {txn.category_id}
+                                    </span>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        )
     }
 
     return (
@@ -103,57 +166,7 @@ export default function Transactions() {
             </div>
 
             <div className="card overflow-hidden transition-all duration-300">
-                {loading ? (
-                    <div className="flex flex-col items-center justify-center py-24 gap-4">
-                        <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-                        <p className="text-xs font-bold uppercase tracking-widest text-foreground/40">Fetching Ledger Records...</p>
-                    </div>
-                ) : transactions.length === 0 ? (
-                    <div className="text-center py-24 bg-secondary/5 rounded-3xl border border-dashed border-border/40 m-4">
-                        <ClipboardList className="w-16 h-16 text-foreground/10 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-foreground/80 font-heading">Void Ledger</h3>
-                        <p className="text-foreground/40 font-medium italic mb-6">No financial transactions identified within the specified parameters</p>
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="data-table">
-                            <thead>
-                                <tr className="border-b border-border/40">
-                                    <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40 px-6">Ref Identity</th>
-                                    <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Chronology</th>
-                                    <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Narrative Description</th>
-                                    <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Capital Magnitude</th>
-                                    <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40 text-right px-8">Categorisation</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/10">
-                                {transactions.map((txn) => (
-                                    <tr key={txn.id} className="group hover:bg-secondary/20 transition-colors">
-                                        <td className="py-4 px-6">
-                                            <span className="font-mono text-[11px] font-bold text-primary/60 tracking-wider">#{txn.reference}</span>
-                                        </td>
-                                        <td className="py-4">
-                                            <span className="text-sm font-medium text-foreground/60">{formatDate(txn.transaction_date)}</span>
-                                        </td>
-                                        <td className="py-4">
-                                            <span className="text-sm font-bold text-foreground/80">{txn.description || 'Fee Payment'}</span>
-                                        </td>
-                                        <td className="py-4">
-                                            <span className={`text-sm font-bold ${txn.amount < 0 ? 'text-destructive' : 'text-emerald-500'}`}>
-                                                {formatCurrency(txn.amount)}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 text-right px-8">
-                                            <span className="px-3 py-1 bg-secondary/40 text-[10px] font-bold uppercase tracking-widest rounded-lg border border-border/20 text-foreground/40 group-hover:text-foreground/70 transition-colors">
-                                                Vector {txn.category_id}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                {renderTransactionsTable()}
             </div>
         </div>
     )

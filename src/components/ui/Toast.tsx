@@ -16,7 +16,7 @@ const icons = {
 }
 
 
-export function Toast({ message, type, onClose }: ToastProps) {
+export function Toast({ message, type, onClose }: Readonly<ToastProps>) {
     const Icon = icons[type]
 
     const typeStyles = {

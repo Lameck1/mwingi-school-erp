@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { formatCurrency } from '../../../utils/format';
+
+import { formatCurrencyFromCents } from '../../../utils/format';
 
 interface CBCStrand {
   id: number;
   code: string;
   name: string;
-  description: string;
+  description?: string;
   is_active: boolean;
 }
 
@@ -19,6 +20,16 @@ interface StrandProfitability {
   student_count: number;
 }
 
+const getStrandColor = (profit_margin: number): string => {
+  if (profit_margin >= 20) {
+    return 'bg-green-100 text-green-800';
+  }
+  if (profit_margin >= 0) {
+    return 'bg-yellow-100 text-yellow-800';
+  }
+  return 'bg-red-100 text-red-800';
+};
+
 const CBCStrandManagement: React.FC = () => {
   const [, setStrands] = useState<CBCStrand[]>([]);
   const [profitability, setProfitability] = useState<StrandProfitability[]>([]);
@@ -27,7 +38,7 @@ const CBCStrandManagement: React.FC = () => {
   const [term, setTerm] = useState(1);
 
   useEffect(() => {
-    loadData();
+    void loadData();
   }, [fiscalYear, term]);
 
   const loadData = async () => {
@@ -57,12 +68,6 @@ const CBCStrandManagement: React.FC = () => {
     }
   };
 
-  const getStrandColor = (profit_margin: number) => {
-    if (profit_margin >= 20) return 'bg-green-100 text-green-800';
-    if (profit_margin >= 0) return 'bg-yellow-100 text-yellow-800';
-    return 'bg-red-100 text-red-800';
-  };
-
   if (loading) {
     return <div className="flex justify-center items-center h-64">Loading CBC Strand Data...</div>;
   }
@@ -78,8 +83,8 @@ const CBCStrandManagement: React.FC = () => {
       <div className="bg-white rounded-lg shadow p-4 mb-6">
         <div className="flex gap-4 items-center">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fiscal Year</label>
-            <select
+            <label htmlFor="field-82" className="block text-sm font-medium text-gray-700 mb-1">Fiscal Year</label>
+            <select id="field-82"
               value={fiscalYear}
               onChange={(e) => setFiscalYear(parseInt(e.target.value))}
               className="border rounded px-3 py-2"
@@ -91,8 +96,8 @@ const CBCStrandManagement: React.FC = () => {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Term</label>
-            <select
+            <label htmlFor="field-95" className="block text-sm font-medium text-gray-700 mb-1">Term</label>
+            <select id="field-95"
               value={term}
               onChange={(e) => setTerm(parseInt(e.target.value))}
               className="border rounded px-3 py-2"
@@ -130,14 +135,14 @@ const CBCStrandManagement: React.FC = () => {
                     <div className="text-sm font-medium text-gray-900">{strand.strand_name}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="text-sm text-gray-900">{formatCurrency(strand.revenue)}</div>
+                    <div className="text-sm text-gray-900">{formatCurrencyFromCents(strand.revenue)}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="text-sm text-gray-900">{formatCurrency(strand.expenses)}</div>
+                    <div className="text-sm text-gray-900">{formatCurrencyFromCents(strand.expenses)}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <div className={`text-sm font-medium ${strand.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatCurrency(strand.profit)}
+                      {formatCurrencyFromCents(strand.profit)}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">

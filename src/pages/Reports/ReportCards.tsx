@@ -1,71 +1,25 @@
-import { useState, useEffect, useCallback } from 'react'
 import {
     FileText, Users, Download, Loader2, Eye
 } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+
+import { InstitutionalHeader } from '../../components/patterns/InstitutionalHeader'
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
 import { Modal } from '../../components/ui/Modal'
 import { Select } from '../../components/ui/Select'
 import { useAppStore } from '../../stores'
-import { InstitutionalHeader } from '../../components/patterns/InstitutionalHeader'
 
-import jsPDF from 'jspdf'
+import type { Stream } from '../../types/electron-api/AcademicAPI'
+import type { ReportCardData, ReportCardStudentEntry } from '../../types/electron-api/ReportsAPI'
 
-interface Stream {
-    id: number
-    stream_name: string
-}
-
-interface StudentEntry {
-    student_id: number
-    student_name: string
-    admission_number: string
-}
-
-interface ReportCardData {
-    student: {
-        id: number
-        admission_number: string
-        first_name: string
-        last_name: string
-        stream_name: string
-    }
-    academic_year: string
-    term: string
-    grades: {
-        subject_name: string
-        subject_code: string
-        cat1: number | null
-        cat2: number | null
-        midterm: number | null
-        final_exam: number | null
-        average: number
-        grade_letter: string
-        remarks: string
-    }[]
-    attendance: {
-        total_days: number
-        present: number
-        absent: number
-        attendance_rate: number
-    }
-    summary: {
-        total_marks: number
-        average: number
-        grade: string
-        position: number | null
-        class_size: number
-        teacher_remarks: string
-        principal_remarks: string
-    }
-}
 
 export default function ReportCards() {
     const { currentAcademicYear, currentTerm } = useAppStore()
 
     const [streams, setStreams] = useState<Stream[]>([])
     const [selectedStream, setSelectedStream] = useState<number>(0)
-    const [students, setStudents] = useState<StudentEntry[]>([])
+    const [students, setStudents] = useState<ReportCardStudentEntry[]>([])
     const [loading, setLoading] = useState(false)
     const [generating, setGenerating] = useState(false)
 
@@ -74,7 +28,7 @@ export default function ReportCards() {
     const [nextTermDate, setNextTermDate] = useState<string>('')
 
     useEffect(() => {
-        loadStreams()
+        void loadStreams()
     }, [])
 
 
@@ -89,7 +43,7 @@ export default function ReportCards() {
     }
 
     const loadStudents = useCallback(async () => {
-        if (!currentAcademicYear || !currentTerm) return
+        if (!currentAcademicYear || !currentTerm) {return}
         setLoading(true)
         try {
             const data = await window.electronAPI.getStudentsForReportCards(
@@ -105,19 +59,19 @@ export default function ReportCards() {
 
     useEffect(() => {
         if (selectedStream && currentAcademicYear && currentTerm) {
-            loadStudents()
+            void loadStudents()
         }
     }, [selectedStream, currentAcademicYear, currentTerm, loadStudents])
 
     const handlePreview = async (studentId: number) => {
-        if (!currentAcademicYear || !currentTerm) return
+        if (!currentAcademicYear || !currentTerm) {return}
         setGenerating(true)
         try {
             const data = await window.electronAPI.generateReportCard(
                 studentId, currentAcademicYear.id, currentTerm.id
             )
             if (data) {
-                setPreviewData(data as ReportCardData)
+                setPreviewData(data)
                 setShowPreview(true)
             } else {
                 alert('No report card data available for this student')
@@ -129,9 +83,10 @@ export default function ReportCards() {
         }
     }
 
-    const handleDownloadPDF = () => {
-        if (!previewData) return
+    const handleDownloadPDF = async () => {
+        if (!previewData) {return}
 
+        const { default: jsPDF } = await import('jspdf')
         const doc = new jsPDF()
         const pageWidth = doc.internal.pageSize.getWidth()
         let y = 20
@@ -313,8 +268,9 @@ export default function ReportCards() {
                         ]}
                     />
                     <div className="space-y-1">
-                        <label className="text-xs font-bold text-foreground/50 uppercase tracking-widest ml-1">Next Term Begins</label>
+                        <label htmlFor="next-term-date" className="text-xs font-bold text-foreground/50 uppercase tracking-widest ml-1">Next Term Begins</label>
                         <input
+                            id="next-term-date"
                             type="date"
                             value={nextTermDate}
                             onChange={(e) => setNextTermDate(e.target.value)}
@@ -327,32 +283,40 @@ export default function ReportCards() {
             {/* Students List */}
             <div className="premium-card">
                 <h3 className="text-lg font-bold text-foreground mb-4">Students</h3>
-                {loading ? (
-                    <div className="text-center py-16 text-foreground/40">Loading students...</div>
-                ) : students.length === 0 ? (
-                    <div className="text-center py-16 text-foreground/40">
-                        {selectedStream ? 'No students found' : 'Select a class to view students'}
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {students.map(student => (
-                            <div key={student.student_id} className="flex items-center justify-between p-4 bg-secondary/20 rounded-xl border border-border/30">
-                                <div>
-                                    <p className="font-bold text-foreground">{student.student_name}</p>
-                                    <p className="text-xs text-foreground/50 font-mono">{student.admission_number}</p>
-                                </div>
-                                <button
-                                    onClick={() => handlePreview(student.student_id)}
-                                    disabled={generating}
-                                    className="btn btn-secondary text-sm flex items-center gap-1"
-                                >
-                                    {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
-                                    View
-                                </button>
+                {(() => {
+                    if (loading) {
+                        return <div className="text-center py-16 text-foreground/40">Loading students...</div>
+                    }
+
+                    if (students.length === 0) {
+                        return (
+                            <div className="text-center py-16 text-foreground/40">
+                                {selectedStream ? 'No students found' : 'Select a class to view students'}
                             </div>
-                        ))}
-                    </div>
-                )}
+                        )
+                    }
+
+                    return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {students.map(student => (
+                                <div key={student.student_id} className="flex items-center justify-between p-4 bg-secondary/20 rounded-xl border border-border/30">
+                                    <div>
+                                        <p className="font-bold text-foreground">{student.student_name}</p>
+                                        <p className="text-xs text-foreground/50 font-mono">{student.admission_number}</p>
+                                    </div>
+                                    <button
+                                        onClick={() => handlePreview(student.student_id)}
+                                        disabled={generating}
+                                        className="btn btn-secondary text-sm flex items-center gap-1"
+                                    >
+                                        {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+                                        View
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )
+                })()}
             </div>
 
             {/* Preview Modal */}

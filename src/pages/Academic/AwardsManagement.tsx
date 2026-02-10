@@ -1,9 +1,10 @@
 
+import { Plus, Trash2, CheckCircle, Clock, XCircle, X } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
+
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { useAppStore, useAuthStore } from '../../stores'
-import { Plus, Trash2, CheckCircle, Clock, XCircle, X } from 'lucide-react'
 
 // Roles that can approve awards
 const APPROVER_ROLES = ['ADMIN', 'PRINCIPAL', 'DEPUTY_PRINCIPAL']
@@ -90,11 +91,11 @@ const AwardsManagement = () => {
   }, [])
 
   useEffect(() => {
-    loadInitialData()
+    void loadInitialData()
   }, [loadInitialData])
 
   useEffect(() => {
-    loadAwards()
+    void loadAwards()
   }, [loadAwards])
 
   const handleAwardStudent = async () => {
@@ -178,7 +179,7 @@ const AwardsManagement = () => {
   }
 
   const handleDeleteAward = async (awardId: number) => {
-    if (!confirm('Are you sure you want to delete this award?')) return
+    if (!confirm('Are you sure you want to delete this award?')) {return}
 
     setLoading(true)
     try {
@@ -193,10 +194,9 @@ const AwardsManagement = () => {
     }
   }
 
-  const filteredAwards = awards.filter(award => {
-    if (filterCategory !== 0 && award.award_category_id !== filterCategory) return false
-    return true
-  })
+  const filteredAwards = awards.filter(
+    (award) => filterCategory === 0 || award.award_category_id === filterCategory
+  )
 
   const categoryMap = new Map(categories.map(c => [c.id, c]))
 

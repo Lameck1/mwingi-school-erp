@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
 import { Search, Loader2, Users } from 'lucide-react'
-import { Student } from '../../../types/electron-api/StudentAPI'
-import { formatCurrency } from '../../../utils/format'
+import React, { useState } from 'react'
+
+import { type Student } from '../../../types/electron-api/StudentAPI'
+import { formatCurrencyFromCents } from '../../../utils/format'
 
 interface StudentLedgerSearchProps {
     onSelectStudent: (student: Student) => void
@@ -14,7 +15,7 @@ export const StudentLedgerSearch: React.FC<StudentLedgerSearchProps> = ({ onSele
     const [loading, setLoading] = useState(false)
 
     const handleSearch = async () => {
-        if (!search) return
+        if (!search) {return}
         setLoading(true)
         try {
             const results = await window.electronAPI.getStudents({ search })
@@ -64,7 +65,9 @@ export const StudentLedgerSearch: React.FC<StudentLedgerSearchProps> = ({ onSele
                     {students.map((s) => (
                         <button
                             key={s.id}
+                            type="button"
                             onClick={() => handleSelect(s)}
+                            aria-label={`Select student ${s.first_name} ${s.last_name}`}
                             className="w-full p-4 text-left bg-secondary/20 hover:bg-primary/10 border border-border/40 rounded-xl transition-all group flex items-center justify-between"
                         >
                             <div className="flex items-center gap-4">
@@ -106,11 +109,11 @@ export const StudentLedgerSearch: React.FC<StudentLedgerSearchProps> = ({ onSele
                         <div className="grid grid-cols-2 gap-4">
                             <div className="p-3 bg-secondary/30 rounded-xl border border-border/20">
                                 <p className="text-[10px] text-foreground/40 font-bold uppercase mb-1">Fee Balance</p>
-                                <p className="text-lg font-bold text-amber-500">{formatCurrency(selectedStudent.balance || 0)}</p>
+                                <p className="text-lg font-bold text-amber-500">{formatCurrencyFromCents(selectedStudent.balance || 0)}</p>
                             </div>
                             <div className="p-3 bg-secondary/30 rounded-xl border border-border/20">
                                 <p className="text-[10px] text-foreground/40 font-bold uppercase mb-1">Fee Credit</p>
-                                <p className="text-lg font-bold text-emerald-500">{formatCurrency(selectedStudent.credit_balance || 0)}</p>
+                                <p className="text-lg font-bold text-emerald-500">{formatCurrencyFromCents(selectedStudent.credit_balance || 0)}</p>
                             </div>
                         </div>
                     </div>

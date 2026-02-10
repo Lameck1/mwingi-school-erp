@@ -1,33 +1,18 @@
-import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { formatCurrency } from '../../../utils/format';
+import { useState, useEffect } from 'react';
 
-import { ElectronAPI } from '../../../types/electron-api';
+import { formatCurrencyFromCents } from '../../../utils/format';
 
-interface AccountBalance {
-  account_code: string;
-  account_name: string;
-  balance: number;
-}
-
-interface BalanceSheet {
-  assets: AccountBalance[];
-  liabilities: AccountBalance[];
-  equity: AccountBalance[];
-  total_assets: number;
-  total_liabilities: number;
-  total_equity: number;
-  is_balanced: boolean;
-}
+import type { BalanceSheetReport } from '../../../types/electron-api';
 
 export default function BalanceSheetPage() {
   const [asOfDate, setAsOfDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
-  const [balanceSheet, setBalanceSheet] = useState<BalanceSheet | null>(null);
+  const [balanceSheet, setBalanceSheet] = useState<BalanceSheetReport | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadBalanceSheet();
+    void loadBalanceSheet();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -36,7 +21,7 @@ export default function BalanceSheetPage() {
     setError(null);
 
     try {
-      const result = await window.electronAPI.getBalanceSheet(asOfDate);
+      const result = await window.electronAPI.getBalanceSheet(asOfDate) as { success: boolean; data: BalanceSheetReport; message?: string };
 
       if (result.success) {
         setBalanceSheet(result.data);
@@ -69,8 +54,8 @@ export default function BalanceSheetPage() {
 
       <div className="bg-white rounded-lg shadow p-4 mb-6">
         <div className="flex items-center gap-4">
-          <label className="text-sm font-medium text-gray-700">As of Date:</label>
-          <input
+          <label htmlFor="field-57" className="text-sm font-medium text-gray-700">As of Date:</label>
+          <input id="field-57"
             type="date"
             value={asOfDate}
             onChange={(e) => setAsOfDate(e.target.value)}
@@ -106,12 +91,12 @@ export default function BalanceSheetPage() {
               {balanceSheet.assets.map((account) => (
                 <div key={account.account_code} className="flex justify-between py-2">
                   <span>{account.account_name}</span>
-                  <span>{formatCurrency(account.balance)}</span>
+                  <span>{formatCurrencyFromCents(account.balance)}</span>
                 </div>
               ))}
               <div className="flex justify-between py-3 border-t-2 font-bold">
                 <span>Total Assets</span>
-                <span>{formatCurrency(balanceSheet.total_assets)}</span>
+                <span>{formatCurrencyFromCents(balanceSheet.total_assets)}</span>
               </div>
             </div>
 
@@ -120,18 +105,18 @@ export default function BalanceSheetPage() {
               {balanceSheet.liabilities.map((account) => (
                 <div key={account.account_code} className="flex justify-between py-2">
                   <span>{account.account_name}</span>
-                  <span>{formatCurrency(account.balance)}</span>
+                  <span>{formatCurrencyFromCents(account.balance)}</span>
                 </div>
               ))}
               {balanceSheet.equity.map((account) => (
                 <div key={account.account_code} className="flex justify-between py-2">
                   <span>{account.account_name}</span>
-                  <span>{formatCurrency(account.balance)}</span>
+                  <span>{formatCurrencyFromCents(account.balance)}</span>
                 </div>
               ))}
               <div className="flex justify-between py-3 border-t-2 font-bold">
                 <span>Total</span>
-                <span>{formatCurrency(balanceSheet.total_liabilities + balanceSheet.total_equity)}</span>
+                <span>{formatCurrencyFromCents(balanceSheet.total_liabilities + balanceSheet.total_equity)}</span>
               </div>
             </div>
           </div>

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react'
 import { Plus, Building2, CreditCard, TrendingUp } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
 import { Modal } from '../../components/ui/Modal'
-import { formatCurrency } from '../../utils/format'
+import { formatCurrencyFromCents, shillingsToCents } from '../../utils/format'
 
 interface BankAccount {
     id: number
@@ -31,14 +32,14 @@ export default function BankAccounts() {
     const [saving, setSaving] = useState(false)
 
     useEffect(() => {
-        loadAccounts()
+        void loadAccounts()
     }, [])
 
     const loadAccounts = async () => {
         setLoading(true)
         try {
             const data = await window.electronAPI.getBankAccounts()
-            setAccounts(data)
+            setAccounts(data as BankAccount[])
         } catch (error) {
             console.error('Failed to load bank accounts:', error)
         } finally {
@@ -52,13 +53,13 @@ export default function BankAccounts() {
         try {
             const result = await window.electronAPI.createBankAccount({
                 ...formData,
-                opening_balance: Math.round(formData.opening_balance) // Whole currency units
+                opening_balance: shillingsToCents(formData.opening_balance) // Whole currency units -> cents
             })
 
             if (result.success) {
                 setShowAddModal(false)
                 setFormData({ account_name: '', account_number: '', bank_name: '', branch: '', opening_balance: 0 })
-                loadAccounts()
+                void loadAccounts()
             } else {
                 alert(result.errors?.join(', ') || 'Failed to create account')
             }
@@ -98,7 +99,7 @@ export default function BankAccounts() {
                 />
                 <StatCard
                     label="Total Balance"
-                    value={formatCurrency(totalBalance)}
+                    value={formatCurrencyFromCents(totalBalance)}
                     icon={CreditCard}
                     color="from-emerald-500/20 to-teal-500/20 text-emerald-400"
                 />
@@ -112,15 +113,17 @@ export default function BankAccounts() {
 
             {/* Accounts List */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {loading ? (
+                {loading && (
                     [1, 2, 3].map(i => (
                         <div key={i} className="h-40 bg-secondary/30 animate-pulse rounded-xl" />
                     ))
-                ) : accounts.length === 0 ? (
+                )}
+                {!loading && accounts.length === 0 && (
                     <div className="col-span-full text-center py-16 text-foreground/40">
                         No bank accounts added yet
                     </div>
-                ) : (
+                )}
+                {!loading && accounts.length > 0 && (
                     accounts.map(account => (
                         <div key={account.id} className="premium-card group hover:border-primary/30 transition-colors">
                             <div className="flex items-start justify-between mb-4">
@@ -145,7 +148,7 @@ export default function BankAccounts() {
                                 </div>
                                 <div className="text-right">
                                     <p className="text-[10px] font-bold text-foreground/40 uppercase tracking-wider">Balance</p>
-                                    <p className="text-lg font-bold text-foreground font-mono">{formatCurrency(account.current_balance)}</p>
+                                    <p className="text-lg font-bold text-foreground font-mono">{formatCurrencyFromCents(account.current_balance)}</p>
                                 </div>
                             </div>
                         </div>
@@ -161,8 +164,8 @@ export default function BankAccounts() {
             >
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="space-y-2">
-                        <label className="text-sm font-bold text-foreground/60">Account Name *</label>
-                        <input
+                        <label htmlFor="field-165" className="text-sm font-bold text-foreground/60">Account Name *</label>
+                        <input id="field-165"
                             type="text"
                             value={formData.account_name}
                             onChange={(e) => setFormData({ ...formData, account_name: e.target.value })}
@@ -174,8 +177,8 @@ export default function BankAccounts() {
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-sm font-bold text-foreground/60">Bank Name *</label>
-                            <input
+                            <label htmlFor="field-178" className="text-sm font-bold text-foreground/60">Bank Name *</label>
+                            <input id="field-178"
                                 type="text"
                                 value={formData.bank_name}
                                 onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
@@ -185,8 +188,8 @@ export default function BankAccounts() {
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-sm font-bold text-foreground/60">Branch</label>
-                            <input
+                            <label htmlFor="field-189" className="text-sm font-bold text-foreground/60">Branch</label>
+                            <input id="field-189"
                                 type="text"
                                 value={formData.branch}
                                 onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
@@ -198,8 +201,8 @@ export default function BankAccounts() {
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-sm font-bold text-foreground/60">Account Number *</label>
-                            <input
+                            <label htmlFor="field-202" className="text-sm font-bold text-foreground/60">Account Number *</label>
+                            <input id="field-202"
                                 type="text"
                                 value={formData.account_number}
                                 onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
@@ -209,8 +212,8 @@ export default function BankAccounts() {
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-sm font-bold text-foreground/60">Opening Balance</label>
-                            <input
+                            <label htmlFor="field-213" className="text-sm font-bold text-foreground/60">Opening Balance</label>
+                            <input id="field-213"
                                 type="number"
                                 value={formData.opening_balance || ''}
                                 onChange={(e) => setFormData({ ...formData, opening_balance: Number(e.target.value) })}
@@ -243,4 +246,3 @@ export default function BankAccounts() {
         </div>
     )
 }
-

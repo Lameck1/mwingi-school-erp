@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
     ArrowLeft, Plus, Trash2, Save, AlertCircle,
     DollarSign
 } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+
 import { PageHeader } from '../../../components/patterns/PageHeader'
 import { useAppStore, useAuthStore } from '../../../stores'
+import { type CreateBudgetLineItemData } from '../../../types/electron-api'
 import { formatCurrency, shillingsToCents } from '../../../utils/format'
-import { CreateBudgetLineItemData } from '../../../types/electron-api'
 
 interface TransactionCategory {
     id: number
@@ -32,7 +33,7 @@ export default function CreateBudget() {
     ])
 
     useEffect(() => {
-        loadCategories()
+        void loadCategories()
     }, [])
 
     const loadCategories = async () => {
@@ -85,6 +86,11 @@ export default function CreateBudget() {
             return
         }
 
+        if (!user?.id) {
+            setError('You must be signed in to create a budget')
+            return
+        }
+
         setLoading(true)
         try {
             const result = await window.electronAPI.createBudget({
@@ -96,7 +102,7 @@ export default function CreateBudget() {
                     ...item,
                     budgeted_amount: shillingsToCents(item.budgeted_amount) // Whole currency units
                 }))
-            }, user?.id || 1)
+            }, user.id)
 
             if (result.success) {
                 navigate('/budget')
@@ -142,10 +148,10 @@ export default function CreateBudget() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <label className="text-sm font-bold text-foreground/60 uppercase tracking-wider">
+                            <label htmlFor="field-151" className="text-sm font-bold text-foreground/60 uppercase tracking-wider">
                                 Budget Name *
                             </label>
-                            <input
+                            <input id="field-151"
                                 type="text"
                                 value={budgetName}
                                 onChange={(e) => setBudgetName(e.target.value)}
@@ -156,7 +162,7 @@ export default function CreateBudget() {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-bold text-foreground/60 uppercase tracking-wider">
+                            <label htmlFor="field-176" className="text-sm font-bold text-foreground/60 uppercase tracking-wider">
                                 Academic Period
                             </label>
                             <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-foreground/70">
@@ -167,10 +173,10 @@ export default function CreateBudget() {
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-sm font-bold text-foreground/60 uppercase tracking-wider">
+                        <label htmlFor="field-176" className="text-sm font-bold text-foreground/60 uppercase tracking-wider">
                             Notes
                         </label>
-                        <textarea
+                        <textarea id="field-176"
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             placeholder="Additional notes about this budget..."
@@ -199,10 +205,10 @@ export default function CreateBudget() {
                             <div key={index} className="flex items-start gap-4 p-4 bg-white/[0.02] rounded-xl border border-white/5">
                                 <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-wider">
+                                        <label htmlFor="field-208" className="text-[10px] font-bold text-foreground/40 uppercase tracking-wider">
                                             Category
                                         </label>
-                                        <select
+                                        <select id="field-208"
                                             value={item.category_id}
                                             onChange={(e) => updateLineItem(index, 'category_id', Number(e.target.value))}
                                             className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -223,10 +229,10 @@ export default function CreateBudget() {
                                     </div>
 
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-wider">
+                                        <label htmlFor="field-232" className="text-[10px] font-bold text-foreground/40 uppercase tracking-wider">
                                             Description
                                         </label>
-                                        <input
+                                        <input id="field-232"
                                             type="text"
                                             value={item.description}
                                             onChange={(e) => updateLineItem(index, 'description', e.target.value)}
@@ -236,10 +242,10 @@ export default function CreateBudget() {
                                     </div>
 
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-wider">
+                                        <label htmlFor="field-245" className="text-[10px] font-bold text-foreground/40 uppercase tracking-wider">
                                             Amount (KES)
                                         </label>
-                                        <input
+                                        <input id="field-245"
                                             type="number"
                                             value={item.budgeted_amount || ''}
                                             onChange={(e) => updateLineItem(index, 'budgeted_amount', Number(e.target.value))}
@@ -271,7 +277,7 @@ export default function CreateBudget() {
                         </span>
                         <div className="flex items-center gap-2 text-2xl font-bold text-white font-mono">
                             <DollarSign className="w-5 h-5 text-primary" />
-                            {formatCurrency(totalBudgeted * 100)}
+                            {formatCurrency(totalBudgeted)}
                         </div>
                     </div>
                 </div>

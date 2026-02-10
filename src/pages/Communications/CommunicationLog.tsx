@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
 import {
     MessageSquare, Mail, CheckCircle, XCircle
 } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
 
@@ -27,7 +28,6 @@ export default function CommunicationLog() {
     const [typeFilter, setTypeFilter] = useState<'ALL' | 'SMS' | 'EMAIL'>('ALL')
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'SENT' | 'FAILED'>('ALL')
 
-    const [pagination, setPagination] = useState({ currentPage: 1, limit: 10, total: 0, totalPages: 1 });
     const [searchQuery, setSearchQuery] = useState('');
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
@@ -66,7 +66,7 @@ export default function CommunicationLog() {
     }, [typeFilter, statusFilter, searchQuery])
 
     useEffect(() => {
-        loadLogs()
+        void loadLogs()
     }, [loadLogs])
 
 
@@ -78,6 +78,16 @@ export default function CommunicationLog() {
             sms: data.filter(l => l.message_type === 'SMS').length,
             email: data.filter(l => l.message_type === 'EMAIL').length
         })
+    }
+
+    const getStatusFilterClass = (status: 'ALL' | 'SENT' | 'FAILED') => {
+        if (statusFilter !== status) {
+            return 'text-foreground/60 hover:text-foreground'
+        }
+
+        return status === 'FAILED'
+            ? 'bg-red-500 text-white shadow-lg'
+            : 'bg-green-500 text-white shadow-lg'
     }
 
     return (
@@ -140,10 +150,7 @@ export default function CommunicationLog() {
                         <button
                             key={status}
                             onClick={() => setStatusFilter(status)}
-                            className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all duration-300 ${statusFilter === status
-                                ? status === 'FAILED' ? 'bg-red-500 text-white shadow-lg' : 'bg-green-500 text-white shadow-lg'
-                                : 'text-foreground/60 hover:text-foreground'
-                                }`}
+                            className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all duration-300 ${getStatusFilterClass(status)}`}
                         >
                             {status === 'ALL' ? 'All Status' : status}
                         </button>
@@ -153,11 +160,13 @@ export default function CommunicationLog() {
 
             {/* Logs Table */}
             <div className="premium-card">
-                {loading ? (
+                {loading && (
                     <div className="text-center py-16 text-foreground/40">Loading history...</div>
-                ) : logs.length === 0 ? (
+                )}
+                {!loading && logs.length === 0 && (
                     <div className="text-center py-16 text-foreground/40">No communication history found</div>
-                ) : (
+                )}
+                {!loading && logs.length > 0 && (
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead>
@@ -222,4 +231,3 @@ export default function CommunicationLog() {
         </div>
     )
 }
-

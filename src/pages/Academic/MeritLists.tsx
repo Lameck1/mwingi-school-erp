@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import { Download, Printer, FileText } from 'lucide-react';
+import { useState, useEffect } from 'react';
+
 import { PageHeader } from '../../components/patterns/PageHeader';
 import { Select } from '../../components/ui/Select';
 import { useAppStore } from '../../stores';
-import { Download, Printer, FileText } from 'lucide-react';
+import { exportToPDF } from '../../utils/exporters';
+import { printCurrentView } from '../../utils/print';
 
 interface MeritListItem {
   position: number;
@@ -13,6 +16,22 @@ interface MeritListItem {
   grade: string;
   percentage?: number;
 }
+
+const getGradeBadgeColor = (grade: string): string => {
+  if (grade === 'A' || grade === 'A-') {
+    return '#10b981';
+  }
+  if (grade === 'B+' || grade === 'B') {
+    return '#3b82f6';
+  }
+  if (grade === 'B-' || grade === 'C+') {
+    return '#f59e0b';
+  }
+  if (grade === 'C') {
+    return '#ef4444';
+  }
+  return '#6b7280';
+};
 
 const MeritLists = () => {
   const { currentAcademicYear, currentTerm } = useAppStore();
@@ -25,7 +44,7 @@ const MeritLists = () => {
   const [selectedStream, setSelectedStream] = useState<number>(0);
 
   useEffect(() => {
-    loadInitialData();
+    void loadInitialData();
   }, []);
 
   const loadInitialData = async () => {
@@ -68,11 +87,26 @@ const MeritLists = () => {
     setExporting(true);
     try {
       const streamName = streams.find(s => s.id === selectedStream)?.stream_name || 'Class';
-      await window.electronAPI.exportToPDF({
-        data: meritList,
-        filename: `Merit_List_${streamName}_${currentTerm?.term_name}.pdf`,
+      await exportToPDF({
+        filename: `Merit_List_${streamName}_${currentTerm?.term_name}`,
         title: `Merit List - ${streamName}`,
-        subtitle: `Academic Year: ${currentAcademicYear?.year_name} | Term: ${currentTerm?.term_name}`
+        subtitle: `Academic Year: ${currentAcademicYear?.year_name} | Term: ${currentTerm?.term_name}`,
+        columns: [
+          { key: 'position', header: 'Position', width: 20 },
+          { key: 'admission_number', header: 'Adm No', width: 30 },
+          { key: 'student_name', header: 'Student Name', width: 60 },
+          { key: 'total_marks', header: 'Total Marks', width: 30, align: 'right' },
+          { key: 'average_marks', header: 'Average', width: 30, align: 'right' },
+          { key: 'grade', header: 'Grade', width: 20, align: 'center' }
+        ],
+        data: meritList.map((row) => ({
+          position: row.position,
+          admission_number: row.admission_number,
+          student_name: row.student_name,
+          total_marks: row.total_marks,
+          average_marks: row.average_marks.toFixed(2),
+          grade: row.grade
+        }))
       });
     } catch (error) {
       console.error('Failed to export PDF:', error);
@@ -121,11 +155,76 @@ const MeritLists = () => {
       alert('Please generate a merit list first');
       return;
     }
-    window.print();
+    printCurrentView({
+      title: `Merit List - ${getStreamName()}`,
+      selector: '#merit-list-print-area'
+    });
   };
 
   const getStreamName = () => {
     return streams.find(s => s.id === selectedStream)?.stream_name || 'All Streams';
+  };
+
+  const renderMeritListContent = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center h-64 text-foreground/40">
+          <p>Loading...</p>
+        </div>
+      );
+    }
+
+    if (meritList.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 text-foreground/40">
+          <p>No merit list generated yet. Select a stream and click "Generate Merit List".</p>
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        <div className="mb-4 print:text-black">
+          <h2 className="text-xl font-bold mb-2">Merit List - {getStreamName()}</h2>
+          <p className="text-sm text-foreground/60">
+            Academic Year: {currentAcademicYear?.year_name} | Term: {currentTerm?.term_name}
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse print:text-black">
+            <thead>
+              <tr className="border-b border-white/10 print:border-black">
+                <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Position</th>
+                <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Adm No.</th>
+                <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Name</th>
+                <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Total Marks</th>
+                <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Average</th>
+                <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Grade</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5 print:divide-black">
+              {meritList.map((row) => (
+                <tr key={row.admission_number} className="group hover:bg-white/[0.02] transition-colors print:hover:bg-white">
+                  <td className="py-4 pr-4 print:text-black">{row.position}</td>
+                  <td className="py-4 pr-4 print:text-black">{row.admission_number}</td>
+                  <td className="py-4 pr-4 print:text-black">{row.student_name}</td>
+                  <td className="py-4 pr-4 print:text-black">{row.total_marks}</td>
+                  <td className="py-4 pr-4 print:text-black">{row.average_marks.toFixed(2)}</td>
+                  <td className="py-4 pr-4 print:text-black">
+                    <span className="px-2 py-1 rounded text-sm font-semibold" style={{
+                      backgroundColor: getGradeBadgeColor(row.grade),
+                      color: 'white'
+                    }}>
+                      {row.grade}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -192,61 +291,8 @@ const MeritLists = () => {
         </div>
       )}
 
-      <div className="premium-card min-h-[400px]">
-        {loading ? (
-          <div className="flex items-center justify-center h-64 text-foreground/40">
-            <p>Loading...</p>
-          </div>
-        ) : meritList.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-foreground/40">
-            <p>No merit list generated yet. Select a stream and click "Generate Merit List".</p>
-          </div>
-        ) : (
-          <div>
-            <div className="mb-4 print:text-black">
-              <h2 className="text-xl font-bold mb-2">Merit List - {getStreamName()}</h2>
-              <p className="text-sm text-foreground/60">
-                Academic Year: {currentAcademicYear?.year_name} | Term: {currentTerm?.term_name}
-              </p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse print:text-black">
-                <thead>
-                  <tr className="border-b border-white/10 print:border-black">
-                    <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Position</th>
-                    <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Adm No.</th>
-                    <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Name</th>
-                    <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Total Marks</th>
-                    <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Average</th>
-                    <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Grade</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 print:divide-black">
-                  {meritList.map((row) => (
-                    <tr key={row.admission_number} className="group hover:bg-white/[0.02] transition-colors print:hover:bg-white">
-                      <td className="py-4 pr-4 print:text-black">{row.position}</td>
-                      <td className="py-4 pr-4 print:text-black">{row.admission_number}</td>
-                      <td className="py-4 pr-4 print:text-black">{row.student_name}</td>
-                      <td className="py-4 pr-4 print:text-black">{row.total_marks}</td>
-                      <td className="py-4 pr-4 print:text-black">{row.average_marks.toFixed(2)}</td>
-                      <td className="py-4 pr-4 print:text-black">
-                        <span className="px-2 py-1 rounded text-sm font-semibold" style={{
-                          backgroundColor: row.grade === 'A' || row.grade === 'A-' ? '#10b981' :
-                            row.grade === 'B+' || row.grade === 'B' ? '#3b82f6' :
-                              row.grade === 'B-' || row.grade === 'C+' ? '#f59e0b' :
-                                row.grade === 'C' ? '#ef4444' : '#6b7280',
-                          color: 'white'
-                        }}>
-                          {row.grade}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+      <div id="merit-list-print-area" className="premium-card min-h-[400px]">
+        {renderMeritListContent()}
       </div>
     </div>
   );

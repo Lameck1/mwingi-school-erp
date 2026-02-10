@@ -1,19 +1,22 @@
-import React, { useState, useEffect, useCallback } from 'react'
 import {
     Plus,
     Download
 } from 'lucide-react'
+import React, { useState, useEffect, useCallback } from 'react'
+
 import { PageHeader } from '../../../components/patterns/PageHeader'
-import { DataTable } from '../../../components/ui/Table/DataTable'
-import { Modal } from '../../../components/ui/Modal'
 import { Input } from '../../../components/ui/Input'
+import { Modal } from '../../../components/ui/Modal'
 import { Select } from '../../../components/ui/Select'
+import { DataTable } from '../../../components/ui/Table/DataTable'
 import { useToast } from '../../../contexts/ToastContext'
-import { formatCurrency } from '../../../utils/format'
-import { Grant, ElectronAPI } from '../../../types/electron-api'
+import { useAuthStore } from '../../../stores'
+import { type Grant } from '../../../types/electron-api'
+import { formatCurrencyFromCents, shillingsToCents } from '../../../utils/format'
 
 export default function GrantTracking() {
     const { showToast } = useToast()
+    const { user } = useAuthStore()
     const [loading, setLoading] = useState(false)
     const [grants, setGrants] = useState<Grant[]>([])
     const [filterStatus, setFilterStatus] = useState<'ACTIVE' | 'EXPIRED' | 'FULLY_UTILIZED'>('ACTIVE')
@@ -63,20 +66,24 @@ export default function GrantTracking() {
     }, [filterStatus, showToast])
 
     useEffect(() => {
-        loadData()
+        void loadData()
     }, [loadData])
 
     const handleCreateGrant = async (e: React.FormEvent) => {
         e.preventDefault()
+        if (!user?.id) {
+            showToast('You must be signed in to create a grant', 'error')
+            return
+        }
         try {
             await window.electronAPI.createGrant({
                 ...createForm,
-                amount_allocated: parseFloat(createForm.amount_allocated),
-                amount_received: parseFloat(createForm.amount_received)
-            }, 1) // Default user ID
+                amount_allocated: shillingsToCents(createForm.amount_allocated),
+                amount_received: shillingsToCents(createForm.amount_received)
+            }, user.id)
             showToast('Grant created successfully', 'success')
             setIsCreateModalOpen(false)
-            loadData()
+            void loadData()
         } catch (error) {
             console.error(error)
             showToast('Failed to create grant', 'error')
@@ -85,22 +92,26 @@ export default function GrantTracking() {
 
     const handleRecordUtilization = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!selectedGrant) return
+        if (!selectedGrant) {return}
+        if (!user?.id) {
+            showToast('You must be signed in to record utilization', 'error')
+            return
+        }
         try {
-            const result = await window.electronAPI.recordGrantUtilization(
-                selectedGrant.id,
-                parseFloat(utilizationForm.amount),
-                utilizationForm.description,
-                null, // GL Code optional
-                utilizationForm.utilizationDate,
-                1 // User ID
-            )
+            const result = await window.electronAPI.recordGrantUtilization({
+                grantId: selectedGrant.id,
+                amount: shillingsToCents(utilizationForm.amount),
+                description: utilizationForm.description,
+                glAccountCode: null,
+                utilizationDate: utilizationForm.utilizationDate,
+                userId: user.id
+            })
             
             if (result.success) {
                 showToast('Utilization recorded successfully', 'success')
                 setIsUtilizeModalOpen(false)
                 setUtilizationForm({ amount: '', description: '', utilizationDate: new Date().toISOString().slice(0, 10) })
-                loadData()
+                void loadData()
             } else {
                 showToast(result.message || 'Failed to record utilization', 'error')
             }
@@ -134,7 +145,7 @@ export default function GrantTracking() {
             key: 'amount_allocated',
             header: 'Allocated', 
             accessorKey: 'amount_allocated',
-            cell: (row: Grant) => formatCurrency(row.amount_allocated)
+            cell: (row: Grant) => formatCurrencyFromCents(row.amount_allocated)
         },
         { 
             key: 'utilization_percentage',
@@ -235,8 +246,8 @@ export default function GrantTracking() {
             >
                 <form onSubmit={handleCreateGrant} className="space-y-4">
                     <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-foreground/60 px-1">Grant Name</label>
-                        <Input
+                        <label htmlFor="field-249" className="text-xs font-bold text-foreground/60 px-1">Grant Name</label>
+                        <Input id="field-249"
                             value={createForm.grant_name}
                             onChange={(e) => setCreateForm({...createForm, grant_name: e.target.value})}
                             required
@@ -245,7 +256,7 @@ export default function GrantTracking() {
                     <Select
                         label="Grant Type"
                         value={createForm.grant_type}
-                        onChange={(e) => setCreateForm({...createForm, grant_type: e.target.value})}
+                        onChange={(val) => setCreateForm({ ...createForm, grant_type: String(val) })}
                         options={[
                             { value: 'CAPITATION', label: 'Capitation' },
                             { value: 'FREE_DAY_SECONDARY', label: 'Free Day Secondary' },
@@ -256,15 +267,15 @@ export default function GrantTracking() {
                         ]}
                     />
                     <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-foreground/60 px-1">NEMIS Reference Number</label>
-                        <Input
+                        <label htmlFor="field-270" className="text-xs font-bold text-foreground/60 px-1">NEMIS Reference Number</label>
+                        <Input id="field-270"
                             value={createForm.nemis_reference_number}
                             onChange={(e) => setCreateForm({...createForm, nemis_reference_number: e.target.value})}
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-foreground/60 px-1">Amount Allocated (KES)</label>
-                        <Input
+                        <label htmlFor="field-277" className="text-xs font-bold text-foreground/60 px-1">Amount Allocated (KES)</label>
+                        <Input id="field-277"
                             type="number"
                             value={createForm.amount_allocated}
                             onChange={(e) => setCreateForm({...createForm, amount_allocated: e.target.value})}
@@ -272,8 +283,8 @@ export default function GrantTracking() {
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-foreground/60 px-1">Amount Received (KES)</label>
-                        <Input
+                        <label htmlFor="field-286" className="text-xs font-bold text-foreground/60 px-1">Amount Received (KES)</label>
+                        <Input id="field-286"
                             type="number"
                             value={createForm.amount_received}
                             onChange={(e) => setCreateForm({...createForm, amount_received: e.target.value})}
@@ -299,8 +310,8 @@ export default function GrantTracking() {
             >
                 <form onSubmit={handleRecordUtilization} className="space-y-4">
                     <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-foreground/60 px-1">Amount Used (KES)</label>
-                        <Input
+                        <label htmlFor="field-313" className="text-xs font-bold text-foreground/60 px-1">Amount Used (KES)</label>
+                        <Input id="field-313"
                             type="number"
                             value={utilizationForm.amount}
                             onChange={(e) => setUtilizationForm({...utilizationForm, amount: e.target.value})}
@@ -308,16 +319,16 @@ export default function GrantTracking() {
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-foreground/60 px-1">Description</label>
-                        <Input
+                        <label htmlFor="field-322" className="text-xs font-bold text-foreground/60 px-1">Description</label>
+                        <Input id="field-322"
                             value={utilizationForm.description}
                             onChange={(e) => setUtilizationForm({...utilizationForm, description: e.target.value})}
                             required
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-foreground/60 px-1">Date</label>
-                        <Input
+                        <label htmlFor="field-330" className="text-xs font-bold text-foreground/60 px-1">Date</label>
+                        <Input id="field-330"
                             type="date"
                             value={utilizationForm.utilizationDate}
                             onChange={(e) => setUtilizationForm({...utilizationForm, utilizationDate: e.target.value})}

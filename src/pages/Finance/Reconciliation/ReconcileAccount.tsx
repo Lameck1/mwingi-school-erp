@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
 import { Upload, ArrowRightLeft, CreditCard } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+
 import { PageHeader } from '../../../components/patterns/PageHeader'
-import { formatCurrency } from '../../../utils/format'
-import { BankAccount, BankStatement, BankStatementLine } from '../../../types/electron-api/BankReconciliationAPI'
+import { type BankAccount, type BankStatement, type BankStatementLine, type UnmatchedTransaction } from '../../../types/electron-api/BankReconciliationAPI'
+import { formatCurrencyFromCents } from '../../../utils/format'
 
 export default function ReconcileAccount() {
     const [accounts, setAccounts] = useState<BankAccount[]>([])
@@ -11,21 +12,13 @@ export default function ReconcileAccount() {
     const [selectedStatement, setSelectedStatement] = useState<BankStatement | null>(null)
     const [lines, setLines] = useState<BankStatementLine[]>([])
 
-    interface UnmatchedTransaction {
-        id: number
-        description: string
-        transaction_ref: string
-        transaction_date: string
-        amount: number
-        [key: string]: unknown
-    }
     const [unmatchedTransactions, setUnmatchedTransactions] = useState<UnmatchedTransaction[]>([])
 
     const loadAccounts = useCallback(async () => {
         try {
             const data = await window.electronAPI.getAccounts()
             setAccounts(data)
-            if (data.length > 0 && !selectedAccount) setSelectedAccount(data[0].id)
+            if (data.length > 0 && !selectedAccount) {setSelectedAccount(data[0].id)}
         } catch (error) {
             console.error('Failed to load accounts', error)
         }
@@ -52,7 +45,7 @@ export default function ReconcileAccount() {
     }, [])
 
     const loadUnmatchedTransactions = useCallback(async () => {
-        if (!selectedStatement) return
+        if (!selectedStatement) {return}
         try {
             const start = new Date(selectedStatement.statement_date)
             start.setDate(1) // Start of month
@@ -72,19 +65,19 @@ export default function ReconcileAccount() {
     }, [selectedStatement])
 
     useEffect(() => {
-        loadAccounts()
+        void loadAccounts()
     }, [loadAccounts])
 
     useEffect(() => {
         if (selectedAccount) {
-            loadStatements(selectedAccount)
+            void loadStatements(selectedAccount)
         }
     }, [selectedAccount, loadStatements])
 
     useEffect(() => {
         if (selectedStatement) {
-            loadStatementDetails(selectedStatement.id)
-            loadUnmatchedTransactions()
+            void loadStatementDetails(selectedStatement.id)
+            void loadUnmatchedTransactions()
         }
     }, [selectedStatement, loadStatementDetails, loadUnmatchedTransactions])
 
@@ -93,10 +86,10 @@ export default function ReconcileAccount() {
             await window.electronAPI.matchTransaction(lineId, transactionId)
             // Refresh
             if (selectedStatement) {
-                loadStatementDetails(selectedStatement.id)
-                loadUnmatchedTransactions()
+                void loadStatementDetails(selectedStatement.id)
+                void loadUnmatchedTransactions()
             }
-        } catch (error) {
+        } catch {
             alert('Failed to match')
         }
     }
@@ -111,8 +104,8 @@ export default function ReconcileAccount() {
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="space-y-2">
-                    <label className="label">Bank Account</label>
-                    <select
+                    <label htmlFor="field-107" className="label">Bank Account</label>
+                    <select id="field-107"
                         value={selectedAccount || ''}
                         onChange={(e) => setSelectedAccount(Number(e.target.value))}
                         className="input"
@@ -123,8 +116,8 @@ export default function ReconcileAccount() {
                     </select>
                 </div>
                 <div className="space-y-2">
-                    <label className="label">Statement Period</label>
-                    <select
+                    <label htmlFor="field-119" className="label">Statement Period</label>
+                    <select id="field-119"
                         value={selectedStatement?.id || ''}
                         onChange={(e) => {
                             const stmt = statements.find(s => s.id === Number(e.target.value))
@@ -165,7 +158,7 @@ export default function ReconcileAccount() {
                                             <p className="text-xs text-foreground/50">{new Date(line.transaction_date).toLocaleDateString()}</p>
                                         </div>
                                         <p className={`font-mono font-bold ${line.credit_amount > 0 ? 'text-emerald-400' : 'text-white'}`}>
-                                            {formatCurrency(line.credit_amount || -line.debit_amount)}
+                                            {formatCurrencyFromCents(line.credit_amount || -line.debit_amount)}
                                         </p>
                                     </div>
                                 </div>
@@ -193,7 +186,7 @@ export default function ReconcileAccount() {
                                             <p className="text-xs text-foreground/50">{txn.transaction_ref} • {new Date(txn.transaction_date).toLocaleDateString()}</p>
                                         </div>
                                         <p className="font-mono font-bold text-white">
-                                            {formatCurrency(txn.amount)}
+                                            {formatCurrencyFromCents(txn.amount)}
                                         </p>
                                     </div>
                                     <button
@@ -201,7 +194,7 @@ export default function ReconcileAccount() {
                                             // Ideally select bank line first, then click here to match
                                             // For simplicity, prompting for ID match or assume selection state
                                             const lineId = prompt('Enter Bank Line ID to match:')
-                                            if (lineId) handleMatch(parseInt(lineId), txn.id)
+                                            if (lineId) {void handleMatch(parseInt(lineId), txn.id)}
                                         }}
                                         className="hidden group-hover:block w-full mt-2 btn btn-xs btn-secondary text-center"
                                     >

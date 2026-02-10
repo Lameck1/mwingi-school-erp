@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
-import { formatCurrency } from '../../utils/format'
 import { Calculator, Play, Download, AlertCircle, ChevronLeft, Eye, Printer, MessageSquare, Loader2, Calendar } from 'lucide-react'
+import { useState, useEffect } from 'react'
+
 import { useAuthStore, useAppStore } from '../../stores'
-import { PayrollPeriod, PayrollEntry } from '../../types/electron-api/PayrollAPI'
-import { ElectronAPI } from '../../types/electron-api'
+import { type PayrollPeriod, type PayrollEntry } from '../../types/electron-api/PayrollAPI'
+import { formatCurrencyFromCents } from '../../utils/format'
 import { printDocument } from '../../utils/print'
 
 export default function PayrollRun() {
@@ -22,7 +22,7 @@ export default function PayrollRun() {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
     useEffect(() => {
-        loadHistory()
+        void loadHistory()
     }, [])
 
     const loadHistory = async () => {
@@ -77,7 +77,7 @@ export default function PayrollRun() {
             if (result.success) {
                 setPayrollData(result.results || [])
                 setSelectedPeriod({ period_name: `${months[month - 1]} ${year}`, status: 'DRAFT' }) // Temporary period obj
-                loadHistory() // Refresh history
+                await loadHistory() // Refresh history
             } else {
                 setError(result.error || 'Failed to run payroll')
             }
@@ -93,7 +93,7 @@ export default function PayrollRun() {
         setSelectedPeriod(null)
         setPayrollData([])
         setError('')
-        loadHistory()
+        void loadHistory()
     }
 
     if (selectedPeriod || payrollData.length > 0) {
@@ -166,30 +166,34 @@ export default function PayrollRun() {
                                             <p className="font-bold text-foreground group-hover:text-primary transition-colors">{p.staff_name}</p>
                                             <p className="text-[10px] text-foreground/40 italic">ID: {p.staff_id}</p>
                                         </td>
-                                        <td className="px-4 py-5 text-right text-xs font-medium text-foreground/60">{formatCurrency(p.basic_salary)}</td>
-                                        <td className="px-4 py-5 text-right text-xs font-medium text-emerald-500">+{formatCurrency(p.allowances)}</td>
-                                        <td className="px-4 py-5 text-right text-xs font-bold text-foreground">{formatCurrency(p.gross_salary)}</td>
+                                        <td className="px-4 py-5 text-right text-xs font-medium text-foreground/60">{formatCurrencyFromCents(p.basic_salary)}</td>
+                                        <td className="px-4 py-5 text-right text-xs font-medium text-emerald-500">+{formatCurrencyFromCents(p.allowances)}</td>
+                                        <td className="px-4 py-5 text-right text-xs font-bold text-foreground">{formatCurrencyFromCents(p.gross_salary)}</td>
                                         <td className="px-4 py-5 text-right text-xs font-medium text-red-500">
-                                            -{formatCurrency((p.paye || 0) + (p.nhif || 0) + (p.nssf || 0))}
+                                            -{formatCurrencyFromCents((p.paye || 0) + (p.nhif || 0) + (p.nssf || 0))}
                                         </td>
                                         <td className="px-4 py-5 text-right">
                                             <span className="text-sm font-bold text-foreground bg-primary/10 px-3 py-1 rounded-lg border border-primary/20">
-                                                {formatCurrency(p.net_salary)}
+                                                {formatCurrencyFromCents(p.net_salary)}
                                             </span>
                                         </td>
                                         <td className="px-4 py-5">
                                             <div className="flex items-center justify-end gap-2">
                                                 <button
+                                                    type="button"
                                                     onClick={() => handleNotifyStaff(p)}
                                                     className="p-2 bg-secondary hover:bg-primary/20 text-primary rounded-lg transition-all"
                                                     title="Notify via SMS"
+                                                    aria-label={`Notify ${p.staff_name} via SMS`}
                                                 >
                                                     <MessageSquare className="w-4 h-4" />
                                                 </button>
                                                 <button
+                                                    type="button"
                                                     onClick={() => handlePrintPayslip(p)}
                                                     className="p-2 bg-secondary hover:bg-white/10 text-foreground/40 hover:text-white rounded-lg transition-all"
                                                     title="Print Payslip"
+                                                    aria-label={`Print payslip for ${p.staff_name}`}
                                                 >
                                                     <Printer className="w-4 h-4" />
                                                 </button>
@@ -227,8 +231,9 @@ export default function PayrollRun() {
                     <div className="space-y-6">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <label className="label">Month</label>
+                                <label className="label" htmlFor="payroll-month">Month</label>
                                 <select
+                                    id="payroll-month"
                                     value={month}
                                     onChange={(e) => setMonth(Number(e.target.value))}
                                     aria-label="Select Month"
@@ -238,8 +243,9 @@ export default function PayrollRun() {
                                 </select>
                             </div>
                             <div className="space-y-2">
-                                <label className="label">Year</label>
+                                <label className="label" htmlFor="payroll-year">Year</label>
                                 <input
+                                    id="payroll-year"
                                     type="number"
                                     value={year}
                                     onChange={(e) => setYear(Number(e.target.value))}
@@ -341,7 +347,7 @@ export default function PayrollRun() {
 
         try {
             const api = window.electronAPI
-            const message = `Salary Notification: Your salary for ${selectedPeriod?.period_name} has been processed. Net Pay: KES ${staff.net_salary}. Thank you.`
+            const message = `Salary Notification: Your salary for ${selectedPeriod?.period_name} has been processed. Net Pay: ${formatCurrencyFromCents(staff.net_salary)}. Thank you.`
             const result = await api.sendSMS({
                 to: staff.phone,
                 message,
@@ -355,13 +361,13 @@ export default function PayrollRun() {
             } else {
                 alert('Failed to send: ' + result.error)
             }
-        } catch (error) {
+        } catch {
             alert('Error sending notification')
         }
     }
 
     async function handleBulkNotify() {
-        if (!confirm(`Send salary notifications to ${payrollData.length} staff members?`)) return
+        if (!confirm(`Send salary notifications to ${payrollData.length} staff members?`)) {return}
         if (!user) {
             alert('User not authenticated')
             return
@@ -379,7 +385,7 @@ export default function PayrollRun() {
             }
 
             try {
-                const message = `Salary Notification: Your salary for ${selectedPeriod?.period_name} has been processed. Net Pay: KES ${staff.net_salary}. Thank you.`
+                const message = `Salary Notification: Your salary for ${selectedPeriod?.period_name} has been processed. Net Pay: ${formatCurrencyFromCents(staff.net_salary)}. Thank you.`
                 const result = await api.sendSMS({
                     to: staff.phone,
                     message,
@@ -387,9 +393,9 @@ export default function PayrollRun() {
                     recipientType: 'STAFF',
                     userId: user.id
                 })
-                if (result.success) sent++
-                else failed++
-            } catch (error) {
+                if (result.success) {sent++}
+                else {failed++}
+            } catch {
                 failed++
             }
         }

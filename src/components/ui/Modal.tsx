@@ -1,13 +1,13 @@
+import { X } from 'lucide-react'
 import React, { useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { X } from 'lucide-react'
 
 interface ModalProps {
     isOpen: boolean
     onClose: () => void
     title: string
     children: React.ReactNode
-    size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
+    size?: 'sm' | 'md' | 'lg' | 'xl' | 'full' | 'print'
 }
 
 const sizes = {
@@ -16,6 +16,7 @@ const sizes = {
     lg: 'max-w-4xl',
     xl: 'max-w-6xl',
     full: 'max-w-[95vw]',
+    print: 'max-w-[96vw] sm:max-w-[90vw] lg:max-w-[80vw] xl:max-w-[1080px] 2xl:max-w-[1160px]',
 }
 
 export function Modal({
@@ -27,7 +28,7 @@ export function Modal({
 }: ModalProps) {
     useEffect(() => {
         const handleEsc = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose()
+            if (e.key === 'Escape') {onClose()}
         }
         if (isOpen) {
             document.addEventListener('keydown', handleEsc)
@@ -39,7 +40,7 @@ export function Modal({
         }
     }, [isOpen, onClose])
 
-    if (!isOpen) return null
+    if (!isOpen) {return null}
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">

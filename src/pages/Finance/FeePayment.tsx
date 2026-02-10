@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+
 import { useAppStore } from '../../stores'
-import { Student } from '../../types/electron-api/StudentAPI'
-import { Payment } from '../../types/electron-api/FinanceAPI'
-import { StudentLedgerSearch } from './components/StudentLedgerSearch'
-import { PaymentEntryForm } from './components/PaymentEntryForm'
 import { LedgerHistory } from './components/LedgerHistory'
+import { PaymentEntryForm } from './components/PaymentEntryForm'
+import { StudentLedgerSearch } from './components/StudentLedgerSearch'
+import { type Payment } from '../../types/electron-api/FinanceAPI'
+import { type Student } from '../../types/electron-api/StudentAPI'
 
 export default function FeePayment() {
     const [searchParams] = useSearchParams()
@@ -17,7 +18,7 @@ export default function FeePayment() {
     useEffect(() => {
         const studentId = searchParams.get('student')
         if (studentId) {
-            loadStudent(parseInt(studentId))
+            void loadStudent(parseInt(studentId))
         }
     }, [searchParams])
 
@@ -34,7 +35,7 @@ export default function FeePayment() {
     }
 
     const handleStudentSelect = (student: Student) => {
-        loadStudent(student.id)
+        void loadStudent(student.id)
     }
 
     const handlePaymentComplete = (newBalance: number) => {
@@ -42,7 +43,7 @@ export default function FeePayment() {
             // Optimistic update
             setSelectedStudent({ ...selectedStudent, balance: newBalance })
             // Reload to get new payment in history
-            loadStudent(selectedStudent.id)
+            void loadStudent(selectedStudent.id)
         }
     }
 

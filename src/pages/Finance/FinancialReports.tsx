@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
 import { TrendingUp, TrendingDown, DollarSign, Download, Filter, Calendar, Activity, BarChart3, PieChart as PieIcon } from 'lucide-react'
-import { useToast } from '../../contexts/ToastContext'
-import { formatCurrency } from '../../utils/format'
+import { useEffect, useState } from 'react'
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
+
 import { InstitutionalHeader } from '../../components/patterns/InstitutionalHeader'
+import { useToast } from '../../contexts/ToastContext'
+import { formatCurrencyFromCents } from '../../utils/format'
+
+
 
 interface TransactionSummary {
     totalIncome: number
@@ -50,7 +53,7 @@ export default function FinancialReports() {
     }
 
     useEffect(() => {
-        loadData()
+        void loadData()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [dateRange, showToast])
 
@@ -75,11 +78,11 @@ export default function FinancialReports() {
             <div className="premium-card animate-slide-up">
                 <div className="flex flex-wrap items-end gap-6">
                     <div className="flex-1 min-w-[200px] space-y-2">
-                        <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1 flex items-center gap-2">
+                        <label htmlFor="field-81" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1 flex items-center gap-2">
                             <Calendar className="w-3 h-3" />
                             Session Start
                         </label>
-                        <input
+                        <input id="field-81"
                             type="date"
                             value={dateRange.startDate}
                             onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
@@ -88,11 +91,11 @@ export default function FinancialReports() {
                         />
                     </div>
                     <div className="flex-1 min-w-[200px] space-y-2">
-                        <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1 flex items-center gap-2">
+                        <label htmlFor="field-94" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1 flex items-center gap-2">
                             <Calendar className="w-3 h-3" />
                             Session Termination
                         </label>
-                        <input
+                        <input id="field-94"
                             type="date"
                             value={dateRange.endDate}
                             onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
@@ -120,7 +123,7 @@ export default function FinancialReports() {
                         </div>
                         <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-[0.2em] bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">Revenue Stream</span>
                     </div>
-                    <h3 className="text-3xl font-bold text-foreground font-heading tracking-tight">{formatCurrency(totalIncome)}</h3>
+                    <h3 className="text-3xl font-bold text-foreground font-heading tracking-tight">{formatCurrencyFromCents(totalIncome)}</h3>
                     <p className="text-foreground/40 text-[10px] font-bold uppercase tracking-widest mt-2">Aggregate Capital Influx</p>
                 </div>
 
@@ -131,7 +134,7 @@ export default function FinancialReports() {
                         </div>
                         <span className="text-[10px] font-bold text-destructive uppercase tracking-[0.2em] bg-destructive/10 px-3 py-1 rounded-full border border-destructive/20">Operational Cost</span>
                     </div>
-                    <h3 className="text-3xl font-bold text-foreground font-heading tracking-tight">{formatCurrency(totalExpense)}</h3>
+                    <h3 className="text-3xl font-bold text-foreground font-heading tracking-tight">{formatCurrencyFromCents(totalExpense)}</h3>
                     <p className="text-foreground/40 text-[10px] font-bold uppercase tracking-widest mt-2">Aggregate Environment Drain</p>
                 </div>
 
@@ -142,7 +145,7 @@ export default function FinancialReports() {
                         </div>
                         <span className={`text-[10px] font-bold uppercase tracking-[0.2em] px-3 py-1 rounded-full border ${netBalance >= 0 ? 'text-primary bg-primary/10 border-primary/20' : 'text-orange-500 bg-orange-500/10 border-orange-500/20'}`}>Net Liquidity</span>
                     </div>
-                    <h3 className={`text-3xl font-bold font-heading tracking-tight ${netBalance >= 0 ? 'text-primary' : 'text-orange-500'}`}>{formatCurrency(netBalance)}</h3>
+                    <h3 className={`text-3xl font-bold font-heading tracking-tight ${netBalance >= 0 ? 'text-primary' : 'text-orange-500'}`}>{formatCurrencyFromCents(netBalance)}</h3>
                     <p className="text-foreground/40 text-[10px] font-bold uppercase tracking-widest mt-2">Operational Differential</p>
                 </div>
             </div>
@@ -169,7 +172,7 @@ export default function FinancialReports() {
                                         </Pie>
                                         <Tooltip
                                             contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
-                                            formatter={(value: number) => formatCurrency(value)}
+                                            formatter={(value: number) => formatCurrencyFromCents(value)}
                                         />
                                     </PieChart>
                                 </ResponsiveContainer>
@@ -210,7 +213,7 @@ export default function FinancialReports() {
                                         <Tooltip
                                             cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                                             contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
-                                            formatter={(value: number) => formatCurrency(value)}
+                                            formatter={(value: number) => formatCurrencyFromCents(value)}
                                         />
                                         <Bar dataKey="value" fill="#ef4444" radius={[0, 4, 4, 0]} barSize={20} />
                                     </BarChart>

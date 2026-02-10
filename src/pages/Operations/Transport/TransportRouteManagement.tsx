@@ -1,19 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react'
 import {
     Truck,
     Users,
     Plus,
     DollarSign
 } from 'lucide-react'
-import { formatCurrency } from '../../../utils/format'
+import React, { useState, useEffect, useCallback } from 'react'
+
 import { PageHeader } from '../../../components/patterns/PageHeader'
 import { StatCard } from '../../../components/patterns/StatCard'
-import { DataTable } from '../../../components/ui/Table/DataTable'
-import { Modal } from '../../../components/ui/Modal'
 import { Input } from '../../../components/ui/Input'
+import { Modal } from '../../../components/ui/Modal'
 import { Select } from '../../../components/ui/Select'
+import { DataTable } from '../../../components/ui/Table/DataTable'
 import { useToast } from '../../../contexts/ToastContext'
-import { TransportRoute } from '../../../types/electron-api/OperationsAPI'
+import { useAuthStore } from '../../../stores'
+import { type TransportRoute } from '../../../types/electron-api/OperationsAPI'
+import { formatCurrencyFromCents, shillingsToCents } from '../../../utils/format'
 
 interface TransportSummary {
     totalRoutes: number
@@ -22,6 +24,7 @@ interface TransportSummary {
 
 export default function TransportRouteManagement() {
     const { showToast } = useToast()
+    const { user } = useAuthStore()
     const [loading, setLoading] = useState(false)
     const [routes, setRoutes] = useState<TransportRoute[]>([])
     const [summary, setSummary] = useState<TransportSummary | null>(null)
@@ -76,7 +79,7 @@ export default function TransportRouteManagement() {
     }, [showToast])
 
     useEffect(() => {
-        loadData()
+        void loadData()
     }, [loadData])
 
     const handleCreateRoute = async (e: React.FormEvent) => {
@@ -86,12 +89,12 @@ export default function TransportRouteManagement() {
                 route_name: createForm.route_name,
                 distance_km: parseFloat(createForm.distance_km),
                 estimated_students: parseInt(createForm.estimated_students),
-                budget_per_term_cents: Math.round(parseFloat(createForm.budget_per_term) * 100)
+                budget_per_term_cents: shillingsToCents(createForm.budget_per_term)
             })
             showToast('Route created successfully', 'success')
             setIsCreateModalOpen(false)
             setCreateForm({ route_name: '', distance_km: '', estimated_students: '', budget_per_term: '' })
-            loadData()
+            await loadData()
         } catch (error) {
             console.error(error)
             showToast('Failed to create route', 'error')
@@ -101,13 +104,17 @@ export default function TransportRouteManagement() {
     const handleRecordExpense = async (e: React.FormEvent) => {
         e.preventDefault()
         try {
+            if (!user) {
+                showToast('User not authenticated', 'error')
+                return
+            }
             await window.electronAPI.recordTransportExpense({
                 ...expenseForm,
                 route_id: parseInt(expenseForm.route_id),
-                amount_cents: Math.round(parseFloat(expenseForm.amount) * 100),
+                amount_cents: shillingsToCents(expenseForm.amount),
                 fiscal_year: new Date().getFullYear(),
                 term: 1, // Default to Term 1
-                recorded_by: 1
+                recorded_by: user.id
             })
             showToast('Expense recorded successfully', 'success')
             setIsExpenseModalOpen(false)
@@ -126,7 +133,7 @@ export default function TransportRouteManagement() {
             key: 'budget_per_term_cents',
             header: 'Budget (KES)',
             accessorKey: 'budget_per_term_cents',
-            cell: (row: TransportRoute) => formatCurrency(row.budget_per_term_cents)
+            cell: (row: TransportRoute) => formatCurrencyFromCents(row.budget_per_term_cents)
         },
         {
             key: 'is_active',
@@ -200,16 +207,18 @@ export default function TransportRouteManagement() {
             >
                 <form onSubmit={handleCreateRoute} className="space-y-4">
                     <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-foreground/60 px-1">Route Name</label>
+                        <label htmlFor="transport-route-name" className="text-xs font-bold text-foreground/60 px-1">Route Name</label>
                         <Input
+                            id="transport-route-name"
                             value={createForm.route_name}
                             onChange={(e) => setCreateForm({ ...createForm, route_name: e.target.value })}
                             required
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-foreground/60 px-1">Distance (KM)</label>
+                        <label htmlFor="transport-distance-km" className="text-xs font-bold text-foreground/60 px-1">Distance (KM)</label>
                         <Input
+                            id="transport-distance-km"
                             type="number"
                             value={createForm.distance_km}
                             onChange={(e) => setCreateForm({ ...createForm, distance_km: e.target.value })}
@@ -217,8 +226,9 @@ export default function TransportRouteManagement() {
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-foreground/60 px-1">Estimated Students</label>
+                        <label htmlFor="transport-estimated-students" className="text-xs font-bold text-foreground/60 px-1">Estimated Students</label>
                         <Input
+                            id="transport-estimated-students"
                             type="number"
                             value={createForm.estimated_students}
                             onChange={(e) => setCreateForm({ ...createForm, estimated_students: e.target.value })}
@@ -226,8 +236,9 @@ export default function TransportRouteManagement() {
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-foreground/60 px-1">Budget Per Term (KES)</label>
+                        <label htmlFor="transport-budget-per-term" className="text-xs font-bold text-foreground/60 px-1">Budget Per Term (KES)</label>
                         <Input
+                            id="transport-budget-per-term"
                             type="number"
                             value={createForm.budget_per_term}
                             onChange={(e) => setCreateForm({ ...createForm, budget_per_term: e.target.value })}
@@ -272,8 +283,9 @@ export default function TransportRouteManagement() {
                         ]}
                     />
                     <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-foreground/60 px-1">Amount (KES)</label>
+                        <label htmlFor="transport-expense-amount" className="text-xs font-bold text-foreground/60 px-1">Amount (KES)</label>
                         <Input
+                            id="transport-expense-amount"
                             type="number"
                             value={expenseForm.amount}
                             onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
@@ -281,8 +293,9 @@ export default function TransportRouteManagement() {
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-foreground/60 px-1">Description</label>
+                        <label htmlFor="transport-expense-description" className="text-xs font-bold text-foreground/60 px-1">Description</label>
                         <Input
+                            id="transport-expense-description"
                             value={expenseForm.description}
                             onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
                             required

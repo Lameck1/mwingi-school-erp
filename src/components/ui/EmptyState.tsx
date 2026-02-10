@@ -1,5 +1,5 @@
-import React from 'react'
 import { Inbox } from 'lucide-react'
+import React from 'react'
 
 interface EmptyStateProps {
     icon?: React.ReactNode
@@ -13,7 +13,7 @@ export function EmptyState({
     title,
     description,
     action
-}: EmptyStateProps) {
+}: Readonly<EmptyStateProps>) {
     return (
         <div className="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed border-white/5 rounded-2xl bg-white/[0.02]">
             <div className="mb-4">

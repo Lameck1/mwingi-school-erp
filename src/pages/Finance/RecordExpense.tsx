@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react'
-import { shillingsToCents } from '../../utils/format'
-import { useAuthStore } from '../../stores'
-import { TransactionCategory } from '../../types/electron-api/FinanceAPI'
 import { Plus, Check, Loader2, ArrowLeftCircle, Receipt, Tag, CreditCard, FileText, Calendar } from 'lucide-react'
+import React, { useCallback, useEffect, useState } from 'react'
+
 import { useToast } from '../../contexts/ToastContext'
+import { useAuthStore } from '../../stores'
+import { type TransactionCategory } from '../../types/electron-api/FinanceAPI'
+import { shillingsToCents } from '../../utils/format'
 
 export default function RecordExpense() {
     const { user } = useAuthStore()
@@ -25,20 +26,7 @@ export default function RecordExpense() {
         transaction_type: 'EXPENSE'
     })
 
-    useEffect(() => {
-        const loadCategories = async () => {
-            try {
-                const allCats = await window.electronAPI.getTransactionCategories()
-                setCategories(allCats.filter((c: TransactionCategory) => c.category_type === 'EXPENSE'))
-            } catch (error) {
-                console.error('Failed to load categories:', error)
-                showToast('Failed to load categories', 'error')
-            }
-        }
-        loadCategories()
-    }, [showToast])
-
-    const loadCategories = async () => {
+    const loadCategories = useCallback(async () => {
         try {
             const allCats = await window.electronAPI.getTransactionCategories()
             setCategories(allCats.filter((c: TransactionCategory) => c.category_type === 'EXPENSE'))
@@ -46,10 +34,14 @@ export default function RecordExpense() {
             console.error('Failed to load categories:', error)
             showToast('Failed to load categories', 'error')
         }
-    }
+    }, [showToast])
+
+    useEffect(() => {
+        void loadCategories()
+    }, [loadCategories])
 
     const handleCreateCategory = async () => {
-        if (!newCategory.trim()) return
+        if (!newCategory.trim()) {return}
         try {
             setLoading(true)
             await window.electronAPI.createTransactionCategory(newCategory, 'EXPENSE')

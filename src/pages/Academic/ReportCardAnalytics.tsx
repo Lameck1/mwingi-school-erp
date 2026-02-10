@@ -1,10 +1,12 @@
 
+import { Download, TrendingUp } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { useAppStore } from '../../stores'
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
-import { Download, TrendingUp } from 'lucide-react'
+import { exportToPDF } from '../../utils/exporters'
 
 interface PerformanceSummary {
   mean_score: number
@@ -70,7 +72,7 @@ const ReportCardAnalytics = () => {
   }, [currentAcademicYear, currentTerm])
 
   useEffect(() => {
-    loadInitialData()
+    void loadInitialData()
   }, [loadInitialData])
 
   const handleAnalyze = async () => {
@@ -119,11 +121,24 @@ const ReportCardAnalytics = () => {
     }
 
     try {
-      await window.electronAPI.exportReportCardAnalyticsToPDF({
-        examId: selectedExam,
-        summary: performanceSummary,
-        grades: gradeDistribution,
-        subjects: subjectPerformance
+      await exportToPDF({
+        filename: `report-card-analytics-${selectedExam}-${selectedStream}`,
+        title: 'Report Card Analytics - Subject Performance',
+        subtitle: `Mean: ${performanceSummary.mean_score.toFixed(2)} | Pass Rate: ${performanceSummary.pass_rate.toFixed(1)}% | Students: ${performanceSummary.total_students}`,
+        columns: [
+          { key: 'subject_name', header: 'Subject', width: 70 },
+          { key: 'mean_score', header: 'Mean Score', width: 30, align: 'right' },
+          { key: 'pass_rate', header: 'Pass Rate', width: 30, align: 'right' },
+          { key: 'difficulty_index', header: 'Difficulty', width: 30, align: 'right' },
+          { key: 'discrimination_index', header: 'Discrimination', width: 35, align: 'right' }
+        ],
+        data: subjectPerformance.map((s) => ({
+          subject_name: s.subject_name,
+          mean_score: s.mean_score.toFixed(2),
+          pass_rate: `${s.pass_rate.toFixed(1)}%`,
+          difficulty_index: s.difficulty_index.toFixed(2),
+          discrimination_index: s.discrimination_index.toFixed(2)
+        }))
       })
     } catch (error) {
       console.error('Failed to export:', error)

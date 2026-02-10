@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
-import { formatCurrency } from '../../../utils/format';
 import { format } from 'date-fns';
+import { useState, useEffect, useCallback } from 'react';
+
+import { useAuthStore } from '../../../stores';
+import { formatCurrencyFromCents } from '../../../utils/format';
 
 interface ApprovalRequest {
   id: number;
@@ -16,7 +18,17 @@ interface ApprovalRequest {
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
+const getStatusBadge = (status: string) => {
+  const colors = {
+    PENDING: 'bg-yellow-100 text-yellow-800',
+    APPROVED: 'bg-green-100 text-green-800',
+    REJECTED: 'bg-red-100 text-red-800'
+  };
+  return colors[status as keyof typeof colors] || colors.PENDING;
+};
+
 export default function ApprovalQueuePage() {
+  const { user } = useAuthStore();
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [filter, setFilter] = useState<'PENDING' | 'ALL'>('PENDING');
   const [loading, setLoading] = useState<boolean>(false);
@@ -44,18 +56,23 @@ export default function ApprovalQueuePage() {
   }, [filter]);
 
   useEffect(() => {
-    loadApprovals();
+    void loadApprovals();
   }, [loadApprovals]);
 
   const handleApprove = async (approvalId: number) => {
+    if (!user?.id) {
+      setError('You must be signed in to approve transactions');
+      return;
+    }
     try {
       const result = await window.electronAPI.approveTransaction(
         approvalId,
-        reviewNotes || 'Approved'
+        reviewNotes || 'Approved',
+        user.id
       );
 
       if (result.success) {
-        loadApprovals();
+        void loadApprovals();
         setSelectedApproval(null);
         setReviewNotes('');
       } else {
@@ -71,15 +88,20 @@ export default function ApprovalQueuePage() {
       setError('Please provide a reason for rejection');
       return;
     }
+    if (!user?.id) {
+      setError('You must be signed in to reject transactions');
+      return;
+    }
 
     try {
       const result = await window.electronAPI.rejectTransaction(
         approvalId,
-        reviewNotes
+        reviewNotes,
+        user.id
       );
 
       if (result.success) {
-        loadApprovals();
+        void loadApprovals();
         setSelectedApproval(null);
         setReviewNotes('');
       } else {
@@ -89,19 +111,6 @@ export default function ApprovalQueuePage() {
       setError((err as Error).message);
     }
   };
-
-
-
-
-  const getStatusBadge = (status: string) => {
-    const colors = {
-      PENDING: 'bg-yellow-100 text-yellow-800',
-      APPROVED: 'bg-green-100 text-green-800',
-      REJECTED: 'bg-red-100 text-red-800'
-    };
-    return colors[status as keyof typeof colors] || colors.PENDING;
-  };
-
   if (loading) {
     return (
       <div className="p-6">
@@ -121,8 +130,8 @@ export default function ApprovalQueuePage() {
 
       <div className="bg-white rounded-lg shadow p-4 mb-6">
         <div className="flex items-center gap-4">
-          <label className="text-sm font-medium text-gray-700">Filter:</label>
-          <select
+          <label htmlFor="field-137" className="text-sm font-medium text-gray-700">Filter:</label>
+          <select id="field-137"
             value={filter}
             onChange={(e) => setFilter(e.target.value as 'PENDING' | 'ALL')}
             className="px-3 py-2 border border-gray-300 rounded-md"
@@ -181,7 +190,7 @@ export default function ApprovalQueuePage() {
                       <div className="text-xs text-gray-500">{approval.student_name}</div>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{formatCurrency(approval.amount)}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900">{formatCurrencyFromCents(approval.amount)}</td>
                   <td className="px-6 py-4 text-sm text-gray-900">{approval.rule_name}</td>
                   <td className="px-6 py-4 text-sm text-gray-900">
                     {approval.requested_by_name}
@@ -228,7 +237,7 @@ export default function ApprovalQueuePage() {
                 <span className="font-medium">Description:</span> {selectedApproval.description}
               </div>
               <div>
-                <span className="font-medium">Amount:</span> {formatCurrency(selectedApproval.amount)}
+                <span className="font-medium">Amount:</span> {formatCurrencyFromCents(selectedApproval.amount)}
               </div>
               {selectedApproval.student_name && (
                 <div>
@@ -285,4 +294,3 @@ export default function ApprovalQueuePage() {
     </div>
   );
 }
-

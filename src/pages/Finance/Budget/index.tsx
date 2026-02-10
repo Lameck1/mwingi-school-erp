@@ -1,16 +1,17 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
 import {
     Plus, TrendingUp, TrendingDown, DollarSign,
     CheckCircle, XCircle, Clock, AlertTriangle,
     Edit, FileText
 } from 'lucide-react'
-import { DataTable, Column } from '../../../components/ui/Table/DataTable'
+import { useState, useEffect, useCallback } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+
 import { PageHeader } from '../../../components/patterns/PageHeader'
 import { StatCard } from '../../../components/patterns/StatCard'
+import { DataTable, type Column } from '../../../components/ui/Table/DataTable'
 import { useAppStore } from '../../../stores'
-import { formatCurrency } from '../../../utils/format'
-import { Budget } from '../../../types/electron-api'
+import { type Budget } from '../../../types/electron-api'
+import { formatCurrencyFromCents } from '../../../utils/format'
 
 const statusConfig = {
     DRAFT: { label: 'Draft', color: 'bg-gray-500/20 text-gray-400 border-gray-500/30', icon: Edit },
@@ -60,7 +61,7 @@ export default function BudgetList() {
     }, [currentAcademicYear])
 
     useEffect(() => {
-        loadBudgets()
+        void loadBudgets()
     }, [loadBudgets])
 
     const columns: Column<Budget>[] = [
@@ -104,7 +105,7 @@ export default function BudgetList() {
             align: 'right',
             sortable: true,
             render: (value) => (
-                <span className="font-mono font-bold text-white">{formatCurrency(value as number)}</span>
+                <span className="font-mono font-bold text-white">{formatCurrencyFromCents(value as number)}</span>
             )
         },
         {
@@ -112,7 +113,7 @@ export default function BudgetList() {
             header: 'Actual',
             align: 'right',
             render: (value) => (
-                <span className="font-mono font-medium text-foreground/70">{formatCurrency(value as number)}</span>
+                <span className="font-mono font-medium text-foreground/70">{formatCurrencyFromCents(value as number)}</span>
             )
         },
         {
@@ -125,7 +126,7 @@ export default function BudgetList() {
                 return (
                     <span className={`font-mono font-bold flex items-center justify-end gap-1 ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
                         {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                        {formatCurrency(Math.abs(variance))}
+                        {formatCurrencyFromCents(Math.abs(variance))}
                     </span>
                 )
             }
@@ -153,25 +154,25 @@ export default function BudgetList() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard
                     label="Active Budget"
-                    value={formatCurrency(summary.activeBudget)}
+                    value={formatCurrencyFromCents(summary.activeBudget)}
                     icon={DollarSign}
                     color="from-blue-500/20 to-indigo-500/20 text-blue-400"
                 />
                 <StatCard
                     label="Total Budgeted"
-                    value={formatCurrency(summary.totalBudgeted)}
+                    value={formatCurrencyFromCents(summary.totalBudgeted)}
                     icon={FileText}
                     color="from-emerald-500/20 to-teal-500/20 text-emerald-400"
                 />
                 <StatCard
                     label="Total Spent"
-                    value={formatCurrency(summary.totalActual)}
+                    value={formatCurrencyFromCents(summary.totalActual)}
                     icon={TrendingDown}
                     color="from-amber-500/20 to-orange-500/20 text-amber-400"
                 />
                 <StatCard
                     label="Overall Variance"
-                    value={formatCurrency(Math.abs(summary.variance))}
+                    value={formatCurrencyFromCents(Math.abs(summary.variance))}
                     icon={summary.variance >= 0 ? TrendingUp : AlertTriangle}
                     color={summary.variance >= 0
                         ? "from-green-500/20 to-emerald-500/20 text-green-400"
