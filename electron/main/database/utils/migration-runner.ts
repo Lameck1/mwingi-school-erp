@@ -1,7 +1,8 @@
-import { getDatabase } from '../index'
 import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
+
+import { getDatabase } from '../index'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -56,7 +57,7 @@ export class MigrationRunner {
 
     const allMigrations = fs.readdirSync(this.migrationsPath)
       .filter(file => file.endsWith('.sql'))
-      .sort()
+      .sort((left, right) => left.localeCompare(right))
 
     const executedMigrations = this.getExecutedMigrations()
 
