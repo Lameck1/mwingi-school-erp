@@ -58,7 +58,7 @@ export default function SubjectManagement() {
   }, [showToast])
 
   useEffect(() => {
-    void loadSubjects()
+    loadSubjects().catch((err: unknown) => console.error('Failed to load subjects:', err))
   }, [loadSubjects])
 
   const openCreate = () => {

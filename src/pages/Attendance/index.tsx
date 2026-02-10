@@ -144,12 +144,12 @@ export default function Attendance() {
     }, [selectedStream, selectedDate, currentAcademicYear, currentTerm])
 
     useEffect(() => {
-        void loadStreams()
+        loadStreams().catch((err: unknown) => console.error('Failed to load streams:', err))
     }, [])
 
     useEffect(() => {
         if (selectedStream && currentAcademicYear && currentTerm) {
-            void loadStudents()
+            loadStudents().catch((err: unknown) => console.error('Failed to load students:', err))
         }
     }, [selectedStream, selectedDate, currentAcademicYear, currentTerm, loadStudents])
 

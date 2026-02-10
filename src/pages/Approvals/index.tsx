@@ -68,7 +68,7 @@ export default function Approvals() {
     }, [filter])
 
     useEffect(() => {
-        void loadData()
+        loadData().catch((err: unknown) => console.error('Failed to load data:', err))
     }, [loadData])
 
     const handleApprove = async (request: ApprovalRequest) => {
@@ -77,7 +77,7 @@ export default function Approvals() {
         try {
             const result = await globalThis.electronAPI.approveRequest(request.id, user.id)
             if (result.success) {
-                void loadData()
+                loadData().catch((err: unknown) => console.error('Failed to reload data:', err))
             } else {
                 alert(result.errors?.join(', ') || 'Failed to approve')
             }
@@ -102,7 +102,7 @@ export default function Approvals() {
                 setShowRejectModal(false)
                 setRejectReason('')
                 setSelectedRequest(null)
-                void loadData()
+                loadData().catch((err: unknown) => console.error('Failed to reload data:', err))
             } else {
                 alert(result.errors?.join(', ') || 'Failed to reject')
             }

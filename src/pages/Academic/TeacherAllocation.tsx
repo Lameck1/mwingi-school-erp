@@ -87,11 +87,11 @@ export default function TeacherAllocation() {
     }, [])
 
     useEffect(() => {
-        void loadInitialData()
+        loadInitialData().catch((err: unknown) => console.error('Failed to load initial data:', err))
     }, [loadInitialData])
 
     useEffect(() => {
-        void loadAllocations()
+        loadAllocations().catch((err: unknown) => console.error('Failed to load allocations:', err))
     }, [loadAllocations])
 
     const handleAllocate = async () => {

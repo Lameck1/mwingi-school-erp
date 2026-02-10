@@ -95,13 +95,13 @@ export default function MarksEntry() {
 
     useEffect(() => {
         if (currentAcademicYear && currentTerm) {
-            void loadInitialData()
+            loadInitialData().catch((err: unknown) => console.error('Load initial data failed:', err))
         }
     }, [loadInitialData, currentAcademicYear, currentTerm])
 
     useEffect(() => {
         if (selectedExam && selectedAllocation) {
-            void loadResults()
+            loadResults().catch((err: unknown) => console.error('Load results failed:', err))
         }
     }, [selectedExam, selectedAllocation, loadResults])
 

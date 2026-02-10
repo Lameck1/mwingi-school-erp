@@ -72,7 +72,7 @@ const ReportCardAnalytics = () => {
   }, [currentAcademicYear, currentTerm])
 
   useEffect(() => {
-    void loadInitialData()
+    loadInitialData().catch((err: unknown) => console.error('Failed to load initial data:', err))
   }, [loadInitialData])
 
   const handleAnalyze = async () => {

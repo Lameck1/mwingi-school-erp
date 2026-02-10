@@ -22,7 +22,7 @@ export default function AuditLog() {
         } finally { setLoading(false) }
     }, [showToast])
 
-    useEffect(() => { void loadLogs() }, [loadLogs])
+    useEffect(() => { loadLogs().catch((err: unknown) => console.error('Failed to load logs:', err)) }, [loadLogs])
 
     const actionColors: Record<string, string> = {
         CREATE: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
