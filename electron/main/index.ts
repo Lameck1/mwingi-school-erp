@@ -75,7 +75,9 @@ function createWindow() {
         if (!details || typeof details !== 'object' || !('message' in details)) {
             return
         }
-        const message = String((details as { message?: unknown }).message ?? '')
+        const detailsObj = details as { message?: unknown }
+        const rawMessage = detailsObj.message
+        const message = typeof rawMessage === 'string' ? rawMessage : ''
         if (message.length > 0) {
             console.error(`[Renderer] ${message}`)
         }
@@ -83,10 +85,10 @@ function createWindow() {
 
     // Load the app
     if (VITE_DEV_SERVER_URL) {
-        void mainWindow!.loadURL(VITE_DEV_SERVER_URL)
+        mainWindow!.loadURL(VITE_DEV_SERVER_URL).catch((err: Error) => console.error('Failed to load dev URL:', err.message))
         mainWindow!.webContents.openDevTools()
     } else {
-        void mainWindow!.loadFile(path.join(__dirname, '../../dist/index.html'))
+        mainWindow!.loadFile(path.join(__dirname, '../../dist/index.html')).catch((err: Error) => console.error('Failed to load file:', err.message))
     }
 
     mainWindow!.on('closed', () => {

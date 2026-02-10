@@ -170,13 +170,15 @@ function registerPdfExportHandler(): void {
     })
 }
 
+const safeString = (val: unknown): string => (typeof val === 'string' ? val : '')
+
 function buildScheduleExportHtml(slots: Array<Record<string, unknown>>): string {
     const rows = slots.map(slot => `
               <tr>
-                <td>${slot['subject_name'] || ''}</td>
-                <td>${slot['start_date'] || ''}</td>
-                <td>${slot['start_time'] || ''} - ${slot['end_time'] || ''}</td>
-                <td>${slot['venue_name'] || ''}</td>
+                <td>${safeString(slot['subject_name'])}</td>
+                <td>${safeString(slot['start_date'])}</td>
+                <td>${safeString(slot['start_time'])} - ${safeString(slot['end_time'])}</td>
+                <td>${safeString(slot['venue_name'])}</td>
               </tr>
             `).join('')
 
