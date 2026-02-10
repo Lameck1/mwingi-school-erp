@@ -118,7 +118,7 @@ interface BalanceResult {
 // ============================================================================
 
 class CashFlowRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -199,8 +199,8 @@ class CashFlowRepository {
 // ============================================================================
 
 class OperatingActivitiesCalculator implements IOperatingActivitiesCalculator {
-  private db: Database.Database
-  private repo: CashFlowRepository
+  private readonly db: Database.Database
+  private readonly repo: CashFlowRepository
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -244,8 +244,8 @@ class OperatingActivitiesCalculator implements IOperatingActivitiesCalculator {
 // ============================================================================
 
 class InvestingActivitiesCalculator implements IInvestingActivitiesCalculator {
-  private db: Database.Database
-  private repo: CashFlowRepository
+  private readonly db: Database.Database
+  private readonly repo: CashFlowRepository
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -281,8 +281,8 @@ class InvestingActivitiesCalculator implements IInvestingActivitiesCalculator {
 // ============================================================================
 
 class FinancingActivitiesCalculator implements IFinancingActivitiesCalculator {
-  private db: Database.Database
-  private repo: CashFlowRepository
+  private readonly db: Database.Database
+  private readonly repo: CashFlowRepository
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -322,8 +322,8 @@ class FinancingActivitiesCalculator implements IFinancingActivitiesCalculator {
 // ============================================================================
 
 class LiquidityAnalyzer implements ILiquidityAnalyzer {
-  private db: Database.Database
-  private repo: CashFlowRepository
+  private readonly db: Database.Database
+  private readonly repo: CashFlowRepository
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -419,7 +419,7 @@ class CashFlowForecaster implements ICashFlowForecaster {
 export class CashFlowStatementService
   implements IOperatingActivitiesCalculator, IInvestingActivitiesCalculator, IFinancingActivitiesCalculator {
   // Composed services
-  private db: Database.Database
+  private readonly db: Database.Database
   private readonly operatingCalculator: OperatingActivitiesCalculator
   private readonly investingCalculator: InvestingActivitiesCalculator
   private readonly financingCalculator: FinancingActivitiesCalculator
@@ -467,8 +467,9 @@ export class CashFlowStatementService
       const transactions = await this.repository.getTransactionsByType(period.startDate, period.endDate, ['CREDIT', 'PAYMENT'])
       const forecasts = await this.forecaster.generateCashForecasts(transactions, 60)
 
-      const cashForecast30 = forecasts.find(f => f.forecast_date === new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])?.projected_balance || closingCashBalance
-      const cashForecast60 = forecasts.find(f => f.forecast_date === new Date(new Date().getTime() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])?.projected_balance || closingCashBalance
+      const now = Date.now()
+      const cashForecast30 = forecasts.find(f => f.forecast_date === new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])?.projected_balance || closingCashBalance
+      const cashForecast60 = forecasts.find(f => f.forecast_date === new Date(now + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])?.projected_balance || closingCashBalance
 
       return {
         period_start: period.startDate,

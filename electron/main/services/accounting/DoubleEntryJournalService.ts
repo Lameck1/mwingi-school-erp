@@ -88,7 +88,7 @@ export interface AccountBalance {
 // ============================================================================
 
 export class DoubleEntryJournalService {
-  private db: Database.Database;
+  private readonly db: Database.Database;
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase();
@@ -379,7 +379,7 @@ export class DoubleEntryJournalService {
 
       // Check if approval required for void
       const daysOld = Math.floor(
-        (new Date().getTime() - new Date(originalEntry[0].entry_date).getTime()) / (1000 * 60 * 60 * 24)
+        (Date.now() - new Date(originalEntry[0].entry_date).getTime()) / (1000 * 60 * 60 * 24)
       );
 
       // Calculate total amount from line items

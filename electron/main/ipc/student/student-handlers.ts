@@ -76,7 +76,7 @@ function toDbActiveFlag(value: boolean): number {
 }
 
 function coalesceValue<T>(incoming: T | undefined, current: T): T {
-  return incoming === undefined ? current : incoming
+  return incoming ?? current
 }
 
 function resolveEnrollmentContext(db: ReturnType<typeof getDatabase>): EnrollmentContext | null {

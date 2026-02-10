@@ -1,11 +1,11 @@
-import * as fs from 'fs'
-import * as path from 'path'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 
 import { app } from '../electron-env'
 
 import type Database from 'better-sqlite3'
 
-export let db: Database.Database | null = null
+export let db: Database.Database | null = null // NOSONAR - re-assigned during init/recovery lifecycle
 
 export function getDatabase(): Database.Database {
     if (!db) {throw new Error('Database not initialized')}
@@ -191,7 +191,9 @@ export async function backupDatabase(backupPath: string): Promise<void> {
     const dbPath = getDatabasePath()
     const encryptedConnection = isEncryptedConnection(db)
 
-    if (!encryptedConnection) {
+    if (encryptedConnection) {
+        console.warn('Encrypted SQLite connection detected. Using file-copy backup strategy.')
+    } else {
         try {
             await db.backup(backupPath)
             return
@@ -199,8 +201,6 @@ export async function backupDatabase(backupPath: string): Promise<void> {
             const message = error instanceof Error ? error.message : String(error)
             console.warn(`Native backup failed (${message}). Falling back to file-copy backup.`)
         }
-    } else {
-        console.warn('Encrypted SQLite connection detected. Using file-copy backup strategy.')
     }
 
     try {

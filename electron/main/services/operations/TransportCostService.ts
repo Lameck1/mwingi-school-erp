@@ -85,7 +85,7 @@ interface ExpenseSummaryResult {
  * - Generate profitability reports
  */
 export class TransportCostService {
-  private db: Database.Database;
+  private readonly db: Database.Database;
 
   constructor(db: Database.Database) {
     this.db = db;

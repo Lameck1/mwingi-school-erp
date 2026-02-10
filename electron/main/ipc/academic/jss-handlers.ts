@@ -2,12 +2,18 @@ import { getDatabase } from '../../database'
 import { ipcMain } from '../../electron-env'
 import { JSSTransitionService } from '../../services/cbc/JSSTransitionService'
 
+import type { IpcMainInvokeEvent } from 'electron'
+
+type TransitionPayload = Parameters<JSSTransitionService['processStudentTransition']>[0]
+type BulkTransitionPayload = Parameters<JSSTransitionService['batchProcessTransitions']>[0]
+type FeeStructurePayload = Parameters<JSSTransitionService['setJSSFeeStructure']>[0]
+
 export function registerJSSHandlers() {
     const db = getDatabase()
     const jssService = new JSSTransitionService(db)
 
     // Initiate transition for single student
-    ipcMain.handle('jss:initiateTransition', async (_, data) => {
+    ipcMain.handle('jss:initiateTransition', async (_event: IpcMainInvokeEvent, data: TransitionPayload) => {
         try {
             const id = jssService.processStudentTransition(data)
             return { success: true, data: id }
@@ -17,7 +23,7 @@ export function registerJSSHandlers() {
     })
 
     // Bulk transition
-    ipcMain.handle('jss:bulkTransition', async (_, data) => {
+    ipcMain.handle('jss:bulkTransition', async (_event: IpcMainInvokeEvent, data: BulkTransitionPayload) => {
         try {
             const result = jssService.batchProcessTransitions(data)
             return { success: true, data: result }
@@ -27,7 +33,7 @@ export function registerJSSHandlers() {
     })
 
     // Get eligible students
-    ipcMain.handle('jss:getEligibleStudents', async (_, fromGrade, fiscalYear) => {
+    ipcMain.handle('jss:getEligibleStudents', async (_event: IpcMainInvokeEvent, fromGrade: number, fiscalYear: number) => {
         try {
             const students = jssService.getEligibleStudentsForTransition(fromGrade, fiscalYear)
             return { success: true, data: students }
@@ -37,7 +43,7 @@ export function registerJSSHandlers() {
     })
 
     // Get fee structure
-    ipcMain.handle('jss:getFeeStructure', async (_, grade, fiscalYear) => {
+    ipcMain.handle('jss:getFeeStructure', async (_event: IpcMainInvokeEvent, grade: number, fiscalYear: number) => {
         try {
             const structure = jssService.getJSSFeeStructure(grade, fiscalYear)
             if (structure) {
@@ -54,7 +60,7 @@ export function registerJSSHandlers() {
     })
 
     // Set fee structure
-    ipcMain.handle('jss:setFeeStructure', async (_, data) => {
+    ipcMain.handle('jss:setFeeStructure', async (_event: IpcMainInvokeEvent, data: FeeStructurePayload) => {
         try {
             // Store data directly as provided (assuming frontend sends cents or normalized values)
             // But wait, if frontend sends shillings, we MUST convert here if we want consistency?
@@ -87,7 +93,7 @@ export function registerJSSHandlers() {
     })
 
     // Get transition report (history)
-    ipcMain.handle('jss:getTransitionReport', async (_, studentId) => {
+    ipcMain.handle('jss:getTransitionReport', async (_event: IpcMainInvokeEvent, studentId: number) => {
         try {
             const history = jssService.getStudentTransitionHistory(studentId)
             return { success: true, data: history }
@@ -97,7 +103,7 @@ export function registerJSSHandlers() {
     })
 
     // Get transition summary
-    ipcMain.handle('jss:getTransitionSummary', async (_, fiscalYear) => {
+    ipcMain.handle('jss:getTransitionSummary', async (_event: IpcMainInvokeEvent, fiscalYear: number) => {
         try {
             const summary = jssService.getTransitionSummary(fiscalYear)
             return { success: true, data: summary }

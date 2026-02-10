@@ -188,7 +188,7 @@ export class AcademicSystemService {
         this.db.prepare(`
             INSERT INTO exam (academic_year_id, term_id, name, weight)
             VALUES (?, ?, ?, ?)
-        `).run(data.academic_year_id, data.term_id, data.name, data.weight || 1.0)
+        `).run(data.academic_year_id, data.term_id, data.name, data.weight || 1)
 
         logAudit(userId, 'CREATE_EXAM', 'exam', 0, null, data)
     }

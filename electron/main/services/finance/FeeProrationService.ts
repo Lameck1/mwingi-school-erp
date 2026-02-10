@@ -36,7 +36,7 @@ export type {
 // ============================================================================
 
 class InvoiceTemplateRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -65,7 +65,7 @@ class InvoiceTemplateRepository {
 }
 
 class ProRatedInvoiceRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -370,7 +370,7 @@ class ProRatedInvoiceGenerator implements IProRatedInvoiceGenerator {
 // ============================================================================
 
 export class FeeProrationService implements IProRateCalculator, ITermDateValidator, IProRatedInvoiceGenerator {
-  private db: Database.Database
+  private readonly db: Database.Database
   private readonly calculator: ProRateCalculator
   private readonly validator: TermDateValidator
   private readonly invoiceGenerator: ProRatedInvoiceGenerator
@@ -462,7 +462,7 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
       const proratedAmount = template.amount * (daysEnrolled / daysInTerm)
 
       // Create invoice with unique invoice number
-      const invoiceToken = randomUUID().replace(/-/g, '').slice(0, 9).toUpperCase()
+      const invoiceToken = randomUUID().replaceAll('-', '').slice(0, 9).toUpperCase()
       const invoiceNumber = `INV-${Date.now()}-${invoiceToken}`
       const invoiceResult = db.prepare(`
         INSERT INTO fee_invoice (

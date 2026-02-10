@@ -73,7 +73,7 @@ export interface StudentActivityParticipation {
  * - Support budget allocation by strand
  */
 export class CBCStrandService {
-  private db: Database.Database;
+  private readonly db: Database.Database;
 
   constructor(db: Database.Database) {
     this.db = db;

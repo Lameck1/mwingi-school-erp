@@ -151,16 +151,16 @@ const computeStaffPayroll = ({
     const { nssf, housingLevy, shif, paye, totalDeductions } = calculateStatutoryDeductions(gross, rates, payeBands)
     const net = gross - totalDeductions
 
-    const payrollResult = payrollStmt.run(periodId, staff.id, basic, gross, totalDeductions, net)
+    const payrollResult = payrollStmt.run([periodId, staff.id, basic, gross, totalDeductions, net])
     const payrollId = payrollResult.lastInsertRowid
 
-    deductionStmt.run(payrollId, 'NSSF', nssf)
-    deductionStmt.run(payrollId, 'Housing Levy', housingLevy)
-    deductionStmt.run(payrollId, 'SHIF', shif)
-    deductionStmt.run(payrollId, 'PAYE', paye)
+    deductionStmt.run([payrollId, 'NSSF', nssf])
+    deductionStmt.run([payrollId, 'Housing Levy', housingLevy])
+    deductionStmt.run([payrollId, 'SHIF', shif])
+    deductionStmt.run([payrollId, 'PAYE', paye])
 
     for (const allowance of staffAllowances) {
-        allowanceStmt.run(payrollId, allowance.allowance_name, allowance.amount)
+        allowanceStmt.run([payrollId, allowance.allowance_name, allowance.amount])
     }
 
     return {
@@ -183,8 +183,11 @@ const runPayrollForPeriod = (
     userId: number
 ): { success: true; periodId: number; results: PayrollComputationResult[] } | { success: false; error: string } => {
     const periodCreation = createPayrollPeriod(db, month, year, userId)
-    if (!periodCreation.success || !periodCreation.periodId) {
-        return { success: false, error: periodCreation.error || 'Failed to create payroll period' }
+    if (!periodCreation.success) {
+        return { success: false, error: periodCreation.error }
+    }
+    if (!periodCreation.periodId) {
+        return { success: false, error: 'Failed to create payroll period' }
     }
     const periodId = periodCreation.periodId
 

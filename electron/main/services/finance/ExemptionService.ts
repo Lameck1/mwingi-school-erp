@@ -37,7 +37,7 @@ export interface ExemptionCreateData {
 }
 
 export class ExemptionService {
-    private db = getDatabase()
+    private readonly db = getDatabase()
 
     getExemptions(filters?: {
         studentId?: number;
@@ -130,8 +130,7 @@ export class ExemptionService {
         `).get(studentId, academicYearId, termId, categoryId) as FeeExemption | undefined
 
         // If no category-specific, check for blanket exemption (all categories)
-        if (!exemption) {
-            exemption = this.db.prepare(`
+        exemption ??= this.db.prepare(`
                 SELECT * FROM fee_exemption 
                 WHERE student_id = ? 
                 AND academic_year_id = ? 
@@ -140,7 +139,6 @@ export class ExemptionService {
                 AND status = 'ACTIVE'
                 LIMIT 1
             `).get(studentId, academicYearId, termId) as FeeExemption | undefined
-        }
 
         if (!exemption) {
             return {

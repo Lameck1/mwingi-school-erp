@@ -3,7 +3,7 @@ import { DoubleEntryJournalService } from './DoubleEntryJournalService';
 import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
 
-import type Database from 'better-sqlite3-multiple-ciphers';
+import type Database from 'better-sqlite3';
 
 /**
  * Opening Balance Service
@@ -35,8 +35,8 @@ export interface StudentOpeningBalance {
 }
 
 export class OpeningBalanceService {
-  private db: Database.Database;
-  private journalService: DoubleEntryJournalService;
+  private readonly db: Database.Database;
+  private readonly journalService: DoubleEntryJournalService;
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase();
@@ -185,7 +185,7 @@ export class OpeningBalanceService {
             SELECT id, account_code, account_name
             FROM gl_account
             WHERE account_code = ? AND is_active = 1
-          `).get(balance.gl_account_code);
+          `).get(balance.gl_account_code) as { id: number; account_code: string; account_name: string } | undefined;
 
           if (!account) {
             throw new Error(`Invalid GL account code: ${balance.gl_account_code}. Verify the account exists in Chart of Accounts and is active.`);

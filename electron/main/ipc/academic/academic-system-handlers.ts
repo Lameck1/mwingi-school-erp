@@ -18,17 +18,13 @@ import type { IpcMainInvokeEvent } from 'electron'
 
 let cachedService: AcademicSystemService | null = null
 const getService = () => {
-    if (!cachedService) {
-        cachedService = new AcademicSystemService()
-    }
+    cachedService ??= new AcademicSystemService()
     return cachedService
 }
 
 let cachedNotificationService: NotificationService | null = null
 const getNotificationService = () => {
-    if (!cachedNotificationService) {
-        cachedNotificationService = new NotificationService()
-    }
+    cachedNotificationService ??= new NotificationService()
     return cachedNotificationService
 }
 

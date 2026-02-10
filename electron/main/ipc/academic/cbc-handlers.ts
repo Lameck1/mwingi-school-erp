@@ -2,6 +2,11 @@ import { getDatabase } from '../../database'
 import { ipcMain } from '../../electron-env'
 import { CBCStrandService } from '../../services/cbc/CBCStrandService'
 
+import type { IpcMainInvokeEvent } from 'electron'
+
+type StrandExpenseInput = Parameters<CBCStrandService['recordStrandExpense']>[0]
+type StudentParticipationInput = Parameters<CBCStrandService['recordStudentParticipation']>[0]
+
 export function registerCBCHandlers() {
     const db = getDatabase()
     const cbcService = new CBCStrandService(db)
@@ -25,7 +30,9 @@ export function registerCBCHandlers() {
     })
 
     // Link fee category to strand
-    ipcMain.handle('cbc:linkFeeCategory', async (_, feeCategoryId, strandId, allocationPercentage, userId) => {
+    ipcMain.handle(
+        'cbc:linkFeeCategory',
+        async (_event: IpcMainInvokeEvent, feeCategoryId: number, strandId: number, allocationPercentage: number, userId: number) => {
         try {
             const id = cbcService.linkFeeCategoryToStrand(feeCategoryId, strandId, allocationPercentage, userId)
             return { success: true, data: id }
@@ -35,7 +42,7 @@ export function registerCBCHandlers() {
     })
 
     // Record strand expense
-    ipcMain.handle('cbc:recordExpense', async (_, data) => {
+    ipcMain.handle('cbc:recordExpense', async (_event: IpcMainInvokeEvent, data: StrandExpenseInput) => {
         try {
             const id = cbcService.recordStrandExpense(data)
             return { success: true, data: id }
@@ -45,7 +52,7 @@ export function registerCBCHandlers() {
     })
 
     // Get profitability report
-    ipcMain.handle('cbc:getProfitabilityReport', async (_, fiscalYear, term) => {
+    ipcMain.handle('cbc:getProfitabilityReport', async (_event: IpcMainInvokeEvent, fiscalYear: number, term?: number) => {
         try {
             return { success: true, data: cbcService.getStrandProfitability(fiscalYear, term) }
         } catch (error) {
@@ -54,7 +61,7 @@ export function registerCBCHandlers() {
     })
 
     // Record participation
-    ipcMain.handle('cbc:recordParticipation', async (_, data) => {
+    ipcMain.handle('cbc:recordParticipation', async (_event: IpcMainInvokeEvent, data: StudentParticipationInput) => {
         try {
             const id = cbcService.recordStudentParticipation(data)
             return { success: true, data: id }
@@ -64,7 +71,7 @@ export function registerCBCHandlers() {
     })
 
     // Get student participation
-    ipcMain.handle('cbc:getStudentParticipations', async (_, studentId) => {
+    ipcMain.handle('cbc:getStudentParticipations', async (_event: IpcMainInvokeEvent, studentId: number) => {
         try {
             return { success: true, data: cbcService.getStudentParticipations(studentId) }
         } catch (error) {

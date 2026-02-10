@@ -9,9 +9,9 @@ export interface ValidationResult<T> {
     error?: string
 }
 
-export const validateAmount = (amount: unknown): ValidationResult<number> => {
+export const validateAmount = (amount?: unknown): ValidationResult<number> => {
     const num = Number(amount)
-    if (isNaN(num) || num < 0) {
+    if (Number.isNaN(num) || num < 0) {
         return { success: false, error: 'Invalid amount. Must be a positive number.' }
     }
     // Amount is expected to be in cents already; normalize to an integer
@@ -22,22 +22,22 @@ export const formatFromCents = (cents: number): number => {
     return cents / 100
 }
 
-export const validateId = (id: unknown, label: string = 'ID'): ValidationResult<number> => {
+export const validateId = (id?: unknown, label: string = 'ID'): ValidationResult<number> => {
     const num = Number(id)
-    if (isNaN(num) || num <= 0) {
+    if (Number.isNaN(num) || num <= 0) {
         return { success: false, error: `Invalid ${label}.` }
     }
     return { success: true, data: num }
 }
 
-export const validateDate = (date: unknown): ValidationResult<string> => {
+export const validateDate = (date?: unknown): ValidationResult<string> => {
     if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(date)) {
         return { success: false, error: 'Invalid date format. Expected YYYY-MM-DD.' }
     }
     return { success: true, data: date }
 }
 
-export const sanitizeString = (str: unknown, maxLength: number = 255): string => {
+export const sanitizeString = (str?: unknown, maxLength: number = 255): string => {
     if (typeof str !== 'string') {return ''}
     return str.trim().slice(0, maxLength)
 }

@@ -87,7 +87,7 @@ interface ReportCardSummaryRow {
 
 export class ReportCardService {
     private get db() { return getDatabase() }
-    private attendanceService = new AttendanceService()
+    private readonly attendanceService = new AttendanceService()
     private subjectColumnCache: { nameColumn: 'name' | 'subject_name'; codeColumn: 'code' | 'subject_code' } | null = null
 
     private tableExists(tableName: string): boolean {
@@ -234,7 +234,7 @@ export class ReportCardService {
             if (results.length === 0) {return null}
 
             const totals = results.reduce((acc, result) => {
-                const score = result.score !== null ? result.score : (result.competency_level * 25)
+                const score = result.score ?? (result.competency_level * 25)
                 return {
                     weightedSum: acc.weightedSum + (score * result.weight),
                     totalWeight: acc.totalWeight + result.weight

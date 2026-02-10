@@ -18,35 +18,15 @@ export interface SegmentProfitability {
   occupancy_rate_percentage?: number
   recommendations?: string[]
 }
-export interface OverallProfitability {
-  overall_summary: { total_revenue: number; total_expenses: number; net_profit: number; profit_margin_percentage: number; status: ProfitabilityStatus }
-  financial_health: string
-  recommendations: string[]
-}
-export interface OverallProfitabilitySync {
-  segments: SegmentProfitability[]
-  totalRevenue: number
-  totalExpenses: number
-  netProfit: number
-  profit_margin_percentage: number
-  status: ProfitabilityStatus
-  recommendations: string[]
-}
-export interface ComparisonSummary {
-  segments: SegmentProfitability[]
-  comparison_summary: { highest_performing: string; lowest_performing: string; total_segments: number }
-}
-export interface SegmentAnalysisReport {
-  segments: SegmentProfitability[]
-  overall: OverallProfitability
-  unprofitable_segments: SegmentProfitability[]
-  generated_at: string
-}
+export interface OverallProfitability { overall_summary: { total_revenue: number; total_expenses: number; net_profit: number; profit_margin_percentage: number; status: ProfitabilityStatus }; financial_health: string; recommendations: string[] }
+export interface OverallProfitabilitySync { segments: SegmentProfitability[]; totalRevenue: number; totalExpenses: number; netProfit: number; profit_margin_percentage: number; status: ProfitabilityStatus; recommendations: string[] }
+export interface ComparisonSummary { segments: SegmentProfitability[]; comparison_summary: { highest_performing: string; lowest_performing: string; total_segments: number } }
+export interface SegmentAnalysisReport { segments: SegmentProfitability[]; overall: OverallProfitability; unprofitable_segments: SegmentProfitability[]; generated_at: string }
 type TotalResult = { total: number }
 type CountResult = { count: number }
 type SegmentAnalysisResult = { revenue: number; costs: number }
 class ProfitabilityRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
   }
@@ -123,8 +103,8 @@ class ProfitabilityRepository {
 }
 // TRANSPORT PROFITABILITY CALCULATOR (SRP)
 class TransportProfitabilityCalculator implements ITransportProfitabilityCalculator {
-  private db: Database.Database
-  private repo: ProfitabilityRepository
+  private readonly db: Database.Database
+  private readonly repo: ProfitabilityRepository
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
     this.repo = new ProfitabilityRepository(this.db)
@@ -151,8 +131,10 @@ class TransportProfitabilityCalculator implements ITransportProfitabilityCalcula
   private getTransportRecommendations(profit: number, revenue: number): string[] {
     const recommendations: string[] = []
     if (profit < 0) {
-      recommendations.push('Transport is unprofitable. Consider reviewing fuel consumption and driver efficiency.')
-      recommendations.push('Analyze maintenance costs for potential cost reduction.')
+      recommendations.push(
+        'Transport is unprofitable. Consider reviewing fuel consumption and driver efficiency.',
+        'Analyze maintenance costs for potential cost reduction.'
+      )
     } else if (revenue * 0.2 > profit) {
       recommendations.push('Transport profit margin is below 20%. Review operational efficiency.')
     }
@@ -161,8 +143,8 @@ class TransportProfitabilityCalculator implements ITransportProfitabilityCalcula
 }
 // BOARDING PROFITABILITY CALCULATOR (SRP)
 class BoardingProfitabilityCalculator implements IBoardingProfitabilityCalculator {
-  private db: Database.Database
-  private repo: ProfitabilityRepository
+  private readonly db: Database.Database
+  private readonly repo: ProfitabilityRepository
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
     this.repo = new ProfitabilityRepository(this.db)
@@ -203,8 +185,8 @@ class BoardingProfitabilityCalculator implements IBoardingProfitabilityCalculato
 }
 // ACTIVITY FEE ANALYZER (SRP)
 class ActivityFeeAnalyzer implements IActivityFeeAnalyzer {
-  private db: Database.Database
-  private repo: ProfitabilityRepository
+  private readonly db: Database.Database
+  private readonly repo: ProfitabilityRepository
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
     this.repo = new ProfitabilityRepository(this.db)
@@ -243,8 +225,8 @@ class ActivityFeeAnalyzer implements IActivityFeeAnalyzer {
 }
 // OVERALL PROFITABILITY ANALYZER (SRP)
 class OverallProfitabilityAnalyzer implements IOverallProfitabilityAnalyzer {
-  private db: Database.Database
-  private repo: ProfitabilityRepository
+  private readonly db: Database.Database
+  private readonly repo: ProfitabilityRepository
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
     this.repo = new ProfitabilityRepository(this.db)
@@ -279,8 +261,10 @@ class OverallProfitabilityAnalyzer implements IOverallProfitabilityAnalyzer {
   private getOverallRecommendations(profitMargin: number, netProfit: number): string[] {
     const recommendations: string[] = []
     if (netProfit < 0) {
-      recommendations.push('School is operating at a loss. Urgent action required to review revenue and expenses.')
-      recommendations.push('Consider increasing fees or reducing operational costs.')
+      recommendations.push(
+        'School is operating at a loss. Urgent action required to review revenue and expenses.',
+        'Consider increasing fees or reducing operational costs.'
+      )
     } else if (profitMargin < 10) {
       recommendations.push('Profit margin is below 10%. Monitor expenses closely and look for efficiency improvements.')
     }
@@ -295,7 +279,7 @@ export class SegmentProfitabilityService
   implements ITransportProfitabilityCalculator, IBoardingProfitabilityCalculator, IActivityFeeAnalyzer
 {
   // Composed services
-  private db: Database.Database
+  private readonly db: Database.Database
   private readonly transportCalculator: TransportProfitabilityCalculator
   private readonly boardingCalculator: BoardingProfitabilityCalculator
   private readonly activityAnalyzer: ActivityFeeAnalyzer
@@ -380,7 +364,7 @@ export class SegmentProfitabilityService
       revenue,
       costs,
       profit,
-      profit_margin_percentage: parseFloat(profitMargin.toFixed(2)),
+      profit_margin_percentage: Number.parseFloat(profitMargin.toFixed(2)),
       status: this.resolveStatus(profit)
     }
   }
@@ -409,7 +393,7 @@ export class SegmentProfitabilityService
       revenue,
       costs,
       profit,
-      profit_margin_percentage: parseFloat(profitMargin.toFixed(2)),
+      profit_margin_percentage: Number.parseFloat(profitMargin.toFixed(2)),
       occupancy_rate_percentage: occupancyRate,
       status: this.resolveStatus(profit),
       recommendations
@@ -438,7 +422,7 @@ export class SegmentProfitabilityService
       revenue,
       costs,
       profit,
-      profit_margin_percentage: parseFloat(profitMargin.toFixed(2)),
+      profit_margin_percentage: Number.parseFloat(profitMargin.toFixed(2)),
       status: this.resolveStatus(profit)
     }
   }
@@ -455,7 +439,7 @@ export class SegmentProfitabilityService
       totalRevenue,
       totalExpenses,
       netProfit,
-      profit_margin_percentage: parseFloat(totalMargin.toFixed(2)),
+      profit_margin_percentage: Number.parseFloat(totalMargin.toFixed(2)),
       status: this.resolveStatus(netProfit),
       recommendations: this.getOverallRecommendations(transport, boarding, activity)
     }

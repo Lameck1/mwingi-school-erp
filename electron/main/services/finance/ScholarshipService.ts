@@ -4,7 +4,7 @@ import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 
 import type { LegacyAllocationData, LegacyScholarshipData } from './scholarship-normalization'
-import type Database from 'better-sqlite3-multiple-ciphers'
+import type Database from 'better-sqlite3'
 
 // ============================================================================
 // SEGREGATED INTERFACES (ISP)
@@ -103,7 +103,7 @@ export interface EligibilityResult {
 // ============================================================================
 
 class ScholarshipRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -157,7 +157,7 @@ class ScholarshipRepository {
 }
 
 class ScholarshipAllocationRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -246,7 +246,7 @@ class ScholarshipAllocationRepository {
 // ============================================================================
 
 class ScholarshipCreator implements IScholarshipCreator {
-  constructor(private scholarshipRepo: ScholarshipRepository) {}
+  constructor(private readonly scholarshipRepo: ScholarshipRepository) {}
 
   async createScholarship(data: ScholarshipData, userId: number): Promise<ScholarshipResult> {
     try {
@@ -287,8 +287,8 @@ class ScholarshipCreator implements IScholarshipCreator {
 
 class ScholarshipAllocator implements IScholarshipAllocator {
   constructor(
-    private allocationRepo: ScholarshipAllocationRepository,
-    private scholarshipRepo: ScholarshipRepository
+    private readonly allocationRepo: ScholarshipAllocationRepository,
+    private readonly scholarshipRepo: ScholarshipRepository
   ) {}
 
   async allocateScholarshipToStudent(allocationData: AllocationData, userId: number): Promise<AllocationResult> {
@@ -360,7 +360,7 @@ class ScholarshipAllocator implements IScholarshipAllocator {
 }
 
 class ScholarshipValidator implements IScholarshipValidator {
-  constructor(private allocationRepo: ScholarshipAllocationRepository) {}
+  constructor(private readonly allocationRepo: ScholarshipAllocationRepository) {}
 
   async validateScholarshipEligibility(studentId: number, scholarshipId: number): Promise<EligibilityResult> {
     // Check existing allocations
@@ -385,8 +385,8 @@ class ScholarshipValidator implements IScholarshipValidator {
 
 class ScholarshipQueryService implements IScholarshipQueryService {
   constructor(
-    private scholarshipRepo: ScholarshipRepository,
-    private allocationRepo: ScholarshipAllocationRepository
+    private readonly scholarshipRepo: ScholarshipRepository,
+    private readonly allocationRepo: ScholarshipAllocationRepository
   ) {}
 
   async getActiveScholarships(): Promise<Scholarship[]> {
@@ -409,7 +409,7 @@ class ScholarshipQueryService implements IScholarshipQueryService {
 export class ScholarshipService 
   implements IScholarshipCreator, IScholarshipAllocator, IScholarshipValidator, IScholarshipQueryService {
   
-  private db: Database.Database
+  private readonly db: Database.Database
   private readonly creator: ScholarshipCreator
   private readonly allocator: ScholarshipAllocator
   private readonly validator: ScholarshipValidator

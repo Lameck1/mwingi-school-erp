@@ -49,7 +49,7 @@ export class StudentCostService {
 
     private getAcademicYearValue(academicYearId: number): number {
         const row = this.db.prepare('SELECT year_name FROM academic_year WHERE id = ?').get(academicYearId) as { year_name?: string } | undefined
-        const year = row?.year_name ? parseInt(row.year_name, 10) : Number.NaN
+        const year = row?.year_name ? Number.parseInt(row.year_name, 10) : Number.NaN
         return Number.isFinite(year) ? year : new Date().getFullYear()
     }
 

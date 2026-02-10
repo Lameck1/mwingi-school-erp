@@ -45,7 +45,7 @@ export interface ReconciliationReport {
 }
 
 export class ReconciliationService {
-  private db = getDatabase();
+  private readonly db = getDatabase();
 
   private resolveOverallStatus(summary: ReconciliationReport['summary']): ReconciliationStatus {
     if (summary.failed > 0) {
@@ -63,15 +63,14 @@ export class ReconciliationService {
    * Run all reconciliation checks
    */
   async runAllChecks(userId: number): Promise<ReconciliationReport> {
-    const checks: ReconciliationResult[] = [];
-
-    // Run all checks
-    checks.push(await this.checkStudentCreditBalances());
-    checks.push(await this.checkTrialBalance());
-    checks.push(await this.checkOrphanedTransactions());
-    checks.push(await this.checkInvoicePayments());
-    checks.push(await this.checkAbnormalBalances());
-    checks.push(await this.checkLedgerLinkage());
+    const checks = await Promise.all([
+      this.checkStudentCreditBalances(),
+      this.checkTrialBalance(),
+      this.checkOrphanedTransactions(),
+      this.checkInvoicePayments(),
+      this.checkAbnormalBalances(),
+      this.checkLedgerLinkage()
+    ]);
 
     // Calculate summary
     const summary = {

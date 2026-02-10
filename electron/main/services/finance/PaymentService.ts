@@ -19,7 +19,7 @@ import type {
   VoidPaymentData,
   VoidedTransaction
 } from './PaymentService.types'
-import type Database from 'better-sqlite3-multiple-ciphers'
+import type Database from 'better-sqlite3'
 
 export type {
   ApprovalQueueItem,

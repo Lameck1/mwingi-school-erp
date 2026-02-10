@@ -1,5 +1,5 @@
 import { createGetOrCreateCategoryId, generateBatchInvoices, getErrorMessage, getTodayDate, type FinanceContext, UNKNOWN_ERROR_MESSAGE } from './finance-handler-utils'
-import { type PaymentData, type PaymentResult, type TransactionData, TransactionFilters as _TransactionFilters, type InvoiceData, type InvoiceItem, type FeeStructureItemData, type FeeInvoiceDB, type FeeInvoiceWithDetails, type FeeStructureWithDetails } from './types'
+import { type PaymentData, type PaymentResult, type TransactionData, type InvoiceData, type InvoiceItem, type FeeStructureItemData, type FeeInvoiceDB, type FeeInvoiceWithDetails, type FeeStructureWithDetails } from './types'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 import { ipcMain } from '../../electron-env'
@@ -9,7 +9,7 @@ import { ExemptionService } from '../../services/finance/ExemptionService'
 import { FeeProrationService } from '../../services/finance/FeeProrationService'
 import { PaymentService } from '../../services/finance/PaymentService'
 import { ScholarshipService, type ScholarshipData, type AllocationData } from '../../services/finance/ScholarshipService'
-import { validateAmount, validateId, validateDate as _validateDate, sanitizeString } from '../../utils/validation'
+import { validateAmount, validateId, sanitizeString } from '../../utils/validation'
 
 import type { IpcMainInvokeEvent } from 'electron'
 
@@ -154,7 +154,7 @@ const registerInvoiceHandlers = (context: FinanceContext): void => {
 
     ipcMain.handle('invoice:create', async (_event: IpcMainInvokeEvent, data: InvoiceData, items: InvoiceItem[], userId: number) => {
         return db.transaction(() => {
-            const invoiceNumber = `INV-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Date.now()).slice(-6)}`
+            const invoiceNumber = `INV-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${String(Date.now()).slice(-6)}`
             const itemsInCents = items.map(item => ({ ...item, amount: item.amount }))
             const totalCents = itemsInCents.reduce((sum: number, item) => sum + item.amount, 0)
 
@@ -422,7 +422,7 @@ export function registerFinanceHandlers(): void {
     const context: FinanceContext = {
         db,
         exemptionService: new ExemptionService(),
-        paymentService: new PaymentService(db),
+        paymentService: new PaymentService(),
         getOrCreateCategoryId: createGetOrCreateCategoryId(db)
     }
 

@@ -2,6 +2,8 @@ import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 import { ipcMain } from '../../electron-env'
 
+import type { IpcMainInvokeEvent } from 'electron'
+
 type ApprovalRecord = {
   journal_entry_id: number
   status: string
@@ -16,7 +18,7 @@ export function registerFinanceApprovalHandlers(): void {
 }
 
 function registerApprovalQueueHandler(db: ReturnType<typeof getDatabase>): void {
-  ipcMain.handle('approvals:getQueue', async (_event, filter: 'PENDING' | 'ALL' = 'PENDING') => {
+  ipcMain.handle('approvals:getQueue', async (_event: IpcMainInvokeEvent, filter: 'PENDING' | 'ALL' = 'PENDING') => {
     try {
       const whereClause = filter === 'PENDING' ? "AND ta.status = 'PENDING'" : ''
       const approvals = db.prepare(`
@@ -55,7 +57,7 @@ function registerApprovalQueueHandler(db: ReturnType<typeof getDatabase>): void 
 }
 
 function registerApproveHandler(db: ReturnType<typeof getDatabase>): void {
-  ipcMain.handle('approvals:approve', async (_event, approvalId: number, reviewNotes: string, reviewerUserId: number) => {
+  ipcMain.handle('approvals:approve', async (_event: IpcMainInvokeEvent, approvalId: number, reviewNotes: string, reviewerUserId: number) => {
     try {
       const approval = db.prepare(`
         SELECT ta.*, je.id as journal_entry_id
@@ -103,7 +105,7 @@ function registerApproveHandler(db: ReturnType<typeof getDatabase>): void {
 }
 
 function registerRejectHandler(db: ReturnType<typeof getDatabase>): void {
-  ipcMain.handle('approvals:reject', async (_event, approvalId: number, reviewNotes: string, reviewerUserId: number) => {
+  ipcMain.handle('approvals:reject', async (_event: IpcMainInvokeEvent, approvalId: number, reviewNotes: string, reviewerUserId: number) => {
     try {
       if (!reviewNotes) {
         return { success: false, message: 'Review notes are required for rejection' }

@@ -1,16 +1,16 @@
 import { ipcMain } from '../../electron-env';
 import { MeritListService } from '../../services/academic/MeritListService';
 
+import type { IpcMainInvokeEvent } from 'electron';
+
 let cachedService: MeritListService | null = null;
 const getService = () => {
-  if (!cachedService) {
-    cachedService = new MeritListService();
-  }
+  cachedService ??= new MeritListService();
   return cachedService;
 };
 
 export function registerMeritListHandlers() {
-  ipcMain.handle('merit-list:generate', async (_event, options: { academicYearId: number; termId: number; streamId: number }) => {
+  ipcMain.handle('merit-list:generate', async (_event: IpcMainInvokeEvent, options: { academicYearId: number; termId: number; streamId: number }) => {
     try {
       return await getService().generateMeritList(options);
     } catch (error) {
@@ -18,7 +18,7 @@ export function registerMeritListHandlers() {
     }
   });
 
-  ipcMain.handle('merit-list:getSubject', async (_event, payload: { examId: number; subjectId: number; streamId: number }) => {
+  ipcMain.handle('merit-list:getSubject', async (_event: IpcMainInvokeEvent, payload: { examId: number; subjectId: number; streamId: number }) => {
     try {
       return await getService().getSubjectMeritList(payload.examId, payload.subjectId, payload.streamId);
     } catch (error) {
@@ -26,7 +26,7 @@ export function registerMeritListHandlers() {
     }
   });
 
-  ipcMain.handle('merit-list:getSubjectDifficulty', async (_event, payload: { examId: number; subjectId: number; streamId: number }) => {
+  ipcMain.handle('merit-list:getSubjectDifficulty', async (_event: IpcMainInvokeEvent, payload: { examId: number; subjectId: number; streamId: number }) => {
     try {
       return await getService().getSubjectDifficulty(payload.examId, payload.subjectId, payload.streamId);
     } catch (error) {
@@ -34,7 +34,7 @@ export function registerMeritListHandlers() {
     }
   });
 
-  ipcMain.handle('merit-list:getMostImproved', async (_event, payload: {
+  ipcMain.handle('merit-list:getMostImproved', async (_event: IpcMainInvokeEvent, payload: {
     academicYearId: number;
     currentTermId: number;
     comparisonTermId: number;

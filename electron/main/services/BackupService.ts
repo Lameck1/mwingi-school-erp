@@ -1,5 +1,5 @@
-import * as fs from 'fs'
-import * as path from 'path'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 
 import { db, getDatabasePath, backupDatabase } from '../database'
 import { app } from '../electron-env'
@@ -13,7 +13,7 @@ export interface BackupInfo {
 export class BackupService {
     private static get BACKUP_DIR() { return path.join(app.getPath('userData'), 'backups') }
     // Keep last 7 days + 1 monthly (not implemented strictly yet, just count based rotation)
-    private static MAX_BACKUPS = 7
+    private static readonly MAX_BACKUPS = 7
 
     static async init() {
         if (!fs.existsSync(this.BACKUP_DIR)) {
@@ -36,7 +36,7 @@ export class BackupService {
             }
 
             const lastBackup = backups[0] // list is sorted desc
-            const hoursSinceLast = (new Date().getTime() - lastBackup.created_at.getTime()) / (1000 * 60 * 60)
+            const hoursSinceLast = (Date.now() - lastBackup.created_at.getTime()) / (1000 * 60 * 60)
 
             if (hoursSinceLast >= 24) {
                 console.error(`Last backup was ${hoursSinceLast.toFixed(1)}h ago. Creating auto-backup...`)
@@ -51,7 +51,7 @@ export class BackupService {
 
         try {
             await this.init()
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+            const timestamp = new Date().toISOString().replaceAll(/[:.]/g, '-')
             const filename = `backup-${prefix}-${timestamp}.sqlite`
             const backupPath = path.join(this.BACKUP_DIR, filename)
 

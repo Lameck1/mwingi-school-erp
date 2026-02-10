@@ -1,8 +1,7 @@
 
 import { getDatabase } from '../../database'
-import { logAudit as _logAudit } from '../../database/utils/audit'
 
-import type Database from 'better-sqlite3-multiple-ciphers'
+import type Database from 'better-sqlite3'
 
 const FINANCIAL_PERIOD_NOT_FOUND = 'Financial period not found'
 
@@ -29,7 +28,7 @@ export interface TransactionAllowanceResult {
 }
 
 export class PeriodLockingService {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()

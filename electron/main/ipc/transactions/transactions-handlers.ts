@@ -1,7 +1,7 @@
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
-import { app as _app, BrowserWindow as _BrowserWindow, dialog as _dialog, ipcMain } from '../../electron-env'
-import { validateAmount, validateId as _validateId, validateDate as _validateDate, sanitizeString } from '../../utils/validation'
+import { ipcMain } from '../../electron-env'
+import { validateAmount, sanitizeString } from '../../utils/validation'
 
 import type { IpcMainInvokeEvent } from 'electron'
 
@@ -44,7 +44,7 @@ export function registerTransactionsHandlers(): void {
         const description = sanitizeString(data.description)
         const paymentRef = sanitizeString(data.payment_reference)
 
-        const txnRef = `TXN-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(Date.now()).slice(-6)}`
+        const txnRef = `TXN-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${String(Date.now()).slice(-6)}`
 
         const stmt = db.prepare(`INSERT INTO ledger_transaction (
             transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit,
@@ -72,7 +72,7 @@ export function registerTransactionsHandlers(): void {
 
         const params: unknown[] = []
 
-        if (filters.startDate && filters.endDate) {
+        if (filters?.startDate && filters.endDate) {
             query += ` AND t.transaction_date BETWEEN ? AND ?`
             params.push(filters.startDate, filters.endDate)
         }

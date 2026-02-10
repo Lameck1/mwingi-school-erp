@@ -50,7 +50,7 @@ export class SegmentProfitabilitySyncAdapter {
       revenue,
       costs,
       profit,
-      profit_margin_percentage: parseFloat(profitMargin.toFixed(2)),
+      profit_margin_percentage: Number.parseFloat(profitMargin.toFixed(2)),
       status: this.resolveStatus(profit)
     }
   }
@@ -81,7 +81,7 @@ export class SegmentProfitabilitySyncAdapter {
       revenue,
       costs,
       profit,
-      profit_margin_percentage: parseFloat(profitMargin.toFixed(2)),
+      profit_margin_percentage: Number.parseFloat(profitMargin.toFixed(2)),
       occupancy_rate_percentage: occupancyRate,
       status: this.resolveStatus(profit),
       recommendations
@@ -112,7 +112,7 @@ export class SegmentProfitabilitySyncAdapter {
       revenue,
       costs,
       profit,
-      profit_margin_percentage: parseFloat(profitMargin.toFixed(2)),
+      profit_margin_percentage: Number.parseFloat(profitMargin.toFixed(2)),
       status: this.resolveStatus(profit)
     }
   }
@@ -132,7 +132,7 @@ export class SegmentProfitabilitySyncAdapter {
       totalRevenue,
       totalExpenses,
       netProfit,
-      profit_margin_percentage: parseFloat(totalMargin.toFixed(2)),
+      profit_margin_percentage: Number.parseFloat(totalMargin.toFixed(2)),
       status: this.resolveStatus(netProfit),
       recommendations: this.getOverallRecommendations(transport, boarding, activity)
     }

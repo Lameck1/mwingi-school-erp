@@ -1,6 +1,6 @@
 
-import path from 'path'
-import { fileURLToPath } from 'url'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { BackupService } from './backup-service'
 import { initializeDatabase } from './database'
@@ -100,53 +100,56 @@ function sendDbError(message: string) {
 }
 
 // App lifecycle
-app.whenReady().then(async () => {
+try {
+    await app.whenReady()
+
     // Initialize database
+    let dbReady = false
     try {
         await initializeDatabase()
         // console.error('Database initialized successfully')
-        
+
         // Verify migrations
         verifyMigrations()
+        dbReady = true
     } catch (error) {
         console.error('Failed to initialize database:', error)
         sendDbError(error instanceof Error ? error.message : 'Database initialization failed')
         dialog.showErrorBox('Database Error', 'Failed to initialize database. Application will exit.')
         app.quit()
-        return
     }
 
-    // Initialize Services
-    registerServices()
+    if (dbReady) {
+        // Initialize Services
+        registerServices()
 
-    // Register IPC handlers
-    registerAllIpcHandlers()
+        // Register IPC handlers
+        registerAllIpcHandlers()
 
-    // Initialize Auto Backup Service
-    try {
-        await BackupService.init()
-    } catch (error) {
-        console.error('Failed to initialize backup service:', error)
-    }
-
-    // Initialize Report Scheduler
-    reportScheduler.initialize()
-
-    // Create window
-    createWindow()
-
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) {
-            createWindow()
+        // Initialize Auto Backup Service
+        try {
+            await BackupService.init()
+        } catch (error) {
+            console.error('Failed to initialize backup service:', error)
         }
-    })
 
-    return null
-}).catch((error) => {
+        // Initialize Report Scheduler
+        reportScheduler.initialize()
+
+        // Create window
+        createWindow()
+
+        app.on('activate', () => {
+            if (BrowserWindow.getAllWindows().length === 0) {
+                createWindow()
+            }
+        })
+    }
+} catch (error: unknown) {
     console.error('Application startup failed:', error)
     dialog.showErrorBox('Startup Error', 'Failed to start application.')
     app.quit()
-});
+}
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {

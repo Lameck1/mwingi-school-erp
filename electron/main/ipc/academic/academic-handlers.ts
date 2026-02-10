@@ -2,6 +2,8 @@ import { getDatabase } from '../../database'
 import { ipcMain } from '../../electron-env'
 import { renderHtmlToPdfBuffer, resolveOutputPath, writePdfBuffer } from '../../utils/pdf'
 
+import type { IpcMainInvokeEvent } from 'electron'
+
 interface ExportPdfPayload {
     html?: string
     filename?: string
@@ -70,7 +72,7 @@ function registerAcademicYearAndTermHandlers(db: ReturnType<typeof getDatabase>)
         return db.prepare('SELECT * FROM academic_year WHERE is_current = 1').get()
     })
 
-    ipcMain.handle('academicYear:create', async (_event, data: AcademicYearCreateData) => {
+    ipcMain.handle('academicYear:create', async (_event: IpcMainInvokeEvent, data: AcademicYearCreateData) => {
         try {
             db.transaction(() => {
                 if (data.is_current) {
@@ -86,7 +88,7 @@ function registerAcademicYearAndTermHandlers(db: ReturnType<typeof getDatabase>)
         }
     })
 
-    ipcMain.handle('academicYear:activate', async (_event, id: number) => {
+    ipcMain.handle('academicYear:activate', async (_event: IpcMainInvokeEvent, id: number) => {
         try {
             db.transaction(() => {
                 db.prepare('UPDATE academic_year SET is_current = 0').run()
@@ -99,7 +101,7 @@ function registerAcademicYearAndTermHandlers(db: ReturnType<typeof getDatabase>)
         }
     })
 
-    ipcMain.handle('term:getByYear', async (_event, yearId: number) => {
+    ipcMain.handle('term:getByYear', async (_event: IpcMainInvokeEvent, yearId: number) => {
         return db.prepare('SELECT * FROM term WHERE academic_year_id = ? ORDER BY term_number').all(yearId)
     })
 
@@ -113,7 +115,7 @@ function registerExamLookupHandlers(db: ReturnType<typeof getDatabase>): void {
         return db.prepare('SELECT * FROM stream WHERE is_active = 1 ORDER BY level_order').all()
     })
 
-    ipcMain.handle('academic:getExamsList', async (_event, filters: { academicYearId?: number; termId?: number }) => {
+    ipcMain.handle('academic:getExamsList', async (_event: IpcMainInvokeEvent, filters: { academicYearId?: number; termId?: number }) => {
         let query = 'SELECT id, name FROM academic_exam WHERE 1=1'
         const params: number[] = []
 
@@ -136,7 +138,7 @@ function registerExamLookupHandlers(db: ReturnType<typeof getDatabase>): void {
 }
 
 function registerPdfExportHandler(): void {
-    ipcMain.handle('export:pdf', async (_event, data: ExportPdfPayload) => {
+    ipcMain.handle('export:pdf', async (_event: IpcMainInvokeEvent, data: ExportPdfPayload) => {
         try {
             const html = data.html || `
               <html>
@@ -212,17 +214,17 @@ function buildScheduleExportHtml(slots: Array<Record<string, unknown>>): string 
 }
 
 function registerSchedulerHandlers(db: ReturnType<typeof getDatabase>): void {
-    ipcMain.handle('schedule:generate', async (_event, data: { examId?: number; startDate?: string; endDate?: string }) => {
+    ipcMain.handle('schedule:generate', async (_event: IpcMainInvokeEvent, data: { examId?: number; startDate?: string; endDate?: string }) => {
         return generateSchedule(db, data.examId, data.startDate, data.endDate)
     })
 
-    ipcMain.handle('schedule:detectClashes', async (_event, data: { examId?: number }) => {
+    ipcMain.handle('schedule:detectClashes', async (_event: IpcMainInvokeEvent, data: { examId?: number }) => {
         if (!data.examId) {return []}
         const generated = await generateSchedule(db, data.examId)
         return detectClashes(db, data.examId, generated.slots)
     })
 
-    ipcMain.handle('schedule:exportPDF', async (_event, data: { examId?: number; slots?: Array<Record<string, unknown>> }) => {
+    ipcMain.handle('schedule:exportPDF', async (_event: IpcMainInvokeEvent, data: { examId?: number; slots?: Array<Record<string, unknown>> }) => {
         try {
             const html = buildScheduleExportHtml(data.slots || [])
             const buffer = await renderHtmlToPdfBuffer(html)

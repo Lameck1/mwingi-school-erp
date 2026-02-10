@@ -1,6 +1,6 @@
 import { getDatabase } from '../../database'
 
-import type { Database } from 'better-sqlite3'
+import type Database from 'better-sqlite3'
 
 // ============================================================================
 // INTERFACES

@@ -17,7 +17,7 @@ import type {
   VoidPaymentData,
   VoidedTransaction
 } from './PaymentService.types'
-import type Database from 'better-sqlite3-multiple-ciphers'
+import type Database from 'better-sqlite3'
 
 interface VoidAuditRecordData {
   transactionId: number
@@ -35,7 +35,7 @@ interface VoidAuditRecordData {
 // ============================================================================
 
 export class PaymentTransactionRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -126,7 +126,7 @@ export class PaymentTransactionRepository {
 // ============================================================================
 
 export class VoidAuditRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -173,7 +173,7 @@ export class VoidAuditRepository {
 // ============================================================================
 
 export class InvoiceValidator implements IPaymentValidator {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -227,7 +227,7 @@ export class InvoiceValidator implements IPaymentValidator {
 // ============================================================================
 
 export class PaymentProcessor {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -255,8 +255,8 @@ export class PaymentProcessor {
   }
 
   private createTransactionRefs(): { transactionRef: string; receiptNumber: string } {
-    const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-    const nonce = randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()
+    const timestamp = new Date().toISOString().slice(0, 10).replaceAll('-', '')
+    const nonce = randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase()
     const uniqueSegment = String(Date.now())
     return {
       transactionRef: `TXN-${timestamp}-${uniqueSegment}-${nonce}`,
@@ -419,9 +419,9 @@ export class PaymentProcessor {
 // ============================================================================
 
 export class VoidProcessor implements IPaymentVoidProcessor {
-  private db: Database.Database
-  private transactionRepo: PaymentTransactionRepository
-  private voidAuditRepo: VoidAuditRepository
+  private readonly db: Database.Database
+  private readonly transactionRepo: PaymentTransactionRepository
+  private readonly voidAuditRepo: VoidAuditRepository
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -486,9 +486,9 @@ export class VoidProcessor implements IPaymentVoidProcessor {
 // ============================================================================
 
 export class PaymentQueryService implements IPaymentQueryService {
-  private db: Database.Database
-  private transactionRepo: PaymentTransactionRepository
-  private voidAuditRepo: VoidAuditRepository
+  private readonly db: Database.Database
+  private readonly transactionRepo: PaymentTransactionRepository
+  private readonly voidAuditRepo: VoidAuditRepository
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()

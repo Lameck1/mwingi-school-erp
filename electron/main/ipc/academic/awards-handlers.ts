@@ -4,7 +4,7 @@ import { ipcMain } from '../../electron-env';
 import type { IpcMainInvokeEvent } from 'electron';
 
 // Roles that can approve awards
-const APPROVER_ROLES = ['ADMIN', 'PRINCIPAL', 'DEPUTY_PRINCIPAL'];
+const APPROVER_ROLES = new Set(['ADMIN', 'PRINCIPAL', 'DEPUTY_PRINCIPAL']);
 
 interface AwardAssignParams {
   studentId: number;
@@ -37,7 +37,7 @@ function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void
   ipcMain.handle('awards:assign', async (_event: IpcMainInvokeEvent, params: AwardAssignParams) => {
     try {
       // Auto-approve if user is ADMIN/PRINCIPAL/DEPUTY_PRINCIPAL
-      const autoApprove = APPROVER_ROLES.includes(params.userRole);
+      const autoApprove = APPROVER_ROLES.has(params.userRole);
       const status = autoApprove ? 'approved' : 'pending';
       const approvedAt = autoApprove ? new Date().toISOString() : null;
       const approvedBy = autoApprove ? params.userId : null;

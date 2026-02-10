@@ -32,15 +32,13 @@ type ServiceFactory<T> = () => T
 
 class ServiceContainer {
     private static instance: ServiceContainer | undefined
-    private services: Map<string, unknown> = new Map()
-    private factories: Map<string, ServiceFactory<unknown>> = new Map()
+    private readonly services: Map<string, unknown> = new Map()
+    private readonly factories: Map<string, ServiceFactory<unknown>> = new Map()
 
     private constructor() { }
 
     static getInstance(): ServiceContainer {
-        if (!ServiceContainer.instance) {
-            ServiceContainer.instance = new ServiceContainer()
-        }
+        ServiceContainer.instance ??= new ServiceContainer()
         return ServiceContainer.instance
     }
 

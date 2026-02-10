@@ -1,6 +1,6 @@
-import { Menu, app, dialog, shell, type BrowserWindow } from '../electron-env'
+import { Menu, app, dialog, shell } from '../electron-env'
 
-import type { MenuItemConstructorOptions } from 'electron'
+import type { BrowserWindow, MenuItemConstructorOptions } from 'electron'
 
 function createMacAppMenu(isMac: boolean): MenuItemConstructorOptions[] {
     if (!isMac) {
@@ -145,12 +145,12 @@ function createNavigateMenu(mainWindow: BrowserWindow): MenuItemConstructorOptio
             {
                 label: 'Go Back',
                 accelerator: 'CmdOrCtrl+[',
-                click: () => mainWindow.webContents.goBack(),
+                click: () => mainWindow.webContents.navigationHistory.goBack(),
             },
             {
                 label: 'Go Forward',
                 accelerator: 'CmdOrCtrl+]',
-                click: () => mainWindow.webContents.goForward(),
+                click: () => mainWindow.webContents.navigationHistory.goForward(),
             },
             { type: 'separator' },
             {
@@ -264,7 +264,7 @@ async function showBackupDialog(mainWindow: BrowserWindow): Promise<void> {
 }
 
 function openExternalUrl(url: string): void {
-    shell.openExternal(url).catch((error) => {
+    shell.openExternal(url).catch((error: unknown) => {
         console.error(`Failed to open external URL (${url}):`, error)
     })
 }

@@ -2,6 +2,7 @@ import { getDatabase } from '../../database'
 import { ipcMain } from '../../electron-env'
 import { NEMISExportService } from '../../services/reports/NEMISExportService'
 
+import type { NEMISExportConfig, NEMISStudent } from '../../services/reports/NEMISExportService.types'
 import type { IpcMainInvokeEvent } from 'electron'
 
 interface CountResult { count: number }
@@ -306,7 +307,7 @@ function registerNemisExportHandlers(): void {
         }
     })
 
-    ipcMain.handle('reports:createNEMISExport', async (_event: IpcMainInvokeEvent, exportConfig: unknown, userId: number) => {
+    ipcMain.handle('reports:createNEMISExport', async (_event: IpcMainInvokeEvent, exportConfig: NEMISExportConfig, userId: number) => {
         try {
             return await nemisService.createExport(exportConfig, userId)
         } catch (error) {
@@ -322,7 +323,7 @@ function registerNemisExportHandlers(): void {
         }
     })
 
-    ipcMain.handle('reports:validateNEMISStudentData', async (_event: IpcMainInvokeEvent, student: unknown) => {
+    ipcMain.handle('reports:validateNEMISStudentData', async (_event: IpcMainInvokeEvent, student: NEMISStudent) => {
         try {
             return nemisService.validateStudentData(student)
         } catch (error) {

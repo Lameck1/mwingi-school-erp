@@ -1,6 +1,6 @@
 import { getDatabase } from '../../database';
 
-import type Database from 'better-sqlite3-multiple-ciphers';
+import type Database from 'better-sqlite3';
 
 
 /**
@@ -34,7 +34,7 @@ export interface CategoryBalance {
 }
 
 export class ProfitAndLossService {
-  private db: Database.Database;
+  private readonly db: Database.Database;
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase();
@@ -146,9 +146,9 @@ export class ProfitAndLossService {
           ? (expenseVariance / prior.total_expenses) * 100 
           : 0,
         net_profit_variance: netProfitVariance,
-        net_profit_variance_percent: prior.net_profit !== 0 
-          ? (netProfitVariance / prior.net_profit) * 100 
-          : 0
+        net_profit_variance_percent: prior.net_profit === 0
+          ? 0
+          : (netProfitVariance / prior.net_profit) * 100
       }
     };
   }

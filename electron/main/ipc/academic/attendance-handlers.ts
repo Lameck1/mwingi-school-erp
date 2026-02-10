@@ -5,9 +5,7 @@ import type { IpcMainInvokeEvent } from 'electron'
 
 let cachedService: AttendanceService | null = null
 const getService = () => {
-    if (!cachedService) {
-        cachedService = new AttendanceService()
-    }
+    cachedService ??= new AttendanceService()
     return cachedService
 }
 

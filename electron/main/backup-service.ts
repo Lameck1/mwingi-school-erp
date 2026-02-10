@@ -1,14 +1,14 @@
  
-import fs from 'fs'
-import path from 'path'
+import fs from 'node:fs'
+import path from 'node:path'
 
 import { backupDatabase } from './database'
 import { app } from './electron-env'
 
 export class BackupService {
-    private static BACKUP_DIR_NAME = 'backups'
-    private static AUTO_BACKUP_DIR_NAME = 'auto'
-    private static RETENTION_DAYS = 7
+    private static readonly BACKUP_DIR_NAME = 'backups'
+    private static readonly AUTO_BACKUP_DIR_NAME = 'auto'
+    private static readonly RETENTION_DAYS = 7
 
     static async init() {
         // Run initial backup check after a short delay to ensure app is fully ready

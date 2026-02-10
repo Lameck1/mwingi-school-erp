@@ -42,8 +42,8 @@ interface LegacyTransaction {
 }
 
 export class DataMigrationService {
-  private db: Database.Database;
-  private journalService: DoubleEntryJournalService;
+  private readonly db: Database.Database;
+  private readonly journalService: DoubleEntryJournalService;
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase();
@@ -137,8 +137,8 @@ export class DataMigrationService {
    * Dry run mode available for testing
    */
   async migrateHistoricalTransactions(
-    dryRun = false,
-    userId: number
+    userId: number,
+    dryRun = false
   ): Promise<MigrationResult> {
     try {
       const transactions = this.getUnmigratedTransactions();

@@ -164,7 +164,7 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
 
         // Simple Straight Line Depreciation (10% default for now)
         // In real app, fetch rate from category
-        const rate = 0.10
+        const rate = 0.1
         const depreciationAmount = Math.round(asset.acquisition_cost * rate)
 
         const newAccumulated = asset.accumulated_depreciation + depreciationAmount

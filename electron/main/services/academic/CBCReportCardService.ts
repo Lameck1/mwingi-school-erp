@@ -256,25 +256,31 @@ export class CBCReportCardService {
   ): Promise<StudentReportCard> {
     try {
       const exam = this.getExamOrThrow(examId)
+      const termId = exam.term_id
       const student = this.getEnrolledStudentOrThrow(studentId, exam)
       const studentName = `${student.first_name} ${student.last_name}`
 
-      const stream = this.getRecordById<StreamResult>('stream', student.stream_id)
+      if (student.stream_id == null) {
+        throw new Error('Student stream is missing')
+      }
+      const streamId = student.stream_id
+
+      const stream = this.getRecordById<StreamResult>('stream', streamId)
       const streamName = stream?.stream_name || 'Unknown'
       const academicYear = this.getRecordById<AcademicYearResult>('academic_year', exam.academic_year_id)
-      const term = this.getRecordById<TermResult>('term', exam.term_id)
+      const term = this.getRecordById<TermResult>('term', termId)
 
       const subjects = this.getSubjectGradesOrThrow(examId, studentId)
       const { totalMarks, averageMarks, overallGrade } = this.calculatePerformance(subjects)
       const learningAreas = this.getLearningAreas()
       const { daysPresent, daysAbsent, attendancePercentage } = this.getAttendanceMetrics(studentId)
-      const classPosition = this.getClassPosition(exam, student.stream_id, studentId, examId)
+      const classPosition = this.getClassPosition(exam, streamId, studentId, examId)
       const qrCodeToken = this.generateQRToken(studentId, examId)
       const now = new Date().toISOString()
       const reportCardId = this.insertReportCardRecord({
         examId,
         studentId,
-        streamId: student.stream_id,
+        streamId,
         generatedByUserId,
         overallGrade,
         totalMarks,
@@ -308,7 +314,7 @@ export class CBCReportCardService {
         attendance_percentage: attendancePercentage,
         class_teacher_comment: 'Excellent performance this term. Keep up the good work!',
         principal_comment: 'Well done on your academic progress.',
-        next_term_begin_date: this.getNextTermDate(exam.term_id),
+        next_term_begin_date: this.getNextTermDate(termId),
         fees_balance: feesBalance,
         qr_code_token: qrCodeToken,
         generated_at: now

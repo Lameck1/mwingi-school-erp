@@ -41,10 +41,10 @@ interface NewUser {
 function registerSessionHandlers(db: ReturnType<typeof getDatabase>): void {
     ipcMain.handle('auth:getSession', async (): Promise<AuthSession | null> => {
         const session = await getSession()
-        if (!session.user.id) {return null}
+        if (!session?.user.id) {return null}
 
         const existing = db.prepare('SELECT id, is_active, username, full_name, email, role, last_login, created_at, updated_at FROM user WHERE id = ?').get(session.user.id) as User | undefined
-        if (!existing || existing.is_active !== 1) {
+        if (existing?.is_active !== 1) {
             await clearSession()
             return null
         }

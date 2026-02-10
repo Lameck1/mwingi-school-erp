@@ -2,6 +2,9 @@ import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
 import { centsToShillings } from '../../utils/money';
 
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
 /**
  * BudgetEnforcementService
  * 
@@ -68,7 +71,7 @@ export interface BudgetVarianceReport {
 }
 
 export class BudgetEnforcementService {
-  private db = getDatabase();
+  private readonly db = getDatabase();
 
   private getBudgetAllocation(
     glAccountCode: string,
@@ -183,7 +186,7 @@ export class BudgetEnforcementService {
     } catch (error: unknown) {
       return {
         success: false,
-        message: `Failed to set budget allocation: ${error.message}`,
+        message: `Failed to set budget allocation: ${getErrorMessage(error)}`,
       };
     }
   }
@@ -252,7 +255,7 @@ export class BudgetEnforcementService {
       console.error('Budget validation error:', error);
       return {
         is_allowed: true,
-        message: `Budget validation failed: ${error.message}. Transaction allowed.`,
+        message: `Budget validation failed: ${getErrorMessage(error)}. Transaction allowed.`,
       };
     }
   }

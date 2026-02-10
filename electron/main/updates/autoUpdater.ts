@@ -1,7 +1,9 @@
 import log from 'electron-log'
 import { autoUpdater, type UpdateInfo, type ProgressInfo } from 'electron-updater'
 
-import { type BrowserWindow, dialog, ipcMain } from '../electron-env'
+import { dialog, ipcMain } from '../electron-env'
+
+import type { BrowserWindow } from 'electron'
 
 // Configure logging
 autoUpdater.logger = log
@@ -10,7 +12,7 @@ autoUpdater.logger = log
 const UPDATE_STATUS_CHANNEL = 'update-status'
 
 export class AutoUpdateManager {
-    private mainWindow: BrowserWindow
+    private readonly mainWindow: BrowserWindow
     private isUpdateAvailable = false
     private downloadProgress = 0
 
@@ -143,12 +145,12 @@ export class AutoUpdateManager {
             detail: 'Would you like to download it now?',
             buttons: ['Download', 'Later'],
             defaultId: 0
-        }).then(({ response }) => {
+        }).then(({ response }: { response: number }) => {
             if (response === 0) {
                 return this.downloadUpdate()
             }
             return null
-        }).catch((error) => {
+        }).catch((error: unknown) => {
             log.error('Failed to show update notification dialog:', error)
         })
     }
@@ -163,12 +165,12 @@ export class AutoUpdateManager {
             detail: 'The application will restart to install the update.',
             buttons: ['Install Now', 'Install on Exit'],
             defaultId: 0
-        }).then(({ response }) => {
+        }).then(({ response }: { response: number }) => {
             if (response === 0) {
                 this.installUpdate()
             }
             return null
-        }).catch((error) => {
+        }).catch((error: unknown) => {
             log.error('Failed to show install prompt dialog:', error)
         })
     }

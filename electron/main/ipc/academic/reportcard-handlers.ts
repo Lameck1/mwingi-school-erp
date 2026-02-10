@@ -1,6 +1,6 @@
-import * as fs from 'fs'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 import nodemailer from 'nodemailer'
-import * as path from 'path'
 import { PDFDocument } from 'pdf-lib'
 
 import { getDatabase } from '../../database'
@@ -19,6 +19,82 @@ const cbcService = new CBCReportCardService()
 const legacyService = new ReportCardService()
 const UNKNOWN_ERROR = 'Unknown error'
 const REPORT_CARDS_DIR = 'report-cards'
+
+type SmtpConfig = {
+    host: string
+    port: number
+    user: string
+    pass: string
+}
+
+async function getSessionUserId(): Promise<number> {
+    const session = await getSession()
+    return session?.user.id ?? 0
+}
+
+function resolveSmtpConfig(): { config: SmtpConfig | null; error?: string } {
+    const host = ConfigService.getConfig('smtp.host')
+    const port = ConfigService.getConfig('smtp.port')
+    const user = ConfigService.getConfig('smtp.user')
+    const pass = ConfigService.getConfig('smtp.pass')
+
+    if (!host || !port || !user || !pass) {
+        return { config: null, error: 'SMTP settings are not configured' }
+    }
+
+    return {
+        config: {
+            host,
+            port: Number(port),
+            user,
+            pass,
+        },
+    }
+}
+
+async function generateBatchReportCardFiles(examId: number, streamId: number) {
+    const userId = await getSessionUserId()
+    const reportCards = await cbcService.generateBatchReportCards(examId, streamId, userId)
+    const files = await generateReportCardPdfs(reportCards, `exam_${examId}_stream_${streamId}`)
+    return { files, userId }
+}
+
+async function sendReportCardEmails(
+    files: Array<{ studentId: number; filePath: string }>,
+    config: SmtpConfig
+): Promise<{ sent: string[]; failed: string[] }> {
+    const transporter = nodemailer.createTransport({
+        host: config.host,
+        port: config.port,
+        secure: config.port === 465,
+        auth: { user: config.user, pass: config.pass },
+    })
+
+    const sent: string[] = []
+    const failed: string[] = []
+
+    for (const file of files) {
+        const studentEmail = await getGuardianEmail(file.studentId)
+        if (!studentEmail) {
+            failed.push(file.filePath)
+            continue
+        }
+        try {
+            await transporter.sendMail({
+                from: config.user,
+                to: studentEmail,
+                subject: 'Report Card',
+                text: 'Please find the attached report card.',
+                attachments: [{ filename: path.basename(file.filePath), path: file.filePath }],
+            })
+            sent.push(file.filePath)
+        } catch {
+            failed.push(file.filePath)
+        }
+    }
+
+    return { sent, failed }
+}
 
 export function registerReportCardHandlers(): void {
     registerCbcReportCardHandlers()
@@ -40,14 +116,12 @@ function registerCbcBaseHandlers(): void {
     })
 
     ipcMain.handle('report-card:generate', async (_event: IpcMainInvokeEvent, studentId: number, examId: number) => {
-        const session = await getSession()
-        const userId = session.user.id || 0
+        const userId = await getSessionUserId()
         return cbcService.generateReportCard(studentId, examId, userId)
     })
 
     ipcMain.handle('report-card:generateBatch', async (_event: IpcMainInvokeEvent, data: { exam_id: number; stream_id: number }) => {
-        const session = await getSession()
-        const userId = session.user.id || 0
+        const userId = await getSessionUserId()
         const result = await cbcService.generateBatchReportCards(data.exam_id, data.stream_id, userId)
         return { success: true, generated: result.length, failed: 0 }
     })
@@ -59,49 +133,13 @@ function registerCbcEmailHandlers(): void {
         data: { exam_id: number; stream_id: number; template_id: string; include_sms: boolean }
     ) => {
         try {
-            const smtpHost = ConfigService.getConfig('smtp.host')
-            const smtpPort = ConfigService.getConfig('smtp.port')
-            const smtpUser = ConfigService.getConfig('smtp.user')
-            const smtpPass = ConfigService.getConfig('smtp.pass')
-
-            if (!smtpHost || !smtpPort || !smtpUser || !smtpPass) {
-                return { success: false, sent: 0, failed: 0, message: 'SMTP settings are not configured' }
+            const { config, error } = resolveSmtpConfig()
+            if (!config) {
+                return { success: false, sent: 0, failed: 0, message: error }
             }
 
-            const transporter = nodemailer.createTransport({
-                host: smtpHost,
-                port: Number(smtpPort),
-                secure: Number(smtpPort) === 465,
-                auth: { user: smtpUser, pass: smtpPass },
-            })
-
-            const session = await getSession()
-            const userId = session.user.id || 0
-            const reportCards = await cbcService.generateBatchReportCards(data.exam_id, data.stream_id, userId)
-            const files = await generateReportCardPdfs(reportCards, `exam_${data.exam_id}_stream_${data.stream_id}`)
-            const sent: string[] = []
-            const failed: string[] = []
-
-            for (const file of files) {
-                const studentEmail = await getGuardianEmail(file.studentId)
-                if (!studentEmail) {
-                    failed.push(file.filePath)
-                    continue
-                }
-                try {
-                    await transporter.sendMail({
-                        from: smtpUser,
-                        to: studentEmail,
-                        subject: 'Report Card',
-                        text: 'Please find the attached report card.',
-                        attachments: [{ filename: path.basename(file.filePath), path: file.filePath }],
-                    })
-                    sent.push(file.filePath)
-                } catch {
-                    failed.push(file.filePath)
-                }
-            }
-
+            const { files } = await generateBatchReportCardFiles(data.exam_id, data.stream_id)
+            const { sent, failed } = await sendReportCardEmails(files, config)
             return { success: true, sent: sent.length, failed: failed.length }
         } catch (error) {
             console.error('Email report cards failed:', error)
@@ -113,10 +151,7 @@ function registerCbcEmailHandlers(): void {
 function registerCbcMergeHandlers(): void {
     ipcMain.handle('report-card:mergePDFs', async (_event: IpcMainInvokeEvent, data: { exam_id: number; stream_id: number; output_path: string }) => {
         try {
-            const session = await getSession()
-            const userId = session.user.id || 0
-            const reportCards = await cbcService.generateBatchReportCards(data.exam_id, data.stream_id, userId)
-            const files = await generateReportCardPdfs(reportCards, `exam_${data.exam_id}_stream_${data.stream_id}`)
+            const { files } = await generateBatchReportCardFiles(data.exam_id, data.stream_id)
             const merged = await PDFDocument.create()
 
             for (const file of files) {
@@ -142,10 +177,7 @@ function registerCbcMergeHandlers(): void {
 function registerCbcDownloadHandlers(): void {
     ipcMain.handle('report-card:downloadReports', async (_event: IpcMainInvokeEvent, data: { exam_id: number; stream_id: number; merge: boolean }) => {
         try {
-            const session = await getSession()
-            const userId = session.user.id || 0
-            const reportCards = await cbcService.generateBatchReportCards(data.exam_id, data.stream_id, userId)
-            const files = await generateReportCardPdfs(reportCards, `exam_${data.exam_id}_stream_${data.stream_id}`)
+            const { files } = await generateBatchReportCardFiles(data.exam_id, data.stream_id)
             if (!data.merge) {
                 return { success: true, files: files.map(f => f.filePath) }
             }

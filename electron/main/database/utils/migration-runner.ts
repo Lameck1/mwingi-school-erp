@@ -1,6 +1,6 @@
-import * as fs from 'fs'
-import * as path from 'path'
-import { fileURLToPath } from 'url'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { getDatabase } from '../index'
 
@@ -14,8 +14,8 @@ interface MigrationRecord {
 }
 
 export class MigrationRunner {
-  private db = getDatabase()
-  private migrationsPath: string
+  private readonly db = getDatabase()
+  private readonly migrationsPath: string
 
   constructor(migrationsPath?: string) {
     this.migrationsPath = migrationsPath || path.join(__dirname, '../migrations')

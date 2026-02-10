@@ -1,4 +1,4 @@
-import * as fs from 'fs'
+import * as fs from 'node:fs'
 
 import { ipcMain, dialog, BrowserWindow } from '../../electron-env'
 import { dataImportService, type ImportConfig } from '../../services/data/DataImportService'

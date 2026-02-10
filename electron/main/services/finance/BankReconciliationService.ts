@@ -1,5 +1,4 @@
 import { getDatabase } from '../../database'
-import { BaseService as _BaseService } from '../base/BaseService'
 
 export interface BankAccount {
     id: number

@@ -48,7 +48,7 @@ export type {
 // ============================================================================
 
 class NEMISDataRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -216,7 +216,7 @@ class NEMISDataRepository {
 }
 
 class NEMISExportRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -263,7 +263,7 @@ class NEMISExportRepository {
 // ============================================================================
 
 class NEMISDataExtractor implements INEMISDataExtractor {
-  constructor(private dataRepo: NEMISDataRepository) {}
+  constructor(private readonly dataRepo: NEMISDataRepository) {}
 
   async extractStudentData(filters?: NEMISFilters): Promise<NEMISStudent[]> {
     return this.dataRepo.extractStudentData(filters)
@@ -342,7 +342,7 @@ class NEMISFormatter implements INEMISFormatter {
         if (value === null || value === undefined) {return ''}
         const stringValue = String(value)
         if (stringValue.includes(',') || stringValue.includes('"')) {
-          return `"${stringValue.replace(/"/g, '""')}"`
+          return `"${stringValue.replaceAll('"', '""')}"`
         }
         return stringValue
       })
@@ -487,7 +487,7 @@ class NEMISExportManager implements INEMISExportManager {
 export class NEMISExportService 
   implements INEMISDataExtractor, INEMISValidator, INEMISFormatter, INEMISExportManager {
   
-  private db: Database.Database
+  private readonly db: Database.Database
   private readonly extractor: NEMISDataExtractor
   private readonly validator: NEMISValidator
   private readonly formatter: NEMISFormatter

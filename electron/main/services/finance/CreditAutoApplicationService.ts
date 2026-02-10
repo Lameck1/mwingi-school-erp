@@ -62,7 +62,7 @@ export interface AllocationResult {
 // ============================================================================
 
 class CreditRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -121,7 +121,7 @@ class CreditRepository {
 }
 
 class InvoiceRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -180,12 +180,12 @@ class FIFOAllocationStrategy implements ICreditAllocationStrategy {
 }
 
 class CreditAllocator implements ICreditAllocator {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(
-    private creditRepo: CreditRepository,
-    private invoiceRepo: InvoiceRepository,
-    private allocationStrategy: ICreditAllocationStrategy,
+    private readonly creditRepo: CreditRepository,
+    private readonly invoiceRepo: InvoiceRepository,
+    private readonly allocationStrategy: ICreditAllocationStrategy,
     db?: Database.Database
   ) {
     this.db = db || getDatabase()
@@ -296,7 +296,7 @@ class CreditAllocator implements ICreditAllocator {
 }
 
 class CreditBalanceTracker implements ICreditBalanceTracker {
-  constructor(private creditRepo: CreditRepository) {}
+  constructor(private readonly creditRepo: CreditRepository) {}
 
   async getStudentCreditBalance(studentId: number): Promise<number> {
     return this.creditRepo.getStudentCreditBalance(studentId)
@@ -312,7 +312,7 @@ class CreditBalanceTracker implements ICreditBalanceTracker {
 // ============================================================================
 
 export class CreditAutoApplicationService implements ICreditAllocator, ICreditBalanceTracker {
-  private db: Database.Database
+  private readonly db: Database.Database
   private readonly allocator: CreditAllocator
   private readonly balanceTracker: CreditBalanceTracker
 

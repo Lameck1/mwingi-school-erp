@@ -3,6 +3,8 @@ import { DoubleEntryJournalService } from '../../services/accounting/DoubleEntry
 import { OpeningBalanceService } from '../../services/accounting/OpeningBalanceService';
 import { ProfitAndLossService } from '../../services/accounting/ProfitAndLossService';
 
+import type { IpcMainInvokeEvent } from 'electron';
+
 type ReportResponse<T> = { data: T; success: true } | { message: string; success: false };
 
 function success<T>(data: T): ReportResponse<T> {
@@ -14,7 +16,7 @@ function failure(message: string): ReportResponse<never> {
 }
 
 function registerBalanceSheetHandlers(journalService: DoubleEntryJournalService): void {
-  ipcMain.handle('reports:getBalanceSheet', async (_event, asOfDate: string) => {
+  ipcMain.handle('reports:getBalanceSheet', async (_event: IpcMainInvokeEvent, asOfDate: string) => {
     try {
       return success(await journalService.getBalanceSheet(asOfDate));
     } catch (error) {
@@ -24,7 +26,7 @@ function registerBalanceSheetHandlers(journalService: DoubleEntryJournalService)
 }
 
 function registerProfitAndLossHandlers(plService: ProfitAndLossService): void {
-  ipcMain.handle('reports:getProfitAndLoss', async (_event, startDate: string, endDate: string) => {
+  ipcMain.handle('reports:getProfitAndLoss', async (_event: IpcMainInvokeEvent, startDate: string, endDate: string) => {
     try {
       return success(await plService.generateProfitAndLoss(startDate, endDate));
     } catch (error) {
@@ -34,7 +36,13 @@ function registerProfitAndLossHandlers(plService: ProfitAndLossService): void {
 
   ipcMain.handle(
     'reports:getComparativeProfitAndLoss',
-    async (_event, currentStart: string, currentEnd: string, priorStart: string, priorEnd: string) => {
+    async (
+      _event: IpcMainInvokeEvent,
+      currentStart: string,
+      currentEnd: string,
+      priorStart: string,
+      priorEnd: string
+    ) => {
       try {
         return success(await plService.generateComparativeProfitAndLoss(currentStart, currentEnd, priorStart, priorEnd));
       } catch (error) {
@@ -43,7 +51,7 @@ function registerProfitAndLossHandlers(plService: ProfitAndLossService): void {
     }
   );
 
-  ipcMain.handle('reports:getRevenueBreakdown', async (_event, startDate: string, endDate: string) => {
+  ipcMain.handle('reports:getRevenueBreakdown', async (_event: IpcMainInvokeEvent, startDate: string, endDate: string) => {
     try {
       return success(await plService.getRevenueBreakdown(startDate, endDate));
     } catch (error) {
@@ -51,7 +59,7 @@ function registerProfitAndLossHandlers(plService: ProfitAndLossService): void {
     }
   });
 
-  ipcMain.handle('reports:getExpenseBreakdown', async (_event, startDate: string, endDate: string) => {
+  ipcMain.handle('reports:getExpenseBreakdown', async (_event: IpcMainInvokeEvent, startDate: string, endDate: string) => {
     try {
       return success(await plService.getExpenseBreakdown(startDate, endDate));
     } catch (error) {
@@ -61,7 +69,7 @@ function registerProfitAndLossHandlers(plService: ProfitAndLossService): void {
 }
 
 function registerTrialBalanceAndLedgerHandlers(journalService: DoubleEntryJournalService, obService: OpeningBalanceService): void {
-  ipcMain.handle('reports:getTrialBalance', async (_event, startDate: string, endDate: string) => {
+  ipcMain.handle('reports:getTrialBalance', async (_event: IpcMainInvokeEvent, startDate: string, endDate: string) => {
     try {
       return success(await journalService.getTrialBalance(startDate, endDate));
     } catch (error) {
@@ -71,7 +79,13 @@ function registerTrialBalanceAndLedgerHandlers(journalService: DoubleEntryJourna
 
   ipcMain.handle(
     'reports:getStudentLedger',
-    async (_event, studentId: number, academicYearId: number, startDate: string, endDate: string) => {
+    async (
+      _event: IpcMainInvokeEvent,
+      studentId: number,
+      academicYearId: number,
+      startDate: string,
+      endDate: string
+    ) => {
       try {
         return success(await obService.getStudentLedger(studentId, academicYearId, startDate, endDate));
       } catch (error) {

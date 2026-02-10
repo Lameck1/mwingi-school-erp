@@ -15,7 +15,7 @@ import { PayrollJournalService, type PayrollPeriod } from './PayrollJournalServi
 import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
 
-const SELECT_PAYROLL_PERIOD_BY_ID = SELECT_PAYROLL_PERIOD_BY_ID;
+const SELECT_PAYROLL_PERIOD_BY_ID = 'SELECT * FROM payroll_period WHERE id = ?';
 
 export interface PayrollRecordWithStaff {
   id: number;
@@ -80,8 +80,8 @@ export interface PayrollSummaryResult {
 }
 
 export class PayrollIntegrationService {
-  private db = getDatabase();
-  private payrollJournalService: PayrollJournalService;
+  private readonly db = getDatabase();
+  private readonly payrollJournalService: PayrollJournalService;
 
   constructor() {
     this.payrollJournalService = new PayrollJournalService();
@@ -180,7 +180,7 @@ export class PayrollIntegrationService {
         .prepare(SELECT_PAYROLL_PERIOD_BY_ID)
         .get(periodId) as PayrollPeriod | undefined;
 
-      if (!period || !period.gl_posted) {
+      if (!period?.gl_posted) {
         return {
           success: false,
           message: 'Payroll must be posted to GL before recording payment',
@@ -253,7 +253,7 @@ export class PayrollIntegrationService {
         .prepare(SELECT_PAYROLL_PERIOD_BY_ID)
         .get(periodId) as PayrollPeriod | undefined;
 
-      if (!period || period.status !== 'PAID') {
+      if (period?.status !== 'PAID') {
         return {
           success: false,
           message: 'Payroll must be paid before recording statutory payments',

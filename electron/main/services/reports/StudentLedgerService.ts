@@ -93,7 +93,7 @@ const isDebitTransaction = (transactionType: string): boolean =>
 // ============================================================================
 
 class StudentLedgerRepository {
-  private db: Database.Database
+  private readonly db: Database.Database
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -164,8 +164,8 @@ class StudentLedgerRepository {
 // ============================================================================
 
 class OpeningBalanceCalculator implements IOpeningBalanceCalculator {
-  private db: Database.Database
-  private repo: StudentLedgerRepository
+  private readonly db: Database.Database
+  private readonly repo: StudentLedgerRepository
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -198,9 +198,9 @@ class OpeningBalanceCalculator implements IOpeningBalanceCalculator {
 // ============================================================================
 
 class LedgerGenerator implements ILedgerGenerator {
-  private db: Database.Database
-  private repo: StudentLedgerRepository
-  private balanceCalc: OpeningBalanceCalculator
+  private readonly db: Database.Database
+  private readonly repo: StudentLedgerRepository
+  private readonly balanceCalc: OpeningBalanceCalculator
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -261,9 +261,9 @@ class LedgerGenerator implements ILedgerGenerator {
 // ============================================================================
 
 class LedgerReconciler implements ILedgerReconciler {
-  private db: Database.Database
-  private repo: StudentLedgerRepository
-  private ledgerGen: LedgerGenerator
+  private readonly db: Database.Database
+  private readonly repo: StudentLedgerRepository
+  private readonly ledgerGen: LedgerGenerator
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -311,9 +311,9 @@ class LedgerReconciler implements ILedgerReconciler {
 // ============================================================================
 
 class LedgerValidator implements ILedgerValidator {
-  private db: Database.Database
-  private repo: StudentLedgerRepository
-  private balanceCalc: OpeningBalanceCalculator
+  private readonly db: Database.Database
+  private readonly repo: StudentLedgerRepository
+  private readonly balanceCalc: OpeningBalanceCalculator
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -366,7 +366,7 @@ export class StudentLedgerService
   implements IOpeningBalanceCalculator, ILedgerGenerator, ILedgerReconciler, ILedgerValidator
 {
   // Composed services
-  private db: Database.Database
+  private readonly db: Database.Database
   private readonly balanceCalculator: OpeningBalanceCalculator
   private readonly ledgerGenerator: LedgerGenerator
   private readonly reconciler: LedgerReconciler

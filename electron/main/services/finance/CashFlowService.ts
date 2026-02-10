@@ -161,7 +161,7 @@ export class CashFlowService {
         return {
             labels,
             actual,
-            projected: [...Array(results.length).fill(null), ...projected],
+            projected: [...new Array(results.length).fill(null), ...projected],
             trend_slope: 0
         }
     }

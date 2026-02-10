@@ -1,7 +1,7 @@
-import { type Database } from 'better-sqlite3-multiple-ciphers';
-
 import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
+
+import type Database from 'better-sqlite3';
 
 const ACCOUNT_NOT_FOUND = 'Account not found';
 
@@ -24,7 +24,7 @@ export interface GLAccount extends GLAccountData {
 }
 
 export class GLAccountService {
-  private db: Database;
+  private readonly db: Database.Database;
 
   constructor() {
     this.db = getDatabase();
@@ -72,7 +72,7 @@ export class GLAccountService {
   async getById(id: number): Promise<{ success: boolean; data?: GLAccount; message?: string }> {
     try {
       const account = this.findAccountById(id);
-      if (!account) {
+      if (account === undefined) {
         return { success: false, message: ACCOUNT_NOT_FOUND };
       }
       return { success: true, data: account };
@@ -96,7 +96,7 @@ export class GLAccountService {
         data.account_subtype || null,
         data.parent_account_id || null,
         data.is_system_account ? 1 : 0,
-        data.is_active !== false ? 1 : 0, // Default to true
+        data.is_active === false ? 0 : 1, // Default to true
         data.requires_subsidiary ? 1 : 0,
         data.normal_balance,
         data.description || null
@@ -115,7 +115,7 @@ export class GLAccountService {
   async update(id: number, data: Partial<GLAccountData>, userId: number): Promise<{ success: boolean; data?: GLAccount; message?: string }> {
     try {
       const currentAccount = this.findAccountById(id);
-      if (!currentAccount) {
+      if (currentAccount === undefined) {
         return { success: false, message: ACCOUNT_NOT_FOUND };
       }
 
@@ -147,7 +147,7 @@ export class GLAccountService {
   async delete(id: number, userId: number): Promise<{ success: boolean; message: string }> {
     try {
       const currentAccount = this.findAccountById(id);
-      if (!currentAccount) {
+      if (currentAccount === undefined) {
         return { success: false, message: ACCOUNT_NOT_FOUND };
       }
 

@@ -38,8 +38,8 @@ type PostStatutoryPaymentArgs = [
 ];
 
 export class PayrollJournalService {
-  private db: Database.Database;
-  private journalService: DoubleEntryJournalService;
+  private readonly db: Database.Database;
+  private readonly journalService: DoubleEntryJournalService;
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase();

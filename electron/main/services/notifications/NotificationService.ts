@@ -25,14 +25,62 @@ import type {
     SMSProviderConfig
 } from './notification-types'
 
+type CommunicationHistoryFilters = {
+    recipientType?: string
+    recipientId?: number
+    channel?: string
+    status?: string
+    startDate?: string
+    endDate?: string
+}
+
+const buildCommunicationHistoryQuery = (filters?: CommunicationHistoryFilters) => {
+    let query = `
+      SELECT cl.*, u.full_name as sent_by_name
+      FROM message_log cl
+      LEFT JOIN user u ON cl.sent_by_user_id = u.id
+      WHERE 1=1
+    `
+    const params: unknown[] = []
+
+    const addStringClause = (value: string | undefined, clause: string) => {
+        if (!value) {
+            return
+        }
+        query += ` AND ${clause}`
+        params.push(value)
+    }
+
+    const addNumberClause = (value: number | undefined, clause: string) => {
+        if (value === undefined) {
+            return
+        }
+        query += ` AND ${clause}`
+        params.push(value)
+    }
+
+    addStringClause(filters?.recipientType, 'cl.recipient_type = ?')
+    addNumberClause(filters?.recipientId, 'cl.recipient_id = ?')
+    addStringClause(filters?.channel, 'cl.message_type = ?')
+    addStringClause(filters?.status, 'cl.status = ?')
+
+    const startDate = filters?.startDate
+    const endDate = filters?.endDate
+    if (startDate && endDate) {
+        query += ' AND DATE(cl.created_at) BETWEEN ? AND ?'
+        params.push(startDate, endDate)
+    }
+
+    query += ' ORDER BY cl.created_at DESC LIMIT 500'
+
+    return { query, params }
+}
+
 export class NotificationService {
     private get db() { return getDatabase() }
     private isConfigLoaded = false
     private smsConfig: SMSProviderConfig | null = null
     private emailConfig: EmailProviderConfig | null = null
-
-    constructor() {
-    }
 
     private loadConfig(): void {
         if (this.isConfigLoaded) {return}
@@ -316,7 +364,7 @@ export class NotificationService {
      * Process template with variables
      */
     private processTemplate(template: string, variables: Partial<Record<string, string>>): string {
-        return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+        return template.replaceAll(/\{\{(\w+)\}\}/g, (match, key) => {
             return variables[key] ?? match
         })
     }
@@ -326,7 +374,7 @@ export class NotificationService {
      */
     private normalizePhone(phone: string): string {
         // Remove spaces and dashes
-        let normalized = phone.replace(/[\s-]/g, '')
+        let normalized = phone.replaceAll(/[\s-]/g, '')
 
         // Handle Kenya numbers
         if (normalized.startsWith('0')) {
@@ -414,7 +462,7 @@ export class NotificationService {
 
         // Extract variables from body
         const variableMatches = body.match(/\{\{(\w+)\}\}/g) || []
-        const variables = Array.from(new Set(variableMatches.map(m => m.replace(/[{}]/g, ''))))
+        const variables = Array.from(new Set(variableMatches.map(m => m.replaceAll(/[{}]/g, ''))))
 
         const result = this.db.prepare(`
       INSERT INTO message_template (template_name, template_type, category, subject, body, variables)
@@ -495,45 +543,8 @@ export class NotificationService {
     /**
      * Get communication history
      */
-    getCommunicationHistory(filters?: {
-        recipientType?: string
-        recipientId?: number
-        channel?: string
-        status?: string
-        startDate?: string
-        endDate?: string
-    }): CommunicationLog[] {
-        let query = `
-      SELECT cl.*, u.full_name as sent_by_name
-      FROM message_log cl
-      LEFT JOIN user u ON cl.sent_by_user_id = u.id
-      WHERE 1=1
-    `
-        const params: unknown[] = []
-
-        if (filters?.recipientType) {
-            query += ' AND cl.recipient_type = ?'
-            params.push(filters.recipientType)
-        }
-        if (filters?.recipientId) {
-            query += ' AND cl.recipient_id = ?'
-            params.push(filters.recipientId)
-        }
-        if (filters?.channel) {
-            query += ' AND cl.message_type = ?'
-            params.push(filters.channel)
-        }
-        if (filters?.status) {
-            query += ' AND cl.status = ?'
-            params.push(filters.status)
-        }
-        if (filters.startDate && filters.endDate) {
-            query += ' AND DATE(cl.created_at) BETWEEN ? AND ?'
-            params.push(filters.startDate, filters.endDate)
-        }
-
-        query += ' ORDER BY cl.created_at DESC LIMIT 500'
-
+    getCommunicationHistory(filters?: CommunicationHistoryFilters): CommunicationLog[] {
+        const { query, params } = buildCommunicationHistoryQuery(filters)
         return this.db.prepare(query).all(...params) as CommunicationLog[]
     }
 }

@@ -1,4 +1,4 @@
-import * as path from 'path'
+import * as path from 'node:path'
 
 import { ipcMain, shell, app } from '../../electron-env'
 import { BackupService } from '../../services/BackupService'

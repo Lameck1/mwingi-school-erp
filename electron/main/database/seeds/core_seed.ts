@@ -89,9 +89,14 @@ function seedAdminUser(db: Database): void {
     return
   }
 
+  const passwordHash = process.env.SEED_DEFAULT_ADMIN_PASSWORD_HASH
+  if (!passwordHash) {
+    throw new Error('SEED_DEFAULT_ADMIN_PASSWORD_HASH must be set when seeding the default admin account.')
+  }
+
   db.exec(`
       INSERT OR IGNORE INTO user (username, password_hash, full_name, email, role) VALUES 
-      ('admin', '$2a$10$RicmEoNAtBI5Kfx9Z1YcA.09l63qLqDPXes6IH.09Gd7vy4Ilwqte', 'System Administrator', 'admin@mwingiadventist.ac.ke', 'ADMIN');
+      ('admin', '${passwordHash}', 'System Administrator', 'admin@mwingiadventist.ac.ke', 'ADMIN');
     `)
 }
 

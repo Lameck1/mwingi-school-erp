@@ -25,9 +25,7 @@ export class ReportScheduler {
     private get db() { return getDatabase() }
     private _notificationService: NotificationService | null = null
     private get notificationService() {
-        if (!this._notificationService) {
-            this._notificationService = new NotificationService()
-        }
+        this._notificationService ??= new NotificationService()
         return this._notificationService
     }
     private checkInterval: ReturnType<typeof setInterval> | null = null
