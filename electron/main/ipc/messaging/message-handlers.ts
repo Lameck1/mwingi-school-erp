@@ -4,20 +4,23 @@ import { NotificationService } from '../../services/notifications/NotificationSe
 
 import type { IpcMainInvokeEvent } from 'electron';
 
-export function registerMessageHandlers(): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const db = new Proxy({} as any, {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        get: (_target, prop) => (getDatabase() as any)[prop]
-    });
+interface MessageTemplateInput {
+    id?: number;
+    template_name: string;
+    template_type: 'SMS' | 'EMAIL';
+    subject?: string;
+    body: string;
+    placeholders?: string;
+}
 
+export function registerMessageHandlers(): void {
     // ======== MESSAGE TEMPLATES ========
     ipcMain.handle('message:getTemplates', async () => {
-        return db.prepare('SELECT * FROM message_template WHERE is_active = 1').all();
+        return getDatabase().prepare('SELECT * FROM message_template WHERE is_active = 1').all();
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ipcMain.handle('message:saveTemplate', async (_event: IpcMainInvokeEvent, template: any) => {
+    ipcMain.handle('message:saveTemplate', async (_event: IpcMainInvokeEvent, template: MessageTemplateInput) => {
+        const db = getDatabase();
         if (template.id) {
             db.prepare(`UPDATE message_template SET 
         template_name = ?, template_type = ?, subject = ?, body = ?, placeholders = ? 
@@ -41,6 +44,7 @@ export function registerMessageHandlers(): void {
 
     // ======== SENDING SMS ========
     ipcMain.handle('message:sendSms', async (_event: IpcMainInvokeEvent, options: { to: string, message: string, recipientId?: number, recipientType?: string, userId: number }) => {
+        const db = getDatabase();
         const settings = db.prepare('SELECT sms_api_key, sms_api_secret, sms_sender_id FROM school_settings WHERE id = 1').get() as { sms_api_key: string; sms_api_secret: string; sms_sender_id: string } | undefined;
 
         // Create log entry as PENDING
@@ -96,6 +100,6 @@ export function registerMessageHandlers(): void {
 
     // ======== MESSAGE LOGS ========
     ipcMain.handle('message:getLogs', async (_event: IpcMainInvokeEvent, limit = 50) => {
-        return db.prepare('SELECT * FROM message_log ORDER BY created_at DESC LIMIT ?').all(limit);
+        return getDatabase().prepare('SELECT * FROM message_log ORDER BY created_at DESC LIMIT ?').all(limit);
     });
 }

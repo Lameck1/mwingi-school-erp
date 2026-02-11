@@ -164,3 +164,79 @@ export interface FinanceAPI {
 
   // Manual Fixes
 }
+
+// Scholarship Types
+export interface ScholarshipCreateData {
+  name: string
+  description: string
+  scholarship_type: 'MERIT' | 'NEED_BASED' | 'SPORTS' | 'PARTIAL' | 'FULL'
+  amount: number
+  percentage?: number
+  max_beneficiaries: number
+  eligibility_criteria: string
+  valid_from: string
+  valid_to: string
+  sponsor_name?: string
+  sponsor_contact?: string
+}
+
+export interface ScholarshipAllocationData {
+  scholarship_id: number
+  student_id: number
+  amount_allocated: number
+  allocation_notes: string
+  effective_date: string
+}
+
+export interface Scholarship {
+  id: number
+  name: string
+  description: string
+  scholarship_type: 'MERIT' | 'NEED_BASED' | 'SPORTS' | 'PARTIAL' | 'FULL'
+  amount: number
+  percentage: number | null
+  max_beneficiaries: number
+  eligibility_criteria: string
+  valid_from: string
+  valid_to: string
+  sponsor_name: string | null
+  sponsor_contact: string | null
+  is_active: boolean
+  created_at: string
+}
+
+export interface StudentScholarship {
+  id: number
+  scholarship_id: number
+  student_id: number
+  amount_allocated: number
+  allocation_notes: string
+  effective_date: string
+  status: 'ACTIVE' | 'EXPIRED' | 'REVOKED'
+  created_at: string
+  scholarship_name?: string
+  student_name?: string
+}
+
+// CBC Strand Types
+export interface CBCExpenseData {
+  strand_id: number
+  expense_date: string
+  description: string
+  gl_account_code: string
+  amount_cents: number
+  term: number
+  fiscal_year: number
+  receipt_number?: string
+  created_by: number
+}
+
+export interface StudentParticipationData {
+  student_id: number
+  strand_id: number
+  activity_name: string
+  start_date: string
+  academic_year: number
+  term: number
+  participation_level: 'PRIMARY' | 'SECONDARY' | 'INTEREST'
+}
