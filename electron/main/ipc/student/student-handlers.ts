@@ -1,5 +1,6 @@
 import { getDatabase } from '../../database'
 import { ipcMain } from '../../electron-env'
+import { sanitizeString, validateId } from '../../utils/validation'
 
 import type { IpcMainInvokeEvent } from 'electron'
 
@@ -238,6 +239,15 @@ function registerStudentWriteHandlers(db: ReturnType<typeof getDatabase>): void 
 
 function registerCreateStudentHandler(db: ReturnType<typeof getDatabase>): void {
   ipcMain.handle('student:create', async (_event: IpcMainInvokeEvent, data: StudentCreateData) => {
+    // Validate and sanitize input
+    const admissionNumber = sanitizeString(data.admission_number, 50)
+    const firstName = sanitizeString(data.first_name, 100)
+    const lastName = sanitizeString(data.last_name, 100)
+    
+    if (!admissionNumber || !firstName || !lastName) {
+      return { success: false, error: 'Admission number, first name, and last name are required' }
+    }
+
     const stmt = db.prepare(`
       INSERT INTO student (
         admission_number, first_name, middle_name, last_name, date_of_birth, gender,
@@ -247,32 +257,35 @@ function registerCreateStudentHandler(db: ReturnType<typeof getDatabase>): void 
     `)
 
     const result = stmt.run(
-      data.admission_number,
-      data.first_name,
-      data.middle_name,
-      data.last_name,
+      admissionNumber,
+      firstName,
+      sanitizeString(data.middle_name, 100),
+      lastName,
       data.date_of_birth,
       toDbGender(data.gender),
       data.student_type,
       data.admission_date,
-      data.guardian_name,
-      data.guardian_phone,
-      data.guardian_email,
-      data.guardian_relationship,
-      data.address,
-      data.notes,
+      sanitizeString(data.guardian_name, 200),
+      sanitizeString(data.guardian_phone, 20),
+      sanitizeString(data.guardian_email, 100),
+      sanitizeString(data.guardian_relationship, 50),
+      sanitizeString(data.address, 500),
+      sanitizeString(data.notes, 1000),
     )
     const newStudentId = Number(result.lastInsertRowid)
 
     try {
       if (data.stream_id) {
-        createEnrollment(db, {
-          studentId: newStudentId,
-          streamId: data.stream_id,
-          studentType: data.student_type,
-          enrollmentDate: data.admission_date,
-          useCurrentDate: false,
-        })
+        const streamValidation = validateId(data.stream_id, 'Stream')
+        if (streamValidation.success) {
+          createEnrollment(db, {
+            studentId: newStudentId,
+            streamId: streamValidation.data!,
+            studentType: data.student_type,
+            enrollmentDate: data.admission_date,
+            useCurrentDate: false,
+          })
+        }
       }
     } catch {
       // Ignore enrollment side effect failures and keep student creation successful.
@@ -284,7 +297,13 @@ function registerCreateStudentHandler(db: ReturnType<typeof getDatabase>): void 
 
 function registerUpdateStudentHandler(db: ReturnType<typeof getDatabase>): void {
   ipcMain.handle('student:update', async (_event: IpcMainInvokeEvent, id: number, data: Partial<StudentCreateData>) => {
-    const student = db.prepare('SELECT * FROM student WHERE id = ?').get(id) as Student | undefined
+    // Validate student ID
+    const idValidation = validateId(id, 'Student')
+    if (!idValidation.success) {
+      return { success: false, error: idValidation.error }
+    }
+
+    const student = db.prepare('SELECT * FROM student WHERE id = ?').get(idValidation.data!) as Student | undefined
     if (!student) {
       return { success: false, error: 'Student not found' }
     }
@@ -300,33 +319,36 @@ function registerUpdateStudentHandler(db: ReturnType<typeof getDatabase>): void 
       WHERE id = ?
     `)
     stmt.run(
-      merged.admission_number,
-      merged.first_name,
-      merged.middle_name,
-      merged.last_name,
+      sanitizeString(merged.admission_number, 50),
+      sanitizeString(merged.first_name, 100),
+      sanitizeString(merged.middle_name, 100),
+      sanitizeString(merged.last_name, 100),
       merged.date_of_birth,
       merged.gender,
       merged.student_type,
       merged.admission_date,
-      merged.guardian_name,
-      merged.guardian_phone,
-      merged.guardian_email,
-      merged.guardian_relationship,
-      merged.address,
-      merged.notes,
+      sanitizeString(merged.guardian_name, 200),
+      sanitizeString(merged.guardian_phone, 20),
+      sanitizeString(merged.guardian_email, 100),
+      sanitizeString(merged.guardian_relationship, 50),
+      sanitizeString(merged.address, 500),
+      sanitizeString(merged.notes, 1000),
       merged.is_active,
-      id,
+      idValidation.data!,
     )
 
     try {
       if (data.stream_id) {
-        createEnrollment(db, {
-          studentId: id,
-          streamId: data.stream_id,
-          studentType: data.student_type ?? student.student_type,
-          enrollmentDate: student.admission_date,
-          useCurrentDate: true,
-        })
+        const streamValidation = validateId(data.stream_id, 'Stream')
+        if (streamValidation.success) {
+          createEnrollment(db, {
+            studentId: idValidation.data!,
+            streamId: streamValidation.data!,
+            studentType: data.student_type ?? student.student_type,
+            enrollmentDate: student.admission_date,
+            useCurrentDate: true,
+          })
+        }
       }
     } catch {
       // Ignore enrollment side effect failures and keep student update successful.

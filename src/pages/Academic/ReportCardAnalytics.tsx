@@ -218,8 +218,8 @@ const ReportCardAnalytics = () => {
               </div>
               <div className="p-4 rounded-lg bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/30">
                 <p className="text-xs text-foreground/60">Top Performer</p>
-                <p className="text-sm font-bold text-purple-400">{performanceSummary.top_performer.split(' ')[0]}</p>
-                <p className="text-xs text-foreground/60">{performanceSummary.top_performer_score.toFixed(1)}</p>
+                <p className="text-sm font-bold text-purple-400">{(performanceSummary.top_performer ?? 'N/A').split(' ')[0]}</p>
+                <p className="text-xs text-foreground/60">{performanceSummary.top_performer_score?.toFixed(1) ?? 'N/A'}</p>
               </div>
               <div className="p-4 rounded-lg bg-gradient-to-br from-red-500/20 to-red-600/20 border border-red-500/30">
                 <p className="text-xs text-foreground/60">Pass/Fail</p>

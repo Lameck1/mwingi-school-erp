@@ -53,6 +53,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCashFlowStatement: (startDate: string, endDate: string) => ipcRenderer.invoke('finance:getCashFlow', startDate, endDate),
   getForecast: (months: number) => ipcRenderer.invoke('finance:getForecast', months),
 
+  // Student Credits
+  allocateStudentCredits: (studentId: number, userId: number) => ipcRenderer.invoke('finance:allocateCredits', studentId, userId),
+  getStudentCreditBalance: (studentId: number) => ipcRenderer.invoke('finance:getCreditBalance', studentId),
+  getStudentCreditTransactions: (studentId: number, limit?: number) => ipcRenderer.invoke('finance:getCreditTransactions', studentId, limit),
+  addStudentCredit: (studentId: number, amount: number, notes: string, userId: number) => ipcRenderer.invoke('finance:addCredit', studentId, amount, notes, userId),
+
+  // Fee Proration
+  calculateProRatedFee: (studentId: number, termId: number, enrollmentDate: string) => ipcRenderer.invoke('finance:calculateProRatedFee', studentId, termId, enrollmentDate),
+  validateEnrollmentDate: (termId: number, enrollmentDate: string) => ipcRenderer.invoke('finance:validateEnrollmentDate', termId, enrollmentDate),
+  generateProRatedInvoice: (studentId: number, termId: number, enrollmentDate: string, userId: number) => ipcRenderer.invoke('finance:generateProRatedInvoice', studentId, termId, enrollmentDate, userId),
+  getProRationHistory: (studentId: number) => ipcRenderer.invoke('finance:getProRationHistory', studentId),
+
+  // Scholarships
+  createScholarship: (data: unknown, userId: number) => ipcRenderer.invoke('finance:createScholarship', data, userId),
+  allocateScholarship: (allocationData: unknown, userId: number) => ipcRenderer.invoke('finance:allocateScholarship', allocationData, userId),
+  validateScholarshipEligibility: (studentId: number, scholarshipId: number) => ipcRenderer.invoke('finance:validateScholarshipEligibility', studentId, scholarshipId),
+  getActiveScholarships: () => ipcRenderer.invoke('finance:getActiveScholarships'),
+  getStudentScholarships: (studentId: number) => ipcRenderer.invoke('finance:getStudentScholarships', studentId),
+  getScholarshipAllocations: (scholarshipId: number) => ipcRenderer.invoke('finance:getScholarshipAllocations', scholarshipId),
+  applyScholarshipToInvoice: (invoiceId: number, scholarshipAllocationId: number, userId: number) => ipcRenderer.invoke('finance:applyScholarshipToInvoice', invoiceId, scholarshipAllocationId, userId),
+
   // Transactions
 
   // Budgeting
@@ -403,6 +424,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getActiveCBCStrands: () => ipcRenderer.invoke('cbc:getActiveStrands'),
   linkFeeCategoryToStrand: (feeCategoryId: number, strandId: number, allocationPercentage: number, userId: number) =>
     ipcRenderer.invoke('cbc:linkFeeCategory', feeCategoryId, strandId, allocationPercentage, userId),
+  recordCBCExpense: (data: unknown) => ipcRenderer.invoke('cbc:recordExpense', data),
+  getCBCProfitabilityReport: (fiscalYear: number, term?: number) => ipcRenderer.invoke('cbc:getProfitabilityReport', fiscalYear, term),
+  recordStudentParticipation: (data: unknown) => ipcRenderer.invoke('cbc:recordParticipation', data),
+  getStudentParticipations: (studentId: number) => ipcRenderer.invoke('cbc:getStudentParticipations', studentId),
 
   // JSS Transitions
   initiateJSSTransition: (data: unknown) => ipcRenderer.invoke('jss:initiateTransition', data),

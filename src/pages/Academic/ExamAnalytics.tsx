@@ -217,8 +217,8 @@ const ExamAnalytics = () => {
               </div>
               <div className="p-4 rounded-lg bg-white/5">
                 <p className="text-sm text-foreground/60">Top Performer</p>
-                <p className="text-lg font-bold">{performanceSummary.top_performer}</p>
-                <p className="text-xs text-foreground/60">{performanceSummary.top_performer_score.toFixed(2)}</p>
+                <p className="text-lg font-bold">{performanceSummary.top_performer ?? 'N/A'}</p>
+                <p className="text-xs text-foreground/60">{performanceSummary.top_performer_score?.toFixed(2) ?? 'N/A'}</p>
               </div>
               <div className="p-4 rounded-lg bg-white/5">
                 <p className="text-sm text-foreground/60">Total Students</p>

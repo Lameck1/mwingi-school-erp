@@ -26,6 +26,9 @@ export const STUDENT_TYPES = {
 
 export type StudentType = typeof STUDENT_TYPES[keyof typeof STUDENT_TYPES]
 
+// Array form for iteration
+export const STUDENT_TYPES_LIST = Object.values(STUDENT_TYPES)
+
 // Invoice statuses
 export const INVOICE_STATUS = {
     PENDING: 'PENDING',

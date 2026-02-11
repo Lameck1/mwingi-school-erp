@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3-multiple-ciphers'
+import Database from 'better-sqlite3'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 import { PaymentService } from '../PaymentService'
