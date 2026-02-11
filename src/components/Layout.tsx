@@ -2,6 +2,7 @@ import {
     ArrowUpRight,
     BarChart3,
     BookOpen,
+    Bus,
     Calculator,
     CheckCircle,
     ChevronDown,
@@ -9,14 +10,20 @@ import {
     Clock,
     CreditCard,
     Database,
+    DollarSign,
     FileText,
+    Gift,
+    Home,
     LayoutDashboard,
+    Layers,
+    Link2,
     LogOut,
     Mail,
     Menu,
     MessageSquare,
     Moon,
     Package,
+    Percent,
     Settings,
     Shield,
     Sun,
@@ -76,6 +83,7 @@ const navItems: NavItem[] = [
             { path: '/students/promotions', label: 'Promotions', icon: ArrowUpRight },
             { path: '/attendance', label: 'Attendance', icon: CheckCircle },
             { path: '/report-cards', label: 'Report Cards', icon: FileText },
+            { path: '/academic/report-card-generation', label: 'Generate Reports', icon: FileText },
             { path: '/academic/allocations', label: 'Subject Allocation', icon: UserPlus },
             { path: '/academic/subjects', label: 'Subjects', icon: BookOpen },
             { path: '/academic/exams', label: 'Exam Management', icon: ClipboardList },
@@ -102,14 +110,61 @@ const navItems: NavItem[] = [
             { path: '/fee-payment', label: 'Fee Payments', icon: CreditCard },
             { path: '/invoices', label: 'Invoices', icon: FileText },
             { path: '/fee-structure', label: 'Fee Structure', icon: TableProperties },
+            { path: '/fee-exemptions', label: 'Fee Exemptions', icon: Percent },
             { path: '/budget', label: 'Budgets', icon: Calculator },
             { path: '/bank-accounts', label: 'Bank Accounts', icon: CreditCard },
             { path: '/approvals', label: 'Approvals', icon: CheckCircle },
             { path: '/record-income', label: 'Record Income', icon: TrendingUp },
             { path: '/record-expense', label: 'Record Expense', icon: TrendingDown },
             { path: '/transactions', label: 'Transactions', icon: ClipboardList },
-            { path: '/financial-reports', label: 'Financial Reports', icon: BarChart3 },
-            { path: '/cash-flow', label: 'Cash Flow', icon: TrendingUp }
+            { path: '/cash-flow', label: 'Cash Flow', icon: TrendingUp },
+            {
+                label: 'Accounting',
+                icon: Calculator,
+                children: [
+                    { path: '/finance/gl-accounts', label: 'Chart of Accounts', icon: Layers },
+                    { path: '/finance/opening-balances', label: 'Opening Balances', icon: DollarSign },
+                    { path: '/finance/reconciliation', label: 'Reconciliation', icon: CheckCircle },
+                    { path: '/finance/transaction-approvals', label: 'Approvals Queue', icon: CheckCircle }
+                ]
+            },
+            {
+                label: 'Reports',
+                icon: BarChart3,
+                children: [
+                    { path: '/financial-reports', label: 'Financial Reports', icon: BarChart3 },
+                    { path: '/finance/balance-sheet', label: 'Balance Sheet', icon: FileText },
+                    { path: '/finance/profit-and-loss', label: 'Profit & Loss', icon: TrendingUp },
+                    { path: '/finance/trial-balance', label: 'Trial Balance', icon: TableProperties }
+                ]
+            },
+            {
+                label: 'Assets',
+                icon: Package,
+                children: [
+                    { path: '/finance/fixed-assets', label: 'Asset Register', icon: Package },
+                    { path: '/finance/depreciation', label: 'Depreciation', icon: TrendingDown },
+                    { path: '/asset-hire', label: 'Asset Hire', icon: CreditCard }
+                ]
+            },
+            {
+                label: 'Advanced',
+                icon: Settings,
+                children: [
+                    { path: '/finance/grants', label: 'Grant Tracking', icon: Gift },
+                    { path: '/finance/student-cost', label: 'Student Cost', icon: Users },
+                    { path: '/finance/cbc-strands', label: 'CBC Strands', icon: BookOpen },
+                    { path: '/finance/jss-transition', label: 'JSS Transition', icon: ArrowUpRight }
+                ]
+            }
+        ]
+    },
+    {
+        label: 'Operations',
+        icon: Settings,
+        children: [
+            { path: '/operations/boarding', label: 'Boarding', icon: Home },
+            { path: '/operations/transport', label: 'Transport', icon: Bus }
         ]
     },
     {
@@ -132,9 +187,19 @@ const navItems: NavItem[] = [
     {
         label: 'Communications',
         icon: Mail,
-        children: [{ path: '/communications', label: 'Message Logs', icon: MessageSquare }]
+        children: [
+            { path: '/communications', label: 'Message Logs', icon: MessageSquare },
+            { path: '/settings/message-templates', label: 'Templates', icon: FileText }
+        ]
     },
-    { path: '/settings', label: 'Settings', icon: Settings }
+    {
+        label: 'Settings',
+        icon: Settings,
+        children: [
+            { path: '/settings', label: 'General Settings', icon: Settings },
+            { path: '/settings/integrations', label: 'Integrations', icon: Link2 }
+        ]
+    }
 ]
 
 const adminItems: NavItem[] = [

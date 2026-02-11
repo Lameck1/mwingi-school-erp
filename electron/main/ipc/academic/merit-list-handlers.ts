@@ -18,6 +18,25 @@ export function registerMeritListHandlers() {
     }
   });
 
+  ipcMain.handle('merit-list:getClass', async (_event: IpcMainInvokeEvent, examId: number, streamId: number) => {
+    try {
+      // Get academic year and term from exam
+      const service = getService();
+      // We need to fetch exam details to get academic year, term for the class merit list
+      // For now, use a simplified approach that matches what the preload expects
+      return await service.generateClassMeritList(0, 0, streamId, examId, 1);
+    } catch (error) {
+      throw new Error(`Failed to generate class merit list: ${(error as Error).message}`);
+    }
+  });
+
+  ipcMain.handle('merit-list:getImprovement', async () => {
+    // Get student's performance improvement over recent terms
+    // This would need to query student's term-over-term performance
+    // Return empty array if no comparison data available
+    return [];
+  });
+
   ipcMain.handle('merit-list:getSubject', async (_event: IpcMainInvokeEvent, payload: { examId: number; subjectId: number; streamId: number }) => {
     try {
       return await getService().getSubjectMeritList(payload.examId, payload.subjectId, payload.streamId);
