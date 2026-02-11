@@ -1,5 +1,6 @@
 import { getDatabase } from '../../database'
 import { ipcMain } from '../../electron-env'
+import { sanitizeString, validateAmount, validateId } from '../../utils/validation'
 
 import type { IpcMainInvokeEvent } from 'electron'
 
@@ -57,10 +58,6 @@ function toNullableString(value: string | null | undefined): string | null {
   return value ?? null
 }
 
-function toNullableNumber(value: number | null | undefined): number | null {
-  return value ?? null
-}
-
 interface ValidatedStaffCreateData {
   basic_salary: number
   bank_account: string | null
@@ -82,49 +79,61 @@ interface ValidatedStaffCreateData {
 }
 
 function validateCreateData(data: StaffCreateData): ValidatedStaffCreateData {
-  if (!data.staff_number || !data.first_name || !data.last_name) {
+  const staffNumber = sanitizeString(data.staff_number, 50)
+  const firstName = sanitizeString(data.first_name, 100)
+  const lastName = sanitizeString(data.last_name, 100)
+
+  if (!staffNumber || !firstName || !lastName) {
     throw new Error('Staff number, first name, and last name are required')
   }
 
+  // Validate salary if provided
+  const salaryValidation = validateAmount(data.basic_salary ?? 0)
+  const basicSalary = salaryValidation.success ? (salaryValidation.data ?? 0) : 0
+
   return {
-    staff_number: data.staff_number,
-    first_name: data.first_name,
-    middle_name: toNullableString(data.middle_name),
-    last_name: data.last_name,
-    id_number: toNullableString(data.id_number),
-    kra_pin: toNullableString(data.kra_pin),
-    nhif_number: toNullableString(data.nhif_number),
-    nssf_number: toNullableString(data.nssf_number),
-    phone: toNullableString(data.phone),
-    email: toNullableString(data.email),
-    bank_name: toNullableString(data.bank_name),
-    bank_account: toNullableString(data.bank_account),
-    department: toNullableString(data.department),
-    job_title: toNullableString(data.job_title),
+    staff_number: staffNumber,
+    first_name: firstName,
+    middle_name: toNullableString(sanitizeString(data.middle_name, 100)),
+    last_name: lastName,
+    id_number: toNullableString(sanitizeString(data.id_number, 20)),
+    kra_pin: toNullableString(sanitizeString(data.kra_pin, 20)),
+    nhif_number: toNullableString(sanitizeString(data.nhif_number, 20)),
+    nssf_number: toNullableString(sanitizeString(data.nssf_number, 20)),
+    phone: toNullableString(sanitizeString(data.phone, 20)),
+    email: toNullableString(sanitizeString(data.email, 100)),
+    bank_name: toNullableString(sanitizeString(data.bank_name, 100)),
+    bank_account: toNullableString(sanitizeString(data.bank_account, 50)),
+    department: toNullableString(sanitizeString(data.department, 100)),
+    job_title: toNullableString(sanitizeString(data.job_title, 100)),
     employment_date: toNullableString(data.employment_date),
-    basic_salary: data.basic_salary || 0,
+    basic_salary: basicSalary,
     is_active: data.is_active === false ? 0 : 1
   }
 }
 
 function buildUpdateParams(data: Partial<StaffCreateData>, id: number): Array<number | string | null> {
+  // Validate and sanitize update parameters
+  const salaryValidation = data.basic_salary !== undefined ? validateAmount(data.basic_salary) : { success: true, data: null }
+  const basicSalary = salaryValidation.success ? (salaryValidation.data ?? null) : null
+
   return [
-    toNullableString(data.staff_number),
-    toNullableString(data.first_name),
-    toNullableString(data.middle_name),
-    toNullableString(data.last_name),
-    toNullableString(data.id_number),
-    toNullableString(data.kra_pin),
-    toNullableString(data.nhif_number),
-    toNullableString(data.nssf_number),
-    toNullableString(data.phone),
-    toNullableString(data.email),
-    toNullableString(data.bank_name),
-    toNullableString(data.bank_account),
-    toNullableString(data.department),
-    toNullableString(data.job_title),
+    toNullableString(sanitizeString(data.staff_number, 50)),
+    toNullableString(sanitizeString(data.first_name, 100)),
+    toNullableString(sanitizeString(data.middle_name, 100)),
+    toNullableString(sanitizeString(data.last_name, 100)),
+    toNullableString(sanitizeString(data.id_number, 20)),
+    toNullableString(sanitizeString(data.kra_pin, 20)),
+    toNullableString(sanitizeString(data.nhif_number, 20)),
+    toNullableString(sanitizeString(data.nssf_number, 20)),
+    toNullableString(sanitizeString(data.phone, 20)),
+    toNullableString(sanitizeString(data.email, 100)),
+    toNullableString(sanitizeString(data.bank_name, 100)),
+    toNullableString(sanitizeString(data.bank_account, 50)),
+    toNullableString(sanitizeString(data.department, 100)),
+    toNullableString(sanitizeString(data.job_title, 100)),
     toNullableString(data.employment_date),
-    toNullableNumber(data.basic_salary),
+    basicSalary,
     mapOptionalActive(data.is_active),
     id
   ]
@@ -174,6 +183,12 @@ function registerStaffMutationHandlers(db: ReturnType<typeof getDatabase>): void
   })
 
   ipcMain.handle('staff:update', async (_event: IpcMainInvokeEvent, id: number, data: Partial<StaffCreateData>) => {
+    // Validate staff ID
+    const idValidation = validateId(id, 'Staff')
+    if (!idValidation.success) {
+      return { success: false, error: idValidation.error }
+    }
+
     db.prepare(`
       UPDATE staff SET
         staff_number = COALESCE(?, staff_number),
@@ -194,7 +209,7 @@ function registerStaffMutationHandlers(db: ReturnType<typeof getDatabase>): void
         basic_salary = COALESCE(?, basic_salary),
         is_active = COALESCE(?, is_active)
       WHERE id = ?
-    `).run(...buildUpdateParams(data, id))
+    `).run(...buildUpdateParams(data, idValidation.data!))
     return { success: true }
   })
 

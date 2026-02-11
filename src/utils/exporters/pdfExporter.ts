@@ -69,7 +69,7 @@ export async function exportToPDF(options: PDFExportOptions): Promise<void> {
     const columnWidths = calculateColumnWidths(columns, contentWidth)
 
     // Table Header
-    yPosition = renderTableHeader(doc, columns, columnWidths, margin, contentWidth, yPosition)
+    yPosition = renderTableHeader({ doc, columns, columnWidths, margin, contentWidth, yPosition })
 
     // Table Rows
     const rowHeight = 7
@@ -78,7 +78,7 @@ export async function exportToPDF(options: PDFExportOptions): Promise<void> {
     })
 
     // Footer
-    renderFooter(doc, footerText, margin, pageHeight, pageWidth, showPageNumbers)
+    renderFooter({ doc, footerText, margin, pageHeight, pageWidth, showPageNumbers })
 
     // Save
     doc.save(`${filename}.pdf`)
@@ -161,14 +161,17 @@ function calculateColumnWidths(columns: PDFColumn[], contentWidth: number): numb
     return columns.map(col => col.width || defaultWidth)
 }
 
-function renderTableHeader(
-    doc: jsPDF,
-    columns: PDFColumn[],
-    columnWidths: number[],
-    margin: number,
-    contentWidth: number,
+interface TableHeaderParams {
+    doc: jsPDF
+    columns: PDFColumn[]
+    columnWidths: number[]
+    margin: number
+    contentWidth: number
     yPosition: number
-): number {
+}
+
+function renderTableHeader(params: TableHeaderParams): number {
+    const { doc, columns, columnWidths, margin, contentWidth, yPosition } = params
     doc.setFillColor(45, 55, 72)
     doc.rect(margin, yPosition, contentWidth, 8, 'F')
 
@@ -215,7 +218,7 @@ function renderTableRows(
             if (ctx.showPageNumbers) { addPageNumber(doc, ctx.pageWidth, ctx.pageHeight) }
             doc.addPage()
             yPosition = ctx.margin
-            yPosition = renderTableHeader(doc, columns, columnWidths, ctx.margin, ctx.contentWidth, yPosition)
+            yPosition = renderTableHeader({ doc, columns, columnWidths, margin: ctx.margin, contentWidth: ctx.contentWidth, yPosition })
             doc.setFont('helvetica', 'normal')
             isAlternate = false
         }
@@ -232,21 +235,24 @@ function renderTableRows(
         doc.line(ctx.margin, yPosition + ctx.rowHeight, ctx.pageWidth - ctx.margin, yPosition + ctx.rowHeight)
 
         // Cell values
-        renderRowCells(doc, row, columns, columnWidths, ctx.margin, yPosition)
+        renderRowCells({ doc, row, columns, columnWidths, margin: ctx.margin, yPosition })
         yPosition += ctx.rowHeight
     }
 
     return yPosition
 }
 
-function renderRowCells(
-    doc: jsPDF,
-    row: Record<string, unknown>,
-    columns: PDFColumn[],
-    columnWidths: number[],
-    margin: number,
+interface RowCellsParams {
+    doc: jsPDF
+    row: Record<string, unknown>
+    columns: PDFColumn[]
+    columnWidths: number[]
+    margin: number
     yPosition: number
-): void {
+}
+
+function renderRowCells(params: RowCellsParams): void {
+    const { doc, row, columns, columnWidths, margin, yPosition } = params
     let xPosition = margin + 2
     columns.forEach((col, i) => {
         const value = formatValue(row[col.key], col.format)
@@ -265,14 +271,17 @@ function renderRowCells(
     })
 }
 
-function renderFooter(
-    doc: jsPDF,
-    footerText: string | undefined,
-    margin: number,
-    pageHeight: number,
-    pageWidth: number,
+interface FooterParams {
+    doc: jsPDF
+    footerText: string | undefined
+    margin: number
+    pageHeight: number
+    pageWidth: number
     showPageNumbers: boolean
-): void {
+}
+
+function renderFooter(params: FooterParams): void {
+    const { doc, footerText, margin, pageHeight, pageWidth, showPageNumbers } = params
     if (footerText) {
         doc.setFontSize(8)
         doc.setTextColor(100, 100, 100)

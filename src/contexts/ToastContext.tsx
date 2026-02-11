@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react'
 
 import { Toast, type ToastType } from '../components/ui/Toast'
 
@@ -16,17 +16,13 @@ const ToastContext = createContext<ToastContextType | undefined>(undefined)
 
 export function ToastProvider({ children }: Readonly<{ children: React.ReactNode }>) {
     const [toasts, setToasts] = useState<ToastMessage[]>([])
-    const fallbackIdCounter = useRef(0)
 
     const removeToastById = useCallback((id: string) => {
         setToasts(prev => prev.filter(toast => toast.id !== id))
     }, [])
 
     const showToast = useCallback((message: string, type: ToastType = 'info') => {
-        fallbackIdCounter.current += 1
-        const id = globalThis.crypto?.randomUUID
-            ? globalThis.crypto.randomUUID()
-            : `toast-${Date.now()}-${fallbackIdCounter.current}`
+        const id = globalThis.crypto.randomUUID()
         setToasts(prev => [...prev, { id, message, type }])
         setTimeout(() => {
             removeToastById(id)

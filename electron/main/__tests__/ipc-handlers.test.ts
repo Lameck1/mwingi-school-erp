@@ -3,6 +3,18 @@ import { vi, describe, test, expect, beforeEach, type Mock } from 'vitest';
 import { ipcMain } from '../electron-env'
 import { registerAllIpcHandlers } from '../ipc/index';
 
+// Mock keytar before any other imports
+vi.mock('keytar', () => ({
+  default: {
+    getPassword: vi.fn().mockResolvedValue(null),
+    setPassword: vi.fn().mockResolvedValue(null),
+    deletePassword: vi.fn().mockResolvedValue(true)
+  },
+  getPassword: vi.fn().mockResolvedValue(null),
+  setPassword: vi.fn().mockResolvedValue(null),
+  deletePassword: vi.fn().mockResolvedValue(true)
+}));
+
 // Mock ServiceContainer
 vi.mock('../services/base/ServiceContainer', () => ({
   container: {
