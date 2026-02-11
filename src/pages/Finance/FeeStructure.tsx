@@ -5,6 +5,7 @@ import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore } from '../../stores'
 import { type AcademicYear, type Term, type Stream } from '../../types/electron-api/AcademicAPI'
 import { type FeeCategory, type FeeStructureCreateData } from '../../types/electron-api/FinanceAPI'
+import { STUDENT_TYPES_LIST } from '../../utils/constants'
 import { centsToShillings, shillingsToCents } from '../../utils/format'
 
 interface FeeStructureItem {
@@ -16,8 +17,6 @@ interface FeeStructureItem {
     feeCategoryId?: number
     amount?: number
 }
-
-const STUDENT_TYPES = ['DAY_SCHOLAR', 'BOARDER'] as const
 
 export default function FeeStructure() {
     const { showToast } = useToast()
@@ -143,7 +142,7 @@ export default function FeeStructure() {
     const renderTableRows = () => {
         const rows: JSX.Element[] = []
         for (const stream of streams) {
-            for (const [index, studentType] of STUDENT_TYPES.entries()) {
+            for (const [index, studentType] of STUDENT_TYPES_LIST.entries()) {
                 const streamStyle = index === 0 ? 'hsl(var(--background))' : 'hsl(var(--card))'
                 rows.push(
                     <tr key={`${stream.id}-${studentType}`} className={`${index === 0 ? 'bg-background' : 'bg-card'} hover:bg-accent/10 transition-colors`}>
