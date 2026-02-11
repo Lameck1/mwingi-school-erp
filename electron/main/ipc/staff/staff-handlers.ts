@@ -87,8 +87,12 @@ function validateCreateData(data: StaffCreateData): ValidatedStaffCreateData {
     throw new Error('Staff number, first name, and last name are required')
   }
 
-  // Validate salary if provided
-  const salaryValidation = validateAmount(data.basic_salary ?? 0)
+  // Validate salary if provided - throw error if provided but invalid
+  const salaryInput = data.basic_salary ?? 0
+  const salaryValidation = validateAmount(salaryInput)
+  if (!salaryValidation.success && data.basic_salary !== undefined && data.basic_salary !== null) {
+    throw new Error(salaryValidation.error ?? 'Invalid salary amount')
+  }
   const basicSalary = salaryValidation.success ? (salaryValidation.data ?? 0) : 0
 
   return {
@@ -114,8 +118,12 @@ function validateCreateData(data: StaffCreateData): ValidatedStaffCreateData {
 
 function buildUpdateParams(data: Partial<StaffCreateData>, id: number): Array<number | string | null> {
   // Validate and sanitize update parameters
-  const salaryValidation = data.basic_salary !== undefined ? validateAmount(data.basic_salary) : { success: true, data: null }
-  const basicSalary = salaryValidation.success ? (salaryValidation.data ?? null) : null
+  // For updates, only validate salary if explicitly provided
+  let basicSalary: number | null = null
+  if (data.basic_salary !== undefined) {
+    const salaryValidation = validateAmount(data.basic_salary)
+    basicSalary = salaryValidation.success ? (salaryValidation.data ?? null) : null
+  }
 
   return [
     toNullableString(sanitizeString(data.staff_number, 50)),
