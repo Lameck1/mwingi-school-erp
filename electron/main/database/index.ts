@@ -35,6 +35,9 @@ async function loadDatabaseClass(): Promise<typeof Database> {
 }
 
 function applyKeyPragma(database: Database.Database, key: string, pragmaName: 'key' | 'rekey'): void {
+    if (!/^[\da-f]+$/i.test(key)) {
+        throw new Error('Encryption key must be a hex string')
+    }
     try {
         database.pragma(`${pragmaName}="x'${key}'"`)
     } catch (error) {
@@ -44,11 +47,16 @@ function applyKeyPragma(database: Database.Database, key: string, pragmaName: 'k
 
 function openAndTest(DatabaseClass: typeof Database, dbPath: string, key?: string): Database.Database {
     const database = new DatabaseClass(dbPath)
-    if (key) {
-        applyKeyPragma(database, key, 'key')
+    try {
+        if (key) {
+            applyKeyPragma(database, key, 'key')
+        }
+        database.prepare('SELECT count(*) FROM sqlite_master').get()
+        return database
+    } catch (error) {
+        closeSilently(database)
+        throw error
     }
-    database.prepare('SELECT count(*) FROM sqlite_master').get()
-    return database
 }
 
 function closeSilently(database: Database.Database | null): void {
@@ -64,25 +72,30 @@ function closeSilently(database: Database.Database | null): void {
 
 function prepareUnencryptedDatabase(DatabaseClass: typeof Database, dbPath: string, key: string): Database.Database {
     const database = new DatabaseClass(dbPath)
-    database.prepare('SELECT count(*) FROM sqlite_master').get()
+    try {
+        database.prepare('SELECT count(*) FROM sqlite_master').get()
 
-    const modeBefore = database.pragma('journal_mode', { simple: true })
-    console.error(`Current journal_mode: ${modeBefore}`)
-    database.pragma('journal_mode = DELETE')
+        const modeBefore = database.pragma('journal_mode', { simple: true })
+        console.error(`Current journal_mode: ${modeBefore}`)
+        database.pragma('journal_mode = DELETE')
 
-    const modeAfter = database.pragma('journal_mode', { simple: true })
-    console.error(`New journal_mode: ${modeAfter}`)
-    if (modeAfter !== 'delete') {
-        throw new Error(`Failed to switch to DELETE mode. Current mode: ${modeAfter}`)
+        const modeAfter = database.pragma('journal_mode', { simple: true })
+        console.error(`New journal_mode: ${modeAfter}`)
+        if (modeAfter !== 'delete') {
+            throw new Error(`Failed to switch to DELETE mode. Current mode: ${modeAfter}`)
+        }
+
+        if (key) {
+            console.error('Database is unencrypted. Encrypting now...')
+            applyKeyPragma(database, key, 'rekey')
+            console.error('Encryption complete. Verifying...')
+        }
+
+        return database
+    } catch (error) {
+        closeSilently(database)
+        throw error
     }
-
-    if (key) {
-        console.error('Database is unencrypted. Encrypting now...')
-        applyKeyPragma(database, key, 'rekey')
-        console.error('Encryption complete. Verifying...')
-    }
-
-    return database
 }
 
 function recoverDatabaseFile(DatabaseClass: typeof Database, dbPath: string, key: string): Database.Database {

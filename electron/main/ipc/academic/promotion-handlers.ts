@@ -21,7 +21,11 @@ export function registerPromotionHandlers(): void {
     ]
 
     ipcMain.handle('promotion:getStreams', async () => {
-        return getService().getStreams()
+        try {
+            return getService().getStreams()
+        } catch (error) {
+            throw new Error(`Failed to get streams: ${(error as Error).message}`)
+        }
     })
 
     ipcMain.handle('promotion:getStudentsForPromotion', async (
@@ -29,7 +33,11 @@ export function registerPromotionHandlers(): void {
         streamId: number,
         academicYearId: number
     ) => {
-        return getService().getStudentsForPromotion(streamId, academicYearId)
+        try {
+            return getService().getStudentsForPromotion(streamId, academicYearId)
+        } catch (error) {
+            throw new Error(`Failed to get students for promotion: ${(error as Error).message}`)
+        }
     })
 
     ipcMain.handle('promotion:promoteStudent', async (
@@ -44,24 +52,36 @@ export function registerPromotionHandlers(): void {
         },
         userId: number
     ) => {
-        return getService().promoteStudent(data, userId)
+        try {
+            return getService().promoteStudent(data, userId)
+        } catch (error) {
+            throw new Error(`Failed to promote student: ${(error as Error).message}`)
+        }
     })
 
     ipcMain.handle('promotion:batchPromote', async (
         _event: IpcMainInvokeEvent,
         ...[studentIds, fromStreamId, toStreamId, fromAcademicYearId, toAcademicYearId, toTermId, userId]: BatchPromoteArgs
     ) => {
-        return getService().batchPromote(
-            studentIds, fromStreamId, toStreamId,
-            fromAcademicYearId, toAcademicYearId, toTermId, userId
-        )
+        try {
+            return getService().batchPromote(
+                studentIds, fromStreamId, toStreamId,
+                fromAcademicYearId, toAcademicYearId, toTermId, userId
+            )
+        } catch (error) {
+            throw new Error(`Failed to batch promote: ${(error as Error).message}`)
+        }
     })
 
     ipcMain.handle('promotion:getStudentHistory', async (
         _event: IpcMainInvokeEvent,
         studentId: number
     ) => {
-        return getService().getStudentPromotionHistory(studentId)
+        try {
+            return getService().getStudentPromotionHistory(studentId)
+        } catch (error) {
+            throw new Error(`Failed to get promotion history: ${(error as Error).message}`)
+        }
     })
 
     ipcMain.handle('promotion:getNextStream', async (

@@ -14,10 +14,13 @@ export async function renderHtmlToPdfBuffer(html: string): Promise<Buffer> {
   })
 
   const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
-  await window.loadURL(dataUrl)
-  const buffer = await window.webContents.printToPDF({ printBackground: true })
-  window.close()
-  return buffer
+  try {
+    await window.loadURL(dataUrl)
+    const buffer = await window.webContents.printToPDF({ printBackground: true })
+    return buffer
+  } finally {
+    window.close()
+  }
 }
 
 export function resolveOutputPath(filename: string, folderName: string = 'exports'): string {

@@ -162,7 +162,7 @@ export class ReconciliationService {
           COALESCE(SUM(jel.credit_amount), 0) as total_credits
         FROM journal_entry je
         JOIN journal_entry_line jel ON jel.journal_entry_id = je.id
-        WHERE je.status = 'POSTED'
+        WHERE je.is_posted = 1 AND je.is_voided = 0
       `).get() as { total_debits: number; total_credits: number } | undefined;
 
       if (!result) {
@@ -301,7 +301,8 @@ export class ReconciliationService {
         SELECT ga.account_code, ga.account_name, 
                COALESCE(SUM(jel.debit_amount - jel.credit_amount), 0) as balance
         FROM gl_account ga
-        LEFT JOIN journal_entry_line jel ON jel.gl_account_code = ga.account_code
+        LEFT JOIN journal_entry_line jel ON jel.gl_account_id = ga.id
+        LEFT JOIN journal_entry je ON jel.journal_entry_id = je.id AND je.is_posted = 1 AND je.is_voided = 0
         WHERE ga.account_type = 'ASSET' AND ga.is_active = 1
         GROUP BY ga.account_code, ga.account_name
         HAVING SUM(jel.debit_amount - jel.credit_amount) < -100
@@ -320,7 +321,8 @@ export class ReconciliationService {
         SELECT ga.account_code, ga.account_name,
                COALESCE(SUM(jel.credit_amount - jel.debit_amount), 0) as balance
         FROM gl_account ga
-        LEFT JOIN journal_entry_line jel ON jel.gl_account_code = ga.account_code
+        LEFT JOIN journal_entry_line jel ON jel.gl_account_id = ga.id
+        LEFT JOIN journal_entry je ON jel.journal_entry_id = je.id AND je.is_posted = 1 AND je.is_voided = 0
         WHERE ga.account_type = 'LIABILITY' AND ga.is_active = 1
         GROUP BY ga.account_code, ga.account_name
         HAVING SUM(jel.credit_amount - jel.debit_amount) < -100

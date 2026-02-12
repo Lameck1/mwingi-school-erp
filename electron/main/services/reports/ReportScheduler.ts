@@ -61,13 +61,22 @@ export class ReportScheduler {
     }
 
     private async checkAndRunReports(): Promise<void> {
-        const schedules = this.getActiveSchedules()
-        const now = new Date()
+        try {
+            const schedules = this.getActiveSchedules()
+            const now = new Date()
 
-        for (const schedule of schedules) {
-            if (this.shouldRun(schedule, now)) {
-                await this.executeReport(schedule)
+            for (const schedule of schedules) {
+                if (this.shouldRun(schedule, now)) {
+                    await this.executeReport(schedule)
+                }
             }
+        } catch (error) {
+            // Database may not be ready yet (e.g. during dev server restarts).
+            // Silently skip this tick — the next interval will retry.
+            if (error instanceof Error && error.message.includes('not initialized')) {
+                return
+            }
+            console.error('Report scheduler error:', error)
         }
     }
 

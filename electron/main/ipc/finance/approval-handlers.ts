@@ -59,45 +59,47 @@ function registerApprovalQueueHandler(db: ReturnType<typeof getDatabase>): void 
 function registerApproveHandler(db: ReturnType<typeof getDatabase>): void {
   ipcMain.handle('approvals:approve', async (_event: IpcMainInvokeEvent, approvalId: number, reviewNotes: string, reviewerUserId: number) => {
     try {
-      const approval = db.prepare(`
-        SELECT ta.*, je.id as journal_entry_id
-        FROM transaction_approval ta
-        JOIN journal_entry je ON ta.journal_entry_id = je.id
-        WHERE ta.id = ? AND ta.status = 'PENDING'
-      `).get(approvalId) as ApprovalRecord | undefined
+      return db.transaction(() => {
+        const approval = db.prepare(`
+          SELECT ta.*, je.id as journal_entry_id
+          FROM transaction_approval ta
+          JOIN journal_entry je ON ta.journal_entry_id = je.id
+          WHERE ta.id = ? AND ta.status = 'PENDING'
+        `).get(approvalId) as ApprovalRecord | undefined
 
-      if (!approval) {
-        return { success: false, message: 'Approval request not found or already processed' }
-      }
+        if (!approval) {
+          return { success: false, message: 'Approval request not found or already processed' }
+        }
 
-      db.prepare(`
-        UPDATE transaction_approval
-        SET
-          status = 'APPROVED',
-          reviewed_by_user_id = ?,
-          reviewed_at = CURRENT_TIMESTAMP,
-          review_notes = ?
-        WHERE id = ?
-      `).run(reviewerUserId, reviewNotes, approvalId)
+        db.prepare(`
+          UPDATE transaction_approval
+          SET
+            status = 'APPROVED',
+            reviewed_by_user_id = ?,
+            reviewed_at = CURRENT_TIMESTAMP,
+            review_notes = ?
+          WHERE id = ?
+        `).run(reviewerUserId, reviewNotes, approvalId)
 
-      db.prepare(`
-        UPDATE journal_entry
-        SET
-          approval_status = 'APPROVED',
-          approved_by_user_id = ?,
-          approved_at = CURRENT_TIMESTAMP,
-          is_posted = 1,
-          posted_by_user_id = ?,
-          posted_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(reviewerUserId, reviewerUserId, approval.journal_entry_id)
+        db.prepare(`
+          UPDATE journal_entry
+          SET
+            approval_status = 'APPROVED',
+            approved_by_user_id = ?,
+            approved_at = CURRENT_TIMESTAMP,
+            is_posted = 1,
+            posted_by_user_id = ?,
+            posted_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(reviewerUserId, reviewerUserId, approval.journal_entry_id)
 
-      logAudit(reviewerUserId, 'APPROVE', 'transaction_approval', approvalId, null, {
-        journal_entry_id: approval.journal_entry_id,
-        review_notes: reviewNotes,
-      })
+        logAudit(reviewerUserId, 'APPROVE', 'transaction_approval', approvalId, null, {
+          journal_entry_id: approval.journal_entry_id,
+          review_notes: reviewNotes,
+        })
 
-      return { success: true, message: 'Transaction approved successfully' }
+        return { success: true, message: 'Transaction approved successfully' }
+      })()
     } catch (error) {
       return { success: false, message: `Failed to approve transaction: ${(error as Error).message}` }
     }
@@ -111,52 +113,54 @@ function registerRejectHandler(db: ReturnType<typeof getDatabase>): void {
         return { success: false, message: 'Review notes are required for rejection' }
       }
 
-      const approval = db.prepare(`
-        SELECT ta.*, je.id as journal_entry_id
-        FROM transaction_approval ta
-        JOIN journal_entry je ON ta.journal_entry_id = je.id
-        WHERE ta.id = ? AND ta.status = 'PENDING'
-      `).get(approvalId) as ApprovalRecord | undefined
+      return db.transaction(() => {
+        const approval = db.prepare(`
+          SELECT ta.*, je.id as journal_entry_id
+          FROM transaction_approval ta
+          JOIN journal_entry je ON ta.journal_entry_id = je.id
+          WHERE ta.id = ? AND ta.status = 'PENDING'
+        `).get(approvalId) as ApprovalRecord | undefined
 
-      if (!approval) {
-        return { success: false, message: 'Approval request not found or already processed' }
-      }
+        if (!approval) {
+          return { success: false, message: 'Approval request not found or already processed' }
+        }
 
-      db.prepare(`
-        UPDATE transaction_approval
-        SET
-          status = 'REJECTED',
-          reviewed_by_user_id = ?,
-          reviewed_at = CURRENT_TIMESTAMP,
-          review_notes = ?
-        WHERE id = ?
-      `).run(reviewerUserId, reviewNotes, approvalId)
+        db.prepare(`
+          UPDATE transaction_approval
+          SET
+            status = 'REJECTED',
+            reviewed_by_user_id = ?,
+            reviewed_at = CURRENT_TIMESTAMP,
+            review_notes = ?
+          WHERE id = ?
+        `).run(reviewerUserId, reviewNotes, approvalId)
 
-      db.prepare(`
-        UPDATE journal_entry
-        SET
-          approval_status = 'REJECTED',
-          approved_by_user_id = ?,
-          approved_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(reviewerUserId, approval.journal_entry_id)
+        db.prepare(`
+          UPDATE journal_entry
+          SET
+            approval_status = 'REJECTED',
+            approved_by_user_id = ?,
+            approved_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(reviewerUserId, approval.journal_entry_id)
 
-      db.prepare(`
-        UPDATE journal_entry
-        SET
-          is_voided = 1,
-          voided_reason = ?,
-          voided_by_user_id = ?,
-          voided_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(`Rejected: ${reviewNotes}`, reviewerUserId, approval.journal_entry_id)
+        db.prepare(`
+          UPDATE journal_entry
+          SET
+            is_voided = 1,
+            voided_reason = ?,
+            voided_by_user_id = ?,
+            voided_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(`Rejected: ${reviewNotes}`, reviewerUserId, approval.journal_entry_id)
 
-      logAudit(reviewerUserId, 'REJECT', 'transaction_approval', approvalId, null, {
-        journal_entry_id: approval.journal_entry_id,
-        review_notes: reviewNotes,
-      })
+        logAudit(reviewerUserId, 'REJECT', 'transaction_approval', approvalId, null, {
+          journal_entry_id: approval.journal_entry_id,
+          review_notes: reviewNotes,
+        })
 
-      return { success: true, message: 'Transaction rejected successfully' }
+        return { success: true, message: 'Transaction rejected successfully' }
+      })()
     } catch (error) {
       return { success: false, message: `Failed to reject transaction: ${(error as Error).message}` }
     }

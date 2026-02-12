@@ -1,6 +1,7 @@
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 import { ipcMain } from '../../electron-env'
+import { DoubleEntryJournalService } from '../../services/accounting/DoubleEntryJournalService'
 import { validateAmount, sanitizeString } from '../../utils/validation'
 
 import type { IpcMainInvokeEvent } from 'electron'
@@ -46,21 +47,62 @@ export function registerTransactionsHandlers(): void {
 
         const txnRef = `TXN-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${String(Date.now()).slice(-6)}`
 
-        const stmt = db.prepare(`INSERT INTO ledger_transaction (
-            transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit,
-            payment_method, payment_reference, description, recorded_by_user_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-
         const debitCredit = data.transaction_type === 'EXPENSE' ? 'DEBIT' : 'CREDIT'
 
-        const result = stmt.run(
-            txnRef, data.transaction_date, data.transaction_type, data.category_id,
-            amountCents, debitCredit, data.payment_method, paymentRef,
-            description, userId
-        )
+        return db.transaction(() => {
+            const stmt = db.prepare(`INSERT INTO ledger_transaction (
+                transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit,
+                payment_method, payment_reference, description, recorded_by_user_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 
-        logAudit(userId, 'CREATE', 'ledger_transaction', result.lastInsertRowid as number, null, { ...data, amount: amountCents })
-        return { success: true, id: result.lastInsertRowid }
+            const result = stmt.run(
+                txnRef, data.transaction_date, data.transaction_type, data.category_id,
+                amountCents, debitCredit, data.payment_method, paymentRef,
+                description, userId
+            )
+
+            logAudit(userId, 'CREATE', 'ledger_transaction', result.lastInsertRowid as number, null, { ...data, amount: amountCents })
+
+            // Create corresponding journal entry for GL reporting (inside same transaction)
+            try {
+                const journalService = new DoubleEntryJournalService(db)
+
+                // Resolve GL account: check transaction_category for gl_account_code
+                const category = db.prepare('SELECT gl_account_code, category_type FROM transaction_category WHERE id = ?')
+                    .get(data.category_id) as { gl_account_code: string | null; category_type: string } | undefined
+
+                const cashCode = data.payment_method === 'CASH' ? '1010' : '1020'
+                let debitCode: string
+                let creditCode: string
+                let entryType: string
+
+                if (data.transaction_type === 'EXPENSE') {
+                    debitCode = category?.gl_account_code || '5900'
+                    creditCode = cashCode
+                    entryType = 'EXPENSE'
+                } else {
+                    debitCode = cashCode
+                    creditCode = category?.gl_account_code || '4300'
+                    entryType = 'INCOME'
+                }
+
+                journalService.createJournalEntry({
+                    entry_date: data.transaction_date,
+                    entry_type: entryType,
+                    description: sanitizeString(data.description) || `${data.transaction_type} transaction`,
+                    created_by_user_id: userId,
+                    lines: [
+                        { gl_account_code: debitCode, debit_amount: amountCents, credit_amount: 0, description: `Debit: ${data.transaction_type}` },
+                        { gl_account_code: creditCode, debit_amount: 0, credit_amount: amountCents, description: `Credit: ${data.transaction_type}` }
+                    ]
+                })
+            } catch (err) {
+                console.error('Failed to create journal entry for transaction (non-fatal):', err)
+                // Journal entry failure should not block the transaction recording
+            }
+
+            return { success: true, id: result.lastInsertRowid }
+        })()
     })
 
     ipcMain.handle('transaction:getAll', async (_event: IpcMainInvokeEvent, filters?: TransactionFilters) => {

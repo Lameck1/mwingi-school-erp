@@ -2,8 +2,12 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { BackupService } from './backup-service'
-import { initializeDatabase } from './database'
+// Initialize logger FIRST — explicit log.xxx() calls work immediately;
+// console overrides are installed after app.whenReady() below.
+import { installConsoleOverrides, log } from './utils/logger'
+
+import { BackupService } from './services/BackupService'
+import { closeDatabase, initializeDatabase } from './database'
 import { verifyMigrations } from './database/verify_migrations'
 import { app, BrowserWindow, dialog } from './electron-env'
 import { registerAllIpcHandlers } from './ipc/index'
@@ -61,78 +65,79 @@ function createWindow() {
         createApplicationMenu(mainWindow)
         // Initialize Auto Updater (packaged only)
         initializeAutoUpdater(mainWindow).catch((error) => {
-            console.error('Failed to initialize auto updater:', error)
+            log.error('Failed to initialize auto updater:', error)
+        })
+
+        // Show window when ready
+        mainWindow.once('ready-to-show', () => {
+            mainWindow?.show()
+        })
+
+        // Pipe renderer logs to main process using the Event object API.
+        mainWindow.webContents.on('console-message', (event) => {
+            const message = event.message
+            if (message && message.length > 0) {
+                log.warn(`[Renderer] ${message}`)
+            }
+        })
+
+        // Security: Block external navigation attempts
+        mainWindow.webContents.on('will-navigate', (event, url) => {
+            // Allow navigation to local files and dev server only
+            const isLocalFile = url.startsWith('file://')
+            const isDevServer = VITE_DEV_SERVER_URL && url.startsWith(VITE_DEV_SERVER_URL)
+            if (!isLocalFile && !isDevServer) {
+                log.warn(`Blocked navigation to external URL: ${url}`)
+                event.preventDefault()
+            }
+        })
+
+        // Security: Block new window creation (popups)
+        mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+            log.warn(`Blocked popup window request for: ${url}`)
+            return { action: 'deny' }
+        })
+
+        // Load the app
+        if (VITE_DEV_SERVER_URL) {
+            mainWindow.loadURL(VITE_DEV_SERVER_URL).catch((err: Error) => log.error('Failed to load dev URL:', err.message))
+            mainWindow.webContents.openDevTools()
+        } else {
+            mainWindow.loadFile(path.join(__dirname, '../../dist/index.html')).catch((err: Error) => log.error('Failed to load file:', err.message))
+        }
+
+        mainWindow.on('closed', () => {
+            mainWindow = null
         })
     }
-
-    // Show window when ready
-    mainWindow!.once('ready-to-show', () => {
-        mainWindow?.show()
-    })
-
-    // Pipe renderer logs to main process using the current Electron event payload shape.
-    mainWindow!.webContents.on('console-message', (_event, details: unknown) => {
-        if (!details || typeof details !== 'object' || !('message' in details)) {
-            return
-        }
-        const detailsObj = details as { message?: unknown }
-        const rawMessage = detailsObj.message
-        const message = typeof rawMessage === 'string' ? rawMessage : ''
-        if (message.length > 0) {
-            console.error(`[Renderer] ${message}`)
-        }
-    })
-
-    // Security: Block external navigation attempts
-    mainWindow!.webContents.on('will-navigate', (event, url) => {
-        // Allow navigation to local files and dev server only
-        const isLocalFile = url.startsWith('file://')
-        const isDevServer = VITE_DEV_SERVER_URL && url.startsWith(VITE_DEV_SERVER_URL)
-        if (!isLocalFile && !isDevServer) {
-            console.warn(`Blocked navigation to external URL: ${url}`)
-            event.preventDefault()
-        }
-    })
-
-    // Security: Block new window creation (popups)
-    mainWindow!.webContents.setWindowOpenHandler(({ url }) => {
-        console.warn(`Blocked popup window request for: ${url}`)
-        return { action: 'deny' }
-    })
-
-    // Load the app
-    if (VITE_DEV_SERVER_URL) {
-        mainWindow!.loadURL(VITE_DEV_SERVER_URL).catch((err: Error) => console.error('Failed to load dev URL:', err.message))
-        mainWindow!.webContents.openDevTools()
-    } else {
-        mainWindow!.loadFile(path.join(__dirname, '../../dist/index.html')).catch((err: Error) => console.error('Failed to load file:', err.message))
-    }
-
-    mainWindow!.on('closed', () => {
-        mainWindow = null
-    })
 }
 
 function sendDbError(message: string) {
-    if (!mainWindow || mainWindow.isDestroyed()) {return}
+    if (!mainWindow || mainWindow.isDestroyed()) { return }
     mainWindow.webContents.send('db-error', message)
 }
 
-// App lifecycle
-try {
+// ── Application startup ─────────────────────────────────────────
+// Wrapped in an async function (NOT top-level await) to avoid
+// deadlocking the Electron event loop during ESM module evaluation.
+// With top-level `await`, Node pauses module evaluation which can
+// prevent Electron's 'ready' event from firing in bundled builds.
+async function bootstrap(): Promise<void> {
     await app.whenReady()
+
+    // Now that Electron is ready, redirect console.error/warn to log file
+    installConsoleOverrides()
 
     // Initialize database
     let dbReady = false
     try {
         await initializeDatabase()
-        // console.error('Database initialized successfully')
 
         // Verify migrations
         verifyMigrations()
         dbReady = true
     } catch (error) {
-        console.error('Failed to initialize database:', error)
+        log.error('Failed to initialize database:', error)
         sendDbError(error instanceof Error ? error.message : 'Database initialization failed')
         dialog.showErrorBox('Database Error', 'Failed to initialize database. Application will exit.')
         app.quit()
@@ -149,7 +154,7 @@ try {
         try {
             await BackupService.init()
         } catch (error) {
-            console.error('Failed to initialize backup service:', error)
+            log.error('Failed to initialize backup service:', error)
         }
 
         // Initialize Report Scheduler
@@ -164,35 +169,39 @@ try {
             }
         })
     }
-} catch (error: unknown) {
-    console.error('Application startup failed:', error)
+}
+
+// eslint-disable-next-line unicorn/prefer-top-level-await -- Top-level await deadlocks Electron in bundled ESM
+bootstrap().catch((error: unknown) => {
+    log.error('Application startup failed:', error)
     dialog.showErrorBox('Startup Error', 'Failed to start application.')
     app.quit()
-}
+})
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
         app.quit()
     }
-});
+})
+
+app.on('before-quit', () => {
+    reportScheduler.shutdown()
+    closeDatabase()
+})
 
 // Handle uncaught exceptions
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(process as any).on('uncaughtException', (error: Error) => {
-    console.error('Uncaught Exception:', error)
+// NOTE: Semicolons are critical here — without them, ASI does NOT
+// insert a semicolon before `(process…)`, causing the previous
+// expression to chain incorrectly.
+;(process as unknown as NodeJS.EventEmitter).on('uncaughtException', (error: Error) => {
+    log.error('Uncaught Exception:', error)
     sendDbError(error.message || 'Unexpected error')
-    // In production, you might want to gracefully exit or restart
-});
+})
 
-// Handle unhandled promise rejections
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(process as any).on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason)
+;(process as unknown as NodeJS.EventEmitter).on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
+    log.error('Unhandled Rejection at:', promise, 'reason:', reason)
     sendDbError(reason instanceof Error ? reason.message : 'Unhandled promise rejection')
-});
-
-
-
+})
 
 
 

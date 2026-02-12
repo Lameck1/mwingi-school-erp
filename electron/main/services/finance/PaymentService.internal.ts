@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
+import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
 
 import type {
   ApprovalQueueItem,
@@ -43,46 +44,52 @@ export class PaymentTransactionRepository {
 
   async createTransaction(data: PaymentData): Promise<number> {
     const db = this.db
+    const transactionRef = `TXN-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${randomUUID().slice(0, 8)}`
     const result = db.prepare(`
       INSERT INTO ledger_transaction (
-        student_id, transaction_type, amount, transaction_date, description,
-        payment_method, payment_reference, recorded_by_user_id, cheque_number, bank_name,
-        is_approved, approval_status, term_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        transaction_ref, student_id, transaction_type, amount, debit_credit,
+        transaction_date, description,
+        payment_method, payment_reference, recorded_by_user_id, category_id, term_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
+      transactionRef,
       data.student_id,
-      'CREDIT',
+      'FEE_PAYMENT',
       data.amount,
+      'CREDIT',
       data.transaction_date,
       data.description || `Payment received: ${data.payment_reference}`,
       data.payment_method,
       data.payment_reference,
       data.recorded_by_user_id,
-      data.cheque_number || null,
-      data.bank_name || null,
-      1,
-      'APPROVED',
+      1, // default category; callers should resolve properly
       data.term_id
     )
     return result.lastInsertRowid as number
   }
 
-  async createReversal(studentId: number, originalAmount: number, voidReason: string, voidedBy: number): Promise<number> {
+  async createReversal(studentId: number, originalAmount: number, voidReason: string, voidedBy: number, categoryId: number): Promise<number> {
     const db = this.db
+    const reversalRef = `VOID-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${randomUUID().slice(0, 8)}`
     const result = db.prepare(`
       INSERT INTO ledger_transaction (
-        student_id, transaction_type, amount, transaction_date, description,
-        payment_method, reference, recorded_by, is_voided, void_reason
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        transaction_ref, student_id, transaction_type, amount, debit_credit,
+        transaction_date, description,
+        payment_method, payment_reference, recorded_by_user_id, category_id,
+        is_voided, voided_reason
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
+      reversalRef,
       studentId,
-      'REVERSAL',
+      'REFUND',
       -originalAmount,
+      'DEBIT',
       new Date().toISOString().split('T')[0],
-      `Void of transaction`,
-      'VOID',
+      `Void of transaction: ${voidReason}`,
+      'CASH',
       `VOID_REF_${studentId}_${Date.now()}`,
       voidedBy,
+      categoryId,
       1,
       voidReason
     )
@@ -185,7 +192,7 @@ export class InvoiceValidator implements IPaymentValidator {
     try {
       const invoices = db.prepare(`
         SELECT * FROM fee_invoice
-        WHERE student_id = ? AND status = 'OUTSTANDING'
+        WHERE student_id = ? AND status != 'PAID'
         ORDER BY due_date ASC
       `).all(studentId) as Invoice[]
 
@@ -410,6 +417,22 @@ export class PaymentProcessor {
     this.applyInvoiceAndCreditUpdates(data)
     this.logPaymentAudit(data, transactionId, transactionRef, receiptNumber)
 
+    // Create corresponding journal entry for GL reporting
+    try {
+      const journalService = new DoubleEntryJournalService(this.db)
+      void journalService.recordPayment(
+        data.student_id,
+        data.amount,
+        data.payment_method,
+        data.payment_reference,
+        data.transaction_date,
+        data.recorded_by_user_id
+      )
+    } catch (err) {
+      // Non-fatal: log but don't fail the payment
+      console.error('Failed to create journal entry for payment:', err)
+    }
+
     return { transactionId, transactionRef, receiptNumber }
   }
 }
@@ -431,50 +454,103 @@ export class VoidProcessor implements IPaymentVoidProcessor {
 
   async voidPayment(data: VoidPaymentData): Promise<PaymentResult> {
     try {
-      const transaction = await this.transactionRepo.getTransaction(data.transaction_id)
+      const run = this.db.transaction(() => {
+        const transaction = this.db.prepare(`SELECT * FROM ledger_transaction WHERE id = ?`).get(data.transaction_id) as PaymentTransaction | null
 
-      if (!transaction) {
-        return {
-          success: false,
-          message: 'Transaction not found'
+        if (!transaction) {
+          return {
+            success: false,
+            message: 'Transaction not found'
+          }
         }
-      }
 
-      const reversalId = await this.transactionRepo.createReversal(
-        transaction.student_id,
-        transaction.amount,
-        data.void_reason,
-        data.voided_by
-      )
+        // Resolve category for reversal entry
+        const categoryId = (transaction as unknown as { category_id: number }).category_id || 1
 
-      await this.voidAuditRepo.recordVoid({
-        transactionId: data.transaction_id,
-        studentId: transaction.student_id,
-        amount: transaction.amount,
-        description: transaction.description,
-        voidReason: data.void_reason,
-        voidedBy: data.voided_by,
-        recoveryMethod: data.recovery_method
+        const reversalRef = `VOID-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${randomUUID().slice(0, 8)}`
+        const reversalResult = this.db.prepare(`
+          INSERT INTO ledger_transaction (
+            transaction_ref, student_id, transaction_type, amount, debit_credit,
+            transaction_date, description,
+            payment_method, payment_reference, recorded_by_user_id, category_id,
+            is_voided, voided_reason
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          reversalRef,
+          transaction.student_id,
+          'REFUND',
+          -transaction.amount,
+          'DEBIT',
+          new Date().toISOString().split('T')[0],
+          `Void of transaction #${data.transaction_id}: ${data.void_reason}`,
+          'CASH',
+          `VOID_REF_${transaction.student_id}_${Date.now()}`,
+          data.voided_by,
+          categoryId,
+          1,
+          data.void_reason
+        )
+        const reversalId = reversalResult.lastInsertRowid as number
+
+        // Mark original transaction as voided
+        this.db.prepare(`
+          UPDATE ledger_transaction SET is_voided = 1, voided_reason = ?, voided_by_user_id = ?, voided_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(data.void_reason, data.voided_by, data.transaction_id)
+
+        // Record void audit
+        this.db.prepare(`
+          INSERT INTO void_audit (
+            transaction_id, transaction_type, original_amount, student_id, description,
+            void_reason, voided_by, voided_at, recovered_method, recovered_by, recovered_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          data.transaction_id,
+          'PAYMENT',
+          transaction.amount,
+          transaction.student_id,
+          transaction.description,
+          data.void_reason,
+          data.voided_by,
+          new Date().toISOString(),
+          data.recovery_method || null,
+          null,
+          null
+        )
+
+        // Reverse invoice application if applicable
+        const invoiceId = (transaction as unknown as { invoice_id: number | null }).invoice_id
+        if (invoiceId) {
+          this.db.prepare(`
+            UPDATE fee_invoice
+            SET amount_paid = MAX(amount_paid - ?, 0),
+                status = CASE WHEN MAX(amount_paid - ?, 0) <= 0 THEN 'PENDING' ELSE 'PARTIAL' END
+            WHERE id = ?
+          `).run(transaction.amount, transaction.amount, invoiceId)
+        }
+
+        // Update student balance
+        this.db.prepare(`
+          UPDATE student SET credit_balance = COALESCE(credit_balance, 0) - ? WHERE id = ?
+        `).run(transaction.amount, transaction.student_id)
+
+        logAudit(
+          data.voided_by,
+          'VOID',
+          'ledger_transaction',
+          reversalId,
+          null,
+          { original_transaction_id: data.transaction_id, void_reason: data.void_reason }
+        )
+
+        return {
+          success: true,
+          message: `Payment voided successfully. Reversal transaction: #${reversalId}`,
+          transaction_id: reversalId
+        }
       })
 
-      const currentBalance = await this.transactionRepo.getStudentBalance(transaction.student_id)
-      const newBalance = currentBalance - transaction.amount
-      await this.transactionRepo.updateStudentBalance(transaction.student_id, newBalance)
-
-      logAudit(
-        data.voided_by,
-        'VOID',
-        'void_audit',
-        reversalId,
-        null,
-        { original_transaction_id: data.transaction_id, void_reason: data.void_reason }
-      )
-
-      return {
-        success: true,
-        message: `Payment voided successfully. Reversal transaction: #${reversalId}`,
-        transaction_id: reversalId
-      }
+      return run()
     } catch (error) {
       throw new Error(`Failed to void payment: ${(error as Error).message}`)
     }
@@ -517,7 +593,7 @@ export class PaymentQueryService implements IPaymentQueryService {
     return db.prepare(`
       SELECT ar.*, s.first_name as student_first_name, s.last_name as student_last_name
       FROM approval_request ar
-      LEFT JOIN student s ON ar.reference_id LIKE CONCAT('PAYMENT_%_', s.id)
+      LEFT JOIN student s ON ar.reference_id LIKE ('PAYMENT_%_' || s.id)
       WHERE ar.transaction_type = 'PAYMENT'
         AND ar.status IN ('PENDING', 'APPROVED_LEVEL_1')
         AND ar.current_approver_role = ?

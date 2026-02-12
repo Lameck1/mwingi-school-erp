@@ -210,6 +210,15 @@ export class AcademicSystemService {
         logAudit(userId, 'ALLOCATE_TEACHER', 'subject_allocation', 0, null, data)
     }
 
+    async deleteAllocation(allocationId: number, userId: number): Promise<void> {
+        const existing = this.db.prepare('SELECT id FROM subject_allocation WHERE id = ?').get(allocationId)
+        if (!existing) {
+            throw new Error('Allocation not found')
+        }
+        this.db.prepare('DELETE FROM subject_allocation WHERE id = ?').run(allocationId)
+        logAudit(userId, 'DELETE_ALLOCATION', 'subject_allocation', allocationId, existing, null)
+    }
+
     async getAllocations(academicYearId: number, termId: number, streamId?: number): Promise<SubjectAllocation[]> {
         let sql = `
             SELECT sa.*, (s.first_name || ' ' || s.last_name) as teacher_name, sub.name as subject_name, st.stream_name

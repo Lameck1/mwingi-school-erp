@@ -72,6 +72,9 @@ function registerAllocationAndResultsHandlers(): void {
     ipcMain.handle('academic:getAllocations', async (_event: IpcMainInvokeEvent, academicYearId: number, termId: number, streamId?: number) => {
         return getService().getAllocations(academicYearId, termId, streamId)
     })
+    ipcMain.handle('academic:deleteAllocation', async (_event: IpcMainInvokeEvent, allocationId: number, userId: number) => {
+        return getService().deleteAllocation(allocationId, userId)
+    })
     ipcMain.handle('academic:saveResults', async (_event: IpcMainInvokeEvent, examId: number, results: unknown[], userId: number) => {
         return getService().saveResults(examId, results as Omit<ExamResult, 'id' | 'exam_id'>[], userId)
     })
@@ -109,12 +112,17 @@ function renderCertificateContent(doc: jsPDF, data: CertificatePayload, pageWidt
     y += 12
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(13)
-    doc.text(`for outstanding improvement in ${data.awardCategory.replace('_', ' ')}`, pageWidth / 2, y, { align: 'center' })
+    doc.text(`for outstanding improvement in ${data.awardCategory.replaceAll('_', ' ')}`, pageWidth / 2, y, { align: 'center' })
     y += 10
     doc.text(`Improvement: ${data.improvementPercentage.toFixed(1)}%`, pageWidth / 2, y, { align: 'center' })
     y += 15
     doc.setFontSize(11)
-    doc.text(`Academic Year ID: ${data.academicYearId}`, pageWidth / 2, y, { align: 'center' })
+    // Look up the academic year name for display
+    const yearRow = getDatabase().prepare(
+        'SELECT year_name FROM academic_year WHERE id = ?'
+    ).get(data.academicYearId) as { year_name: string } | undefined;
+    const yearLabel = yearRow?.year_name ?? `Year ${data.academicYearId}`;
+    doc.text(`Academic Year: ${yearLabel}`, pageWidth / 2, y, { align: 'center' })
     return y + 8
 }
 
@@ -146,11 +154,11 @@ async function sendParentNotifications(data: EmailParentsPayload, userId: number
             continue
         }
 
-        const subject = `Recognition: ${student.student_name} - ${data.awardCategory.replace('_', ' ')}`
+        const subject = `Recognition: ${student.student_name} - ${data.awardCategory.replaceAll('_', ' ')}`
         const message = `
                 <p>Dear ${record.guardian_name || 'Parent/Guardian'},</p>
                 <p>We are pleased to inform you that <strong>${student.student_name}</strong> has been recognized for outstanding improvement.</p>
-                <p><strong>Award:</strong> ${data.awardCategory.replace('_', ' ')}</p>
+                <p><strong>Award:</strong> ${data.awardCategory.replaceAll('_', ' ')}</p>
                 <p><strong>Improvement:</strong> ${student.improvement_percentage.toFixed(1)}%</p>
                 <p>Congratulations!</p>
             `

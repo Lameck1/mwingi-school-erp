@@ -48,11 +48,7 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        sidebar: {
-          bg: '#1e293b',
-          hover: '#334155',
-          active: '#3b82f6',
-        }
+
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

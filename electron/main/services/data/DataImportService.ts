@@ -216,7 +216,10 @@ export class DataImportService {
             }
         }
 
-        if (mapping.required && (value === undefined || value === null || String(value).trim() === '')) {
+        const isEmpty = value === undefined || value === null ||
+            (typeof value === 'string' && value.trim() === '')
+
+        if (mapping.required && isEmpty) {
             errors.push(`${mapping.sourceColumn} is required`)
         }
 
@@ -301,11 +304,19 @@ export class DataImportService {
         return result
     }
 
+    private static readonly VALID_IDENTIFIER = /^[a-zA-Z_]\w*$/
+
     /**
      * Check for duplicate record
      */
     private checkDuplicate(entityType: string, keyField: string, value: unknown): boolean {
+        if (!DataImportService.VALID_IDENTIFIER.test(keyField)) {
+            throw new Error(`Invalid key field name: ${keyField}`)
+        }
         const tableName = this.getTableName(entityType)
+        if (!DataImportService.VALID_IDENTIFIER.test(tableName)) {
+            throw new Error(`Invalid table name: ${tableName}`)
+        }
         const result = this.db.prepare(`SELECT 1 FROM ${tableName} WHERE ${keyField} = ? LIMIT 1`).get(value)
         return !!result
     }

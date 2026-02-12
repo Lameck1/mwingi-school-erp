@@ -24,8 +24,14 @@ interface StatutoryRate {
 }
 
 interface PayrollComputationResult {
+    staff_id: number
     staff_name: string
     staff_number: string
+    department: string
+    job_title: string
+    phone: string
+    basic_salary: number
+    allowances: number
     gross_salary: number
     nssf: number
     housing_levy: number
@@ -143,36 +149,51 @@ const computeStaffPayroll = ({
     deductionStmt,
     allowanceStmt
 }: PayrollStaffComputationContext): PayrollComputationResult => {
-    const basic = staff.basic_salary || 0
+    const basicCents = staff.basic_salary || 0
     const staffAllowances = db.prepare('SELECT * FROM staff_allowance WHERE staff_id = ? AND is_active = 1').all(staff.id) as StaffAllowanceRow[]
-    const totalAllowances = staffAllowances.reduce((sum, allowance) => sum + allowance.amount, 0)
-    const gross = basic + totalAllowances
+    const totalAllowancesCents = staffAllowances.reduce((sum, a) => sum + a.amount, 0)
+    const grossCents = basicCents + totalAllowancesCents
 
-    const { nssf, housingLevy, shif, paye, totalDeductions } = calculateStatutoryDeductions(gross, rates, payeBands)
-    const net = gross - totalDeductions
+    // Convert to KSh for statutory calculations (rates/bands are denominated in KSh)
+    const grossKsh = grossCents / 100
+    const statutory = calculateStatutoryDeductions(grossKsh, rates, payeBands)
 
-    const payrollResult = payrollStmt.run([periodId, staff.id, basic, gross, totalDeductions, net])
+    // Convert statutory results back to cents for consistent storage
+    const nssfCents = Math.round(statutory.nssf * 100)
+    const housingLevyCents = Math.round(statutory.housingLevy * 100)
+    const shifCents = Math.round(statutory.shif * 100)
+    const payeCents = Math.round(statutory.paye * 100)
+    const totalDeductionsCents = nssfCents + housingLevyCents + shifCents + payeCents
+    const netCents = grossCents - totalDeductionsCents
+
+    const payrollResult = payrollStmt.run([periodId, staff.id, basicCents, grossCents, totalDeductionsCents, netCents])
     const payrollId = payrollResult.lastInsertRowid
 
-    deductionStmt.run([payrollId, 'NSSF', nssf])
-    deductionStmt.run([payrollId, 'Housing Levy', housingLevy])
-    deductionStmt.run([payrollId, 'SHIF', shif])
-    deductionStmt.run([payrollId, 'PAYE', paye])
+    deductionStmt.run([payrollId, 'NSSF', nssfCents])
+    deductionStmt.run([payrollId, 'Housing Levy', housingLevyCents])
+    deductionStmt.run([payrollId, 'SHIF', shifCents])
+    deductionStmt.run([payrollId, 'PAYE', payeCents])
 
     for (const allowance of staffAllowances) {
         allowanceStmt.run([payrollId, allowance.allowance_name, allowance.amount])
     }
 
     return {
+        staff_id: staff.id,
         staff_name: `${staff.first_name} ${staff.last_name}`.trim(),
         staff_number: staff.staff_number,
-        gross_salary: gross,
-        nssf,
-        housing_levy: housingLevy,
-        shif,
-        paye,
-        total_deductions: totalDeductions,
-        net_salary: net
+        department: staff.department,
+        job_title: staff.job_title,
+        phone: staff.phone || '',
+        basic_salary: basicCents,
+        allowances: totalAllowancesCents,
+        gross_salary: grossCents,
+        nssf: nssfCents,
+        housing_levy: housingLevyCents,
+        shif: shifCents,
+        paye: payeCents,
+        total_deductions: totalDeductionsCents,
+        net_salary: netCents
     }
 }
 
@@ -230,18 +251,114 @@ export function registerPayrollHandlers(): void {
 
     ipcMain.handle('payroll:getDetails', async (_event: IpcMainInvokeEvent, periodId: number) => {
         const period = db.prepare('SELECT * FROM payroll_period WHERE id = ?').get(periodId)
-        if (!period) {return { success: false, error: 'Period not found' }}
+        if (!period) { return { success: false, error: 'Period not found' } }
 
         const results = db.prepare(`
-            SELECT p.*, 
-                   (s.first_name || ' ' || COALESCE(s.middle_name || ' ', '') || s.last_name) as staff_name, 
-                   s.staff_number, s.department, s.job_title, s.phone
+            SELECT p.*,
+                (s.first_name || ' ' || COALESCE(s.middle_name || ' ', '') || s.last_name) as staff_name,
+                s.staff_number, s.department, s.job_title, s.phone,
+                COALESCE((SELECT SUM(a.amount) FROM payroll_allowance a WHERE a.payroll_id = p.id), 0) as allowances,
+                COALESCE((SELECT d.amount FROM payroll_deduction d WHERE d.payroll_id = p.id AND d.deduction_name = 'PAYE'), 0) as paye,
+                COALESCE((SELECT d.amount FROM payroll_deduction d WHERE d.payroll_id = p.id AND d.deduction_name = 'NSSF'), 0) as nssf,
+                COALESCE((SELECT d.amount FROM payroll_deduction d WHERE d.payroll_id = p.id AND d.deduction_name = 'SHIF'), 0) as shif,
+                COALESCE((SELECT d.amount FROM payroll_deduction d WHERE d.payroll_id = p.id AND d.deduction_name = 'Housing Levy'), 0) as housing_levy
             FROM payroll p
             JOIN staff s ON p.staff_id = s.id
             WHERE p.period_id = ?
         `).all(periodId)
 
         return { success: true, period, results }
+    })
+
+    // ======== PAYROLL STATUS TRANSITIONS ========
+    ipcMain.handle('payroll:confirm', async (_event: IpcMainInvokeEvent, periodId: number, userId: number) => {
+        return db.transaction(() => {
+            const period = db.prepare('SELECT * FROM payroll_period WHERE id = ?').get(periodId) as { id: number; status: string } | undefined
+            if (!period) { return { success: false, error: 'Period not found' } }
+            if (period.status !== 'DRAFT') { return { success: false, error: 'Only DRAFT payrolls can be confirmed' } }
+
+            db.prepare('UPDATE payroll_period SET status = ?, approved_by_user_id = ?, approved_at = CURRENT_TIMESTAMP WHERE id = ?')
+                .run('CONFIRMED', userId, periodId)
+            logAudit(userId, 'UPDATE', 'payroll_period', periodId, { status: 'DRAFT' }, { status: 'CONFIRMED' })
+            return { success: true }
+        })()
+    })
+
+    ipcMain.handle('payroll:markPaid', async (_event: IpcMainInvokeEvent, periodId: number, userId: number) => {
+        return db.transaction(() => {
+            const period = db.prepare('SELECT * FROM payroll_period WHERE id = ?').get(periodId) as { id: number; status: string } | undefined
+            if (!period) { return { success: false, error: 'Period not found' } }
+            if (period.status !== 'CONFIRMED') { return { success: false, error: 'Only CONFIRMED payrolls can be marked as paid' } }
+
+            const paymentDate = new Date().toISOString().split('T')[0]
+            db.prepare('UPDATE payroll_period SET status = ? WHERE id = ?').run('PAID', periodId)
+            db.prepare('UPDATE payroll SET payment_status = ?, payment_date = ? WHERE period_id = ?')
+                .run('PAID', paymentDate, periodId)
+            logAudit(userId, 'UPDATE', 'payroll_period', periodId, { status: 'CONFIRMED' }, { status: 'PAID' })
+            return { success: true }
+        })()
+    })
+
+    ipcMain.handle('payroll:revertToDraft', async (_event: IpcMainInvokeEvent, periodId: number, userId: number) => {
+        return db.transaction(() => {
+            const period = db.prepare('SELECT * FROM payroll_period WHERE id = ?').get(periodId) as { id: number; status: string } | undefined
+            if (!period) { return { success: false, error: 'Period not found' } }
+            if (period.status !== 'CONFIRMED') { return { success: false, error: 'Only CONFIRMED payrolls can be reverted to draft' } }
+
+            db.prepare('UPDATE payroll_period SET status = ?, approved_by_user_id = NULL, approved_at = NULL WHERE id = ?')
+                .run('DRAFT', periodId)
+            logAudit(userId, 'UPDATE', 'payroll_period', periodId, { status: 'CONFIRMED' }, { status: 'DRAFT' })
+            return { success: true }
+        })()
+    })
+
+    ipcMain.handle('payroll:delete', async (_event: IpcMainInvokeEvent, periodId: number, userId: number) => {
+        return db.transaction(() => {
+            const period = db.prepare('SELECT * FROM payroll_period WHERE id = ?').get(periodId) as
+                { id: number; status: string; period_name: string } | undefined
+            if (!period) { return { success: false, error: 'Period not found' } }
+            if (period.status !== 'DRAFT') { return { success: false, error: 'Only DRAFT payrolls can be deleted' } }
+
+            db.prepare('DELETE FROM payroll_allowance WHERE payroll_id IN (SELECT id FROM payroll WHERE period_id = ?)').run(periodId)
+            db.prepare('DELETE FROM payroll_deduction WHERE payroll_id IN (SELECT id FROM payroll WHERE period_id = ?)').run(periodId)
+            db.prepare('DELETE FROM payroll WHERE period_id = ?').run(periodId)
+            db.prepare('DELETE FROM payroll_period WHERE id = ?').run(periodId)
+            logAudit(userId, 'DELETE', 'payroll_period', periodId, { period_name: period.period_name }, null)
+            return { success: true }
+        })()
+    })
+
+    ipcMain.handle('payroll:recalculate', async (_event: IpcMainInvokeEvent, periodId: number, userId: number) => {
+        return db.transaction(() => {
+            const period = db.prepare('SELECT * FROM payroll_period WHERE id = ?').get(periodId) as
+                { id: number; status: string } | undefined
+            if (!period) { return { success: false, error: 'Period not found' } }
+            if (period.status !== 'DRAFT') { return { success: false, error: 'Only DRAFT payrolls can be recalculated' } }
+
+            // Clear existing calculations
+            db.prepare('DELETE FROM payroll_allowance WHERE payroll_id IN (SELECT id FROM payroll WHERE period_id = ?)').run(periodId)
+            db.prepare('DELETE FROM payroll_deduction WHERE payroll_id IN (SELECT id FROM payroll WHERE period_id = ?)').run(periodId)
+            db.prepare('DELETE FROM payroll WHERE period_id = ?').run(periodId)
+
+            // Recompute with current rates and staff
+            const rates = db.prepare('SELECT * FROM statutory_rates WHERE is_current = 1').all() as StatutoryRate[]
+            const payeBands = getPayeBands(rates)
+            const staffList = db.prepare('SELECT * FROM staff WHERE is_active = 1').all() as StaffMember[]
+
+            const payrollStmt = db.prepare(`
+                INSERT INTO payroll (period_id, staff_id, basic_salary, gross_salary, total_deductions, net_salary)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `)
+            const deductionStmt = db.prepare('INSERT INTO payroll_deduction (payroll_id, deduction_name, amount) VALUES (?, ?, ?)')
+            const allowanceStmt = db.prepare('INSERT INTO payroll_allowance (payroll_id, allowance_name, amount) VALUES (?, ?, ?)')
+
+            const results = staffList.map((staff) => computeStaffPayroll({
+                db, staff, periodId, rates, payeBands, payrollStmt, deductionStmt, allowanceStmt
+            }))
+
+            logAudit(userId, 'UPDATE', 'payroll_period', periodId, null, { action: 'recalculate', staffCount: results.length })
+            return { success: true, periodId, results }
+        })()
     })
 
     // ======== STAFF ALLOWANCES ========

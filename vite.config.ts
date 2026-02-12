@@ -1,7 +1,23 @@
 import react from '@vitejs/plugin-react'
-import path from 'path'
+import path from 'node:path'
+import type { Plugin } from 'vite'
 import { defineConfig } from 'vite'
 import electron from 'vite-plugin-electron/simple'
+
+// Stubs out @aws-sdk/client-s3 which is an unused optional dependency
+// pulled in by unzipper (via exceljs). Never called at runtime.
+function stubAwsSdk(): Plugin {
+    const STUB_ID = '\0aws-sdk-stub'
+    return {
+        name: 'stub-aws-sdk',
+        resolveId(id) {
+            if (id === '@aws-sdk/client-s3') return STUB_ID
+        },
+        load(id) {
+            if (id === STUB_ID) return 'export default {};'
+        },
+    }
+}
 
 export default defineConfig({
     plugins: [
@@ -10,6 +26,7 @@ export default defineConfig({
             main: {
                 entry: 'electron/main/index.ts',
                 vite: {
+                    plugins: [stubAwsSdk()],
                     esbuild: {
                         target: 'esnext',
                     },

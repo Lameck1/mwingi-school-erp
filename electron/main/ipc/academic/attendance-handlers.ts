@@ -26,14 +26,22 @@ export function registerAttendanceHandlers(): void {
         academicYearId: number,
         termId: number
     ) => {
-        return getService().getAttendanceByDate(streamId, date, academicYearId, termId)
+        try {
+            return getService().getAttendanceByDate(streamId, date, academicYearId, termId)
+        } catch (error) {
+            throw new Error(`Failed to get attendance: ${(error as Error).message}`)
+        }
     })
 
     ipcMain.handle('attendance:markAttendance', async (
         _event: IpcMainInvokeEvent,
         ...[entries, streamId, date, academicYearId, termId, userId]: MarkAttendanceArgs
     ) => {
-        return getService().markAttendance(entries, streamId, date, academicYearId, termId, userId)
+        try {
+            return getService().markAttendance(entries, streamId, date, academicYearId, termId, userId)
+        } catch (error) {
+            throw new Error(`Failed to mark attendance: ${(error as Error).message}`)
+        }
     })
 
     ipcMain.handle('attendance:getStudentSummary', async (
@@ -42,7 +50,11 @@ export function registerAttendanceHandlers(): void {
         academicYearId: number,
         termId?: number
     ) => {
-        return getService().getStudentAttendanceSummary(studentId, academicYearId, termId)
+        try {
+            return getService().getStudentAttendanceSummary(studentId, academicYearId, termId)
+        } catch (error) {
+            throw new Error(`Failed to get student summary: ${(error as Error).message}`)
+        }
     })
 
     ipcMain.handle('attendance:getClassSummary', async (
@@ -52,7 +64,11 @@ export function registerAttendanceHandlers(): void {
         academicYearId: number,
         termId: number
     ) => {
-        return getService().getClassAttendanceSummary(streamId, date, academicYearId, termId)
+        try {
+            return getService().getClassAttendanceSummary(streamId, date, academicYearId, termId)
+        } catch (error) {
+            throw new Error(`Failed to get class summary: ${(error as Error).message}`)
+        }
     })
 
     ipcMain.handle('attendance:getStudentsForMarking', async (
@@ -61,6 +77,10 @@ export function registerAttendanceHandlers(): void {
         academicYearId: number,
         termId: number
     ) => {
-        return getService().getStudentsForAttendance(streamId, academicYearId, termId)
+        try {
+            return getService().getStudentsForAttendance(streamId, academicYearId, termId)
+        } catch (error) {
+            throw new Error(`Failed to get students for marking: ${(error as Error).message}`)
+        }
     })
 }

@@ -68,6 +68,13 @@ function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void
 
   ipcMain.handle('awards:approve', async (_event: IpcMainInvokeEvent, params: AwardApproveParams) => {
     try {
+      // Verify the award exists and is in pending state
+      const award = db.prepare('SELECT approval_status FROM student_award WHERE id = ?').get(params.awardId) as { approval_status: string } | undefined;
+      if (!award) { throw new Error('Award not found'); }
+      if (award.approval_status !== 'pending') {
+        throw new Error(`Cannot approve award — current status is "${award.approval_status}"`);
+      }
+
       db.prepare(`
         UPDATE student_award 
         SET approval_status = 'approved', 
@@ -86,6 +93,13 @@ function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void
   // Reject an award
   ipcMain.handle('awards:reject', async (_event: IpcMainInvokeEvent, params: AwardRejectParams) => {
     try {
+      // Verify the award exists and is in pending state
+      const award = db.prepare('SELECT approval_status FROM student_award WHERE id = ?').get(params.awardId) as { approval_status: string } | undefined;
+      if (!award) { throw new Error('Award not found'); }
+      if (award.approval_status !== 'pending') {
+        throw new Error(`Cannot reject award — current status is "${award.approval_status}"`);
+      }
+
       db.prepare(`
         UPDATE student_award 
         SET approval_status = 'rejected', 
@@ -102,8 +116,15 @@ function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void
     }
   });
 
-  ipcMain.handle('awards:delete', async (_event: IpcMainInvokeEvent, awardId: number) => {
+  ipcMain.handle('awards:delete', async (_event: IpcMainInvokeEvent, awardId: number, userId?: number) => {
     try {
+      // Only allow deleting pending awards
+      const award = db.prepare('SELECT approval_status FROM student_award WHERE id = ?').get(awardId) as { approval_status: string } | undefined;
+      if (!award) { throw new Error('Award not found'); }
+      if (award.approval_status === 'approved') {
+        throw new Error('Cannot delete an approved award — revoke it first');
+      }
+
       db.prepare(`DELETE FROM student_award WHERE id = ?`).run(awardId);
       return { status: 'success', message: 'Award deleted' };
     } catch (error: unknown) {

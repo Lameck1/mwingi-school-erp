@@ -104,6 +104,7 @@ export class NotificationService {
      * Reload configuration (called after settings update)
      */
     reloadConfig(): void {
+        this.isConfigLoaded = false
         this.loadConfig()
     }
 
@@ -187,6 +188,8 @@ export class NotificationService {
             case 'NEXMO':
             case 'CUSTOM':
                 return { success: false, error: SMS_PROVIDER_UNSUPPORTED }
+            default:
+                return { success: false, error: `Unknown SMS provider: ${String(this.smsConfig.provider)}` }
         }
     }
 
@@ -291,6 +294,8 @@ export class NotificationService {
                 return this.sendSMTP(to, subject, body)
             case 'MAILGUN':
                 return { success: false, error: EMAIL_PROVIDER_UNSUPPORTED }
+            default:
+                return { success: false, error: `Unknown email provider: ${String(this.emailConfig.provider)}` }
         }
     }
 

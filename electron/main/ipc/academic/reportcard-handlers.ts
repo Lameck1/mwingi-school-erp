@@ -29,7 +29,10 @@ type SmtpConfig = {
 
 async function getSessionUserId(): Promise<number> {
     const session = await getSession()
-    return session?.user.id ?? 0
+    if (!session?.user.id) {
+        throw new Error('No active session — please sign in again')
+    }
+    return session.user.id
 }
 
 function resolveSmtpConfig(): { config: SmtpConfig | null; error?: string } {
@@ -109,7 +112,27 @@ function registerCbcReportCardHandlers(): void {
 }
 
 function registerCbcBaseHandlers(): void {
-    ipcMain.handle('report-card:getSubjects', async () => [])
+    ipcMain.handle('report-card:getSubjects', async (_event: IpcMainInvokeEvent, examId?: number) => {
+        try {
+            const db = getDatabase()
+            // Return subjects that have results for the given exam, or all active subjects
+            if (examId) {
+                return db.prepare(
+                    `SELECT DISTINCT s.id, s.name, s.code
+                     FROM subject s
+                     JOIN exam_result er ON er.subject_id = s.id
+                     WHERE er.exam_id = ? AND s.is_active = 1
+                     ORDER BY s.name`
+                ).all(examId)
+            }
+            return db.prepare(
+                `SELECT id, name, code FROM subject WHERE is_active = 1 ORDER BY name`
+            ).all()
+        } catch (error) {
+            console.error('Failed to get subjects:', error)
+            return []
+        }
+    })
 
     ipcMain.handle('report-card:get', async (_event: IpcMainInvokeEvent, examId: number, studentId: number) => {
         return cbcService.getReportCard(examId, studentId)

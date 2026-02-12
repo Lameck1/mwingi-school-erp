@@ -1,8 +1,10 @@
 import { createGetOrCreateCategoryId, generateBatchInvoices, getErrorMessage, getTodayDate, type FinanceContext, UNKNOWN_ERROR_MESSAGE } from './finance-handler-utils'
 import { type PaymentData, type PaymentResult, type TransactionData, type InvoiceData, type InvoiceItem, type FeeStructureItemData, type FeeInvoiceDB, type FeeInvoiceWithDetails, type FeeStructureWithDetails } from './types'
+import { randomUUID } from 'node:crypto'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 import { ipcMain } from '../../electron-env'
+import { DoubleEntryJournalService } from '../../services/accounting/DoubleEntryJournalService'
 import { CashFlowService } from '../../services/finance/CashFlowService'
 import { CreditAutoApplicationService } from '../../services/finance/CreditAutoApplicationService'
 import { ExemptionService } from '../../services/finance/ExemptionService'
@@ -129,10 +131,45 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
     })
 }
 
+const registerPaymentVoidHandler = (context: FinanceContext): void => {
+    const { paymentService } = context
+
+    ipcMain.handle('payment:void', async (
+        _event: IpcMainInvokeEvent,
+        transactionId: number,
+        voidReason: string,
+        userId: number,
+        recoveryMethod?: string
+    ): Promise<PaymentResult | { success: false, message: string }> => {
+        if (!transactionId || transactionId <= 0) {
+            return { success: false, message: 'Invalid transaction ID' }
+        }
+        if (!voidReason?.trim()) {
+            return { success: false, message: 'Void reason is required' }
+        }
+        if (!userId || userId <= 0) {
+            return { success: false, message: 'Invalid user session' }
+        }
+
+        try {
+            return await paymentService.voidPayment({
+                transaction_id: transactionId,
+                void_reason: voidReason.trim(),
+                voided_by: userId,
+                recovery_method: recoveryMethod
+            })
+        } catch (error) {
+            console.error('Payment void error:', error)
+            return { success: false, message: getErrorMessage(error, 'Failed to void payment') }
+        }
+    })
+}
+
 const registerPaymentHandlers = (context: FinanceContext): void => {
     registerPaymentRecordHandler(context)
     registerPaymentQueryHandlers(context)
     registerPayWithCreditHandler(context)
+    registerPaymentVoidHandler(context)
 }
 
 const registerInvoiceHandlers = (context: FinanceContext): void => {
@@ -154,7 +191,7 @@ const registerInvoiceHandlers = (context: FinanceContext): void => {
 
     ipcMain.handle('invoice:create', async (_event: IpcMainInvokeEvent, data: InvoiceData, items: InvoiceItem[], userId: number) => {
         return db.transaction(() => {
-            const invoiceNumber = `INV-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${String(Date.now()).slice(-6)}`
+            const invoiceNumber = `INV-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${randomUUID().slice(0, 8).toUpperCase()}`
             const itemsInCents = items.map(item => ({ ...item, amount: item.amount }))
             const totalCents = itemsInCents.reduce((sum: number, item) => sum + item.amount, 0)
 
@@ -188,6 +225,33 @@ const registerInvoiceHandlers = (context: FinanceContext): void => {
                 itemStatement.run(invoiceResult.lastInsertRowid, item.fee_category_id, item.description, item.amount)
             }
 
+            // Bridge to GL: create journal entry for the invoice
+            try {
+                const journalService = new DoubleEntryJournalService(db)
+                const glLookup = db.prepare(
+                    `SELECT ga.account_code FROM gl_account ga
+                     JOIN fee_category fc ON fc.gl_account_id = ga.id
+                     WHERE fc.id = ?`
+                )
+                const invoiceJournalItems = itemsInCents.map((item) => {
+                    const row = glLookup.get(item.fee_category_id) as { account_code: string } | undefined
+                    return {
+                        gl_account_code: row?.account_code ?? '4300', // fallback: Other Revenue
+                        amount: item.amount,
+                        description: item.description ?? 'Fee invoice item'
+                    }
+                })
+                journalService.recordInvoice(
+                    data.student_id,
+                    invoiceJournalItems,
+                    data.invoice_date,
+                    userId
+                )
+            } catch {
+                // Journal entry failure must not block invoice creation
+                console.error('[invoice:create] GL journal entry failed (non-fatal)')
+            }
+
             return { success: true, invoiceNumber, id: invoiceResult.lastInsertRowid }
         })()
     })
@@ -203,7 +267,7 @@ const registerInvoiceHandlers = (context: FinanceContext): void => {
                    t.term_name
             FROM fee_invoice fi
             JOIN student s ON fi.student_id = s.id
-            JOIN term t ON fi.term_id = t.id
+            LEFT JOIN term t ON fi.term_id = t.id
             ORDER BY fi.invoice_date DESC
         `).all() as FeeInvoiceWithDetails[]
 
@@ -223,9 +287,24 @@ const registerFeeStructureHandlers = (context: FinanceContext): void => {
         return db.prepare('SELECT * FROM fee_category WHERE is_active = 1').all()
     })
 
-    ipcMain.handle('fee:createCategory', async (_event: IpcMainInvokeEvent, name: string, description: string) => {
+    ipcMain.handle('fee:createCategory', async (_event: IpcMainInvokeEvent, name: string, description: string, userId?: number) => {
+        const trimmedName = name?.trim()
+        if (!trimmedName) {
+            return { success: false, message: 'Category name is required' }
+        }
+
+        const existing = db.prepare('SELECT id FROM fee_category WHERE category_name = ? AND is_active = 1').get(trimmedName)
+        if (existing) {
+            return { success: false, message: 'A fee category with this name already exists' }
+        }
+
         const statement = db.prepare('INSERT INTO fee_category (category_name, description) VALUES (?, ?)')
-        const result = statement.run(name, description)
+        const result = statement.run(trimmedName, description?.trim() || '')
+
+        if (userId) {
+            logAudit(userId, 'CREATE', 'fee_category', result.lastInsertRowid as number, null, { name: trimmedName, description })
+        }
+
         return { success: true, id: result.lastInsertRowid }
     })
 
@@ -239,7 +318,7 @@ const registerFeeStructureHandlers = (context: FinanceContext): void => {
         `).all(academicYearId, termId) as FeeStructureWithDetails[]
     })
 
-    ipcMain.handle('fee:saveStructure', async (_event: IpcMainInvokeEvent, data: FeeStructureItemData[], academicYearId: number, termId: number) => {
+    ipcMain.handle('fee:saveStructure', async (_event: IpcMainInvokeEvent, data: FeeStructureItemData[], academicYearId: number, termId: number, userId?: number) => {
         const deleteStatement = db.prepare('DELETE FROM fee_structure WHERE academic_year_id = ? AND term_id = ?')
         const insertStatement = db.prepare(`
             INSERT INTO fee_structure (academic_year_id, term_id, stream_id, student_type, fee_category_id, amount)
@@ -250,6 +329,12 @@ const registerFeeStructureHandlers = (context: FinanceContext): void => {
             deleteStatement.run(academicYearId, termId)
             for (const item of items) {
                 insertStatement.run(academicYearId, termId, item.stream_id, item.student_type, item.fee_category_id, item.amount)
+            }
+
+            if (userId) {
+                logAudit(userId, 'UPDATE', 'fee_structure', 0, null, {
+                    academicYearId, termId, itemCount: items.length
+                })
             }
         })
 

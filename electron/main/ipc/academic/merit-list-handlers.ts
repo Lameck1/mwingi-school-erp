@@ -1,5 +1,6 @@
 import { getDatabase } from '../../database';
 import { ipcMain } from '../../electron-env';
+import { getSession } from '../../security/session';
 import { MeritListService } from '../../services/academic/MeritListService';
 
 import type { IpcMainInvokeEvent } from 'electron';
@@ -36,12 +37,15 @@ export function registerMeritListHandlers() {
         throw new Error('Exam not found');
       }
 
+      const session = await getSession();
+      const userId = session?.user.id ?? 1;
+
       return await getService().generateClassMeritList(
         examInfo.academic_year_id,
         examInfo.term_id,
         streamId,
         examId,
-        1 // System-generated, no specific user
+        userId
       );
     } catch (error) {
       throw new Error(`Failed to generate class merit list: ${(error as Error).message}`);

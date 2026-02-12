@@ -277,11 +277,12 @@ export class BudgetEnforcementService {
       SELECT COALESCE(SUM(jel.debit_amount), 0) as spent
       FROM journal_entry_line jel
       JOIN journal_entry je ON je.id = jel.journal_entry_id
-      WHERE jel.gl_account_code = ?
+      JOIN gl_account ga ON ga.id = jel.gl_account_id
+      WHERE ga.account_code = ?
         AND je.entry_date BETWEEN ? AND ?
-        AND je.status = 'POSTED'
-        AND (jel.department = ? OR (jel.department IS NULL AND ? IS NULL))
-    `).get(glAccountCode, fiscalYearStart, fiscalYearEnd, department, department) as {
+        AND je.is_posted = 1
+        AND je.is_voided = 0
+    `).get(glAccountCode, fiscalYearStart, fiscalYearEnd) as {
       spent: number;
     } | undefined;
 

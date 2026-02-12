@@ -14,6 +14,7 @@ export class BackupService {
     private static get BACKUP_DIR() { return path.join(app.getPath('userData'), 'backups') }
     // Keep last 7 days + 1 monthly (not implemented strictly yet, just count based rotation)
     private static readonly MAX_BACKUPS = 7
+    private static schedulerInterval: ReturnType<typeof setInterval> | null = null
 
     static async init() {
         if (!fs.existsSync(this.BACKUP_DIR)) {
@@ -25,8 +26,9 @@ export class BackupService {
     }
 
     private static startScheduler() {
+        if (this.schedulerInterval) { return }
         // Check every hour
-        setInterval(() => {
+        this.schedulerInterval = setInterval(() => {
             void (async () => {
             const backups = this.listBackups()
             if (backups.length === 0) {
@@ -154,11 +156,11 @@ export class BackupService {
         if (!fs.existsSync(backupPath)) {throw new Error('Backup file not found')}
 
         try {
-            // Close DB connection
-            db?.close()
-
-            // Copy
+            // Copy backup first, THEN close and restart
             fs.copyFileSync(backupPath, dbPath)
+
+            // Close DB connection after successful copy
+            db?.close()
 
             // Relaunch app to re-init DB
             app.relaunch()
@@ -167,8 +169,6 @@ export class BackupService {
             return true
         } catch (e) {
             console.error('Restore failed:', e)
-            // Try to reopen DB so app doesn't crash completely
-            // initializeDatabase() - careful, circular dependency if we import it.
             return false
         }
     }

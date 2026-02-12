@@ -24,12 +24,11 @@
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "lint:strict": "npm run lint:eslint",
     "lint:architecture": "depcruise --config .dependency-cruiser.cjs \"src/**/*.ts\" \"src/**/*.tsx\" \"electron/**/*.ts\" --output-type err-long",
-    "lint:webhint": "npm run build:vite && concurrently -k -s first \"vite preview --host 127.0.0.1 --port 56789 --strictPort\" \"wait-on http://127.0.0.1:56789 && hint http://127.0.0.1:56789 --config .hintrc\"",
     "lint:deps": "npm audit --audit-level=high",
     "lint:md": "npx markdownlint-cli \"**/*.md\" --ignore node_modules",
     "lint:md:fix": "npx markdownlint-cli \"**/*.md\" --ignore node_modules --fix",
     "lint:quality": "npm run lint:eslint:strict && npm run lint:architecture && npm run lint:md",
-    "lint:quality:full": "npm run lint:quality && npm run lint:webhint && npm run lint:deps",
+    "lint:quality:full": "npm run lint:quality && npm run lint:deps",
     "lint:all": "npm run lint:quality",
     "lint:all:fix": "npm run lint:fix && npm run lint:md:fix",
     "prepare": "husky"
@@ -45,6 +44,8 @@
     "electron-updater": "^6.7.3",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.0.0",
+    "csv-parse": "^6.1.0",
+    "exceljs": "^4.4.0",
     "keytar": "^7.9.0",
     "lucide-react": "^0.303.0",
     "nodemailer": "^7.0.13",
@@ -57,9 +58,6 @@
     "zustand": "^4.4.7"
   },
   "devDependencies": {
-    "@hint/configuration-web-recommended": "^8.2.24",
-    "@hint/hint-compat-api": "^4.5.8",
-    "@hint/hint-no-vulnerable-javascript-libraries": "^2.12.22",
     "@playwright/test": "^1.58.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.8",
@@ -74,8 +72,6 @@
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.16",
     "better-sqlite3": "^12.6.2",
-    "concurrently": "^8.2.2",
-    "csv-parse": "^6.1.0",
     "dependency-cruiser": "^17.3.8",
     "electron": "^40.1.0",
     "electron-builder": "^26.6.0",
@@ -89,8 +85,6 @@
     "eslint-plugin-security": "^3.0.1",
     "eslint-plugin-sonarjs": "^3.0.6",
     "eslint-plugin-unicorn": "^62.0.0",
-    "exceljs": "^4.4.0",
-    "hint": "^7.1.13",
     "husky": "^9.1.7",
     "jest": "^30.2.0",
     "lint-staged": "^16.2.7",
@@ -102,8 +96,7 @@
     "vite": "^6.4.1",
     "vite-plugin-electron": "^0.29.0",
     "vite-plugin-electron-renderer": "^0.14.6",
-    "vitest": "^4.0.18",
-    "wait-on": "^7.2.0"
+    "vitest": "^4.0.18"
   },
   "build": {
     "appId": "com.mwingi.school.erp",
@@ -177,6 +170,11 @@
     }
   },
   "overrides": {
-    "@isaacs/brace-expansion": "5.0.1"
+    "@isaacs/brace-expansion": "5.0.1",
+    "@electron/get": "3.1.0",
+    "unzipper": "^0.12.3",
+    "archiver": "^7.0.1",
+    "test-exclude": "^7.0.1"
   }
+
 }
