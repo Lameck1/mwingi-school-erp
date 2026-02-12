@@ -3,8 +3,10 @@ import { useEffect, useState, useCallback } from 'react'
 
 import IntegrationsSettings from './Integrations'
 import MessageTemplates from './MessageTemplates'
+import { PageHeader } from '../../components/patterns/PageHeader'
 import { Modal } from '../../components/ui/Modal'
 import { useToast } from '../../contexts/ToastContext'
+import { useScrollableTabNav } from '../../hooks/useScrollableTabNav'
 import { useAppStore, useAuthStore } from '../../stores'
 import { type AcademicYear } from '../../types/electron-api/AcademicAPI'
 
@@ -13,6 +15,8 @@ export default function Settings() {
     const { user } = useAuthStore()
     const { showToast } = useToast()
     const [activeTab, setActiveTab] = useState('school')
+    const stableSetActiveTab = useCallback((tab: string) => setActiveTab(tab), [])
+    const { navRef, handleTabClick } = useScrollableTabNav(stableSetActiveTab)
     const [saving, setSaving] = useState(false)
     const [loadingYears, setLoadingYears] = useState(false)
     const [academicYears, setAcademicYears] = useState<AcademicYear[]>([])
@@ -114,6 +118,8 @@ export default function Settings() {
         }
     }
 
+    // handleTabClick is now provided by useScrollableTabNav hook
+
     const tabs = [
         { id: 'school', label: 'School Info', icon: School },
         { id: 'academic', label: 'Academic Year', icon: Calendar },
@@ -132,7 +138,7 @@ export default function Settings() {
 
         if (academicYears.length === 0) {
             return (
-                <div className="p-12 text-center border-2 border-dashed border-border/20 rounded-3xl">
+                <div className="p-6 md:p-12 text-center border-2 border-dashed border-border/20 rounded-3xl">
                     <Calendar className="w-12 h-12 text-foreground/5 mx-auto mb-4" />
                     <p className="text-foreground/40 font-bold uppercase text-[10px] tracking-widest">No cycles established</p>
                 </div>
@@ -175,36 +181,37 @@ export default function Settings() {
 
     return (
         <div className="space-y-8 pb-10">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                    <h1 className="text-3xl font-bold text-foreground font-heading uppercase tracking-tight">System Settings</h1>
-                    <p className="text-foreground/50 mt-1 font-medium italic">Configure core architectural and environmental parameters</p>
-                </div>
-                <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="btn btn-primary flex items-center gap-2 py-3 px-8 text-sm font-bold shadow-xl shadow-primary/20 transition-all hover:-translate-y-1"
-                >
-                    {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                    <span>{saving ? 'Synchronizing...' : 'Commit Changes'}</span>
-                </button>
-            </div>
+            <PageHeader
+                title="System Settings"
+                subtitle="Configure core architectural and environmental parameters"
+                actions={
+                    <button
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="btn btn-primary flex items-center gap-2 py-3 px-8 text-sm font-bold shadow-xl shadow-primary/20 transition-all hover:-translate-y-1"
+                    >
+                        {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                        <span>{saving ? 'Synchronizing...' : 'Commit Changes'}</span>
+                    </button>
+                }
+            />
 
             <div className="flex flex-col xl:flex-row gap-8">
-                {/* Sidebar Navigation - Breaks earlier for mobile */}
+                {/* Sidebar Navigation - scrollable row on mobile, vertical on xl */}
                 <div className="w-full xl:w-64 shrink-0">
-                    <nav className="flex xl:flex-col overflow-x-auto xl:overflow-visible no-scrollbar p-2 bg-secondary/20 rounded-2xl border border-border/20">
+                    <nav ref={navRef} className="flex xl:flex-col overflow-x-auto xl:overflow-visible custom-scrollbar p-2 bg-secondary/20 rounded-2xl border border-border/20 scroll-smooth snap-x snap-mandatory xl:snap-none">
                         {tabs.map(tab => (
                             <button
                                 key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`flex items-center gap-3 px-5 py-4 rounded-xl text-left transition-all font-bold text-sm whitespace-nowrap xl:w-full ${activeTab === tab.id
+                                data-tab={tab.id}
+                                onClick={() => handleTabClick(tab.id)}
+                                className={`flex items-center gap-3 px-5 py-4 rounded-xl text-left transition-all font-bold text-sm whitespace-nowrap xl:w-full snap-start ${activeTab === tab.id
                                     ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 translate-x-0 xl:translate-x-2'
                                     : 'text-foreground/60 hover:text-foreground hover:bg-secondary/40'
                                     }`}
                             >
                                 <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? 'opacity-100' : 'opacity-60'}`} />
-                                <span>{tab.label}</span>
+                                <span className="hidden sm:inline">{tab.label}</span>
                             </button>
                         ))}
                     </nav>
@@ -226,31 +233,31 @@ export default function Settings() {
                                     <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="school_name">Official School Name *</label>
                                     <input id="school_name" type="text" value={formData.school_name}
                                         onChange={(e) => setFormData(prev => ({ ...prev, school_name: e.target.value }))}
-                                        className="input w-full bg-secondary/30" placeholder="e.g. Mwingi Adventist School" />
+                                        className="input w-full" placeholder="e.g. Mwingi Adventist School" />
                                 </div>
                                 <div className="md:col-span-2 space-y-2">
                                     <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="school_motto">Operating Motto</label>
                                     <input id="school_motto" type="text" value={formData.school_motto}
                                         onChange={(e) => setFormData(prev => ({ ...prev, school_motto: e.target.value }))}
-                                        className="input w-full bg-secondary/30" placeholder="e.g. Excellence in Service" />
+                                        className="input w-full" placeholder="e.g. Excellence in Service" />
                                 </div>
                                 <div className="md:col-span-2 space-y-2">
                                     <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="address">Physical Address</label>
                                     <textarea id="address" value={formData.address}
                                         onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-                                        className="input w-full bg-secondary/30" rows={3} placeholder="Mwingi-Garissa Rd, Box 123..." />
+                                        className="input w-full" rows={3} placeholder="Mwingi-Garissa Rd, Box 123..." />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="phone">Contact Hotline</label>
                                     <input id="phone" type="tel" value={formData.phone}
                                         onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                                        className="input w-full bg-secondary/30" placeholder="+254 700 000000" />
+                                        className="input w-full" placeholder="+254 700 000000" />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="email">Administrative Email</label>
                                     <input id="email" type="email" value={formData.email}
                                         onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                                        className="input w-full bg-secondary/30" placeholder="admin@school.ac.ke" />
+                                        className="input w-full" placeholder="admin@school.ac.ke" />
                                 </div>
                             </div>
                         </div>
@@ -307,7 +314,7 @@ export default function Settings() {
                                         </div>
                                         <input id="settings-mpesa-paybill" type="text" value={formData.mpesa_paybill}
                                             onChange={(e) => setFormData(prev => ({ ...prev, mpesa_paybill: e.target.value }))}
-                                            className="input w-full pl-12 bg-secondary/30 focus:bg-secondary/50" placeholder="e.g. 247247" />
+                                            className="input w-full pl-12" placeholder="e.g. 247247" />
                                     </div>
                                     <p className="text-[10px] text-foreground/30 font-medium ml-1 leading-relaxed">Official collection shortcode for M-PESA API automated reconciliation.</p>
                                 </div>
@@ -337,49 +344,49 @@ export default function Settings() {
                                 <h2 className="text-xl font-bold text-foreground font-heading uppercase tracking-tight">Data Integrity & Maintenance</h2>
                             </div>
 
-                              <div className="space-y-8">
-                                  <div className="p-6 bg-amber-500/5 rounded-3xl border border-amber-500/20 relative overflow-hidden">
-                                      <div className="absolute top-0 right-0 p-6 opacity-10">
-                                          <Database className="w-20 h-20 text-amber-500" />
-                                      </div>
-                                      <h3 className="text-lg font-bold text-amber-500 flex items-center gap-2 mb-2">
-                                          <Database className="w-5 h-5" />
-                                          Repair Utility: Normalize Currency Scale
-                                      </h3>
-                                      <p className="text-sm text-foreground/60 font-medium leading-relaxed max-w-2xl mb-6">
-                                          Detects 100x currency scaling and normalizes core finance tables (fees, invoices, receipts, ledger).
-                                          This is safe to run if amounts look inflated by a factor of 100.
-                                      </p>
-                                      <button
-                                          onClick={async () => {
-                                              if (!confirm('This will divide inflated currency values by 100 for core finance tables. Continue?')) {return}
-                                              if (!user?.id) {
-                                                  showToast('You must be signed in to run maintenance', 'error')
-                                                  return
-                                              }
-                                              setSaving(true)
-                                              try {
-                                                  const result = await globalThis.electronAPI.normalizeCurrencyScale(user.id)
-                                                  if (result.success) {
-                                                      showToast('Currency values normalized successfully.', 'success')
-                                                      globalThis.location.reload()
-                                                  } else {
-                                                      showToast(result.message, 'error')
-                                                  }
-                                              } catch {
-                                                  showToast('Currency normalization failed', 'error')
-                                              } finally {
-                                                  setSaving(false)
-                                              }
-                                          }}
-                                          disabled={saving}
-                                          className="btn bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-3 py-3 px-8 text-sm font-bold shadow-xl shadow-amber-500/20 transition-all hover:-translate-y-1 active:scale-95 disabled:opacity-50"
-                                      >
-                                          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Database className="w-5 h-5" />}
-                                          <span>Normalize Currency Values</span>
-                                      </button>
-                                  </div>
-                                  <div className="p-8 bg-destructive/5 rounded-3xl border border-destructive/20 relative overflow-hidden">
+                            <div className="space-y-8">
+                                <div className="p-6 bg-amber-500/5 rounded-3xl border border-amber-500/20 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-6 opacity-10">
+                                        <Database className="w-20 h-20 text-amber-500" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-amber-500 flex items-center gap-2 mb-2">
+                                        <Database className="w-5 h-5" />
+                                        Repair Utility: Normalize Currency Scale
+                                    </h3>
+                                    <p className="text-sm text-foreground/60 font-medium leading-relaxed max-w-2xl mb-6">
+                                        Detects 100x currency scaling and normalizes core finance tables (fees, invoices, receipts, ledger).
+                                        This is safe to run if amounts look inflated by a factor of 100.
+                                    </p>
+                                    <button
+                                        onClick={async () => {
+                                            if (!confirm('This will divide inflated currency values by 100 for core finance tables. Continue?')) { return }
+                                            if (!user?.id) {
+                                                showToast('You must be signed in to run maintenance', 'error')
+                                                return
+                                            }
+                                            setSaving(true)
+                                            try {
+                                                const result = await globalThis.electronAPI.normalizeCurrencyScale(user.id)
+                                                if (result.success) {
+                                                    showToast('Currency values normalized successfully.', 'success')
+                                                    globalThis.location.reload()
+                                                } else {
+                                                    showToast(result.message, 'error')
+                                                }
+                                            } catch {
+                                                showToast('Currency normalization failed', 'error')
+                                            } finally {
+                                                setSaving(false)
+                                            }
+                                        }}
+                                        disabled={saving}
+                                        className="btn bg-amber-500 hover:bg-amber-600 text-white flex items-center gap-3 py-3 px-8 text-sm font-bold shadow-xl shadow-amber-500/20 transition-all hover:-translate-y-1 active:scale-95 disabled:opacity-50"
+                                    >
+                                        {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Database className="w-5 h-5" />}
+                                        <span>Normalize Currency Values</span>
+                                    </button>
+                                </div>
+                                <div className="p-4 md:p-8 bg-destructive/5 rounded-3xl border border-destructive/20 relative overflow-hidden">
                                     <div className="absolute top-0 right-0 p-8 opacity-5">
                                         <AlertTriangle className="w-32 h-32 text-destructive" />
                                     </div>
@@ -390,8 +397,8 @@ export default function Settings() {
                                     </h3>
                                     <p className="text-sm text-foreground/60 font-medium leading-relaxed max-w-2xl mb-8">
                                         This utility will permanently erase all transaction history, students, invoices, and payroll data.
-                                        It will then establish <strong>Year 2026, Term 1</strong> as the active session and populate it with a comprehensive set of professional-grade test data.
-                                        <span className="text-destructive font-bold"> This action cannot be undone.</span>
+                                        It will then establish <strong>Year 2026, Term 1</strong> as the active session and populate it with a comprehensive set of professional-grade test data.{' '}
+                                        <span className="text-destructive font-bold">This action cannot be undone.</span>
                                     </p>
 
                                     <button
@@ -486,7 +493,7 @@ export default function Settings() {
                         <input
                             id="new-year-name"
                             type="text"
-                            className="input w-full bg-secondary/30"
+                            className="input w-full"
                             placeholder="e.g. Academic Year 2025"
                             value={newYearData.year_name}
                             onChange={e => setNewYearData({ ...newYearData, year_name: e.target.value })}
@@ -499,7 +506,7 @@ export default function Settings() {
                                 id="new-year-start-date"
                                 type="date"
                                 title="Start Date"
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                                 value={newYearData.start_date}
                                 onChange={e => setNewYearData({ ...newYearData, start_date: e.target.value })}
                             />
@@ -510,7 +517,7 @@ export default function Settings() {
                                 id="new-year-end-date"
                                 type="date"
                                 title="End Date"
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                                 value={newYearData.end_date}
                                 onChange={e => setNewYearData({ ...newYearData, end_date: e.target.value })}
                             />

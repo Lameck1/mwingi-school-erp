@@ -74,6 +74,7 @@ export interface BalanceSheetData {
   total_assets: number;
   total_liabilities: number;
   total_equity: number;
+  net_income: number;
   is_balanced: boolean;
 }
 
@@ -477,6 +478,8 @@ export class DoubleEntryJournalService {
 
   /**
    * Generates balance sheet
+   * Includes net income (Revenue - Expenses) to satisfy the accounting equation:
+   * Assets = Liabilities + Equity + Net Income
    */
   async getBalanceSheet(asOfDate: string): Promise<BalanceSheetData> {
     const accountBalances = this.db.prepare(`
@@ -537,6 +540,41 @@ export class DoubleEntryJournalService {
       }
     });
 
+    // Calculate net income from Revenue and Expense accounts
+    const incomeData = this.db.prepare(`
+      SELECT
+        ga.account_type,
+        COALESCE(SUM(jel.debit_amount), 0) as total_debit,
+        COALESCE(SUM(jel.credit_amount), 0) as total_credit
+      FROM gl_account ga
+      JOIN journal_entry_line jel ON ga.id = jel.gl_account_id
+      JOIN journal_entry je ON jel.journal_entry_id = je.id
+      WHERE je.entry_date <= ?
+        AND je.is_posted = 1
+        AND je.is_voided = 0
+        AND ga.account_type IN ('REVENUE', 'EXPENSE')
+      GROUP BY ga.account_type
+    `).all(asOfDate) as Array<{
+      account_type: string;
+      total_debit: number;
+      total_credit: number;
+    }>;
+
+    let totalRevenue = 0;
+    let totalExpenses = 0;
+
+    incomeData.forEach((row) => {
+      if (row.account_type === 'REVENUE') {
+        // Revenue normal balance is CREDIT
+        totalRevenue = (row.total_credit || 0) - (row.total_debit || 0);
+      } else if (row.account_type === 'EXPENSE') {
+        // Expense normal balance is DEBIT
+        totalExpenses = (row.total_debit || 0) - (row.total_credit || 0);
+      }
+    });
+
+    const netIncome = totalRevenue - totalExpenses;
+
     return {
       assets,
       liabilities,
@@ -544,7 +582,8 @@ export class DoubleEntryJournalService {
       total_assets: totalAssets,
       total_liabilities: totalLiabilities,
       total_equity: totalEquity,
-      is_balanced: Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 1 // Allow 1 cent rounding
+      net_income: netIncome,
+      is_balanced: Math.abs(totalAssets - (totalLiabilities + totalEquity + netIncome)) < 1 // Allow 1 cent rounding
     };
   }
 

@@ -1,20 +1,23 @@
 import {
     Download, FileText, Users, TrendingUp, TrendingDown,
-    Calendar, AlertCircle, MessageSquare, Loader2, Search, Printer
+    Calendar, AlertCircle, Clock, MessageSquare, Loader2, Search, Printer
 } from 'lucide-react'
-import { useState, useEffect, type ElementType } from 'react'
+import { lazy, Suspense, useState, useEffect, useCallback, type ElementType } from 'react'
 import { useLocation } from 'react-router-dom'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell } from 'recharts'
 
-import { InstitutionalHeader } from '../../components/patterns/InstitutionalHeader'
+import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
 import { useAuthStore } from '../../stores'
 import { exportToPDF, downloadCSV } from '../../utils/exporters'
 import { formatCurrencyFromCents } from '../../utils/format'
 import { printCurrentView } from '../../utils/print'
+import { useScrollableTabNav } from '../../hooks/useScrollableTabNav'
+
+const ScheduledReports = lazy(() => import('./ScheduledReports'))
 
 const COLORS = ['#2563eb', '#059669', '#d97706', '#dc2626', '#7c3aed']
-const COLOR_CLASSES = ['bg-blue-600', 'bg-emerald-600', 'bg-amber-600', 'bg-red-600', 'bg-violet-600']
+const COLOR_CLASSES = ['bg-primary', 'bg-emerald-600', 'bg-amber-600', 'bg-red-600', 'bg-violet-600']
 
 interface StudentStats {
     totalStudents: number
@@ -67,7 +70,9 @@ export default function Reports() {
     const [dailyCollections, setDailyCollections] = useState<DailyCollectionItem[]>([])
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10))
     const [sendingBulk, setSendingBulk] = useState(false)
-    const [activeTab, setActiveTab] = useState<'fee-collection' | 'defaulters' | 'daily-collection' | 'students' | 'financial'>('fee-collection')
+    const [activeTab, setActiveTab] = useState<'fee-collection' | 'defaulters' | 'daily-collection' | 'students' | 'financial' | 'scheduled'>('fee-collection')
+    const stableSetActiveTab = useCallback((tab: typeof activeTab) => setActiveTab(tab), [])
+    const { navRef, handleTabClick } = useScrollableTabNav(stableSetActiveTab)
 
     const loadReportData = async () => {
         setLoading(true)
@@ -94,9 +99,9 @@ export default function Reports() {
             // Group by month
             const monthlyData: Record<string, number> = {}
             currentFeeData.forEach((item) => {
-                if (!item.payment_date) {return}
+                if (!item.payment_date) { return }
                 const d = new Date(item.payment_date)
-                if (Number.isNaN(d.getTime())) {return}
+                if (Number.isNaN(d.getTime())) { return }
                 const month = d.toLocaleDateString('en-US', { month: 'short' })
                 monthlyData[month] = (monthlyData[month] || 0) + item.amount
             })
@@ -145,7 +150,7 @@ export default function Reports() {
     useEffect(() => {
         const params = new URLSearchParams(location.search)
         const tab = params.get('tab')
-        if (tab === 'fee-collection' || tab === 'defaulters' || tab === 'daily-collection' || tab === 'students' || tab === 'financial') {
+        if (tab === 'fee-collection' || tab === 'defaulters' || tab === 'daily-collection' || tab === 'students' || tab === 'financial' || tab === 'scheduled') {
             setActiveTab(tab)
         }
     }, [location.search])
@@ -181,7 +186,7 @@ export default function Reports() {
     }
 
     const handleBulkReminders = async () => {
-        if (!confirm(`Send reminders to ${defaulters.length} guardians?`)) {return}
+        if (!confirm(`Send reminders to ${defaulters.length} guardians?`)) { return }
         if (!user?.id) {
             alert('You must be signed in to send reminders')
             return
@@ -206,8 +211,8 @@ export default function Reports() {
                     recipientType: 'STUDENT',
                     userId: user.id
                 })
-                if (result.success) {sentCount++}
-                else {failedCount++}
+                if (result.success) { sentCount++ }
+                else { failedCount++ }
             } catch {
                 failedCount++
             }
@@ -344,40 +349,41 @@ export default function Reports() {
         { id: 'defaulters', label: 'Fee Defaulters', icon: AlertCircle },
         { id: 'students', label: 'Student Stats', icon: Users },
         { id: 'financial', label: 'Financial Summary', icon: FileText },
+        { id: 'scheduled', label: 'Scheduled', icon: Clock },
     ]
 
     return (
         <div className="space-y-8 pb-10">
-            <InstitutionalHeader />
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-1">
-                <div>
-                    <h1 className="text-3xl font-bold text-foreground font-heading uppercase tracking-tight">Institutional Reports</h1>
-                    <p className="text-foreground/50 mt-1 font-medium italic">Comprehensive academic and fiscal diagnostics</p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={handleExportCSV}
-                        className="btn btn-secondary flex items-center gap-2 px-6"
-                    >
-                        <Download className="w-4 h-4" />
-                        <span className="text-xs font-bold uppercase tracking-widest">CSV</span>
-                    </button>
-                    <button
-                        onClick={handleExportPDF}
-                        className="btn btn-primary flex items-center gap-2 px-6 shadow-xl shadow-primary/20"
-                    >
-                        <Download className="w-4 h-4" />
-                        <span className="text-xs font-bold uppercase tracking-widest">PDF</span>
-                    </button>
-                </div>
-            </div>
+            <PageHeader
+                title="Institutional Reports"
+                subtitle="Comprehensive academic and fiscal diagnostics"
+                actions={
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleExportCSV}
+                            className="btn btn-secondary flex items-center gap-2 px-6"
+                        >
+                            <Download className="w-4 h-4" />
+                            <span className="text-xs font-bold uppercase tracking-widest">CSV</span>
+                        </button>
+                        <button
+                            onClick={handleExportPDF}
+                            className="btn btn-primary flex items-center gap-2 px-6 shadow-xl shadow-primary/20"
+                        >
+                            <Download className="w-4 h-4" />
+                            <span className="text-xs font-bold uppercase tracking-widest">PDF</span>
+                        </button>
+                    </div>
+                }
+            />
 
-            {/* Tabs */}
-            <div className="flex gap-4 border-b border-border/20 overflow-x-auto whitespace-nowrap pb-1">
+            {/* Tabs — auto-scrolls hidden items bidirectionally */}
+            <nav ref={navRef} className="flex gap-4 border-b border-border/20 overflow-x-auto whitespace-nowrap pb-1 scroll-smooth">
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
+                        data-tab={tab.id}
+                        onClick={() => handleTabClick(tab.id)}
                         className={`pb-4 px-2 text-sm font-bold uppercase tracking-widest transition-all relative ${activeTab === tab.id ? 'text-primary' : 'text-foreground/40 hover:text-foreground/60'}`}
                     >
                         <div className="flex items-center gap-2">
@@ -387,7 +393,7 @@ export default function Reports() {
                         {activeTab === tab.id && <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-full shadow-[0_-4px_10px_rgba(var(--primary-rgb),0.5)]" />}
                     </button>
                 ))}
-            </div>
+            </nav>
 
             {/* Date Range & Global Filter */}
             <div className="premium-card bg-secondary/5 border-secondary/20">
@@ -400,7 +406,7 @@ export default function Reports() {
                                 type="date"
                                 value={dateRange.start}
                                 onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                                className="input w-full bg-secondary/30 h-12 text-xs font-bold uppercase tracking-tight"
+                                className="input w-full h-12 text-xs font-bold uppercase tracking-tight"
                             />
                         </div>
                         <div className="space-y-1">
@@ -410,7 +416,7 @@ export default function Reports() {
                                 type="date"
                                 value={dateRange.end}
                                 onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                                className="input w-full bg-secondary/30 h-12 text-xs font-bold uppercase tracking-tight"
+                                className="input w-full h-12 text-xs font-bold uppercase tracking-tight"
                             />
                         </div>
                     </div>
@@ -435,7 +441,7 @@ export default function Reports() {
                                 <h3 className="text-lg font-bold text-foreground font-heading tracking-tight uppercase">Monthly Liquidity</h3>
                             </div>
                         </div>
-                        <div className="p-8">
+                        <div className="p-4 md:p-8">
                             {feeCollectionData.length > 0 ? (
                                 <div className="h-72">
                                     <ResponsiveContainer width="100%" height="100%">
@@ -467,7 +473,7 @@ export default function Reports() {
                                 <h3 className="text-lg font-bold text-foreground font-heading tracking-tight uppercase">Payment Channels</h3>
                             </div>
                         </div>
-                        <div className="p-8">
+                        <div className="p-4 md:p-8">
                             {paymentMethodData.length > 0 ? (
                                 <div className="h-72">
                                     <ResponsiveContainer width="100%" height="100%">
@@ -480,7 +486,7 @@ export default function Reports() {
                                                 stroke="none"
                                                 paddingAngle={5}
                                             >
-                                                {paymentMethodData.map((_, i) => (<Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />))}
+                                                {paymentMethodData.map((entry) => (<Cell key={entry.name} fill={COLORS[paymentMethodData.indexOf(entry) % COLORS.length]} />))}
                                             </Pie>
                                             <Tooltip
                                                 contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}
@@ -515,15 +521,15 @@ export default function Reports() {
                                 <Calendar className="w-6 h-6" />
                             </div>
                             <div>
-                            <label htmlFor="audit-date" className="text-[10px] font-bold uppercase text-foreground/40 tracking-widest block">Audit Date</label>
-                            <input
-                                id="audit-date"
-                                type="date"
-                                value={selectedDate}
-                                onChange={(e) => setSelectedDate(e.target.value)}
-                                className="bg-transparent border-none p-0 text-xl font-bold text-foreground focus:ring-0 cursor-pointer"
-                            />
-                        </div>
+                                <label htmlFor="audit-date" className="text-[10px] font-bold uppercase text-foreground/40 tracking-widest block">Audit Date</label>
+                                <input
+                                    id="audit-date"
+                                    type="date"
+                                    value={selectedDate}
+                                    onChange={(e) => setSelectedDate(e.target.value)}
+                                    className="bg-transparent border-none p-0 text-xl font-bold text-foreground focus:ring-0 cursor-pointer"
+                                />
+                            </div>
                         </div>
                         <div className="flex gap-3">
                             <button
@@ -556,20 +562,20 @@ export default function Reports() {
                                         dailyCollections.map((col) => {
                                             const rowKey = col.payment_reference || `${col.admission_number}-${col.amount}-${col.date ?? selectedDate}-${col.payment_method}`
                                             return (
-                                            <tr key={rowKey} className="border-b border-border/10 hover:bg-secondary/5 transition-colors">
-                                                <td className="py-5 px-6 text-xs font-mono text-foreground/60">08:00 AM+</td>
-                                                <td className="py-5 px-6">
-                                                    <div className="text-sm font-bold text-foreground uppercase tracking-tight">{col.student_name}</div>
-                                                    <div className="text-[10px] font-medium text-foreground/40">Audit Verified</div>
-                                                </td>
-                                                <td className="py-5 px-6">
-                                                    <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 uppercase tracking-tighter">
-                                                        {col.payment_method}
-                                                    </span>
-                                                </td>
-                                                <td className="py-5 px-6 text-xs font-mono text-foreground/40">{col.payment_reference || 'INTERNAL_REF'}</td>
-                                                <td className="py-5 px-6 text-right text-sm font-bold text-primary">{formatCurrencyFromCents(col.amount)}</td>
-                                            </tr>
+                                                <tr key={rowKey} className="border-b border-border/10 hover:bg-secondary/5 transition-colors">
+                                                    <td className="py-5 px-6 text-xs font-mono text-foreground/60">08:00 AM+</td>
+                                                    <td className="py-5 px-6">
+                                                        <div className="text-sm font-bold text-foreground uppercase tracking-tight">{col.student_name}</div>
+                                                        <div className="text-[10px] font-medium text-foreground/40">Audit Verified</div>
+                                                    </td>
+                                                    <td className="py-5 px-6">
+                                                        <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 uppercase tracking-tighter">
+                                                            {col.payment_method}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-5 px-6 text-xs font-mono text-foreground/40">{col.payment_reference || 'INTERNAL_REF'}</td>
+                                                    <td className="py-5 px-6 text-right text-sm font-bold text-primary">{formatCurrencyFromCents(col.amount)}</td>
+                                                </tr>
                                             )
                                         })
                                     ) : (
@@ -688,18 +694,24 @@ export default function Reports() {
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="p-8 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl shadow-inner group transition-all hover:bg-emerald-500/10">
                             <p className="text-[10px] font-bold uppercase text-emerald-500/60 tracking-widest mb-2">Aggregate Income</p>
-                            <p className="text-3xl font-bold text-emerald-500 tracking-tight">{formatCurrencyFromCents(financialSummary?.totalIncome || 0)}</p>
+                            <p className="text-xl md:text-3xl font-bold text-emerald-500 tracking-tight">{formatCurrencyFromCents(financialSummary?.totalIncome || 0)}</p>
                         </div>
                         <div className="p-8 bg-rose-500/5 border border-rose-500/10 rounded-2xl shadow-inner group transition-all hover:bg-rose-500/10">
                             <p className="text-[10px] font-bold uppercase text-rose-500/60 tracking-widest mb-2">Aggregate Expenditure</p>
-                            <p className="text-3xl font-bold text-rose-500 tracking-tight">{formatCurrencyFromCents(financialSummary?.totalExpense || 0)}</p>
+                            <p className="text-xl md:text-3xl font-bold text-rose-500 tracking-tight">{formatCurrencyFromCents(financialSummary?.totalExpense || 0)}</p>
                         </div>
                         <div className="p-8 bg-primary/5 border border-primary/10 rounded-2xl shadow-inner group transition-all hover:bg-primary/10">
                             <p className="text-[10px] font-bold uppercase text-primary/60 tracking-widest mb-2">Net Institutional Liquidity</p>
-                            <p className="text-3xl font-bold text-primary tracking-tight">{formatCurrencyFromCents(financialSummary?.netBalance || 0)}</p>
+                            <p className="text-xl md:text-3xl font-bold text-primary tracking-tight">{formatCurrencyFromCents(financialSummary?.netBalance || 0)}</p>
                         </div>
                     </div>
                 </div>
+            )}
+
+            {activeTab === 'scheduled' && (
+                <Suspense fallback={<div className="animate-pulse space-y-4"><div className="h-8 w-48 bg-secondary/50 rounded-lg" /><div className="h-64 bg-secondary/20 rounded-xl" /></div>}>
+                    <ScheduledReports embedded />
+                </Suspense>
             )}
         </div>
     )

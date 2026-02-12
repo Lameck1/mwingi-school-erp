@@ -1,6 +1,7 @@
 import { db } from '../database/index'
 import { logAudit } from '../database/utils/audit'
 import { shillingsToCents } from '../utils/money'
+import { DoubleEntryJournalService } from './accounting/DoubleEntryJournalService'
 
 interface Stream {
     id: number
@@ -42,6 +43,7 @@ const RESET_TABLES: ReadonlyArray<string> = [
     'attendance', 'exam_result', 'report_card_summary', 'exam',
     'subject_allocation', 'stock_movement', 'inventory_item',
     'receipt', 'invoice_item', 'fee_invoice', 'ledger_transaction',
+    'journal_entry_line', 'journal_entry',
     'fee_structure', 'enrollment', 'student', 'payroll_deduction',
     'payroll_allowance', 'payroll', 'payroll_period', 'staff_allowance',
     'staff', 'reconciliation_adjustment', 'bank_statement_line',
@@ -106,6 +108,7 @@ export class SystemMaintenanceService {
             })()
             const normalization = await this.normalizeCurrencyScale(userId)
             const normalizationSuffix = normalization.success ? ` ${normalization.message}` : ''
+            await this.seedJournalEntries(userId)
             return {
                 success: true,
                 message: `Institutional environment for 2026 established successfully.${normalizationSuffix}`
@@ -352,7 +355,7 @@ export class SystemMaintenanceService {
         db!.prepare(`
             INSERT INTO ledger_transaction (transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit, description, recorded_by_user_id)
             VALUES ('EXP-2026-001', '2026-01-15', 'EXPENSE', ?, ?, 'DEBIT', 'January Electricity Bill', ?)
-        `).run(utilitiesCategory, shillingsToCents(2_500_000), userId)
+        `).run(utilitiesCategory, shillingsToCents(25_000), userId)
     }
 
     private seedStaffAndPayroll(): void {
@@ -516,6 +519,95 @@ export class SystemMaintenanceService {
             db?.pragma('foreign_keys = ON')
         } catch {
             // Ignore pragma errors in cleanup path.
+        }
+    }
+
+    /**
+     * Seeds proper double-entry journal entries for all seeded transactions.
+     * Runs AFTER the synchronous seed transaction so that ledger_transaction,
+     * fee_invoice, invoice_item, and gl_account rows already exist.
+     */
+    private async seedJournalEntries(userId: number): Promise<void> {
+        const journalService = new DoubleEntryJournalService()
+
+        // 1. Journal entries for fee invoices: DR AR (1100), CR Revenue per category
+        const invoices = db!.prepare(`
+            SELECT fi.id, fi.student_id, fi.invoice_date
+            FROM fee_invoice fi ORDER BY fi.id
+        `).all() as Array<{ id: number; student_id: number; invoice_date: string }>
+
+        for (const invoice of invoices) {
+            const items = db!.prepare(`
+                SELECT ii.amount, fc.gl_account_id, ga.account_code, fc.category_name
+                FROM invoice_item ii
+                JOIN fee_category fc ON ii.fee_category_id = fc.id
+                LEFT JOIN gl_account ga ON fc.gl_account_id = ga.id
+                WHERE ii.invoice_id = ?
+            `).all(invoice.id) as Array<{ amount: number; gl_account_id: number | null; account_code: string | null; category_name: string }>
+
+            const invoiceItems = items.map(item => ({
+                gl_account_code: item.account_code ?? '4300',
+                amount: item.amount,
+                description: item.category_name
+            }))
+
+            if (invoiceItems.length > 0) {
+                await journalService.recordInvoice(invoice.student_id, invoiceItems, invoice.invoice_date, userId)
+            }
+        }
+
+        // 2. Journal entries for fee payments: DR Bank (1020), CR AR (1100)
+        const payments = db!.prepare(`
+            SELECT lt.student_id, lt.amount, lt.payment_method, lt.payment_reference, lt.transaction_date
+            FROM ledger_transaction lt
+            WHERE lt.transaction_type = 'FEE_PAYMENT' AND (lt.is_voided = 0 OR lt.is_voided IS NULL)
+            ORDER BY lt.id
+        `).all() as Array<{ student_id: number; amount: number; payment_method: string; payment_reference: string; transaction_date: string }>
+
+        if (payments.length === 0) {
+            throw new Error('DEBUG: No payments found in ledger_transaction to seed journal entries from!')
+        }
+
+        for (const payment of payments) {
+            const result = await journalService.recordPayment(
+                payment.student_id,
+                payment.amount,
+                payment.payment_method ?? 'MPESA',
+                payment.payment_reference ?? 'Seed payment',
+                payment.transaction_date,
+                userId
+            )
+
+            // Ensure seeded payments are posted immediately (bypass approval rules)
+            if (result.success && result.entry_id) {
+                db!.prepare(`
+                    UPDATE journal_entry 
+                    SET is_posted = 1, approval_status = 'APPROVED', posted_by_user_id = ?, posted_at = CURRENT_TIMESTAMP 
+                    WHERE id = ? AND is_posted = 0
+                `).run(userId, result.entry_id)
+            }
+        }
+
+        // 3. Journal entry for expenses: DR Expense account, CR Bank (1020)
+        const expenses = db!.prepare(`
+            SELECT lt.amount, lt.description, lt.transaction_date
+            FROM ledger_transaction lt
+            WHERE lt.transaction_type = 'EXPENSE' AND (lt.is_voided = 0 OR lt.is_voided IS NULL)
+            ORDER BY lt.id
+        `).all() as Array<{ amount: number; description: string; transaction_date: string }>
+
+        for (const expense of expenses) {
+            const expenseAccount = expense.description?.toLowerCase().includes('electric') ? '5300' : '5900'
+            await journalService.createJournalEntry({
+                entry_date: expense.transaction_date,
+                entry_type: 'EXPENSE',
+                description: expense.description || 'Seed expense',
+                created_by_user_id: userId,
+                lines: [
+                    { gl_account_code: expenseAccount, debit_amount: expense.amount, credit_amount: 0, description: expense.description },
+                    { gl_account_code: '1020', debit_amount: 0, credit_amount: expense.amount, description: 'Payment from bank' }
+                ]
+            })
         }
     }
 }

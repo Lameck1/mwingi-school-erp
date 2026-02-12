@@ -31,6 +31,7 @@ export interface BalanceSheetReport {
   total_assets: number
   total_liabilities: number
   total_equity: number
+  net_income: number
   is_balanced: boolean
 }
 
