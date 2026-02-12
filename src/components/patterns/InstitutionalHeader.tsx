@@ -41,7 +41,7 @@ export const InstitutionalHeader: React.FC<InstitutionalHeaderProps> = ({ varian
     return (
         <div className="flex items-center gap-4 mb-8 p-4 bg-secondary/10 rounded-2xl border border-secondary/20">
             {settings.logo_path && (
-                <div className="w-16 h-16 rounded-xl bg-white flex items-center justify-center p-2 shadow-sm border border-border/20">
+                <div className="w-16 h-16 rounded-xl bg-card flex items-center justify-center p-2 shadow-sm border border-border/20">
                     <img src={settings.logo_path} alt="Logo" className="max-w-full max-h-full object-contain" />
                 </div>
             )}

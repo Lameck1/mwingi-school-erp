@@ -34,7 +34,7 @@ const QUICK_ACTION_ITEMS: PaletteItem[] = [
 ]
 
 const baseItemClassName = 'flex items-center gap-2 px-2 py-2 text-sm rounded-lg cursor-pointer'
-const normalItemClassName = `${baseItemClassName} text-slate-700 dark:text-slate-200 aria-selected:bg-blue-50 dark:aria-selected:bg-blue-900/20 aria-selected:text-blue-600 dark:aria-selected:text-blue-400`
+const normalItemClassName = `${baseItemClassName} text-foreground/70 dark:text-slate-200 aria-selected:bg-blue-50 dark:aria-selected:bg-blue-900/20 aria-selected:text-blue-600 dark:aria-selected:text-blue-400`
 const dangerItemClassName = `${baseItemClassName} text-red-600 dark:text-red-400 aria-selected:bg-red-50 dark:aria-selected:bg-red-900/20`
 
 function CommandItemButton({
@@ -112,12 +112,12 @@ export function CommandPalette() {
 
     return (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-start justify-center pt-[20vh] animate-in fade-in duration-200">
-            <Command className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in slide-in-from-top-4 duration-200">
-                <div className="flex items-center border-b border-slate-200 dark:border-slate-800 px-3">
+            <Command className="w-full max-w-lg bg-card dark:bg-slate-900 rounded-xl shadow-2xl overflow-hidden border border-border dark:border-slate-800 animate-in slide-in-from-top-4 duration-200">
+                <div className="flex items-center border-b border-border dark:border-slate-800 px-3">
                     <Search className="w-5 h-5 text-slate-400 mr-2" />
                     <Command.Input
                         placeholder="Type a command or search..."
-                        className="w-full px-2 py-4 text-base outline-none bg-transparent text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
+                        className="w-full px-2 py-4 text-base outline-none bg-transparent text-foreground dark:text-slate-100 placeholder:text-slate-400"
                     />
                 </div>
 
@@ -130,13 +130,13 @@ export function CommandPalette() {
                         <PaletteGroupItems items={NAVIGATION_ITEMS} onExecute={executeItem} />
                     </Command.Group>
 
-                    <Command.Separator className="h-px bg-slate-200 dark:bg-slate-800 my-1" />
+                    <Command.Separator className="h-px bg-secondary dark:bg-slate-800 my-1" />
 
                     <Command.Group heading="Quick Actions" className="px-2 py-1.5 text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
                         <PaletteGroupItems items={QUICK_ACTION_ITEMS} onExecute={executeItem} />
                     </Command.Group>
 
-                    <Command.Separator className="h-px bg-slate-200 dark:bg-slate-800 my-1" />
+                    <Command.Separator className="h-px bg-secondary dark:bg-slate-800 my-1" />
 
                     <Command.Group heading="System" className="px-2 py-1.5 text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">
                         <PaletteGroupItems items={systemItems} onExecute={executeItem} />

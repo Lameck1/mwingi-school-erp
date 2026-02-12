@@ -1,5 +1,6 @@
 import { ChevronRight } from 'lucide-react'
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 
 interface Breadcrumb {
     label: string
@@ -19,6 +20,8 @@ export function PageHeader({
     breadcrumbs,
     actions
 }: Readonly<PageHeaderProps>) {
+    const navigate = useNavigate()
+
     return (
         <div className="flex flex-col gap-6 mb-8">
             <div className="flex items-center justify-between">
@@ -28,9 +31,18 @@ export function PageHeader({
                             {breadcrumbs.map((crumb, idx) => (
                                 <React.Fragment key={crumb.label}>
                                     {idx > 0 && <ChevronRight className="w-3 h-3" />}
-                                    <span className={idx === breadcrumbs.length - 1 ? 'text-primary' : ''}>
-                                        {crumb.label}
-                                    </span>
+                                    {crumb.href ? (
+                                        <button
+                                            onClick={() => navigate(crumb.href!)}
+                                            className="hover:text-primary transition-colors cursor-pointer"
+                                        >
+                                            {crumb.label}
+                                        </button>
+                                    ) : (
+                                        <span className={idx === breadcrumbs.length - 1 ? 'text-primary' : ''}>
+                                            {crumb.label}
+                                        </span>
+                                    )}
                                 </React.Fragment>
                             ))}
                         </div>

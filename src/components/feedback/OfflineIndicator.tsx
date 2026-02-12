@@ -57,6 +57,7 @@ export function OfflineIndicator() {
                     <button
                         onClick={handleRetry}
                         disabled={retrying}
+                        title="Retry database connection"
                         className="p-2 hover:bg-white/20 rounded-lg transition-colors"
                     >
                         <RefreshCw className={`w-4 h-4 ${retrying ? 'animate-spin' : ''}`} />

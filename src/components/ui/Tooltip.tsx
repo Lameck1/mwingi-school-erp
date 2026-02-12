@@ -1,4 +1,4 @@
-import React, { useId, useRef, useState } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
 
 import { cn } from '../../utils/cn'
 
@@ -93,21 +93,33 @@ export const Tooltip: React.FC<TooltipProps> = ({
     const [isVisible, setIsVisible] = useState(false)
     const [shouldRender, setShouldRender] = useState(false)
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const animateInRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const animateOutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const tooltipId = useId()
 
+    const clearAllTimers = () => {
+        if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null }
+        if (animateInRef.current) { clearTimeout(animateInRef.current); animateInRef.current = null }
+        if (animateOutRef.current) { clearTimeout(animateOutRef.current); animateOutRef.current = null }
+    }
+
+    useEffect(() => clearAllTimers, [])
+
     const showTooltip = () => {
+        if (animateOutRef.current) { clearTimeout(animateOutRef.current); animateOutRef.current = null }
         timeoutRef.current = setTimeout(() => {
             setShouldRender(true)
             // Small delay to trigger animation
-            setTimeout(() => setIsVisible(true), 10)
+            animateInRef.current = setTimeout(() => setIsVisible(true), 10)
         }, delay)
     }
 
     const hideTooltip = () => {
-        if (timeoutRef.current) {clearTimeout(timeoutRef.current)}
+        if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null }
+        if (animateInRef.current) { clearTimeout(animateInRef.current); animateInRef.current = null }
         setIsVisible(false)
         // Wait for animation to finish before unmounting
-        setTimeout(() => setShouldRender(false), 150)
+        animateOutRef.current = setTimeout(() => setShouldRender(false), 150)
     }
 
     const trigger = React.isValidElement(children)

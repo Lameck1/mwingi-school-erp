@@ -71,21 +71,21 @@ function UploadStep({ fileInputRef, onFileSelect, onDownloadTemplate }: Readonly
         <div className="space-y-4">
             <button
                 type="button"
-                className="w-full border-2 border-dashed border-white/10 rounded-xl p-10 text-center hover:border-primary/50 transition-colors cursor-pointer bg-white/5"
+                className="w-full border-2 border-dashed border-border rounded-xl p-10 text-center hover:border-primary/50 transition-colors cursor-pointer bg-secondary/50"
                 onClick={openPicker}
             >
                 <FileSpreadsheet className="w-12 h-12 mx-auto mb-4 text-primary" />
-                <p className="font-medium text-white mb-1">Click to upload CSV or Excel</p>
+                <p className="font-medium text-foreground mb-1">Click to upload CSV or Excel</p>
                 <p className="text-sm text-foreground/50">or drag and drop here</p>
-                <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv,.xlsx,.xls"
-                    className="hidden"
-                    onChange={onFileSelect}
-                    aria-label="Upload CSV or Excel file"
-                />
             </button>
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                className="hidden"
+                onChange={onFileSelect}
+                aria-label="Upload CSV or Excel file"
+            />
 
             <div className="flex justify-between items-center bg-blue-500/10 p-4 rounded-lg border border-blue-500/20">
                 <div className="flex items-center gap-3">
@@ -118,17 +118,17 @@ interface ReviewStepProps {
 function ReviewStep({ file, error, onCancel, onImport }: Readonly<ReviewStepProps>) {
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+            <div className="flex items-center justify-between p-4 bg-secondary/50 rounded-lg border border-border">
                 <div className="flex items-center gap-3">
                     <div className="p-2 bg-green-500/20 rounded-lg text-green-400">
                         <FileSpreadsheet className="w-5 h-5" />
                     </div>
                     <div>
-                        <p className="font-medium text-white">{file.name}</p>
+                        <p className="font-medium text-foreground">{file.name}</p>
                         <p className="text-xs text-foreground/50">{(file.size / 1024).toFixed(1)} KB</p>
                     </div>
                 </div>
-                <button onClick={onCancel} className="p-1 hover:bg-white/10 rounded-full text-foreground/50" aria-label="Remove file">
+                <button onClick={onCancel} className="p-1 hover:bg-secondary rounded-full text-foreground/50" aria-label="Remove file">
                     <X className="w-4 h-4" />
                 </button>
             </div>
@@ -160,7 +160,7 @@ function ImportingStep() {
     return (
         <div className="py-12 text-center">
             <Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-white mb-2">Processing Data...</h3>
+            <h3 className="text-lg font-bold text-foreground mb-2">Processing Data...</h3>
             <p className="text-sm text-foreground/50">Please wait while we validate and import your records.</p>
         </div>
     )
@@ -175,9 +175,9 @@ function ResultStep({ importResult, onDone }: Readonly<ResultStepProps>) {
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-3 gap-4">
-                <div className="p-4 bg-white/5 rounded-lg text-center border border-white/10">
+                <div className="p-4 bg-secondary/50 rounded-lg text-center border border-border">
                     <p className="text-sm text-foreground/50 mb-1">Total Rows</p>
-                    <p className="text-2xl font-bold text-white">{importResult.totalRows}</p>
+                    <p className="text-2xl font-bold text-foreground">{importResult.totalRows}</p>
                 </div>
                 <div className="p-4 bg-green-500/10 rounded-lg text-center border border-green-500/20">
                     <p className="text-sm text-green-400 mb-1">Imported</p>

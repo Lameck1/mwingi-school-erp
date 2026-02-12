@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react'
+import React, { lazy } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -14,6 +14,8 @@ import SetupAdmin from './pages/SetupAdmin'
 import { useAuthStore } from './stores'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
+const AcademicsHub = lazy(() => import('./pages/Academic'))
+const FinanceHub = lazy(() => import('./pages/Finance'))
 const Students = lazy(() => import('./pages/Students'))
 const StudentForm = lazy(() => import('./pages/Students/StudentForm'))
 const FeePayment = lazy(() => import('./pages/Finance/FeePayment'))
@@ -40,7 +42,6 @@ const Promotions = lazy(() => import('./pages/Students/Promotions'))
 const AttendancePage = lazy(() => import('./pages/Attendance'))
 const ReportCardsPage = lazy(() => import('./pages/Reports/ReportCards'))
 const CommunicationLog = lazy(() => import('./pages/Communications/CommunicationLog'))
-const ScheduledReports = lazy(() => import('./pages/Reports/ScheduledReports'))
 const CashFlow = lazy(() => import('./pages/Finance/CashFlow'))
 const TeacherAllocation = lazy(() => import('./pages/Academic/TeacherAllocation'))
 const SubjectManagement = lazy(() => import('./pages/Academic/SubjectManagement'))
@@ -95,7 +96,6 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
     return (
         <HashRouter>
-            <Suspense fallback={<div className="p-6 text-sm text-foreground/70">Loading…</div>}>
                 <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route path="/setup" element={<SetupAdmin />} />
@@ -105,6 +105,8 @@ function AppRoutes() {
                         </PrivateRoute>
                     }>
                         <Route index element={<Dashboard />} />
+                        <Route path="academics" element={<AcademicsHub />} />
+                        <Route path="finance" element={<FinanceHub />} />
                         <Route path="students" element={<Students />} />
                         <Route path="students/new" element={<StudentForm />} />
                         <Route path="students/:id" element={<StudentForm />} />
@@ -123,7 +125,6 @@ function AppRoutes() {
                         <Route path="payroll-run" element={<PayrollRun />} />
                         <Route path="inventory" element={<Inventory />} />
                         <Route path="reports" element={<Reports />} />
-                        <Route path="reports/scheduled" element={<ScheduledReports />} />
                         <Route path="settings" element={<Settings />} />
                         <Route path="audit-log" element={<AuditLog />} />
                         <Route path="communications" element={<CommunicationLog />} />
@@ -160,15 +161,14 @@ function AppRoutes() {
                         <Route path="finance/transaction-approvals" element={<ApprovalQueue />} />
                         <Route path="finance/grants" element={<GrantTracking />} />
                         <Route path="finance/student-cost" element={<StudentCostAnalysis />} />
-                        <Route path="finance/cbc-strands" element={<CBCStrandManagement />} />
-                        <Route path="finance/jss-transition" element={<JSSTransition />} />
+                        <Route path="academic/cbc-strands" element={<CBCStrandManagement />} />
+                        <Route path="academic/jss-transition" element={<JSSTransition />} />
                         <Route path="operations/boarding" element={<BoardingProfitability />} />
                         <Route path="operations/transport" element={<TransportRouteManagement />} />
                         <Route path="settings/integrations" element={<Integrations />} />
                         <Route path="settings/message-templates" element={<MessageTemplates />} />
                     </Route>
                 </Routes>
-            </Suspense>
         </HashRouter>
     )
 }

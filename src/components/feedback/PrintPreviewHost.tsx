@@ -46,12 +46,13 @@ export function PrintPreviewHost() {
                             <span>Close</span>
                         </button>
                     </div>
-                    <div className="border border-border/30 rounded-xl overflow-hidden bg-white">
+                    <div className="border border-border/30 rounded-xl overflow-hidden bg-card">
                         <iframe
                             ref={frameRef}
                             title={preview.title}
                             srcDoc={preview.html}
-                            className="w-full h-[72vh] bg-white"
+                            sandbox="allow-same-origin allow-modals"
+                            className="w-full h-[72vh] bg-card"
                         />
                     </div>
                 </div>

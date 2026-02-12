@@ -1,44 +1,30 @@
 import {
     ArrowUpRight,
     BarChart3,
-    BookOpen,
     Bus,
     Calculator,
     CheckCircle,
     ChevronDown,
-    ClipboardList,
-    Clock,
-    CreditCard,
     Database,
-    DollarSign,
-    FileText,
-    Gift,
+    GraduationCap,
     Home,
     LayoutDashboard,
-    Layers,
-    Link2,
     LogOut,
     Mail,
     Menu,
-    MessageSquare,
     Moon,
     Package,
-    Percent,
     Settings,
     Shield,
     Sun,
-    TableProperties,
-    TrendingDown,
-    TrendingUp,
     type LucideIcon,
     UserCog,
-    UserPlus,
     Users,
     Wallet,
     WifiOff,
     X
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import { useTheme } from '../contexts/ThemeContext'
@@ -56,6 +42,8 @@ interface NavItem {
     label: string
     icon: LucideIcon
     children?: NavItem[]
+    /** Additional path prefixes that should keep this item highlighted as active */
+    activePatterns?: string[]
 }
 
 interface LayoutModel {
@@ -66,7 +54,7 @@ interface LayoutModel {
     isSidebarOpen: boolean
     setIsSidebarOpen: (open: boolean) => void
     expandedMenus: string[]
-    toggleMenu: (label: string) => void
+    toggleMenu: (label: string, siblingLabels: string[]) => void
     pathname: string
     theme: 'dark' | 'light'
     toggleTheme: () => void
@@ -79,127 +67,39 @@ const navItems: NavItem[] = [
         label: 'Students',
         icon: Users,
         children: [
-            { path: '/students', label: 'All Students', icon: Users },
+            { path: '/students', label: 'Students', icon: Users },
             { path: '/students/promotions', label: 'Promotions', icon: ArrowUpRight },
-            { path: '/attendance', label: 'Attendance', icon: CheckCircle },
-            { path: '/report-cards', label: 'Report Cards', icon: FileText },
-            { path: '/academic/report-card-generation', label: 'Generate Reports', icon: FileText },
-            { path: '/academic/allocations', label: 'Subject Allocation', icon: UserPlus },
-            { path: '/academic/subjects', label: 'Subjects', icon: BookOpen },
-            { path: '/academic/exams', label: 'Exam Management', icon: ClipboardList },
-            { path: '/academic/marks-entry', label: 'Marks Entry', icon: ClipboardList },
-            { path: '/academic/merit-lists', label: 'Merit Lists', icon: ClipboardList },
-            { path: '/academic/schedule', label: 'Exam Schedule', icon: Clock },
-            { path: '/academic/awards', label: 'Awards', icon: ClipboardList },
-            {
-                label: 'Analytics',
-                icon: BarChart3,
-                children: [
-                    { path: '/academic/analytics/exams', label: 'Exam Analytics', icon: BarChart3 },
-                    { path: '/academic/analytics/report-cards', label: 'Report Card Stats', icon: BarChart3 },
-                    { path: '/academic/analytics/subject-merit-list', label: 'Subject Merit', icon: TableProperties },
-                    { path: '/academic/analytics/most-improved', label: 'Most Improved', icon: TrendingUp }
-                ]
-            }
+            { path: '/attendance', label: 'Attendance', icon: CheckCircle }
         ]
     },
+    { path: '/academics', label: 'Academics', icon: GraduationCap, activePatterns: [
+        '/academic/', '/report-cards'
+    ] },
+    { path: '/finance', label: 'Finance', icon: Wallet, activePatterns: [
+        '/finance/', '/fee-payment', '/invoices', '/transactions', '/record-expense',
+        '/record-income', '/financial-reports', '/fee-structure', '/fee-exemptions',
+        '/budget', '/cash-flow', '/bank-accounts', '/approvals', '/asset-hire'
+    ] },
     {
-        label: 'Finance',
-        icon: Wallet,
+        label: 'Staff & Payroll',
+        icon: UserCog,
         children: [
-            { path: '/fee-payment', label: 'Fee Payments', icon: CreditCard },
-            { path: '/invoices', label: 'Invoices', icon: FileText },
-            { path: '/fee-structure', label: 'Fee Structure', icon: TableProperties },
-            { path: '/fee-exemptions', label: 'Fee Exemptions', icon: Percent },
-            { path: '/budget', label: 'Budgets', icon: Calculator },
-            { path: '/bank-accounts', label: 'Bank Accounts', icon: CreditCard },
-            { path: '/approvals', label: 'Approvals', icon: CheckCircle },
-            { path: '/record-income', label: 'Record Income', icon: TrendingUp },
-            { path: '/record-expense', label: 'Record Expense', icon: TrendingDown },
-            { path: '/transactions', label: 'Transactions', icon: ClipboardList },
-            { path: '/cash-flow', label: 'Cash Flow', icon: TrendingUp },
-            {
-                label: 'Accounting',
-                icon: Calculator,
-                children: [
-                    { path: '/finance/gl-accounts', label: 'Chart of Accounts', icon: Layers },
-                    { path: '/finance/opening-balances', label: 'Opening Balances', icon: DollarSign },
-                    { path: '/finance/reconciliation', label: 'Reconciliation', icon: CheckCircle },
-                    { path: '/finance/transaction-approvals', label: 'Approvals Queue', icon: CheckCircle }
-                ]
-            },
-            {
-                label: 'Reports',
-                icon: BarChart3,
-                children: [
-                    { path: '/financial-reports', label: 'Financial Reports', icon: BarChart3 },
-                    { path: '/finance/balance-sheet', label: 'Balance Sheet', icon: FileText },
-                    { path: '/finance/profit-and-loss', label: 'Profit & Loss', icon: TrendingUp },
-                    { path: '/finance/trial-balance', label: 'Trial Balance', icon: TableProperties }
-                ]
-            },
-            {
-                label: 'Assets',
-                icon: Package,
-                children: [
-                    { path: '/finance/fixed-assets', label: 'Asset Register', icon: Package },
-                    { path: '/finance/depreciation', label: 'Depreciation', icon: TrendingDown },
-                    { path: '/asset-hire', label: 'Asset Hire', icon: CreditCard }
-                ]
-            },
-            {
-                label: 'Advanced',
-                icon: Settings,
-                children: [
-                    { path: '/finance/grants', label: 'Grant Tracking', icon: Gift },
-                    { path: '/finance/student-cost', label: 'Student Cost', icon: Users },
-                    { path: '/finance/cbc-strands', label: 'CBC Strands', icon: BookOpen },
-                    { path: '/finance/jss-transition', label: 'JSS Transition', icon: ArrowUpRight }
-                ]
-            }
+            { path: '/staff', label: 'Staff Directory', icon: UserCog },
+            { path: '/payroll-run', label: 'Run Payroll', icon: Calculator }
         ]
     },
     {
         label: 'Operations',
-        icon: Settings,
+        icon: Package,
         children: [
+            { path: '/inventory', label: 'Inventory', icon: Package },
             { path: '/operations/boarding', label: 'Boarding', icon: Home },
             { path: '/operations/transport', label: 'Transport', icon: Bus }
         ]
     },
-    {
-        label: 'Payroll',
-        icon: Calculator,
-        children: [
-            { path: '/staff', label: 'Staff', icon: UserCog },
-            { path: '/payroll-run', label: 'Run Payroll', icon: Calculator }
-        ]
-    },
-    { path: '/inventory', label: 'Inventory', icon: Package },
-    {
-        label: 'Reports',
-        icon: BarChart3,
-        children: [
-            { path: '/reports', label: 'All Reports', icon: BarChart3 },
-            { path: '/reports/scheduled', label: 'Scheduler', icon: Clock }
-        ]
-    },
-    {
-        label: 'Communications',
-        icon: Mail,
-        children: [
-            { path: '/communications', label: 'Message Logs', icon: MessageSquare },
-            { path: '/settings/message-templates', label: 'Templates', icon: FileText }
-        ]
-    },
-    {
-        label: 'Settings',
-        icon: Settings,
-        children: [
-            { path: '/settings', label: 'General Settings', icon: Settings },
-            { path: '/settings/integrations', label: 'Integrations', icon: Link2 }
-        ]
-    }
+    { path: '/reports', label: 'Reports', icon: BarChart3 },
+    { path: '/communications', label: 'Communications', icon: Mail },
+    { path: '/settings', label: 'Settings', icon: Settings }
 ]
 
 const adminItems: NavItem[] = [
@@ -214,6 +114,41 @@ function getSectionTitle(pathname: string): string {
     }
     const [firstSegment] = pathname.substring(1).split('/')
     return firstSegment.replace('-', ' ')
+}
+
+function pathMatches(pathname: string, itemPath: string): boolean {
+    if (itemPath === '/') return pathname === '/'
+    return pathname === itemPath || pathname.startsWith(itemPath + '/')
+}
+
+/** Walk the nav tree and return the chain of parent labels leading to `pathname`. */
+function findMenuChainForPath(pathname: string, items: NavItem[]): string[] | null {
+    for (const item of items) {
+        if (item.path && pathMatches(pathname, item.path)) {
+            return []
+        }
+        if (item.children) {
+            const result = findMenuChainForPath(pathname, item.children)
+            if (result !== null) {
+                return [item.label, ...result]
+            }
+        }
+    }
+    return null
+}
+
+function PageLoader() {
+    return (
+        <div className="space-y-6 animate-pulse pt-2">
+            <div className="h-7 w-56 bg-secondary/50 rounded-lg" />
+            <div className="flex gap-4">
+                <div className="h-24 flex-1 bg-secondary/30 rounded-xl" />
+                <div className="h-24 flex-1 bg-secondary/30 rounded-xl" />
+                <div className="h-24 flex-1 bg-secondary/30 rounded-xl hidden md:block" />
+            </div>
+            <div className="h-96 bg-secondary/20 rounded-xl" />
+        </div>
+    )
 }
 
 function useLoadGlobalSettings(): Pick<LayoutModel, 'schoolName' | 'currentAcademicYearName'> {
@@ -290,11 +225,21 @@ function useLayoutModel(): LayoutModel {
     const { user, logout } = useAuthStore()
     const { theme, toggleTheme } = useTheme()
     const { showToast } = useToast()
-    const [expandedMenus, setExpandedMenus] = useState<string[]>([])
+    const [expandedMenus, setExpandedMenus] = useState<string[]>(() =>
+        findMenuChainForPath(location.pathname, [...navItems, ...adminItems]) ?? []
+    )
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
     const { schoolName, currentAcademicYearName } = useLoadGlobalSettings()
 
     useElectronLayoutEvents(navigate, showToast)
+
+    // Auto-expand the menu section matching the current route
+    useEffect(() => {
+        const chain = findMenuChainForPath(location.pathname, [...navItems, ...adminItems])
+        if (chain !== null) {
+            setExpandedMenus(chain)
+        }
+    }, [location.pathname])
 
     return {
         user,
@@ -304,11 +249,12 @@ function useLayoutModel(): LayoutModel {
         isSidebarOpen,
         setIsSidebarOpen,
         expandedMenus,
-        toggleMenu: (label: string) => setExpandedMenus((previous) => (
-            previous.includes(label)
-                ? previous.filter((item) => item !== label)
-                : [...previous, label]
-        )),
+        toggleMenu: (label: string, siblingLabels: string[]) => setExpandedMenus((previous) => {
+            if (previous.includes(label)) {
+                return previous.filter((item) => item !== label)
+            }
+            return [...previous.filter((item) => !siblingLabels.includes(item)), label]
+        }),
         pathname: location.pathname,
         theme,
         toggleTheme,
@@ -322,12 +268,15 @@ function useLayoutModel(): LayoutModel {
 interface NavTreeProps {
     items: NavItem[]
     expandedMenus: string[]
-    toggleMenu: (label: string) => void
+    toggleMenu: (label: string, siblingLabels: string[]) => void
     closeSidebar: () => void
     isChild?: boolean
 }
 
 function NavTree({ items, expandedMenus, toggleMenu, closeSidebar, isChild = false }: Readonly<NavTreeProps>) {
+    const siblingLabels = items.filter(i => i.children).map(i => i.label)
+    const location = useLocation()
+
     return (
         <>
             {items.map((item) => {
@@ -336,43 +285,52 @@ function NavTree({ items, expandedMenus, toggleMenu, closeSidebar, isChild = fal
                     return (
                         <div key={item.label}>
                             <button
-                                onClick={() => toggleMenu(item.label)}
+                                onClick={() => toggleMenu(item.label, siblingLabels)}
                                 className="w-full flex items-center justify-between px-4 py-3 text-foreground/60 hover:bg-secondary rounded-lg transition-colors"
                             >
                                 <div className="flex items-center gap-3">
                                     <item.icon className="w-5 h-5" />
                                     <span>{item.label}</span>
                                 </div>
-                                <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                             </button>
-                            {isExpanded && (
-                                <div className="ml-4 mt-1 space-y-1">
-                                    <NavTree
-                                        items={item.children}
-                                        expandedMenus={expandedMenus}
-                                        toggleMenu={toggleMenu}
-                                        closeSidebar={closeSidebar}
-                                        isChild={true}
-                                    />
+                            <div className={`grid transition-[grid-template-rows] duration-200 ease-out ${isExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                                <div className="overflow-hidden">
+                                    <div className="ml-4 mt-1 space-y-1">
+                                        <NavTree
+                                            items={item.children}
+                                            expandedMenus={expandedMenus}
+                                            toggleMenu={toggleMenu}
+                                            closeSidebar={closeSidebar}
+                                            isChild={true}
+                                        />
+                                    </div>
                                 </div>
-                            )}
+                            </div>
                         </div>
                     )
                 }
                 if (!item.path) {
                     return null
                 }
+
+                // Check if this item should be active based on activePatterns
+                const isPatternActive = item.activePatterns?.some(
+                    pattern => location.pathname.startsWith(pattern)
+                ) ?? false
+
                 return (
                     <NavLink
                         key={item.path}
                         to={item.path}
                         onClick={closeSidebar}
-                        className={({ isActive }) =>
-                            `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
+                        className={({ isActive }) => {
+                            const active = isActive || isPatternActive
+                            return `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${active
                                 ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
                                 : 'text-foreground/60 hover:bg-secondary'
                             } ${isChild ? 'text-sm' : ''}`
-                        }
+                        }}
                     >
                         <item.icon className={isChild ? 'w-4 h-4' : 'w-5 h-5'} />
                         <span>{item.label}</span>
@@ -393,7 +351,7 @@ function Sidebar({ model }: Readonly<SidebarProps>) {
     return (
         <aside className={`fixed inset-y-0 left-0 w-64 premium-sidebar flex flex-col z-50 transition-transform duration-500 ease-out lg:relative lg:translate-x-0 ${model.isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="p-8 border-b border-border/40 relative">
-                <button onClick={() => model.setIsSidebarOpen(false)} className="absolute top-4 right-4 p-2 lg:hidden text-foreground/40 hover:text-primary transition-colors">
+                <button onClick={() => model.setIsSidebarOpen(false)} title="Close sidebar" className="absolute top-4 right-4 p-2 lg:hidden text-foreground/40 hover:text-primary transition-colors">
                     <X className="w-5 h-5" />
                 </button>
                 <div className="flex items-center gap-3">
@@ -459,7 +417,7 @@ function Header({ model }: Readonly<HeaderProps>) {
     return (
         <header className="premium-header px-4 lg:px-8 h-20 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-4">
-                <button onClick={() => model.setIsSidebarOpen(true)} className="p-2 lg:hidden text-foreground/60 hover:text-primary transition-colors bg-secondary/20 rounded-lg">
+                <button onClick={() => model.setIsSidebarOpen(true)} title="Open sidebar" className="p-2 lg:hidden text-foreground/60 hover:text-primary transition-colors bg-secondary/20 rounded-lg">
                     <Menu className="w-5 h-5" />
                 </button>
                 <h2 className="text-sm font-bold text-foreground/40 uppercase tracking-widest hidden sm:block">{sectionTitle}</h2>
@@ -478,10 +436,10 @@ function Header({ model }: Readonly<HeaderProps>) {
                 </div>
                 <div className="w-px h-8 bg-border/60"></div>
                 <div className="flex items-center gap-2 p-1.5 bg-secondary/50 border border-border/60 rounded-xl">
-                    <button onClick={model.toggleTheme} className="p-2 rounded-lg hover:bg-secondary text-foreground/60 transition-colors">
+                    <button onClick={model.toggleTheme} title="Toggle theme" className="p-2 rounded-lg hover:bg-secondary text-foreground/60 transition-colors">
                         {model.theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                     </button>
-                    <button className="p-2 rounded-lg hover:bg-white/10 text-foreground/60 transition-colors">
+                    <button title="Settings" className="p-2 rounded-lg hover:bg-secondary text-foreground/60 transition-colors">
                         <Settings className="w-4 h-4" />
                     </button>
                 </div>
@@ -521,6 +479,12 @@ function SidebarBackdrop({ isOpen, closeSidebar }: Readonly<SidebarBackdropProps
 
 export default function Layout() {
     const model = useLayoutModel()
+    const mainRef = useRef<HTMLElement>(null)
+
+    // Scroll to top on route change
+    useEffect(() => {
+        mainRef.current?.scrollTo(0, 0)
+    }, [model.pathname])
 
     return (
         <div className="flex h-screen bg-background text-foreground overflow-hidden">
@@ -530,9 +494,11 @@ export default function Layout() {
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
                 {!model.isOnline && <OfflineBanner />}
                 <Header model={model} />
-                <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 lg:p-8 no-scrollbar scroll-smooth">
-                    <div className="max-w-7xl mx-auto animate-slide-up pb-12">
-                        <Outlet />
+                <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 lg:p-8 no-scrollbar scroll-smooth">
+                    <div className="max-w-7xl mx-auto pb-12">
+                        <Suspense fallback={<PageLoader />}>
+                            <Outlet />
+                        </Suspense>
                     </div>
                 </main>
             </div>

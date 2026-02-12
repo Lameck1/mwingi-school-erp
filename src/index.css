@@ -21,8 +21,15 @@
     --card-foreground: 213 27% 84%;
     --popover: 222 47% 8%;
     --popover-foreground: 213 27% 84%;
-    --secondary: 222 47% 11%;
+    --secondary: 222 47% 14%;
     --secondary-foreground: 213 27% 84%;
+    --muted: 222 47% 14%;
+    --muted-foreground: 215 20% 55%;
+    --accent: 222 47% 14%;
+    --accent-foreground: 213 27% 90%;
+    --destructive-foreground: 0 0% 100%;
+    --success-foreground: 0 0% 100%;
+    --warning-foreground: 0 0% 100%;
     --border: 217 32% 17%;
     --input: 217 32% 17%;
     --ring: 231 92% 62%;
@@ -37,6 +44,13 @@
     --popover-foreground: 222 47% 11%;
     --secondary: 210 40% 94%;
     --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 94%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 94%;
+    --accent-foreground: 222 47% 11%;
+    --destructive-foreground: 0 0% 100%;
+    --success-foreground: 0 0% 100%;
+    --warning-foreground: 0 0% 100%;
     --border: 214 32% 85%;
     --input: 214 32% 85%;
     --ring: 231 92% 62%;
@@ -44,6 +58,21 @@
 
   * {
     @apply border-border/30;
+  }
+
+  /* Global dark-mode form control styling */
+  input,
+  select,
+  textarea {
+    background-color: hsl(var(--card));
+    color: hsl(var(--foreground));
+  }
+
+  /* Native date/time picker icons */
+  .dark input[type="date"]::-webkit-calendar-picker-indicator,
+  .dark input[type="time"]::-webkit-calendar-picker-indicator,
+  .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(1) brightness(0.8);
   }
 
   body {
@@ -112,7 +141,7 @@
   /* Sophisticated Input (Minimalist) */
   .input,
   .form-input {
-    @apply w-full bg-background border border-border/60 rounded-lg px-4 py-3 text-sm focus:bg-background focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all duration-300 placeholder:text-muted-foreground/30;
+    @apply w-full bg-input border border-border/60 rounded-lg px-4 py-3 text-sm focus:bg-input focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all duration-300 placeholder:text-muted-foreground/30;
   }
 
   /* Data Table (Modern Clean) */
@@ -167,7 +196,17 @@
 
   .no-scrollbar {
     -ms-overflow-style: none;
-    scrollbar-width: none;
+  }
+
+  @supports (scrollbar-width: none) {
+    .no-scrollbar {
+      scrollbar-width: none;
+    }
+  }
+
+  /* Progress Bar Fill — set --bar-w on element, e.g. via data-attr or React */
+  .bar-fill {
+    width: var(--bar-w, 0%);
   }
 
   /* Stat Card Specifics */
@@ -199,6 +238,34 @@
   .status-badge-error {
     @apply bg-destructive/15 text-destructive border border-destructive/30;
   }
+
+  /* Modal Overlay */
+  .modal-overlay {
+    @apply fixed inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center z-50;
+  }
+
+  .modal-content {
+    @apply bg-card rounded-xl shadow-xl border border-border/40;
+  }
+
+  /* Form Controls (themed) */
+  .form-select,
+  .form-date {
+    @apply w-full bg-background border border-border/60 rounded-lg px-4 py-3 text-sm focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all duration-300;
+  }
+
+  /* Info Box */
+  .info-box {
+    @apply bg-primary/5 border border-primary/20 rounded-lg p-4 text-sm;
+  }
+
+  .info-box-title {
+    @apply font-semibold text-primary mb-1;
+  }
+
+  .info-box-text {
+    @apply text-foreground/70;
+  }
 }
 
 /* Scrollbar Customization */
@@ -213,6 +280,19 @@
 
 ::-webkit-scrollbar-thumb {
   @apply bg-border/40 rounded-full hover:bg-primary/40 transition-colors duration-300;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-border/30 rounded-full hover:bg-primary/30;
 }
 
 /* Animations */

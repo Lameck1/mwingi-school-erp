@@ -80,6 +80,7 @@ export function Select({
 }: Readonly<SelectProps>) {
     const [isOpen, setIsOpen] = useState(false)
     const containerRef = useRef<HTMLDivElement>(null)
+    const buttonRef = useRef<HTMLButtonElement>(null)
     const generatedId = useId()
     const selectId = id || `select-${generatedId}`
     const labelId = `${selectId}-label`
@@ -95,6 +96,10 @@ export function Select({
         document.addEventListener('mousedown', handleClickOutside)
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
+
+    useEffect(() => {
+        buttonRef.current?.setAttribute('aria-expanded', String(isOpen))
+    }, [isOpen])
 
     const handleToggle = () => {
         setIsOpen((prev) => !prev)
@@ -114,15 +119,15 @@ export function Select({
             )}
             <div className="relative">
                 <button
+                    ref={buttonRef}
                     id={selectId}
                     type="button"
                     onClick={handleToggle}
                     aria-label={ariaLabel || label || placeholder}
                     aria-labelledby={label ? labelId : undefined}
-                    aria-expanded={isOpen}
                     aria-haspopup="listbox"
                     className={cn(
-                        "w-full flex items-center justify-between bg-secondary/30 border border-border/50 rounded-lg px-4 py-2.5 text-sm transition-[border-color,background-color,ring] duration-200",
+                        "w-full flex items-center justify-between bg-input border border-border/50 rounded-lg px-4 py-2.5 text-sm transition-[border-color,background-color,ring] duration-200",
                         "hover:bg-secondary/50 hover:border-border/80",
                         "focus:ring-1 focus:ring-primary/40 focus:border-primary/50 outline-none",
                         isOpen && "border-primary/50 ring-1 ring-primary/40"

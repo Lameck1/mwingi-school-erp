@@ -316,6 +316,9 @@ function formatValue(value: unknown, format?: PDFColumn['format']): string {
         case 'date':
             return new Date(value as string).toLocaleDateString()
         default:
-            return String(value)
+            if (typeof value === 'object') {
+                return JSON.stringify(value)
+            }
+            return String(value as string | number | boolean)
     }
 }

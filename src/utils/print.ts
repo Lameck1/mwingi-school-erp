@@ -45,12 +45,20 @@ function getHeadStylesHtml(): string {
     .join('\n')
 }
 
-function escapeHtmlAttribute(value: string): string {
+function escapeHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
     .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
+}
+
+function safeString(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (value == null) return ''
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value as string | number | boolean)
 }
 
 function buildHtmlDocument(params: {
@@ -61,7 +69,7 @@ function buildHtmlDocument(params: {
   includeAppStyles?: boolean
 }): string {
   const headStyles = params.includeAppStyles ? getHeadStylesHtml() : ''
-  const safeTitle = escapeHtmlAttribute(params.title)
+  const safeTitle = escapeHtml(params.title)
 
   return `
     <!DOCTYPE html>
@@ -94,7 +102,7 @@ export function printCurrentView(params?: { title?: string; selector?: string; o
     return
   }
 
-  const bodyClass = escapeHtmlAttribute(document.body.className || '')
+  const bodyClass = escapeHtml(document.body.className || '')
   const html = buildHtmlDocument({
     title: params?.title ?? document.title,
     orientation: params?.orientation ?? 'portrait',
@@ -206,9 +214,9 @@ function generatePrintHTML(
       <div class="meta-grid">
         <div class="meta-box">
           <div class="meta-label">Student Details</div>
-          <div class="meta-value">${data.studentName}</div>
-          <div>ADM: ${data.admissionNumber}</div>
-          <div>Stream: ${data.streamName}</div>
+          <div class="meta-value">${escapeHtml(safeString(data.studentName))}</div>
+          <div>ADM: ${escapeHtml(safeString(data.admissionNumber))}</div>
+          <div>Stream: ${escapeHtml(safeString(data.streamName))}</div>
         </div>
         <div class="meta-box">
           <div class="meta-label">Statement Summary</div>
@@ -246,8 +254,8 @@ function generatePrintHTML(
         return `
               <tr>
                 <td>${date ? new Date(date).toLocaleDateString() : 'Invalid Date'}</td>
-                <td>${ref}</td>
-                <td>${row.description}</td>
+                <td>${escapeHtml(ref)}</td>
+                <td>${escapeHtml(row.description ?? '')}</td>
                 <td style="text-align: right">${debit > 0 ? formatCurrencyFromCents(debit) : '-'}</td>
                 <td style="text-align: right">${credit > 0 ? formatCurrencyFromCents(credit) : '-'}</td>
                 <td style="text-align: right">${formatCurrencyFromCents(balance)}</td>
@@ -267,14 +275,14 @@ function generatePrintHTML(
       <div class="meta-grid">
         <div class="meta-box">
           <div class="meta-label">Receipt For</div>
-          <div class="meta-value">${data.studentName}</div>
-          <div>ADM: ${data.admissionNumber}</div>
+          <div class="meta-value">${escapeHtml(safeString(data.studentName))}</div>
+          <div>ADM: ${escapeHtml(safeString(data.admissionNumber))}</div>
         </div>
         <div class="meta-box">
           <div class="meta-label">Receipt Details</div>
-          <div class="meta-value">No: ${data.receiptNumber}</div>
+          <div class="meta-value">No: ${escapeHtml(safeString(data.receiptNumber))}</div>
           <div>Date: ${new Date(data.date as string).toLocaleDateString()}</div>
-          <div>Mode: ${data.paymentMode}</div>
+          <div>Mode: ${escapeHtml(safeString(data.paymentMode))}</div>
         </div>
       </div>
 
@@ -284,7 +292,7 @@ function generatePrintHTML(
           ${formatCurrencyFromCents(data.amount as number)}
         </div>
         <div style="text-align: center; font-style: italic; color: #64748b;">
-          ${data.amountInWords}
+          ${escapeHtml(safeString(data.amountInWords))}
         </div>
       </div>
 
@@ -298,11 +306,11 @@ function generatePrintHTML(
     title,
     bodyContent: `
       <div class="print-content">
-        <div class="watermark">${schoolName}</div>
+        <div class="watermark">${escapeHtml(schoolName)}</div>
         <div class="header">
-          <div class="school-name">${schoolName}</div>
+          <div class="school-name">${escapeHtml(schoolName)}</div>
           <div class="school-info">
-            ${schoolAddress} | ${schoolPhone} | ${schoolEmail}
+            ${escapeHtml(schoolAddress)} | ${escapeHtml(schoolPhone)} | ${escapeHtml(schoolEmail)}
           </div>
         </div>
         <div class="doc-title">${title}</div>
