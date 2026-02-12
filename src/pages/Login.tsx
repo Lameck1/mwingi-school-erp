@@ -71,7 +71,7 @@ export default function Login() {
             <div className="w-full max-w-md">
                 {/* Logo Section */}
                 <div className="text-center mb-8">
-                    <div className="w-20 h-20 bg-white rounded-full mx-auto mb-4 flex items-center justify-center shadow-lg">
+                    <div className="w-20 h-20 bg-card rounded-full mx-auto mb-4 flex items-center justify-center shadow-lg">
                         <span className="text-3xl font-bold text-blue-600">MAS</span>
                     </div>
                     <h1 className="text-2xl font-bold text-white">Mwingi Adventist School</h1>
@@ -79,11 +79,11 @@ export default function Login() {
                 </div>
 
                 {/* Login Form */}
-                <div className="bg-white rounded-2xl shadow-2xl p-8">
-                    <h2 className="text-xl font-semibold text-gray-800 text-center mb-6">Sign In</h2>
+                <div className="bg-card rounded-2xl shadow-2xl p-8">
+                    <h2 className="text-xl font-semibold text-foreground text-center mb-6">Sign In</h2>
 
                     {error && (
-                        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm">
+                        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg text-sm">
                             {error}
                         </div>
                     )}
@@ -119,7 +119,7 @@ export default function Login() {
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
                                 >
                                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                 </button>
@@ -142,7 +142,7 @@ export default function Login() {
                         </button>
                     </form>
 
-                    <div className="mt-6 pt-6 border-t border-gray-100 text-center text-sm text-gray-500">
+                    <div className="mt-6 pt-6 border-t border-border/30 text-center text-sm text-muted-foreground">
                         <p>Use your assigned credentials to sign in.</p>
                     </div>
                 </div>

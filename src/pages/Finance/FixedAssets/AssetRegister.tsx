@@ -89,7 +89,7 @@ export default function AssetRegister() {
             <PageHeader
                 title="Fixed Asset Register"
                 subtitle="Manage school properties and equipment"
-                breadcrumbs={[{ label: 'Finance' }, { label: 'Fixed Assets' }]}
+                breadcrumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Fixed Assets' }]}
                 actions={
                     <button
                         onClick={() => setShowCreateModal(true)}
@@ -110,7 +110,7 @@ export default function AssetRegister() {
                         onChange={(e) => setSearch(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && loadAssets(search)}
                         placeholder="Search assets..."
-                        className="input pl-11 bg-secondary/30"
+                        className="input pl-11"
                     />
                 </div>
                 <button className="btn btn-secondary px-4" aria-label="Filter assets">
@@ -121,7 +121,7 @@ export default function AssetRegister() {
             <div className="card no-scrollbar overflow-x-auto">
                 <table className="w-full text-left">
                     <thead>
-                        <tr className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 border-b border-white/5">
+                        <tr className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 border-b border-border/20">
                             <th className="px-4 py-4">Asset Details</th>
                             <th className="px-4 py-4">Category</th>
                             <th className="px-4 py-4">Location</th>
@@ -135,14 +135,14 @@ export default function AssetRegister() {
                         {assets.map((asset) => (
                             <tr key={asset.id} className="group hover:bg-white/[0.02]">
                                 <td className="px-4 py-4">
-                                    <p className="font-bold text-white">{asset.asset_name}</p>
+                                    <p className="font-bold text-foreground">{asset.asset_name}</p>
                                     <p className="text-[10px] text-foreground/40 font-mono">{asset.asset_code}</p>
                                 </td>
                                 <td className="px-4 py-4 text-sm text-foreground/70">{asset.category_name || '-'}</td>
                                 <td className="px-4 py-4 text-sm text-foreground/70">{asset.location || '-'}</td>
                                 <td className="px-4 py-4 text-sm text-foreground/70">{formatDate(asset.acquisition_date)}</td>
                                 <td className="px-4 py-4 text-right font-mono text-sm">{formatCurrencyFromCents(asset.acquisition_cost)}</td>
-                                <td className="px-4 py-4 text-right font-bold text-white font-mono">{formatCurrencyFromCents(asset.current_value)}</td>
+                                <td className="px-4 py-4 text-right font-bold text-foreground font-mono">{formatCurrencyFromCents(asset.current_value)}</td>
                                 <td className="px-4 py-4">
                                     <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full ${asset.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-500/10 text-slate-400'
                                         }`}>
@@ -179,7 +179,7 @@ export default function AssetRegister() {
                             aria-label="Asset name"
                         />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <label htmlFor="field-184" className="label">Category</label>
                             <select id="field-184"
@@ -206,7 +206,7 @@ export default function AssetRegister() {
                             />
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <label htmlFor="field-211" className="label">Date Acquired</label>
                             <input id="field-211"

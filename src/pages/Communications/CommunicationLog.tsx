@@ -1,10 +1,13 @@
 import {
-    MessageSquare, Mail, CheckCircle, XCircle
+    MessageSquare, Mail, CheckCircle, XCircle,
+    FileText
 } from 'lucide-react'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
+
+const MessageTemplates = lazy(() => import('../Settings/MessageTemplates'))
 
 interface LogEntry {
     id: number
@@ -23,6 +26,7 @@ export default function CommunicationLog() {
     const [logs, setLogs] = useState<LogEntry[]>([])
     const [loading, setLoading] = useState(true)
     const [stats, setStats] = useState({ total: 0, sent: 0, failed: 0, sms: 0, email: 0 })
+    const [activeTab, setActiveTab] = useState<'logs' | 'templates'>('logs')
 
     // Filters
     const [typeFilter, setTypeFilter] = useState<'ALL' | 'SMS' | 'EMAIL'>('ALL')
@@ -93,10 +97,34 @@ export default function CommunicationLog() {
     return (
         <div className="space-y-8 pb-10">
             <PageHeader
-                title="Communication Log"
-                subtitle="History of sent SMS and Email notifications"
-                breadcrumbs={[{ label: 'Communications' }, { label: 'Logs' }]}
+                title="Communications"
+                subtitle="Messages, notifications, and templates"
+                breadcrumbs={[{ label: 'Communications' }]}
             />
+
+            {/* Tabs */}
+            <div className="flex gap-1 bg-secondary/30 border border-border/20 rounded-lg p-1 w-fit">
+                {([
+                    { id: 'logs' as const, label: 'Message Log', icon: MessageSquare },
+                    { id: 'templates' as const, label: 'Templates', icon: FileText }
+                ]).map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-all duration-300 ${
+                            activeTab === tab.id
+                                ? 'bg-primary text-primary-foreground shadow-lg'
+                                : 'text-foreground/60 hover:text-foreground'
+                        }`}
+                    >
+                        <tab.icon className="w-4 h-4" />
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            {activeTab === 'logs' && (
+                <div className="space-y-6">
 
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -114,19 +142,21 @@ export default function CommunicationLog() {
                         placeholder="Search logs..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="px-3 py-1.5 bg-background/50 border border-white/10 rounded-md text-sm w-full md:w-64"
+                        className="px-3 py-1.5 bg-background/50 border border-border rounded-md text-sm w-full md:w-64"
                     />
                     <input
                         type="date"
+                        aria-label="Start date"
                         value={dateRange.start}
                         onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                        className="px-3 py-1.5 bg-background/50 border border-white/10 rounded-md text-sm"
+                        className="px-3 py-1.5 bg-background/50 border border-border rounded-md text-sm"
                     />
                     <input
                         type="date"
+                        aria-label="End date"
                         value={dateRange.end}
                         onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                        className="px-3 py-1.5 bg-background/50 border border-white/10 rounded-md text-sm"
+                        className="px-3 py-1.5 bg-background/50 border border-border rounded-md text-sm"
                     />
                 </div>
             </div>
@@ -198,7 +228,7 @@ export default function CommunicationLog() {
                                             <div className="font-bold text-foreground">{log.recipient_type}</div>
                                             <div className="text-xs text-foreground/50">ID: {log.recipient_id}</div>
                                         </td>
-                                        <td className="py-3 px-4 text-sm max-w-md">
+                                        <td className="py-3 px-4 text-sm max-w-md truncate">
                                             {log.subject && (
                                                 <div className="font-bold text-foreground mb-1">{log.subject}</div>
                                             )}
@@ -228,6 +258,15 @@ export default function CommunicationLog() {
                     </div>
                 )}
             </div>
+
+                </div>
+            )}
+
+            {activeTab === 'templates' && (
+                <Suspense fallback={<div className="animate-pulse space-y-4"><div className="h-8 w-48 bg-secondary/50 rounded-lg" /><div className="h-64 bg-secondary/20 rounded-xl" /></div>}>
+                    <MessageTemplates />
+                </Suspense>
+            )}
         </div>
     )
 }

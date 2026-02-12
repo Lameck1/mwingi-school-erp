@@ -89,7 +89,7 @@ export default function CashFlow() {
             <PageHeader
                 title="Cash Flow & Forecasting"
                 subtitle="Analyze cash position and future trends"
-                breadcrumbs={[{ label: 'Finance' }, { label: 'Cash Flow' }]}
+                breadcrumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Cash Flow' }]}
                 actions={
                     <button onClick={handleExport} className="btn btn-secondary flex items-center gap-2">
                         <Download className="w-4 h-4" /> Export Report

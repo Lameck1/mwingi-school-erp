@@ -1,6 +1,9 @@
-import { Printer } from 'lucide-react'
-import React from 'react'
+import { Printer, XCircle } from 'lucide-react'
+import React, { useState } from 'react'
 
+import { Modal } from '../../../components/ui/Modal'
+import { useToast } from '../../../contexts/ToastContext'
+import { useAuthStore } from '../../../stores'
 import { type Payment } from '../../../types/electron-api/FinanceAPI'
 import { type Student } from '../../../types/electron-api/StudentAPI'
 import { formatCurrencyFromCents, formatDate } from '../../../utils/format'
@@ -12,9 +15,45 @@ interface LedgerHistoryProps {
     payments: Payment[]
     student: Student | null
     schoolSettings: SchoolSettings | null
+    onPaymentVoided?: () => void
 }
 
-export const LedgerHistory: React.FC<LedgerHistoryProps> = ({ payments, student, schoolSettings }) => {
+export const LedgerHistory: React.FC<LedgerHistoryProps> = ({ payments, student, schoolSettings, onPaymentVoided }) => {
+    const { showToast } = useToast()
+    const { user } = useAuthStore()
+    const [voidingId, setVoidingId] = useState<number | null>(null)
+    const [voidReason, setVoidReason] = useState('')
+    const [voidModalPayment, setVoidModalPayment] = useState<Payment | null>(null)
+
+    const handleVoidRequest = (payment: Payment) => {
+        setVoidModalPayment(payment)
+        setVoidReason('')
+    }
+
+    const handleVoidConfirm = async () => {
+        if (!voidModalPayment || !voidReason.trim() || !user?.id) {return}
+
+        setVoidingId(voidModalPayment.id)
+        try {
+            const result = await globalThis.electronAPI.voidPayment(
+                voidModalPayment.id,
+                voidReason.trim(),
+                user.id
+            )
+            if (result.success) {
+                showToast('Payment voided successfully', 'success')
+                setVoidModalPayment(null)
+                onPaymentVoided?.()
+            } else {
+                showToast(result.message || 'Failed to void payment', 'error')
+            }
+        } catch (error) {
+            console.error('Payment void error:', error)
+            showToast('Failed to void payment', 'error')
+        } finally {
+            setVoidingId(null)
+        }
+    }
 
     const handlePrint = (payment: Payment) => {
         if (!payment || !student) {return}
@@ -87,10 +126,57 @@ export const LedgerHistory: React.FC<LedgerHistoryProps> = ({ payments, student,
                             >
                                 <Printer className="w-5 h-5" />
                             </button>
+                            <button
+                                onClick={() => handleVoidRequest(p)}
+                                className="p-2 hover:bg-destructive/20 rounded-lg text-foreground/40 hover:text-destructive transition-all"
+                                title="Void Payment"
+                                disabled={voidingId === p.id}
+                            >
+                                <XCircle className="w-5 h-5" />
+                            </button>
                         </div>
                     </div>
                 ))}
             </div>
+
+            {/* Void Payment Confirmation Modal */}
+            <Modal isOpen={!!voidModalPayment} onClose={() => setVoidModalPayment(null)} title="Void Payment" size="sm">
+                {voidModalPayment && (
+                    <>
+                        <p className="text-sm text-foreground/60 mb-4">
+                            You are about to void payment <span className="font-bold">{voidModalPayment.receipt_number}</span> for{' '}
+                            <span className="font-bold">{formatCurrencyFromCents(voidModalPayment.amount)}</span>.
+                            This action will reverse the payment and update the student&apos;s balance.
+                        </p>
+                        <label htmlFor="void-reason" className="text-xs font-bold text-foreground/40 uppercase tracking-widest mb-1 block">
+                            Reason for voiding <span className="text-destructive">*</span>
+                        </label>
+                        <textarea
+                            id="void-reason"
+                            value={voidReason}
+                            onChange={(e) => setVoidReason(e.target.value)}
+                            placeholder="Enter the reason for voiding this payment..."
+                            className="input w-full h-24 resize-none mb-4"
+                            required
+                        />
+                        <div className="flex gap-3 justify-end">
+                            <button
+                                onClick={() => setVoidModalPayment(null)}
+                                className="btn btn-secondary px-6 py-2 text-sm font-bold"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleVoidConfirm}
+                                disabled={!voidReason.trim() || voidingId !== null}
+                                className="btn bg-destructive text-white hover:bg-destructive/90 px-6 py-2 text-sm font-bold disabled:opacity-50"
+                            >
+                                {voidingId ? 'Voiding...' : 'Confirm Void'}
+                            </button>
+                        </div>
+                    </>
+                )}
+            </Modal>
         </div>
     )
 }

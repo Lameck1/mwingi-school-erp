@@ -4,7 +4,9 @@ import React, { useState, useEffect } from 'react'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 import { PageHeader } from '../../components/patterns/PageHeader'
+import { ProgressBar } from '../../components/ui/ProgressBar'
 import { Select } from '../../components/ui/Select'
+import { useToast } from '../../contexts/ToastContext'
 import { useAppStore } from '../../stores'
 import { exportToPDF } from '../../utils/exporters'
 
@@ -46,6 +48,7 @@ interface StrugglingStu {
 
 const ExamAnalytics = () => {
   const { currentAcademicYear, currentTerm } = useAppStore()
+  const { showToast } = useToast()
 
   const [exams, setExams] = useState<{ id: number; name: string }[]>([])
   const [streams, setStreams] = useState<{ id: number; stream_name: string }[]>([])
@@ -79,7 +82,7 @@ const ExamAnalytics = () => {
 
   const handleAnalyze = async () => {
     if (!selectedExam || !selectedStream) {
-      alert('Please select an exam and stream')
+      showToast('Please select an exam and stream', 'warning')
       return
     }
 
@@ -111,7 +114,7 @@ const ExamAnalytics = () => {
       setStrugglingStudents(struggling || [])
     } catch (error) {
       console.error('Failed to analyze exam:', error)
-      alert('Failed to analyze exam data')
+      showToast('Failed to analyze exam data', 'error')
     } finally {
       setLoading(false)
     }
@@ -119,7 +122,7 @@ const ExamAnalytics = () => {
 
   const handleExportAnalytics = async () => {
     if (!performanceSummary) {
-      alert('Please analyze an exam first')
+      showToast('Please analyze an exam first', 'warning')
       return
     }
 
@@ -145,7 +148,7 @@ const ExamAnalytics = () => {
       })
     } catch (error) {
       console.error('Failed to export:', error)
-      alert('Failed to export analytics')
+      showToast('Failed to export analytics', 'error')
     }
   }
 
@@ -156,7 +159,7 @@ const ExamAnalytics = () => {
       <PageHeader
         title="Exam Analytics"
         subtitle="Detailed exam performance analysis and insights"
-        breadcrumbs={[{ label: 'Academics' }, { label: 'Exam Analytics' }]}
+        breadcrumbs={[{ label: 'Academics', href: '/academics' }, { label: 'Exam Analytics' }]}
       />
 
       {/* Selection */}
@@ -207,20 +210,20 @@ const ExamAnalytics = () => {
           <div className="premium-card">
             <h3 className="text-lg font-semibold mb-6">Performance Summary</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="p-4 rounded-lg bg-white/5">
+              <div className="p-4 rounded-lg bg-secondary/50">
                 <p className="text-sm text-foreground/60">Mean Score</p>
                 <p className="text-2xl font-bold">{performanceSummary.mean_score.toFixed(2)}</p>
               </div>
-              <div className="p-4 rounded-lg bg-white/5">
+              <div className="p-4 rounded-lg bg-secondary/50">
                 <p className="text-sm text-foreground/60">Pass Rate</p>
                 <p className="text-2xl font-bold text-green-400">{performanceSummary.pass_rate.toFixed(1)}%</p>
               </div>
-              <div className="p-4 rounded-lg bg-white/5">
+              <div className="p-4 rounded-lg bg-secondary/50">
                 <p className="text-sm text-foreground/60">Top Performer</p>
                 <p className="text-lg font-bold">{performanceSummary.top_performer ?? 'N/A'}</p>
                 <p className="text-xs text-foreground/60">{performanceSummary.top_performer_score?.toFixed(2) ?? 'N/A'}</p>
               </div>
-              <div className="p-4 rounded-lg bg-white/5">
+              <div className="p-4 rounded-lg bg-secondary/50">
                 <p className="text-sm text-foreground/60">Total Students</p>
                 <p className="text-2xl font-bold">{performanceSummary.total_students}</p>
               </div>
@@ -262,12 +265,7 @@ const ExamAnalytics = () => {
                     <div key={item.grade} className="flex items-center justify-between">
                       <span className="font-medium">{item.grade}</span>
                       <div className="flex-1 mx-4">
-                        <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-blue-500 to-purple-500"
-                            style={{ width: `${item.percentage}%` }}
-                          />
-                        </div>
+                        <ProgressBar value={item.percentage} fillClass="bg-gradient-to-r from-blue-500 to-purple-500" />
                       </div>
                       <span className="text-sm text-foreground/60">{item.count} ({item.percentage.toFixed(1)}%)</span>
                     </div>
@@ -301,7 +299,7 @@ const ExamAnalytics = () => {
               <div className="mt-6 overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-white/10">
+                    <tr className="border-b border-border">
                       <th className="pb-3 pt-2 font-bold text-foreground/60">Subject</th>
                       <th className="pb-3 pt-2 font-bold text-foreground/60">Mean Score</th>
                       <th className="pb-3 pt-2 font-bold text-foreground/60">Pass Rate</th>
@@ -309,9 +307,9 @@ const ExamAnalytics = () => {
                       <th className="pb-3 pt-2 font-bold text-foreground/60">Discrimination</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
+                  <tbody className="divide-y divide-border">
                     {subjectPerformance.map((subject) => (
-                      <tr key={subject.subject_name} className="hover:bg-white/[0.02]">
+                      <tr key={subject.subject_name} className="hover:bg-secondary/30">
                         <td className="py-3 font-medium">{subject.subject_name}</td>
                         <td className="py-3">{subject.mean_score.toFixed(2)}</td>
                         <td className="py-3">{subject.pass_rate.toFixed(1)}%</td>
@@ -339,7 +337,7 @@ const ExamAnalytics = () => {
               </h3>
               <div className="space-y-3">
                 {strugglingStudents.map((student) => (
-                  <div key={student.student_id} className="p-4 rounded-lg bg-white/5 border border-white/10">
+                  <div key={student.student_id} className="p-4 rounded-lg bg-secondary/50 border border-border">
                     <div className="flex items-center justify-between mb-2">
                       <div>
                         <p className="font-semibold">{student.student_name}</p>

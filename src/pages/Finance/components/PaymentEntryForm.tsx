@@ -130,7 +130,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
             setSuccess(resultData)
 
             // Calculate new balance for parent update
-            const newBalance = Math.max(0, (selectedStudent.balance || 0) - amount)
+            const newBalance = (selectedStudent.balance || 0) - amount
             onPaymentComplete(newBalance)
 
             // Clear form
@@ -173,7 +173,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
             description: success.description,
             studentName: `${selectedStudent.first_name} ${selectedStudent.last_name}`,
             admissionNumber: selectedStudent.admission_number,
-            balance: selectedStudent.balance, // Note: This might be old balance if not updated, but we updated it in parent. However, selectedStudent prop might not be updated yet. Ideally we rely on returned balance or calculate it.
+            balance: (selectedStudent.balance || 0) - success.amount, // Use post-payment balance
             amountInWords: amountToWords(Math.floor(success.amount / 100)) + ' Shillings Only'
         }
 
@@ -186,7 +186,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
     }
 
     const handleSendSms = async () => {
-        if (!success || !selectedStudent || !selectedStudent.guardian_phone) {
+        if (!success || !selectedStudent?.guardian_phone) {
             alert('Guardian phone number missing')
             return
         }
@@ -200,7 +200,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                 message,
                 recipientId: selectedStudent.id,
                 recipientType: 'STUDENT',
-                userId: user!.id
+                userId: user?.id ?? 0
             })
 
             if (result.success) {
@@ -269,7 +269,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                                 type="number"
                                 value={formData.amount}
                                 onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-                                className="input pl-14 text-xl font-bold bg-secondary/30 border-border/20 focus:border-primary/50"
+                                className="input pl-14 text-xl font-bold border-border/20 focus:border-primary/50"
                                 required
                                 placeholder="0.00"
                                 min="1"
@@ -285,7 +285,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                             type="date"
                             value={formData.transaction_date}
                             onChange={(e) => setFormData(prev => ({ ...prev, transaction_date: e.target.value }))}
-                            className="input bg-secondary/30 border-border/20"
+                            className="input border-border/20"
                             required
                             disabled={!selectedStudent}
                         />
@@ -299,7 +299,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                             id="payment-method"
                             value={formData.payment_method}
                             onChange={(e) => setFormData(prev => ({ ...prev, payment_method: e.target.value }))}
-                            className="input bg-secondary/30 border-border/20"
+                            className="input border-border/20"
                             disabled={!selectedStudent || useCredit}
                         >
                             <option value="CASH">Liquid Cash</option>
@@ -327,7 +327,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                             type="text"
                             value={formData.payment_reference}
                             onChange={(e) => setFormData(prev => ({ ...prev, payment_reference: e.target.value }))}
-                            className="input bg-secondary/30 border-border/20"
+                            className="input border-border/20"
                             disabled={!selectedStudent}
                             placeholder="e.g., M-PESA Code"
                         />
@@ -340,7 +340,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                         id="payment-description"
                         value={formData.description}
                         onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                        className="input bg-secondary/30 border-border/20 min-h-[100px]"
+                        className="input border-border/20 min-h-[100px]"
                         rows={3}
                         disabled={!selectedStudent}
                         placeholder="Optional notes for this payment..."

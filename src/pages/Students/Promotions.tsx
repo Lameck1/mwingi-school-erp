@@ -215,7 +215,7 @@ export default function Promotions() {
             <PageHeader
                 title="Student Promotions"
                 subtitle="Promote students to the next class"
-                breadcrumbs={[{ label: 'Students' }, { label: 'Promotions' }]}
+                breadcrumbs={[{ label: 'Students', href: '/students' }, { label: 'Promotions' }]}
             />
 
             {/* Stats */}

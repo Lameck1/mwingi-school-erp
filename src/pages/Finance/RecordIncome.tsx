@@ -7,6 +7,8 @@ import { useAuthStore } from '../../stores'
 import { type TransactionCategory } from '../../types/electron-api/FinanceAPI'
 import { shillingsToCents } from '../../utils/format'
 
+import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
+
 export default function RecordIncome() {
     const { user } = useAuthStore()
     const { showToast } = useToast()
@@ -64,16 +66,22 @@ export default function RecordIncome() {
             showToast('Please fill in all required fields', 'warning')
             return
         }
+        if (!user?.id) {
+            showToast('User session not found. Please log in again.', 'error')
+            return
+        }
 
         setSaving(true)
         try {
             await globalThis.electronAPI.createTransaction({
                 transaction_date: formData.transaction_date,
+                transaction_type: 'INCOME',
                 amount: shillingsToCents(formData.amount), // Whole currency units
                 category_id: Number.parseInt(formData.category_id, 10),
-                reference: formData.payment_reference,
+                payment_method: formData.payment_method,
+                payment_reference: formData.payment_reference,
                 description: formData.description
-            }, user!.id)
+            }, user.id)
 
             showToast('Income recorded successfully', 'success')
             setFormData({
@@ -94,10 +102,11 @@ export default function RecordIncome() {
     }
 
     return (
-        <div className="space-y-8 pb-10 max-w-5xl mx-auto">
+        <div className="space-y-8 pb-10">
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
                 <div>
-                    <h1 className="text-3xl font-bold font-heading uppercase tracking-tight text-emerald-500/90">Record Income</h1>
+                    <HubBreadcrumb crumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Record Income' }]} />
+                    <h1 className="text-xl md:text-3xl font-bold font-heading uppercase tracking-tight text-emerald-500/90">Record Income</h1>
                     <p className="text-foreground/50 mt-1 font-medium italic">Document donations, grants, and miscellaneous capital influxes</p>
                 </div>
                 <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10 max-w-sm group hover:bg-primary/10 transition-colors">
@@ -134,7 +143,7 @@ export default function RecordIncome() {
                                 required
                                 value={formData.transaction_date}
                                 onChange={(e) => setFormData({ ...formData, transaction_date: e.target.value })}
-                                className="input w-full bg-secondary/30 h-12 font-bold text-xs uppercase tracking-tight"
+                                className="input w-full h-12 font-bold text-xs uppercase tracking-tight"
                             />
                         </div>
 
@@ -152,7 +161,7 @@ export default function RecordIncome() {
                                 step="0.01"
                                 value={formData.amount}
                                 onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                className="input w-full bg-secondary/30 h-12 text-lg font-bold"
+                                className="input w-full h-12 text-lg font-bold"
                                 placeholder="0.00"
                             />
                         </div>
@@ -165,7 +174,7 @@ export default function RecordIncome() {
                                 required
                                 value={formData.transaction_type}
                                 onChange={(e) => setFormData({ ...formData, transaction_type: e.target.value })}
-                                className="input w-full bg-secondary/30 h-12 font-bold text-xs uppercase tracking-tight"
+                                className="input w-full h-12 font-bold text-xs uppercase tracking-tight"
                             >
                                 <option value="DONATION">General Donation</option>
                                 <option value="GRANT">Institutional Grant</option>
@@ -183,7 +192,7 @@ export default function RecordIncome() {
                                     required
                                     value={formData.category_id}
                                     onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                                    className="input w-full bg-secondary/30 h-12 font-bold text-xs uppercase tracking-tight"
+                                    className="input w-full h-12 font-bold text-xs uppercase tracking-tight"
                                 >
                                     <option value="">Select Category</option>
                                     {categories.map(cat => (
@@ -206,7 +215,7 @@ export default function RecordIncome() {
                                         aria-label="New Category Name"
                                         value={newCategory}
                                         onChange={(e) => setNewCategory(e.target.value)}
-                                        className="input flex-1 bg-secondary/50 h-12"
+                                        className="input flex-1 h-12"
                                         placeholder="New Category Identifier"
                                     />
                                     <button
@@ -233,7 +242,7 @@ export default function RecordIncome() {
                                 required
                                 value={formData.payment_method}
                                 onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                                className="input w-full bg-secondary/30 h-12 font-bold text-xs uppercase tracking-tight"
+                                className="input w-full h-12 font-bold text-xs uppercase tracking-tight"
                             >
                                 <option value="CASH">Liquid Cash</option>
                                 <option value="MPESA">M-Pesa Mobile</option>
@@ -250,7 +259,7 @@ export default function RecordIncome() {
                                 type="text"
                                 value={formData.payment_reference}
                                 onChange={(e) => setFormData({ ...formData, payment_reference: e.target.value })}
-                                className="input w-full bg-secondary/30 h-12 font-mono text-xs tracking-wider"
+                                className="input w-full h-12 font-mono text-xs tracking-wider"
                                 placeholder="e.g. TXN-XJ72, CHQ#00124"
                             />
                         </div>
@@ -267,7 +276,7 @@ export default function RecordIncome() {
                             rows={3}
                             value={formData.description}
                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            className="input w-full bg-secondary/30 p-4 min-h-[100px] leading-relaxed italic"
+                            className="input w-full p-4 min-h-[100px] leading-relaxed italic"
                             placeholder="Provide detailed narrative or source identification for this revenue entry..."
                         />
                     </div>

@@ -207,7 +207,7 @@ export default function Approvals() {
             <PageHeader
                 title="Approval Requests"
                 subtitle="Review and manage pending approvals"
-                breadcrumbs={[{ label: 'Finance' }, { label: 'Approvals' }]}
+                breadcrumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Approvals' }]}
             />
 
             {/* Summary Cards */}
@@ -286,7 +286,7 @@ export default function Approvals() {
                         <button
                             onClick={handleReject}
                             disabled={processing || !rejectReason.trim()}
-                            className="btn bg-red-600 text-white hover:bg-red-700"
+                            className="btn bg-red-600 text-white hover:bg-destructive/80"
                         >
                             {processing ? 'Rejecting...' : 'Reject'}
                         </button>

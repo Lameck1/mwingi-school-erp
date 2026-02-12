@@ -2,9 +2,10 @@ import { TrendingUp, TrendingDown, DollarSign, Download, Filter, Calendar, Activ
 import { useEffect, useState } from 'react'
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 
-import { InstitutionalHeader } from '../../components/patterns/InstitutionalHeader'
 import { useToast } from '../../contexts/ToastContext'
 import { formatCurrencyFromCents } from '../../utils/format'
+
+import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 
 
 
@@ -32,6 +33,7 @@ export default function FinancialReports() {
     })
 
     const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444']
+    const COLOR_BG_CLASSES = ['bg-emerald-500', 'bg-blue-500', 'bg-violet-500', 'bg-amber-500', 'bg-red-500']
 
     const loadData = async () => {
         setLoading(true)
@@ -59,16 +61,46 @@ export default function FinancialReports() {
 
     const { totalIncome, totalExpense, netBalance } = summary
 
+    const handleExportReport = () => {
+        const lines = [
+            `Financial Report: ${dateRange.startDate} to ${dateRange.endDate}`,
+            '',
+            `Total Income,${(totalIncome / 100).toFixed(2)}`,
+            `Total Expense,${(totalExpense / 100).toFixed(2)}`,
+            `Net Balance,${(netBalance / 100).toFixed(2)}`,
+            '',
+            'Revenue Breakdown',
+            'Category,Amount (KSh)',
+            ...revenueData.map(r => `${r.name},${(r.value / 100).toFixed(2)}`),
+            '',
+            'Expense Breakdown',
+            'Category,Amount (KSh)',
+            ...expenseData.map(e => `${e.name},${(e.value / 100).toFixed(2)}`)
+        ]
+        const csv = lines.join('\n')
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `financial_report_${dateRange.startDate}_${dateRange.endDate}.csv`
+        a.click()
+        URL.revokeObjectURL(url)
+        showToast('Report exported successfully', 'success')
+    }
+
     return (
         <div className="space-y-8 pb-10">
-            <InstitutionalHeader />
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-foreground font-heading uppercase tracking-tight">Financial Intelligence</h1>
+                    <HubBreadcrumb crumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Reports' }]} />
+                    <h1 className="text-xl md:text-3xl font-bold text-foreground font-heading uppercase tracking-tight">Financial Intelligence</h1>
                     <p className="text-foreground/50 mt-1 font-medium italic">High-fidelity analysis of institutional liquidity and fiscal health</p>
                 </div>
-                <button className="btn btn-secondary flex items-center gap-2 py-3 px-8 text-sm font-bold border border-border/40 hover:bg-secondary/40 transition-all shadow-lg hover:-translate-y-1">
+                <button
+                    onClick={handleExportReport}
+                    className="btn btn-secondary flex items-center gap-2 py-3 px-8 text-sm font-bold border border-border/40 hover:bg-secondary/40 transition-all shadow-lg hover:-translate-y-1"
+                >
                     <Download className="w-5 h-5 opacity-60" />
                     <span>Export Strategic Report</span>
                 </button>
@@ -86,7 +118,7 @@ export default function FinancialReports() {
                             type="date"
                             value={dateRange.startDate}
                             onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-                            className="input w-full bg-secondary/30 h-12 text-xs font-bold uppercase tracking-tight"
+                            className="input w-full h-12 text-xs font-bold uppercase tracking-tight"
                             aria-label="Start Date"
                         />
                     </div>
@@ -99,7 +131,7 @@ export default function FinancialReports() {
                             type="date"
                             value={dateRange.endDate}
                             onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-                            className="input w-full bg-secondary/30 h-12 text-xs font-bold uppercase tracking-tight"
+                            className="input w-full h-12 text-xs font-bold uppercase tracking-tight"
                             aria-label="End Date"
                         />
                     </div>
@@ -123,7 +155,7 @@ export default function FinancialReports() {
                         </div>
                         <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-[0.2em] bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">Revenue Stream</span>
                     </div>
-                    <h3 className="text-3xl font-bold text-foreground font-heading tracking-tight">{formatCurrencyFromCents(totalIncome)}</h3>
+                    <h3 className="text-xl md:text-3xl font-bold text-foreground font-heading tracking-tight">{formatCurrencyFromCents(totalIncome)}</h3>
                     <p className="text-foreground/40 text-[10px] font-bold uppercase tracking-widest mt-2">Aggregate Capital Influx</p>
                 </div>
 
@@ -134,7 +166,7 @@ export default function FinancialReports() {
                         </div>
                         <span className="text-[10px] font-bold text-destructive uppercase tracking-[0.2em] bg-destructive/10 px-3 py-1 rounded-full border border-destructive/20">Operational Cost</span>
                     </div>
-                    <h3 className="text-3xl font-bold text-foreground font-heading tracking-tight">{formatCurrencyFromCents(totalExpense)}</h3>
+                    <h3 className="text-xl md:text-3xl font-bold text-foreground font-heading tracking-tight">{formatCurrencyFromCents(totalExpense)}</h3>
                     <p className="text-foreground/40 text-[10px] font-bold uppercase tracking-widest mt-2">Aggregate Environment Drain</p>
                 </div>
 
@@ -179,7 +211,7 @@ export default function FinancialReports() {
                                 <div className="mt-4 flex flex-wrap gap-4 justify-center">
                                     {revenueData.map((item, index) => (
                                         <div key={item.name} className="flex items-center gap-2">
-                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                                            <div className={`w-2 h-2 rounded-full ${COLOR_BG_CLASSES[index % COLOR_BG_CLASSES.length]}`} aria-hidden="true" />
                                             <span className="text-[10px] font-bold uppercase text-foreground/60">{item.name}</span>
                                         </div>
                                     ))}

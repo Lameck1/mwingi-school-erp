@@ -50,7 +50,7 @@ export const StudentLedgerSearch: React.FC<StudentLedgerSearchProps> = ({ onSele
                     onChange={(e) => setSearch(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                     placeholder="Search by name or admission..."
-                    className="input pl-11 py-3 bg-secondary/30 border-border/20"
+                    className="input pl-11 py-3 border-border/20"
                 />
             </div>
 
@@ -106,7 +106,7 @@ export const StudentLedgerSearch: React.FC<StudentLedgerSearchProps> = ({ onSele
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="p-3 bg-secondary/30 rounded-xl border border-border/20">
                                 <p className="text-[10px] text-foreground/40 font-bold uppercase mb-1">Fee Balance</p>
                                 <p className="text-lg font-bold text-amber-500">{formatCurrencyFromCents(selectedStudent.balance || 0)}</p>

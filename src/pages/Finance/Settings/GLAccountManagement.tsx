@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 
+import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb';
 import { formatCurrencyFromCents } from '../../../utils/format';
 
 
@@ -22,17 +23,17 @@ interface GLAccount {
 const getTypeColor = (type: string): string => {
   switch (type) {
     case 'ASSET':
-      return 'bg-blue-100 text-blue-800';
+      return 'bg-blue-500/15 text-blue-600 dark:text-blue-400';
     case 'LIABILITY':
-      return 'bg-red-100 text-red-800';
+      return 'bg-red-500/15 text-red-600 dark:text-red-400';
     case 'EQUITY':
       return 'bg-purple-100 text-purple-800';
     case 'REVENUE':
-      return 'bg-green-100 text-green-800';
+      return 'bg-green-500/15 text-green-600 dark:text-green-400';
     case 'EXPENSE':
       return 'bg-orange-100 text-orange-800';
     default:
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-secondary text-foreground';
   }
 };
 
@@ -85,24 +86,25 @@ export const GLAccountManagement: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Chart of Accounts</h1>
-          <p className="text-gray-600 mt-1">
+          <HubBreadcrumb crumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Chart of Accounts' }]} />
+          <h1 className="text-2xl font-bold text-foreground">Chart of Accounts</h1>
+          <p className="text-foreground/50 mt-1">
             Manage General Ledger accounts and view balances
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-foreground/50">
             {filteredAccounts.length} accounts
           </span>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4 space-y-4">
+      <div className="bg-card rounded-lg shadow p-4 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Search */}
           <div>
-            <label htmlFor="gl-search" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="gl-search" className="block text-sm font-medium text-foreground/70 mb-1">
               Search
             </label>
             <input
@@ -111,20 +113,20 @@ export const GLAccountManagement: React.FC = () => {
               placeholder="Search by code or name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
           </div>
 
           {/* Account Type Filter */}
           <div>
-            <label htmlFor="gl-account-type-filter" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="gl-account-type-filter" className="block text-sm font-medium text-foreground/70 mb-1">
               Account Type
             </label>
             <select
               id="gl-account-type-filter"
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
             >
               <option value="ALL">All Types</option>
               <option value="ASSET">Assets</option>
@@ -138,43 +140,43 @@ export const GLAccountManagement: React.FC = () => {
       </div>
 
       {/* Accounts Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-card rounded-lg shadow overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-500">Loading accounts...</div>
+          <div className="p-8 text-center text-muted-foreground">Loading accounts...</div>
         ) : (
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-secondary">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Code
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Account Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Type
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Current Balance
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-card divide-y divide-border">
               {filteredAccounts.map((account) => (
                 <tr
                   key={account.code}
-                  className="hover:bg-gray-50"
+                  className="hover:bg-secondary"
                 >
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-foreground">
                     {account.code}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
                     {account.name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -186,14 +188,14 @@ export const GLAccountManagement: React.FC = () => {
                       {account.type}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900 font-medium">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-foreground font-medium">
                     {formatCurrencyFromCents(account.currentBalance)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <span
                       className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${account.isActive
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
+                          ? 'bg-green-500/15 text-green-600 dark:text-green-400'
+                          : 'bg-secondary text-foreground'
                         }`}
                     >
                       {account.isActive ? 'Active' : 'Inactive'}
@@ -203,7 +205,7 @@ export const GLAccountManagement: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setSelectedAccount(account)}
-                      className="text-blue-600 hover:text-blue-900 mr-3"
+                      className="text-primary hover:text-primary/80 mr-3"
                     >
                       View
                     </button>
@@ -215,7 +217,7 @@ export const GLAccountManagement: React.FC = () => {
         )}
 
         {!loading && filteredAccounts.length === 0 && (
-          <div className="p-8 text-center text-gray-500">
+          <div className="p-8 text-center text-muted-foreground">
             No accounts match your filters
           </div>
         )}
@@ -223,34 +225,35 @@ export const GLAccountManagement: React.FC = () => {
 
       {/* Account Detail Modal */}
       {selectedAccount && (
-        <div
-          className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50"
-          onClick={() => setSelectedAccount(null)}
-          aria-hidden="true"
-        >
-          <div
-            className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            role="presentation"
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <button
+            type="button"
+            className="absolute inset-0 bg-background/60 backdrop-blur-sm cursor-default"
+            onClick={() => setSelectedAccount(null)}
+            aria-label="Close modal"
+          />
+          <dialog
+            className="bg-card rounded-lg shadow-xl p-6 max-w-md w-full relative z-10"
+            open
+            aria-label="Account Details"
           >
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            <h3 className="text-lg font-semibold text-foreground mb-4">
               Account Details
             </h3>
 
             <div className="space-y-3">
               <div>
-                <p className="text-sm font-medium text-gray-700">Code</p>
-                <p className="text-gray-900 font-mono">{selectedAccount.code}</p>
+                <p className="text-sm font-medium text-foreground/70">Code</p>
+                <p className="text-foreground font-mono">{selectedAccount.code}</p>
               </div>
 
               <div>
-                <p className="text-sm font-medium text-gray-700">Name</p>
-                <p className="text-gray-900">{selectedAccount.name}</p>
+                <p className="text-sm font-medium text-foreground/70">Name</p>
+                <p className="text-foreground">{selectedAccount.name}</p>
               </div>
 
               <div>
-                <p className="text-sm font-medium text-gray-700">Type</p>
+                <p className="text-sm font-medium text-foreground/70">Type</p>
                 <p>
                   <span
                     className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getTypeColor(
@@ -263,28 +266,28 @@ export const GLAccountManagement: React.FC = () => {
               </div>
 
               <div>
-                <p className="text-sm font-medium text-gray-700">
+                <p className="text-sm font-medium text-foreground/70">
                   Description
                 </p>
-                <p className="text-gray-900">{selectedAccount.description}</p>
+                <p className="text-foreground">{selectedAccount.description}</p>
               </div>
 
               <div>
-                <p className="text-sm font-medium text-gray-700">
+                <p className="text-sm font-medium text-foreground/70">
                   Current Balance
                 </p>
-                <p className="text-lg font-semibold text-gray-900">
+                <p className="text-lg font-semibold text-foreground">
                   {formatCurrencyFromCents(selectedAccount.currentBalance)}
                 </p>
               </div>
 
               <div>
-                <p className="text-sm font-medium text-gray-700">Status</p>
+                <p className="text-sm font-medium text-foreground/70">Status</p>
                 <p>
                   <span
                     className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${selectedAccount.isActive
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-800'
+                        ? 'bg-green-500/15 text-green-600 dark:text-green-400'
+                        : 'bg-secondary text-foreground'
                       }`}
                   >
                     {selectedAccount.isActive ? 'Active' : 'Inactive'}
@@ -296,12 +299,12 @@ export const GLAccountManagement: React.FC = () => {
             <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => setSelectedAccount(null)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="px-4 py-2 text-sm font-medium text-foreground/70 bg-card border border-border rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/50"
               >
                 Close
               </button>
             </div>
-          </div>
+          </dialog>
         </div>
       )}
     </div>

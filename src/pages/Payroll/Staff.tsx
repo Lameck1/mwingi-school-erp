@@ -1,6 +1,7 @@
 import { Plus, UserCog, Edit, Trash2, ShieldCheck, Phone, CheckCircle2 } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 
+import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 import { Modal } from '../../components/ui/Modal'
 import { useToast } from '../../contexts/ToastContext'
 import { type StaffMember } from '../../types/electron-api/StaffAPI'
@@ -137,7 +138,8 @@ export default function Staff() {
         <div className="space-y-8 pb-10">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-foreground font-heading uppercase tracking-tight">Staff Management</h1>
+                    <HubBreadcrumb crumbs={[{ label: 'Staff & Payroll' }, { label: 'Staff Directory' }]} />
+                    <h1 className="text-xl md:text-3xl font-bold text-foreground font-heading uppercase tracking-tight">Staff Management</h1>
                     <p className="text-foreground/50 mt-1 font-medium italic">Oversee educational and administrative personnel records</p>
                 </div>
                 <button
@@ -286,7 +288,7 @@ export default function Staff() {
                                 type="text"
                                 value={form.staff_number}
                                 onChange={(e) => setForm(prev => ({ ...prev, staff_number: e.target.value }))}
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                                 placeholder="e.g. ST-001"
                             />
                         </div>
@@ -297,7 +299,7 @@ export default function Staff() {
                                 type="text"
                                 value={form.first_name}
                                 onChange={(e) => setForm(prev => ({ ...prev, first_name: e.target.value }))}
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                                 placeholder="e.g. Joseph"
                             />
                         </div>
@@ -308,7 +310,7 @@ export default function Staff() {
                                 type="text"
                                 value={form.middle_name}
                                 onChange={(e) => setForm(prev => ({ ...prev, middle_name: e.target.value }))}
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                                 placeholder="Optional"
                             />
                         </div>
@@ -319,7 +321,7 @@ export default function Staff() {
                                 type="text"
                                 value={form.last_name}
                                 onChange={(e) => setForm(prev => ({ ...prev, last_name: e.target.value }))}
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                                 placeholder="e.g. Omondi"
                             />
                         </div>
@@ -330,7 +332,7 @@ export default function Staff() {
                                 type="tel"
                                 value={form.phone}
                                 onChange={(e) => setForm(prev => ({ ...prev, phone: e.target.value }))}
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                                 placeholder="+254 7xx xxx xxx"
                             />
                         </div>
@@ -341,7 +343,7 @@ export default function Staff() {
                                 type="email"
                                 value={form.email}
                                 onChange={(e) => setForm(prev => ({ ...prev, email: e.target.value }))}
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                                 placeholder="name@school.ac.ke"
                             />
                         </div>
@@ -352,7 +354,7 @@ export default function Staff() {
                                 type="text"
                                 value={form.department}
                                 onChange={(e) => setForm(prev => ({ ...prev, department: e.target.value }))}
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                                 placeholder="e.g. Academics"
                             />
                         </div>
@@ -363,7 +365,7 @@ export default function Staff() {
                                 type="text"
                                 value={form.job_title}
                                 onChange={(e) => setForm(prev => ({ ...prev, job_title: e.target.value }))}
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                                 placeholder="e.g. Senior Teacher"
                             />
                         </div>
@@ -374,7 +376,7 @@ export default function Staff() {
                                 type="date"
                                 value={form.employment_date}
                                 onChange={(e) => setForm(prev => ({ ...prev, employment_date: e.target.value }))}
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                             />
                         </div>
                         <div className="space-y-2">
@@ -386,7 +388,7 @@ export default function Staff() {
                                 step="0.01"
                                 value={form.basic_salary}
                                 onChange={(e) => setForm(prev => ({ ...prev, basic_salary: e.target.value }))}
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                                 placeholder="e.g. 50000"
                             />
                         </div>

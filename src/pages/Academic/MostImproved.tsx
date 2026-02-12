@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react'
 
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
+import { useToast } from '../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../stores'
 
 interface ImprovedStudent {
@@ -22,6 +23,7 @@ interface ImprovedStudent {
 const MostImproved = () => {
   const { currentAcademicYear, currentTerm } = useAppStore()
   const { user } = useAuthStore()
+  const { showToast } = useToast()
 
   const [terms, setTerms] = useState<{ id: number; name: string }[]>([])
   const [streams, setStreams] = useState<{ id: number; stream_name: string }[]>([])
@@ -73,7 +75,7 @@ const MostImproved = () => {
 
   const handleGenerateMostImproved = async () => {
     if (!selectedCurrentTerm || !selectedComparisonTerm) {
-      alert('Please select both current and comparison terms')
+      showToast('Please select both current and comparison terms', 'warning')
       return
     }
 
@@ -90,7 +92,7 @@ const MostImproved = () => {
       setImprovedStudents(students || [])
     } catch (error) {
       console.error('Failed to get most improved students:', error)
-      alert('Failed to generate list')
+      showToast('Failed to generate list', 'error')
     } finally {
       setLoading(false)
     }
@@ -98,7 +100,7 @@ const MostImproved = () => {
 
   const handleAwardCertificates = async () => {
     if (improvedStudents.length === 0) {
-      alert('Please generate a list first')
+      showToast('Please generate a list first', 'warning')
       return
     }
 
@@ -115,22 +117,22 @@ const MostImproved = () => {
           })
         )
       )
-      alert(`${improvedStudents.length} certificates generated successfully!`)
+      showToast(`${improvedStudents.length} certificates generated successfully!`, 'success')
     } catch (error) {
       console.error('Failed to generate certificates:', error)
-      alert('Failed to generate certificates')
+      showToast('Failed to generate certificates', 'error')
     }
   }
 
   const handleEmailParents = async () => {
     if (improvedStudents.length === 0) {
-      alert('Please generate a list first')
+      showToast('Please generate a list first', 'warning')
       return
     }
 
     try {
       if (!user?.id) {
-        alert('Please sign in again to send emails.')
+        showToast('Please sign in again to send emails', 'warning')
         return
       }
       await globalThis.electronAPI.emailParents({
@@ -138,30 +140,34 @@ const MostImproved = () => {
         awardCategory: selectedAward,
         templateType: 'improvement_award'
       }, user.id)
-      alert(`Emails sent to ${improvedStudents.length} parents!`)
+      showToast(`Emails sent to ${improvedStudents.length} parents!`, 'success')
     } catch (error) {
       console.error('Failed to send emails:', error)
-      alert('Failed to send emails')
+      showToast('Failed to send emails', 'error')
     }
   }
 
   const handleExportList = () => {
     if (improvedStudents.length === 0) {
-      alert('Please generate a list first')
+      showToast('Please generate a list first', 'warning')
       return
     }
 
+    const esc = (v: string | number) => {
+      const s = String(v)
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replaceAll('"', '""')}"` : s
+    }
     const csvContent = [
       ['Position', 'Admission No', 'Student Name', 'Previous Average', 'Current Average', 'Improvement %', 'Improvement Points', 'Grade Change'],
       ...improvedStudents.map((item, index) => [
         index + 1,
-        item.admission_number,
-        item.student_name,
+        esc(item.admission_number),
+        esc(item.student_name),
         item.previous_term_average.toFixed(2),
         item.current_term_average.toFixed(2),
         item.improvement_percentage.toFixed(2),
         item.improvement_points.toFixed(2),
-        item.grade_improvement
+        esc(item.grade_improvement)
       ])
     ].map(row => row.join(',')).join('\n')
 
@@ -171,6 +177,7 @@ const MostImproved = () => {
     a.href = url
     a.download = `Most_Improved_Students.csv`
     a.click()
+    globalThis.URL.revokeObjectURL(url)
   }
 
   const renderMostImprovedContent = () => {
@@ -192,7 +199,7 @@ const MostImproved = () => {
 
     return (
       <div>
-        <div className="mb-4 pb-4 border-b border-white/10">
+        <div className="mb-4 pb-4 border-b border-border">
           <h2 className="text-xl font-bold">Most Improved Students</h2>
           <p className="text-sm text-foreground/60 mt-1">
             Total: {improvedStudents.length} students | Minimum Improvement: {minimumImprovement}%
@@ -201,7 +208,7 @@ const MostImproved = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-white/10">
+              <tr className="border-b border-border">
                 <th className="pb-4 pt-2 font-bold text-foreground/60">Rank</th>
                 <th className="pb-4 pt-2 font-bold text-foreground/60">Adm No</th>
                 <th className="pb-4 pt-2 font-bold text-foreground/60">Student Name</th>
@@ -211,9 +218,9 @@ const MostImproved = () => {
                 <th className="pb-4 pt-2 font-bold text-foreground/60">Grade Change</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-border">
               {improvedStudents.map((student, index) => (
-                <tr key={student.student_id} className="hover:bg-white/[0.02]">
+                <tr key={student.student_id} className="hover:bg-secondary/30">
                   <td className="py-4 pr-4">
                     <span className="inline-block px-3 py-1 rounded-full bg-amber-500/20 text-amber-400 font-bold text-sm">
                       #{index + 1}
@@ -245,7 +252,7 @@ const MostImproved = () => {
       <PageHeader
         title="Most Improved Students"
         subtitle="Identify and award students with exceptional improvement"
-        breadcrumbs={[{ label: 'Academics' }, { label: 'Most Improved' }]}
+        breadcrumbs={[{ label: 'Academics', href: '/academics' }, { label: 'Most Improved' }]}
       />
 
       <div className="premium-card">
@@ -284,7 +291,7 @@ const MostImproved = () => {
               type="number"
               value={minimumImprovement}
               onChange={(e) => setMinimumImprovement(Number(e.target.value))}
-              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10"
+              className="w-full px-3 py-2 rounded-lg bg-secondary/50 border border-border"
               min="0"
               max="100"
             />

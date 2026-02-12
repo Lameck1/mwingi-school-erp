@@ -6,7 +6,9 @@ import { useAuthStore } from '../../stores'
 import { type AcademicYear, type Term, type Stream } from '../../types/electron-api/AcademicAPI'
 import { type FeeCategory, type FeeStructureCreateData } from '../../types/electron-api/FinanceAPI'
 import { STUDENT_TYPES_LIST } from '../../utils/constants'
-import { centsToShillings, shillingsToCents } from '../../utils/format'
+import { centsToShillings, formatCurrencyFromCents, shillingsToCents } from '../../utils/format'
+
+import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 
 interface FeeStructureItem {
     stream_id?: number
@@ -143,30 +145,26 @@ export default function FeeStructure() {
         const rows: JSX.Element[] = []
         for (const stream of streams) {
             for (const [index, studentType] of STUDENT_TYPES_LIST.entries()) {
-                const streamStyle = index === 0 ? 'hsl(var(--background))' : 'hsl(var(--card))'
                 rows.push(
                     <tr key={`${stream.id}-${studentType}`} className={`${index === 0 ? 'bg-background' : 'bg-card'} hover:bg-accent/10 transition-colors`}>
                         {index === 0 && (
                             <td
                                 rowSpan={2}
-                                className="px-4 py-3 whitespace-nowrap text-sm font-bold text-foreground sticky left-0 z-30 border-r border-border/20"
-                                style={{ backgroundColor: 'hsl(var(--background))' }}
+                                className="px-4 py-3 whitespace-nowrap text-sm font-bold text-foreground sticky left-0 z-30 border-r border-border/20 bg-background"
                             >
                                 {stream.stream_name}
                             </td>
                         )}
                         <td
-                            className="px-4 py-3 whitespace-nowrap text-[10px] font-bold text-foreground/40 uppercase sticky left-[140px] z-30 border-r border-border/20"
-                            style={{ backgroundColor: streamStyle }}
+                            className={`px-4 py-3 whitespace-nowrap text-[10px] font-bold text-foreground/40 uppercase sticky left-[140px] z-30 border-r border-border/20 ${index === 0 ? 'bg-background' : 'bg-card'}`}
                         >
                             {studentType.replace('_', ' ')}
                         </td>
                         {renderAmountCells(stream.id, studentType)}
                         <td
-                            className="px-4 py-3 whitespace-nowrap text-sm font-bold text-emerald-400 text-right sticky right-0 z-30 border-l border-border/20"
-                            style={{ backgroundColor: streamStyle }}
+                            className={`px-4 py-3 whitespace-nowrap text-sm font-bold text-emerald-400 text-right sticky right-0 z-30 border-l border-border/20 ${index === 0 ? 'bg-background' : 'bg-card'}`}
                         >
-                            {calculateRowTotal(stream.id, studentType).toLocaleString()}
+                            {formatCurrencyFromCents(shillingsToCents(calculateRowTotal(stream.id, studentType)))}
                         </td>
                     </tr>
                 )
@@ -185,7 +183,7 @@ export default function FeeStructure() {
         try {
             const data: FeeStructureCreateData[] = []
             for (const [key, amount] of Object.entries(structure)) {
-                if (amount > 0) {
+                if (amount >= 0) {
                     const [streamId, studentType, categoryId] = key.split('-')
                     data.push({
                         stream_id: Number(streamId),
@@ -252,7 +250,8 @@ export default function FeeStructure() {
         <div className="p-6">
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-foreground font-heading">Fee Structure</h1>
+                    <HubBreadcrumb crumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Fee Structure' }]} />
+                    <h1 className="text-xl md:text-3xl font-bold text-foreground font-heading">Fee Structure</h1>
                     <p className="text-foreground/50 mt-1 font-medium italic">Manage fee amounts per class and term</p>
                 </div>
                 <div className="flex gap-2">
@@ -291,7 +290,7 @@ export default function FeeStructure() {
                                         console.error('Failed to load terms:', error)
                                     })
                             }}
-                            className="input w-full bg-secondary/30 border-border/20 focus:border-primary/50 transition-all font-medium py-2.5"
+                            className="input w-full border-border/20 focus:border-primary/50 transition-all font-medium py-2.5"
                         >
                             <option value="" className="bg-background">Select Year</option>
                             {years.map(y => (
@@ -304,7 +303,7 @@ export default function FeeStructure() {
                         <select id="field-236"
                             value={selectedTerm}
                             onChange={e => setSelectedTerm(e.target.value)}
-                            className="input w-full bg-secondary/30 border-border/20 focus:border-primary/50 transition-all font-medium py-2.5"
+                            className="input w-full border-border/20 focus:border-primary/50 transition-all font-medium py-2.5"
                             disabled={!selectedYear}
                         >
                             <option value="" className="bg-background">Select Term</option>

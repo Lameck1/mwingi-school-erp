@@ -14,7 +14,7 @@ import { type Budget } from '../../../types/electron-api'
 import { formatCurrencyFromCents } from '../../../utils/format'
 
 const statusConfig = {
-    DRAFT: { label: 'Draft', color: 'bg-gray-500/20 text-gray-400 border-gray-500/30', icon: Edit },
+    DRAFT: { label: 'Draft', color: 'bg-gray-500/20 text-muted-foreground border-gray-500/30', icon: Edit },
     SUBMITTED: { label: 'Pending Approval', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', icon: Clock },
     APPROVED: { label: 'Approved', color: 'bg-green-500/20 text-green-400 border-green-500/30', icon: CheckCircle },
     REJECTED: { label: 'Rejected', color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: XCircle },
@@ -71,7 +71,7 @@ export default function BudgetList() {
             sortable: true,
             render: (_, row) => (
                 <div>
-                    <p className="font-bold text-white">{row.budget_name}</p>
+                    <p className="font-bold text-foreground">{row.budget_name}</p>
                     <p className="text-xs text-foreground/40">
                         Created by {row.created_by_name}
                     </p>
@@ -105,7 +105,7 @@ export default function BudgetList() {
             align: 'right',
             sortable: true,
             render: (value) => (
-                <span className="font-mono font-bold text-white">{formatCurrencyFromCents(value as number)}</span>
+                <span className="font-mono font-bold text-foreground">{formatCurrencyFromCents(value as number)}</span>
             )
         },
         {
@@ -138,7 +138,7 @@ export default function BudgetList() {
             <PageHeader
                 title="Budget Management"
                 subtitle="Create, track, and analyze financial budgets"
-                breadcrumbs={[{ label: 'Finance' }, { label: 'Budgets' }]}
+                breadcrumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Budgets' }]}
                 actions={
                     <Link
                         to="/budget/new"

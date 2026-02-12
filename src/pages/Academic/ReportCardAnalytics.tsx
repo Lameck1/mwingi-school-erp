@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 import { PageHeader } from '../../components/patterns/PageHeader'
+import { ProgressBar } from '../../components/ui/ProgressBar'
 import { Select } from '../../components/ui/Select'
+import { useToast } from '../../contexts/ToastContext'
 import { useAppStore } from '../../stores'
 import { exportToPDF } from '../../utils/exporters'
 
@@ -44,6 +46,7 @@ interface TermComparison {
 
 const ReportCardAnalytics = () => {
   const { currentAcademicYear, currentTerm } = useAppStore()
+  const { showToast } = useToast()
 
   const [exams, setExams] = useState<{ id: number; name: string }[]>([])
   const [streams, setStreams] = useState<{ id: number; stream_name: string }[]>([])
@@ -77,7 +80,7 @@ const ReportCardAnalytics = () => {
 
   const handleAnalyze = async () => {
     if (!selectedExam || !selectedStream) {
-      alert('Please select an exam and stream')
+      showToast('Please select an exam and stream', 'warning')
       return
     }
 
@@ -108,7 +111,7 @@ const ReportCardAnalytics = () => {
       setTermComparison(comparison || [])
     } catch (error) {
       console.error('Failed to analyze:', error)
-      alert('Failed to analyze report cards')
+      showToast('Failed to analyze report cards', 'error')
     } finally {
       setLoading(false)
     }
@@ -116,7 +119,7 @@ const ReportCardAnalytics = () => {
 
   const handleExport = async () => {
     if (!performanceSummary) {
-      alert('Please analyze first')
+      showToast('Please analyze first', 'warning')
       return
     }
 
@@ -142,18 +145,18 @@ const ReportCardAnalytics = () => {
       })
     } catch (error) {
       console.error('Failed to export:', error)
-      alert('Failed to export')
+      showToast('Failed to export', 'error')
     }
   }
 
-  const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#6b7280']
+  const COLOR_CLASSES = ['bg-emerald-500', 'bg-blue-500', 'bg-amber-500', 'bg-red-500', 'bg-gray-500']
 
   return (
     <div className="space-y-8 pb-10">
       <PageHeader
         title="Report Card Analytics"
         subtitle="Class performance insights and trends"
-        breadcrumbs={[{ label: 'Academics' }, { label: 'Report Card Analytics' }]}
+        breadcrumbs={[{ label: 'Academics', href: '/academics' }, { label: 'Report Card Analytics' }]}
       />
 
       {/* Selection */}
@@ -238,15 +241,7 @@ const ReportCardAnalytics = () => {
                     <div key={item.grade} className="flex items-center justify-between">
                       <span className="font-medium w-12">{item.grade}</span>
                       <div className="flex-1 mx-4">
-                        <div className="w-full h-3 rounded-full bg-white/10 overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r"
-                            style={{
-                              backgroundImage: `linear-gradient(to right, ${COLORS[idx % COLORS.length]}, ${COLORS[(idx + 1) % COLORS.length]})`,
-                              width: `${item.percentage}%`
-                            }}
-                          />
-                        </div>
+                        <ProgressBar value={item.percentage} height="h-3" fillClass={COLOR_CLASSES[idx % COLOR_CLASSES.length]} />
                       </div>
                       <span className="text-sm text-foreground/60 w-20 text-right">{item.count} ({item.percentage.toFixed(1)}%)</span>
                     </div>
@@ -260,17 +255,12 @@ const ReportCardAnalytics = () => {
                 <h3 className="text-lg font-semibold mb-4">Subject Performance</h3>
                 <div className="space-y-2">
                   {subjectPerformance.slice(0, 5).map((subject) => (
-                    <div key={subject.subject_name} className="p-3 rounded-lg bg-white/5">
+                    <div key={subject.subject_name} className="p-3 rounded-lg bg-secondary/50">
                       <div className="flex justify-between mb-1">
                         <span className="font-medium text-sm">{subject.subject_name}</span>
                         <span className="text-sm font-bold text-blue-400">{subject.mean_score.toFixed(1)}</span>
                       </div>
-                      <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-blue-500 to-purple-500"
-                          style={{ width: `${(subject.mean_score / 100) * 100}%` }}
-                        />
-                      </div>
+                      <ProgressBar value={subject.mean_score} fillClass="bg-gradient-to-r from-blue-500 to-purple-500" />
                     </div>
                   ))}
                 </div>
@@ -285,7 +275,7 @@ const ReportCardAnalytics = () => {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-sm">
                   <thead>
-                    <tr className="border-b border-white/10">
+                    <tr className="border-b border-border">
                       <th className="pb-3 pt-2 font-bold text-foreground/60">Subject</th>
                       <th className="pb-3 pt-2 font-bold text-foreground/60 text-right">Mean</th>
                       <th className="pb-3 pt-2 font-bold text-foreground/60 text-right">Pass %</th>
@@ -293,9 +283,9 @@ const ReportCardAnalytics = () => {
                       <th className="pb-3 pt-2 font-bold text-foreground/60 text-right">Discrimination</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
+                  <tbody className="divide-y divide-border">
                     {subjectPerformance.map((subject) => (
-                      <tr key={subject.subject_name} className="hover:bg-white/[0.02]">
+                      <tr key={subject.subject_name} className="hover:bg-secondary/30">
                         <td className="py-3 font-medium">{subject.subject_name}</td>
                         <td className="py-3 text-right font-bold">{subject.mean_score.toFixed(1)}</td>
                         <td className="py-3 text-right">

@@ -140,7 +140,7 @@ export default function TransportRouteManagement() {
             header: 'Status',
             accessorKey: 'is_active',
             cell: (row: TransportRoute) => (
-                <span className={`px-2 py-1 rounded-full text-xs ${row.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                <span className={`px-2 py-1 rounded-full text-xs ${row.is_active ? 'bg-green-500/15 text-green-600 dark:text-green-400' : 'bg-gray-100 text-foreground'}`}>
                     {row.is_active ? 'Active' : 'Inactive'}
                 </span>
             )

@@ -1,6 +1,7 @@
 import { Search, Loader2, History, Database, UserCheck, Activity } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 
+import { PageHeader } from '../../components/patterns/PageHeader'
 import { useToast } from '../../contexts/ToastContext'
 import { type AuditLogEntry } from '../../types/electron-api/AuditAPI'
 import { formatDateTime } from '../../utils/format'
@@ -43,16 +44,16 @@ export default function AuditLog() {
 
     return (
         <div className="space-y-8 pb-10">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                    <h1 className="text-3xl font-bold text-foreground font-heading uppercase tracking-tight">Audit Log</h1>
-                    <p className="text-foreground/50 mt-1 font-medium italic">Comprehensive system-wide change tracking and security oversight</p>
-                </div>
-                <div className="flex items-center gap-3 bg-secondary/20 p-2 rounded-xl border border-border/20">
-                    <Activity className="w-5 h-5 text-primary opacity-60" />
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/40 pr-2">Live Monitoring Active</span>
-                </div>
-            </div>
+            <PageHeader
+                title="Audit Log"
+                subtitle="Comprehensive system-wide change tracking and security oversight"
+                actions={
+                    <div className="flex items-center gap-3 bg-secondary/20 p-2 rounded-xl border border-border/20">
+                        <Activity className="w-5 h-5 text-primary opacity-60" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/40 pr-2">Live Monitoring Active</span>
+                    </div>
+                }
+            />
 
             <div className="premium-card animate-slide-up">
                 <div className="flex flex-wrap items-center gap-6">
@@ -62,13 +63,13 @@ export default function AuditLog() {
                             aria-label="Search logs"
                             value={filter.search}
                             onChange={(e) => setFilter(prev => ({ ...prev, search: e.target.value }))}
-                            className="input w-full pl-12 bg-secondary/30 h-12" />
+                            className="input w-full pl-12 h-12" />
                     </div>
 
                     <div className="flex items-center gap-4">
                         <select value={filter.action} onChange={(e) => setFilter(prev => ({ ...prev, action: e.target.value }))}
                             aria-label="Filter by action"
-                            className="input w-44 bg-secondary/30 h-12">
+                            className="input w-44 h-12">
                             <option value="">All Actions</option>
                             <option value="CREATE">Create</option>
                             <option value="UPDATE">Update</option>
@@ -78,7 +79,7 @@ export default function AuditLog() {
                         </select>
                         <select value={filter.table} onChange={(e) => setFilter(prev => ({ ...prev, table: e.target.value }))}
                             aria-label="Filter by table"
-                            className="input w-44 bg-secondary/30 h-12">
+                            className="input w-44 h-12">
                             <option value="">All Tables</option>
                             <option value="student">Students</option>
                             <option value="ledger_transaction">Transactions</option>
@@ -147,7 +148,7 @@ export default function AuditLog() {
                                         <td className="py-4">
                                             <span className="font-mono text-xs text-foreground/40">{log.record_id || 'N/A'}</span>
                                         </td>
-                                        <td className="py-4 max-w-xs">
+                                        <td className="py-4 max-w-xs truncate">
                                             <div className="bg-secondary/30 p-2 rounded-lg border border-border/20 group-hover:border-primary/20 transition-colors">
                                                 <p className="font-mono text-[10px] text-foreground/50 truncate italic">
                                                     {(() => {

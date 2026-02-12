@@ -90,10 +90,10 @@ export default function BudgetDetails() {
     if (loading) {
         return (
             <div className="space-y-8 pb-10">
-                <div className="h-20 bg-white/5 animate-pulse rounded-xl" />
+                <div className="h-20 bg-secondary/50 animate-pulse rounded-xl" />
                 <div className="grid grid-cols-4 gap-6">
                     {[1, 2, 3, 4].map((value) => (
-                        <div key={value} className="h-32 bg-white/5 animate-pulse rounded-xl" />
+                        <div key={value} className="h-32 bg-secondary/50 animate-pulse rounded-xl" />
                     ))}
                 </div>
             </div>
@@ -134,7 +134,7 @@ export default function BudgetDetails() {
                 title={budget.budget_name}
                 subtitle={`Created by ${budget.created_by_name}`}
                 breadcrumbs={[
-                    { label: 'Finance' },
+                    { label: 'Finance', href: '/finance' },
                     { label: 'Budgets', href: '/budget' },
                     { label: budget.budget_name }
                 ]}
@@ -224,7 +224,7 @@ export default function BudgetDetails() {
                     <div className="flex items-center gap-3">
                         <CheckCircle className="w-5 h-5 text-green-400" />
                         <div>
-                            <p className="text-sm font-bold text-white">Approved by {budget.approved_by_name}</p>
+                            <p className="text-sm font-bold text-foreground">Approved by {budget.approved_by_name}</p>
                             <p className="text-xs text-foreground/40">
                                 {budget.approved_at ? new Date(budget.approved_at).toLocaleDateString() : ''}
                             </p>

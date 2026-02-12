@@ -115,11 +115,11 @@ export default function BoardingProfitability() {
             accessorKey: 'occupancy_rate',
             cell: (row: BoardingFacility) => {
                 const rate = row.capacity > 0 ? (row.current_occupancy / row.capacity) * 100 : 0
-                let badgeClass = 'bg-yellow-100 text-yellow-800'
+                let badgeClass = 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400'
                 if (rate >= 90) {
-                    badgeClass = 'bg-green-100 text-green-800'
+                    badgeClass = 'bg-green-500/15 text-green-600 dark:text-green-400'
                 } else if (rate >= 70) {
-                    badgeClass = 'bg-blue-100 text-blue-800'
+                    badgeClass = 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
                 }
                 return (
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeClass}`}>
@@ -133,7 +133,7 @@ export default function BoardingProfitability() {
             header: 'Status',
             accessorKey: 'is_active',
             cell: (row: BoardingFacility) => (
-                <span className={`px-2 py-1 rounded-full text-xs ${row.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                <span className={`px-2 py-1 rounded-full text-xs ${row.is_active ? 'bg-green-500/15 text-green-600 dark:text-green-400' : 'bg-gray-100 text-foreground'}`}>
                     {row.is_active ? 'Active' : 'Inactive'}
                 </span>
             )

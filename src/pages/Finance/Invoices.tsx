@@ -146,7 +146,7 @@ export default function Invoices() {
                 title="Invoices"
                 subtitle="Manage and track student fee invoices"
                 breadcrumbs={[
-                    { label: 'Finance', href: '/finance/fee-payment' },
+                    { label: 'Finance', href: '/finance' },
                     { label: 'Invoices' }
                 ]}
                 actions={

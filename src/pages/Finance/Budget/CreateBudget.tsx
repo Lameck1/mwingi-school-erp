@@ -129,7 +129,7 @@ export default function CreateBudget() {
             <PageHeader
                 title="Create New Budget"
                 subtitle="Define budget allocations for the academic period"
-                breadcrumbs={[{ label: 'Finance' }, { label: 'Budgets', href: '/budget' }, { label: 'New' }]}
+                breadcrumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Budgets', href: '/budget' }, { label: 'New' }]}
                 actions={
                     <button
                         onClick={() => navigate('/budget')}
@@ -151,7 +151,7 @@ export default function CreateBudget() {
 
                 {/* Basic Info */}
                 <div className="premium-card space-y-6">
-                    <h2 className="text-lg font-bold text-white">Budget Details</h2>
+                    <h2 className="text-lg font-bold text-foreground">Budget Details</h2>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
@@ -163,7 +163,7 @@ export default function CreateBudget() {
                                 value={budgetName}
                                 onChange={(e) => setBudgetName(e.target.value)}
                                 placeholder="e.g., Term 1 2024 Budget"
-                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                className="w-full bg-secondary/50 border border-border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50"
                                 required
                             />
                         </div>
@@ -172,7 +172,7 @@ export default function CreateBudget() {
                             <label htmlFor="field-176" className="text-sm font-bold text-foreground/60 uppercase tracking-wider">
                                 Academic Period
                             </label>
-                            <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-foreground/70">
+                            <div className="bg-secondary/50 border border-border rounded-xl px-4 py-3 text-foreground/70">
                                 {currentAcademicYear?.year_name || 'Not set'}
                                 {currentTerm && ` • ${currentTerm.term_name}`}
                             </div>
@@ -188,7 +188,7 @@ export default function CreateBudget() {
                             onChange={(e) => setNotes(e.target.value)}
                             placeholder="Additional notes about this budget..."
                             rows={3}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+                            className="w-full bg-secondary/50 border border-border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
                         />
                     </div>
                 </div>
@@ -196,7 +196,7 @@ export default function CreateBudget() {
                 {/* Line Items */}
                 <div className="premium-card space-y-6">
                     <div className="flex items-center justify-between">
-                        <h2 className="text-lg font-bold text-white">Budget Line Items</h2>
+                        <h2 className="text-lg font-bold text-foreground">Budget Line Items</h2>
                         <button
                             type="button"
                             onClick={addLineItem}
@@ -209,7 +209,7 @@ export default function CreateBudget() {
 
                     <div className="space-y-4">
                         {lineItems.map((item, index) => (
-                            <div key={item.tempId} className="flex items-start gap-4 p-4 bg-white/[0.02] rounded-xl border border-white/5">
+                            <div key={item.tempId} className="flex items-start gap-4 p-4 bg-white/[0.02] rounded-xl border border-border/20">
                                 <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div className="space-y-1">
                                         <label htmlFor="field-208" className="text-[10px] font-bold text-foreground/40 uppercase tracking-wider">
@@ -218,7 +218,7 @@ export default function CreateBudget() {
                                         <select id="field-208"
                                             value={item.category_id}
                                             onChange={(e) => updateLineItem(index, 'category_id', Number(e.target.value))}
-                                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                            className="w-full bg-secondary/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                                             aria-label="Budget category"
                                         >
                                             <option value={0}>Select category...</option>
@@ -244,7 +244,7 @@ export default function CreateBudget() {
                                             value={item.description}
                                             onChange={(e) => updateLineItem(index, 'description', e.target.value)}
                                             placeholder="e.g., Teacher salaries"
-                                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                            className="w-full bg-secondary/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                                         />
                                     </div>
 
@@ -259,7 +259,7 @@ export default function CreateBudget() {
                                             placeholder="0.00"
                                             min="0"
                                             step="0.01"
-                                            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                            className="w-full bg-secondary/50 border border-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/50"
                                         />
                                     </div>
                                 </div>
@@ -278,11 +278,11 @@ export default function CreateBudget() {
                     </div>
 
                     {/* Total */}
-                    <div className="flex items-center justify-end gap-4 pt-4 border-t border-white/10">
+                    <div className="flex items-center justify-end gap-4 pt-4 border-t border-border">
                         <span className="text-sm font-bold text-foreground/60 uppercase tracking-wider">
                             Total Budget:
                         </span>
-                        <div className="flex items-center gap-2 text-2xl font-bold text-white font-mono">
+                        <div className="flex items-center gap-2 text-2xl font-bold text-foreground font-mono">
                             <DollarSign className="w-5 h-5 text-primary" />
                             {formatCurrency(totalBudgeted)}
                         </div>

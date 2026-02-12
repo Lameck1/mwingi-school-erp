@@ -201,6 +201,7 @@ export default function SubjectManagement() {
                       <button
                         onClick={() => openEdit(subject)}
                         className="p-2.5 bg-background border border-border/40 hover:border-blue-500/50 hover:text-blue-500 rounded-xl transition-all shadow-sm"
+                        aria-label="Edit subject"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
@@ -209,6 +210,7 @@ export default function SubjectManagement() {
                           onClick={() => handleToggleActive(subject, false)}
                           className="p-2.5 bg-background border border-border/40 hover:border-destructive/50 hover:text-destructive rounded-xl transition-all shadow-sm"
                           disabled={saving}
+                          aria-label="Deactivate subject"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -217,6 +219,7 @@ export default function SubjectManagement() {
                           onClick={() => handleToggleActive(subject, true)}
                           className="p-2.5 bg-background border border-border/40 hover:border-emerald-500/50 hover:text-emerald-500 rounded-xl transition-all shadow-sm"
                           disabled={saving}
+                          aria-label="Activate subject"
                         >
                           <CheckCircle2 className="w-4 h-4" />
                         </button>
@@ -237,7 +240,7 @@ export default function SubjectManagement() {
       <PageHeader
         title="Subject Management"
         subtitle="Maintain academic subjects and curriculum coverage"
-        breadcrumbs={[{ label: 'Academics' }, { label: 'Subjects' }]}
+        breadcrumbs={[{ label: 'Academics', href: '/academics' }, { label: 'Subjects' }]}
       />
 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -270,7 +273,7 @@ export default function SubjectManagement() {
               type="text"
               value={form.code}
               onChange={(e) => setForm(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
-              className="input w-full bg-secondary/30"
+              className="input w-full"
               placeholder="e.g. C-MATH"
             />
           </div>
@@ -281,7 +284,7 @@ export default function SubjectManagement() {
               type="text"
               value={form.name}
               onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
-              className="input w-full bg-secondary/30"
+              className="input w-full"
               placeholder="e.g. Mathematics"
             />
           </div>

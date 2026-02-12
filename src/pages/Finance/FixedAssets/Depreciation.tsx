@@ -58,7 +58,7 @@ export default function Depreciation() {
             <PageHeader
                 title="Asset Depreciation"
                 subtitle="Manage asset value reduction over time"
-                breadcrumbs={[{ label: 'Finance' }, { label: 'Fixed Assets' }, { label: 'Depreciation' }]}
+                breadcrumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Fixed Assets' }, { label: 'Depreciation' }]}
             />
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -69,7 +69,7 @@ export default function Depreciation() {
                         </div>
                         <div>
                             <p className="text-sm font-bold text-foreground/60 uppercase tracking-wider">Total Book Value</p>
-                            <h3 className="text-2xl font-bold text-white font-mono">
+                            <h3 className="text-2xl font-bold text-foreground font-mono">
                                 {formatCurrencyFromCents(assets.reduce((sum, a) => sum + a.current_value, 0))}
                             </h3>
                         </div>
@@ -79,14 +79,14 @@ export default function Depreciation() {
 
             <div className="card">
                 <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-bold text-white">Active Assets</h3>
+                    <h3 className="text-lg font-bold text-foreground">Active Assets</h3>
                     <div className="text-sm text-foreground/50">Current Period: {currentAcademicYear?.year_name || 'N/A'}</div>
                 </div>
 
                 <div className="no-scrollbar overflow-x-auto">
                     <table className="w-full text-left">
                         <thead>
-                            <tr className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 border-b border-white/5">
+                            <tr className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 border-b border-border/20">
                                 <th className="px-4 py-4">Asset</th>
                                 <th className="px-4 py-4">Category</th>
                                 <th className="px-4 py-4 text-right">Original Cost</th>
@@ -99,7 +99,7 @@ export default function Depreciation() {
                             {assets.map((asset) => (
                                 <tr key={asset.id} className="group hover:bg-white/[0.02]">
                                     <td className="px-4 py-4">
-                                        <div className="font-bold text-white">{asset.asset_name}</div>
+                                        <div className="font-bold text-foreground">{asset.asset_name}</div>
                                         <div className="text-[10px] text-foreground/40 font-mono">{asset.asset_code}</div>
                                     </td>
                                     <td className="px-4 py-4 text-sm text-foreground/70">{asset.category_name}</td>
@@ -107,7 +107,7 @@ export default function Depreciation() {
                                     <td className="px-4 py-4 text-right font-mono text-sm text-amber-400/80">
                                         {formatCurrencyFromCents(asset.accumulated_depreciation)}
                                     </td>
-                                    <td className="px-4 py-4 text-right font-mono font-bold text-white">
+                                    <td className="px-4 py-4 text-right font-mono font-bold text-foreground">
                                         {formatCurrencyFromCents(asset.current_value)}
                                     </td>
                                     <td className="px-4 py-4 text-center">

@@ -2,6 +2,8 @@ import { AlertCircle, CheckCircle, Download, Mail, MessageSquare, Loader } from 
 import React, { useState, useEffect } from 'react'
 
 import { PageHeader } from '../../components/patterns/PageHeader'
+import { ProgressBar } from '../../components/ui/ProgressBar'
+import { useToast } from '../../contexts/ToastContext'
 
 interface GenerationProgress {
   total: number
@@ -19,8 +21,26 @@ interface EmailTemplate {
   body: string
 }
 
-const handleDownloadReportCards = async (): Promise<void> => {
-  alert('Download is temporarily unavailable. Please use generated files from the report card service directory.')
+const handleDownloadReportCards = async (examId: number | null, streamId: number | null, showToastFn: (msg: string, type: 'success' | 'error' | 'warning') => void): Promise<void> => {
+  if (!examId || !streamId) {
+    showToastFn('Please select an exam and stream first', 'warning')
+    return
+  }
+  try {
+    const result = await globalThis.electronAPI.downloadReportCards({
+      exam_id: examId,
+      stream_id: streamId,
+      merge: true
+    })
+    if (result.success) {
+      showToastFn('Report cards downloaded successfully', 'success')
+    } else {
+      showToastFn(result.message || 'Download failed', 'error')
+    }
+  } catch (error) {
+    console.error('Download failed:', error)
+    showToastFn('Failed to download report cards', 'error')
+  }
 }
 
 const renderProgressIcon = (status: GenerationProgress['status']) => {
@@ -36,6 +56,7 @@ const renderProgressIcon = (status: GenerationProgress['status']) => {
 }
 
 const ReportCardGeneration: React.FC = () => {
+  const { showToast } = useToast()
   const [selectedExam, setSelectedExam] = useState<number | null>(null)
   const [selectedStream, setSelectedStream] = useState<number | null>(null)
   const [exams, setExams] = useState<Array<{ id: number; name: string }>>([])
@@ -102,7 +123,7 @@ const ReportCardGeneration: React.FC = () => {
 
   const handleGenerateReportCards = async () => {
     if (!selectedExam || !selectedStream) {
-      alert('Please select both exam and stream')
+      showToast('Please select both exam and stream', 'warning')
       return
     }
 
@@ -159,14 +180,14 @@ const ReportCardGeneration: React.FC = () => {
         status: 'complete'
       }))
 
-      alert(`Report cards generated successfully! ${results.generated} generated, ${results.failed} failed`)
+      showToast(`Report cards generated successfully! ${results.generated} generated, ${results.failed} failed`, 'success')
     } catch (error) {
       setProgress(prev => ({
         ...prev,
         status: 'error',
         error_message: error instanceof Error ? error.message : 'Unknown error'
       }))
-      alert(`Error: ${error instanceof Error ? error.message : 'Failed to generate report cards'}`)
+      showToast(error instanceof Error ? error.message : 'Failed to generate report cards', 'error')
     }
   }
 
@@ -183,32 +204,32 @@ const ReportCardGeneration: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-background to-secondary">
       <PageHeader
         title="Report Card Generation"
         subtitle="Batch generate and distribute CBC report cards to all students"
         breadcrumbs={[
-          { label: 'Academic', href: '/academic' },
-          { label: 'Report Cards', href: '/academic/report-cards' },
+          { label: 'Academics', href: '/academics' },
+          { label: 'Report Cards', href: '/report-cards' },
           { label: 'Generation' }
         ]}
       />
 
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Selection Section */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">Select Report Card Parameters</h2>
+        <div className="bg-card rounded-lg shadow-md p-6 mb-6">
+          <h2 className="text-lg font-semibold text-foreground mb-4">Select Report Card Parameters</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Exam Selection */}
             <div>
-              <label htmlFor="field-193" className="block text-sm font-medium text-slate-700 mb-2">
+              <label htmlFor="field-193" className="block text-sm font-medium text-foreground/70 mb-2">
                 Exam <span className="text-red-500">*</span>
               </label>
               <select id="field-193"
                 value={selectedExam ?? ''}
                 onChange={(e) => setSelectedExam(e.target.value ? Number.parseInt(e.target.value, 10) : null)}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-border rounded-lg bg-card text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent"
               >
                 <option value="">Select Exam</option>
                 {exams.map(exam => (
@@ -221,13 +242,13 @@ const ReportCardGeneration: React.FC = () => {
 
             {/* Stream Selection */}
             <div>
-              <label htmlFor="field-212" className="block text-sm font-medium text-slate-700 mb-2">
+              <label htmlFor="field-212" className="block text-sm font-medium text-foreground/70 mb-2">
                 Stream <span className="text-red-500">*</span>
               </label>
               <select id="field-212"
                 value={selectedStream ?? ''}
                 onChange={(e) => setSelectedStream(e.target.value ? Number.parseInt(e.target.value, 10) : null)}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-border rounded-lg bg-card text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent"
               >
                 <option value="">Select Stream</option>
                 {streams.map(stream => (
@@ -240,14 +261,14 @@ const ReportCardGeneration: React.FC = () => {
 
             {/* Email Options */}
             <div>
-              <label htmlFor="field-231" className="block text-sm font-medium text-slate-700 mb-2">
+              <label htmlFor="field-231" className="block text-sm font-medium text-foreground/70 mb-2">
                 Email Template
               </label>
               <select id="field-231"
                 value={selectedTemplate}
                 onChange={(e) => setSelectedTemplate(e.target.value)}
                 disabled={!sendEmail}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-100"
+                className="w-full px-4 py-2 border border-border rounded-lg bg-card text-foreground focus:ring-2 focus:ring-primary/50 focus:border-transparent disabled:bg-secondary"
               >
                 {emailTemplates.map(template => (
                   <option key={template.id} value={template.id}>
@@ -266,7 +287,7 @@ const ReportCardGeneration: React.FC = () => {
                   onChange={(e) => setSendEmail(e.target.checked)}
                   className="w-4 h-4 text-blue-600 rounded"
                 />
-                <span className="text-sm font-medium text-slate-700">
+                <span className="text-sm font-medium text-foreground/70">
                   <Mail className="inline w-4 h-4 mr-1" />
                   Email to Parents
                 </span>
@@ -279,7 +300,7 @@ const ReportCardGeneration: React.FC = () => {
                   onChange={(e) => setSendSMS(e.target.checked)}
                   className="w-4 h-4 text-blue-600 rounded disabled:opacity-50"
                 />
-                <span className="text-sm font-medium text-slate-700">
+                <span className="text-sm font-medium text-foreground/70">
                   <MessageSquare className="inline w-4 h-4 mr-1" />
                   SMS Notification
                 </span>
@@ -292,7 +313,7 @@ const ReportCardGeneration: React.FC = () => {
                   onChange={(e) => setMergePDFs(e.target.checked)}
                   className="w-4 h-4 text-blue-600 rounded"
                 />
-                <span className="text-sm font-medium text-slate-700">
+                <span className="text-sm font-medium text-foreground/70">
                   <Download className="inline w-4 h-4 mr-1" />
                   Merge PDFs (Single File)
                 </span>
@@ -303,19 +324,19 @@ const ReportCardGeneration: React.FC = () => {
 
         {/* Progress Section */}
         {progress.status !== 'idle' && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="bg-card rounded-lg shadow-md p-6 mb-6">
             <div className="flex items-center gap-4 mb-4">
               {renderProgressIcon(progress.status)}
 
               <div>
-                <h3 className="font-semibold text-slate-900">
+                <h3 className="font-semibold text-foreground">
                   {progress.status === 'generating' && 'Generating Report Cards...'}
                   {progress.status === 'emailing' && 'Sending Emails...'}
                   {progress.status === 'complete' && 'Complete!'}
                   {progress.status === 'error' && 'Error'}
                 </h3>
                 {progress.current_student && (
-                  <p className="text-sm text-slate-600">
+                  <p className="text-sm text-muted-foreground">
                     Current: {progress.current_student}
                   </p>
                 )}
@@ -324,36 +345,31 @@ const ReportCardGeneration: React.FC = () => {
 
             {/* Progress Bar */}
             <div className="mb-4">
-              <div className="flex justify-between text-sm text-slate-600 mb-2">
+              <div className="flex justify-between text-sm text-muted-foreground mb-2">
                 <span>Progress: {progress.completed} of {progress.total}</span>
                 <span>{getProgressPercentage()}%</span>
               </div>
-              <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
-                <div
-                  className={`h-full ${getProgressColor()} transition-all duration-300`}
-                  style={{ width: `${getProgressPercentage()}%` }}
-                />
-              </div>
+              <ProgressBar value={getProgressPercentage()} height="h-3" fillClass={`${getProgressColor()} transition-all duration-300`} />
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              <div className="bg-green-50 rounded p-3">
-                <p className="text-slate-600">Generated</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+              <div className="bg-green-500/10 rounded p-3">
+                <p className="text-muted-foreground">Generated</p>
                 <p className="text-2xl font-bold text-green-600">{progress.completed}</p>
               </div>
-              <div className="bg-red-50 rounded p-3">
-                <p className="text-slate-600">Failed</p>
+              <div className="bg-red-500/10 rounded p-3">
+                <p className="text-muted-foreground">Failed</p>
                 <p className="text-2xl font-bold text-red-600">{progress.failed}</p>
               </div>
-              <div className="bg-blue-50 rounded p-3">
-                <p className="text-slate-600">Total</p>
+              <div className="bg-blue-500/10 rounded p-3">
+                <p className="text-muted-foreground">Total</p>
                 <p className="text-2xl font-bold text-blue-600">{progress.total}</p>
               </div>
             </div>
 
             {progress.error_message && (
-              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+              <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded text-red-500 text-sm">
                 {progress.error_message}
               </div>
             )}
@@ -361,12 +377,12 @@ const ReportCardGeneration: React.FC = () => {
         )}
 
         {/* Action Buttons */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="bg-card rounded-lg shadow-md p-6 mb-6">
           <div className="flex gap-4 flex-wrap">
             <button
               onClick={handleGenerateReportCards}
               disabled={!selectedExam || !selectedStream || progress.status === 'generating' || progress.status === 'emailing'}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed font-medium transition"
+              className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/80 disabled:bg-muted disabled:cursor-not-allowed font-medium transition"
             >
               {progress.status === 'generating' || progress.status === 'emailing' ? (
                 <>
@@ -380,8 +396,8 @@ const ReportCardGeneration: React.FC = () => {
 
             {progress.status === 'complete' && (
               <button
-                onClick={handleDownloadReportCards}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition flex items-center gap-2"
+                onClick={() => handleDownloadReportCards(selectedExam, selectedStream, showToast)}
+                className="px-6 py-2 bg-success text-white rounded-lg hover:bg-success/80 font-medium transition flex items-center gap-2"
               >
                 <Download className="w-4 h-4" />
                 Download Report Cards
@@ -392,13 +408,13 @@ const ReportCardGeneration: React.FC = () => {
 
         {/* Generated Files List */}
         {generatedFiles.length > 0 && (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="font-semibold text-slate-900 mb-4">Generated Files</h3>
+          <div className="bg-card rounded-lg shadow-md p-6">
+            <h3 className="font-semibold text-foreground mb-4">Generated Files</h3>
             <div className="space-y-2">
               {generatedFiles.map((file) => (
-                <div key={file} className="flex items-center justify-between p-3 bg-slate-50 rounded border border-slate-200">
-                  <span className="text-sm text-slate-700">{file}</span>
-                  <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                <div key={file} className="flex items-center justify-between p-3 bg-secondary rounded border border-border">
+                  <span className="text-sm text-foreground/70">{file}</span>
+                  <button className="text-primary hover:text-primary/80 text-sm font-medium">
                     Download
                   </button>
                 </div>
@@ -408,8 +424,8 @@ const ReportCardGeneration: React.FC = () => {
         )}
 
         {/* Info Box */}
-        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-blue-800">
+        <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+          <p className="text-sm text-blue-600 dark:text-blue-400">
             <strong>Note:</strong> Report cards will be generated for all students in the selected stream for the chosen exam.
             If email is enabled, parents will receive the report card as an attachment with parent portal access links.
             All report cards are password-protected with the student's admission number.

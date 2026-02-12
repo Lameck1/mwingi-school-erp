@@ -114,7 +114,7 @@ export default function IntegrationsSettings() {
                             <label htmlFor="sms-provider" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Service Provider</label>
                             <select
                                 id="sms-provider"
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                                 value={smsConfig.provider}
                                 onChange={e => setSmsConfig({ ...smsConfig, provider: e.target.value })}
                             >
@@ -128,7 +128,7 @@ export default function IntegrationsSettings() {
                             <input
                                 id="sms-username"
                                 type="text"
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                                 value={smsConfig.username}
                                 onChange={e => setSmsConfig({ ...smsConfig, username: e.target.value })}
                                 placeholder="Enter service ID"
@@ -141,7 +141,7 @@ export default function IntegrationsSettings() {
                                 <input
                                     id="sms-api-key"
                                     type={showKeys['sms'] ? "text" : "password"}
-                                    className="input w-full bg-secondary/30 pr-10"
+                                    className="input w-full pr-10"
                                     value={smsConfig.api_key}
                                     onChange={e => setSmsConfig({ ...smsConfig, api_key: e.target.value })}
                                     placeholder="••••••••••••••••"
@@ -165,7 +165,7 @@ export default function IntegrationsSettings() {
                             <input
                                 id="sms-sender-id"
                                 type="text"
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                                 value={smsConfig.sender_id}
                                 onChange={e => setSmsConfig({ ...smsConfig, sender_id: e.target.value })}
                                 placeholder="SCHOOLNAME"
@@ -202,7 +202,7 @@ export default function IntegrationsSettings() {
                                 <input
                                     id="smtp-host"
                                     type="text"
-                                    className="input w-full bg-secondary/30"
+                                    className="input w-full"
                                     value={smtpConfig.host}
                                     onChange={e => setSmtpConfig({ ...smtpConfig, host: e.target.value })}
                                     placeholder="smtp.gmail.com"
@@ -213,7 +213,7 @@ export default function IntegrationsSettings() {
                                 <input
                                     id="smtp-port"
                                     type="text"
-                                    className="input w-full bg-secondary/30"
+                                    className="input w-full"
                                     value={smtpConfig.port}
                                     onChange={e => setSmtpConfig({ ...smtpConfig, port: e.target.value })}
                                     placeholder="587"
@@ -226,7 +226,7 @@ export default function IntegrationsSettings() {
                             <input
                                 id="smtp-user"
                                 type="text"
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                                 value={smtpConfig.user}
                                 onChange={e => setSmtpConfig({ ...smtpConfig, user: e.target.value })}
                                 placeholder="admin@school.com"
@@ -239,7 +239,7 @@ export default function IntegrationsSettings() {
                                 <input
                                     id="smtp-pass"
                                     type={showKeys['smtp'] ? "text" : "password"}
-                                    className="input w-full bg-secondary/30 pr-10"
+                                    className="input w-full pr-10"
                                     value={smtpConfig.pass}
                                     onChange={e => setSmtpConfig({ ...smtpConfig, pass: e.target.value })}
                                     placeholder="••••••••••••••••"

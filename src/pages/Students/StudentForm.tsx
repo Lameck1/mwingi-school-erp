@@ -2,6 +2,7 @@ import { ArrowLeft, Save, Loader2, User, Shield, Phone, Mail, MapPin, Calendar, 
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
+import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 import { Select } from '../../components/ui/Select'
 import { type Stream } from '../../types/electron-api/AcademicAPI'
 
@@ -123,7 +124,11 @@ export default function StudentForm() {
                     <ArrowLeft className="w-5 h-5" />
                 </button>
                 <div>
-                    <h1 className="text-3xl font-bold text-foreground font-heading">
+                    <HubBreadcrumb crumbs={[
+                        { label: 'Students', href: '/students' },
+                        { label: isEdit ? 'Edit Student' : 'New Student' }
+                    ]} />
+                    <h1 className="text-xl md:text-3xl font-bold text-foreground font-heading">
                         {isEdit ? 'Update Student Record' : 'Registry Admission'}
                     </h1>
                     <p className="text-foreground/50 mt-1 font-medium italic">
@@ -156,18 +161,18 @@ export default function StudentForm() {
                                 <p className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Full Legal Name (Primary)</p>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <input name="first_name" value={formData.first_name} onChange={handleChange} required
-                                        className="input bg-secondary/20 border-border/20" placeholder="First Name" />
+                                        className="input border-border/20" placeholder="First Name" />
                                     <input name="middle_name" value={formData.middle_name} onChange={handleChange}
-                                        className="input bg-secondary/20 border-border/20" placeholder="Middle Name" />
+                                        className="input border-border/20" placeholder="Middle Name" />
                                     <input name="last_name" value={formData.last_name} onChange={handleChange} required
-                                        className="input bg-secondary/20 border-border/20" placeholder="Surname" />
+                                        className="input border-border/20" placeholder="Surname" />
                                 </div>
                             </div>
 
                             <div>
                                 <label htmlFor="student-admission-number" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Admission Number</label>
                                 <input id="student-admission-number" name="admission_number" value={formData.admission_number} onChange={handleChange} required
-                                    className="input bg-secondary/20 border-border/20 font-mono" placeholder="MAS-2025-XXX" />
+                                    className="input border-border/20 font-mono" placeholder="MAS-2025-XXX" />
                             </div>
 
                             <Select
@@ -206,13 +211,13 @@ export default function StudentForm() {
                             <div>
                                 <label htmlFor="student-dob" className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest block mb-2 ml-1">Date of Birth</label>
                                 <input id="student-dob" name="date_of_birth" type="date" value={formData.date_of_birth} onChange={handleChange}
-                                    className="input bg-secondary/30 border-border/40 focus:border-primary/50 transition-all font-medium" />
+                                    className="input border-border/40 focus:border-primary/50 transition-all font-medium" />
                             </div>
 
                             <div>
                                 <label htmlFor="student-admission-date" className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest block mb-2 ml-1">Admission Date</label>
                                 <input id="student-admission-date" name="admission_date" type="date" value={formData.admission_date} onChange={handleChange} required
-                                    className="input bg-secondary/30 border-border/40 focus:border-primary/50 transition-all font-medium" />
+                                    className="input border-border/40 focus:border-primary/50 transition-all font-medium" />
                             </div>
                         </div>
                     </div>
@@ -230,7 +235,7 @@ export default function StudentForm() {
                             <div className="md:col-span-2">
                                 <label htmlFor="student-guardian-name" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Primary Guardian Name</label>
                                 <input id="student-guardian-name" name="guardian_name" value={formData.guardian_name} onChange={handleChange}
-                                    className="input bg-secondary/20 border-border/20" placeholder="Enter full name" />
+                                    className="input border-border/20" placeholder="Enter full name" />
                             </div>
 
                             <div>
@@ -238,7 +243,7 @@ export default function StudentForm() {
                                 <div className="relative">
                                     <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40" />
                                     <input id="student-guardian-phone" name="guardian_phone" type="tel" value={formData.guardian_phone} onChange={handleChange}
-                                        className="input pl-11 bg-secondary/20 border-border/20" placeholder="e.g. 0712 XXX XXX" />
+                                        className="input pl-11 border-border/20" placeholder="e.g. 0712 XXX XXX" />
                                 </div>
                             </div>
 
@@ -247,7 +252,7 @@ export default function StudentForm() {
                                 <div className="relative">
                                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40" />
                                     <input id="student-guardian-email" name="guardian_email" type="email" value={formData.guardian_email} onChange={handleChange}
-                                        className="input pl-11 bg-secondary/20 border-border/20" placeholder="guardian@example.com" />
+                                        className="input pl-11 border-border/20" placeholder="guardian@example.com" />
                                 </div>
                             </div>
 
@@ -256,7 +261,7 @@ export default function StudentForm() {
                                 <div className="relative">
                                     <MapPin className="absolute left-4 top-4 w-4 h-4 text-foreground/40" />
                                     <textarea id="student-address" name="address" value={formData.address} onChange={handleChange}
-                                        className="input pl-11 bg-secondary/30 border-border/40 focus:border-primary/50 transition-all min-h-[100px] font-medium" placeholder="Village, Town, Street details..." />
+                                        className="input pl-11 border-border/40 focus:border-primary/50 transition-all min-h-[100px] font-medium" placeholder="Village, Town, Street details..." />
                                 </div>
                             </div>
                         </div>
@@ -310,7 +315,7 @@ export default function StudentForm() {
                             name="notes"
                             value={formData.notes}
                             onChange={handleChange}
-                            className="input bg-secondary/20 border-border/20 min-h-[150px] text-xs"
+                            className="input border-border/20 min-h-[150px] text-xs"
                             placeholder="Clinical history, fee arrangements, or special behavioral notes..."
                         />
                     </div>

@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { Tooltip } from '../../components/ui/Tooltip'
+import { useToast } from '../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../stores'
 
 interface Exam {
@@ -35,6 +36,7 @@ interface StudentResult {
 export default function MarksEntry() {
     const { currentAcademicYear, currentTerm } = useAppStore()
     const { user } = useAuthStore()
+    const { showToast } = useToast()
 
     const [exams, setExams] = useState<Exam[]>([])
     const [allocations, setAllocations] = useState<Allocation[]>([])
@@ -117,10 +119,10 @@ export default function MarksEntry() {
         setSaving(true)
         try {
             await globalThis.electronAPI.saveAcademicResults(selectedExam, results, user.id)
-            alert('Results saved successfully!')
+            showToast('Results saved successfully!', 'success')
         } catch (error) {
             console.error('Failed to save results:', error)
-            alert('Failed to save results')
+            showToast('Failed to save results', 'error')
         } finally {
             setSaving(false)
         }
@@ -128,15 +130,14 @@ export default function MarksEntry() {
 
     const handleProcessResults = async () => {
         if (!selectedExam || !user) {return}
-        if (!confirm('This will calculate ranks and averages for the entire school for this exam. Proceed?')) {return}
 
         setProcessing(true)
         try {
             await globalThis.electronAPI.processAcademicResults(selectedExam, user.id)
-            alert('Results processed successfully! Ranks have been updated.')
+            showToast('Results processed successfully! Ranks have been updated.', 'success')
         } catch (error) {
             console.error('Failed to process results:', error)
-            alert('Failed to process results')
+            showToast('Failed to process results', 'error')
         } finally {
             setProcessing(false)
         }
@@ -176,7 +177,7 @@ export default function MarksEntry() {
             <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                     <thead>
-                        <tr className="border-b border-white/10">
+                        <tr className="border-b border-border">
                             <th className="pb-4 pt-2 font-bold text-foreground/60 w-1/4">Student</th>
                             <th className="pb-4 pt-2 font-bold text-foreground/60 w-1/4">
                                 {isCBC ? 'Competency Level' : 'Score (0-100)'}
@@ -184,11 +185,11 @@ export default function MarksEntry() {
                             <th className="pb-4 pt-2 font-bold text-foreground/60">Teacher Remarks</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5">
+                    <tbody className="divide-y divide-border">
                         {results.map((row: StudentResult) => (
-                            <tr key={row.student_id} className="group hover:bg-white/[0.02] transition-colors">
+                            <tr key={row.student_id} className="group hover:bg-secondary/30 transition-colors">
                                 <td className="py-4 pr-4">
-                                    <p className="font-bold text-white">{row.student_name}</p>
+                                    <p className="font-bold text-foreground">{row.student_name}</p>
                                     <p className="text-xs text-foreground/40 font-mono tracking-tighter uppercase">{row.admission_number}</p>
                                 </td>
                                 <td className="py-4 pr-4">
@@ -213,7 +214,7 @@ export default function MarksEntry() {
                                                 max="100"
                                                 value={row.score ?? ''}
                                                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleScoreChange(row.student_id, 'score', e.target.value === '' ? null : Number(e.target.value))}
-                                                className="w-full bg-sidebar border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50 text-sm text-center"
+                                                className="w-full bg-sidebar border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50 text-sm text-center"
                                                 placeholder="0-100"
                                             />
                                         </div>
@@ -224,7 +225,7 @@ export default function MarksEntry() {
                                         type="text"
                                         value={row.teacher_remarks || ''}
                                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleScoreChange(row.student_id, 'teacher_remarks', e.target.value)}
-                                        className="w-full bg-sidebar border border-white/10 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50 text-sm"
+                                        className="w-full bg-sidebar border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50 text-sm"
                                         placeholder="e.g. Excellent work, keep it up"
                                     />
                                 </td>
@@ -241,7 +242,7 @@ export default function MarksEntry() {
             <PageHeader
                 title="Marks Entry"
                 subtitle="Enter and manage student performance records"
-                breadcrumbs={[{ label: 'Academics' }, { label: 'Marks Entry' }]}
+                breadcrumbs={[{ label: 'Academics', href: '/academics' }, { label: 'Marks Entry' }]}
                 actions={
                     <div className="flex gap-3">
                         <Tooltip content="Calculate and update global rankings, averages, and mean grades for all students in this exam.">

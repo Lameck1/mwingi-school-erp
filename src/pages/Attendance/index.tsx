@@ -7,6 +7,7 @@ import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
 import { Select } from '../../components/ui/Select'
 import { Tooltip } from '../../components/ui/Tooltip'
+import { useToast } from '../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../stores'
 
 type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED'
@@ -75,6 +76,7 @@ function StudentAttendanceRow({ student, statusButtons, onStatusChange }: Studen
 export default function Attendance() {
     const { currentAcademicYear, currentTerm } = useAppStore()
     const { user } = useAuthStore()
+    const { showToast } = useToast()
 
     const [streams, setStreams] = useState<Stream[]>([])
     const [selectedStream, setSelectedStream] = useState<number>(0)
@@ -187,13 +189,13 @@ export default function Attendance() {
             )
 
             if (result.success) {
-                alert(`Attendance saved for ${result.marked} students!`)
+                showToast(`Attendance saved for ${result.marked} students!`, 'success')
             } else {
-                alert('Failed to save: ' + (result.errors?.join(', ') || 'Unknown error'))
+                showToast('Failed to save: ' + (result.errors?.join(', ') || 'Unknown error'), 'error')
             }
         } catch (error) {
             console.error('Failed to save attendance:', error)
-            alert('Failed to save attendance')
+            showToast('Failed to save attendance', 'error')
         } finally {
             setSaving(false)
         }
@@ -240,7 +242,7 @@ export default function Attendance() {
             <PageHeader
                 title="Attendance"
                 subtitle="Mark daily student attendance"
-                breadcrumbs={[{ label: 'Students' }, { label: 'Attendance' }]}
+                breadcrumbs={[{ label: 'Students', href: '/students' }, { label: 'Attendance' }]}
                 actions={
                     <button
                         type="button"

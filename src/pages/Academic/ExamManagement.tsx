@@ -4,6 +4,7 @@ import {
 import { useState, useEffect, useCallback } from 'react'
 
 import { PageHeader } from '../../components/patterns/PageHeader'
+import { useToast } from '../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../stores'
 
 interface Exam {
@@ -17,6 +18,7 @@ interface Exam {
 export default function ExamManagement() {
     const { currentAcademicYear, currentTerm } = useAppStore()
     const { user } = useAuthStore()
+    const { showToast } = useToast()
 
     const [exams, setExams] = useState<Exam[]>([])
     const [loading, setLoading] = useState(false)
@@ -59,21 +61,22 @@ export default function ExamManagement() {
             await loadExams()
         } catch (error) {
             console.error('Failed to create exam:', error)
-            alert('Failed to create exam')
+            showToast('Failed to create exam', 'error')
         } finally {
             setSaving(false)
         }
     }
 
     const handleDelete = async (id: number) => {
-        if (!user || !confirm('Are you sure you want to delete this exam? All results for this exam will be removed.')) {return}
+        if (!user) {return}
 
         try {
             await globalThis.electronAPI.deleteAcademicExam(id, user.id)
             await loadExams()
+            showToast('Exam deleted', 'success')
         } catch (error) {
             console.error('Failed to delete exam:', error)
-            alert('Failed to delete exam')
+            showToast('Failed to delete exam', 'error')
         }
     }
 
@@ -113,6 +116,7 @@ export default function ExamManagement() {
                             <button
                                 onClick={() => handleDelete(exam.id)}
                                 className="p-2 text-foreground/30 hover:text-destructive transition-colors rounded-lg hover:bg-destructive/10"
+                                aria-label="Delete exam"
                             >
                                 <Trash2 className="w-4 h-4" />
                             </button>
@@ -128,7 +132,7 @@ export default function ExamManagement() {
             <PageHeader
                 title="Exam Management"
                 subtitle="Create and manage examination instances for the current term"
-                breadcrumbs={[{ label: 'Academics' }, { label: 'Exams' }]}
+                breadcrumbs={[{ label: 'Academics', href: '/academics' }, { label: 'Exams' }]}
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -148,7 +152,7 @@ export default function ExamManagement() {
                                     value={newExamName}
                                     onChange={(e) => setNewExamName(e.target.value)}
                                     placeholder="e.g. Mid-Term Assessment"
-                                    className="input bg-secondary/30 border-border/20 py-2.5 focus:border-primary/50 transition-all"
+                                    className="input border-border/20 py-2.5 focus:border-primary/50 transition-all"
                                 />
                             </div>
 
@@ -159,7 +163,7 @@ export default function ExamManagement() {
                                     step="0.1"
                                     value={newExamWeight}
                                     onChange={(e) => setNewExamWeight(Number(e.target.value))}
-                                    className="input bg-secondary/30 border-border/20 py-2.5 focus:border-primary/50 transition-all font-mono"
+                                    className="input border-border/20 py-2.5 focus:border-primary/50 transition-all font-mono"
                                 />
                             </div>
 

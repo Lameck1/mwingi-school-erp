@@ -6,6 +6,7 @@ import {
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 
+import { PageHeader } from '../../components/patterns/PageHeader'
 import { ImportDialog } from '../../components/ui/ImportDialog'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore } from '../../stores'
@@ -61,9 +62,7 @@ export default function Students() {
 
     const loadData = useCallback(async () => {
         try {
-            const [streamsData] = await Promise.all([
-                globalThis.electronAPI.getStreams()
-            ])
+            const streamsData = await globalThis.electronAPI.getStreams()
             setStreams(streamsData)
             await loadStudents()
         } catch (error) {
@@ -89,10 +88,6 @@ export default function Students() {
         })
         return () => unsubscribe()
     }, [])
-
-    useEffect(() => {
-        loadStudents().catch((err: unknown) => console.error('Failed to reload students', err))
-    }, [loadStudents])
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault()
@@ -141,35 +136,37 @@ export default function Students() {
     return (
         <div className="space-y-8 pb-10">
             {/* Page Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                    <h1 className="text-3xl font-bold text-foreground font-heading">Registry & Students</h1>
-                    <p className="text-foreground/50 mt-1 font-medium italic">Manage official student records and enrollment pipelines</p>
-                </div>
-                <div className="flex items-center gap-4">
-                    <div className="flex bg-secondary/30 rounded-xl p-1 border border-border/20">
-                        <button
-                            onClick={() => setViewMode('list')}
-                            className={`p-2.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-primary shadow-lg text-primary-foreground' : 'text-foreground/40 hover:text-foreground'}`}
+            <PageHeader
+                title="Students"
+                subtitle="Manage official student records and enrollment pipelines"
+                actions={
+                    <div className="flex items-center gap-4">
+                        <div className="flex bg-secondary/30 rounded-xl p-1 border border-border/20">
+                            <button
+                                onClick={() => setViewMode('list')}
+                                title="List view"
+                                className={`p-2.5 rounded-lg transition-all ${viewMode === 'list' ? 'bg-primary shadow-lg text-primary-foreground' : 'text-foreground/40 hover:text-foreground'}`}
+                            >
+                                <ListIcon className="w-5 h-5" />
+                            </button>
+                            <button
+                                onClick={() => setViewMode('grid')}
+                                title="Grid view"
+                                className={`p-2.5 rounded-lg transition-all duration-300 ${viewMode === 'grid' ? 'bg-primary shadow-lg text-primary-foreground' : 'text-foreground/40 hover:text-foreground'}`}
+                            >
+                                <LayoutGrid className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <Link
+                            to="/students/new"
+                            className="btn btn-primary flex items-center gap-2 py-3 px-8 text-sm font-bold shadow-xl shadow-primary/20 transition-all hover:-translate-y-1 active:scale-95"
                         >
-                            <ListIcon className="w-5 h-5" />
-                        </button>
-                        <button
-                            onClick={() => setViewMode('grid')}
-                            className={`p-2.5 rounded-lg transition-all duration-300 ${viewMode === 'grid' ? 'bg-primary shadow-lg text-primary-foreground' : 'text-foreground/40 hover:text-foreground'}`}
-                        >
-                            <LayoutGrid className="w-5 h-5" />
-                        </button>
+                            <Plus className="w-5 h-5" />
+                            Admit New Student
+                        </Link>
                     </div>
-                    <Link
-                        to="/students/new"
-                        className="btn btn-primary flex items-center gap-2 py-3 px-8 text-sm font-bold shadow-xl shadow-primary/20 transition-all hover:-translate-y-1 active:scale-95"
-                    >
-                        <Plus className="w-5 h-5" />
-                        Admit New Student
-                    </Link>
-                </div>
-            </div>
+                }
+            />
 
             <div className="flex justify-end px-1">
                 <button
@@ -191,7 +188,7 @@ export default function Students() {
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Quick search by name or admission number..."
-                            className="input pl-11 py-3.5 bg-secondary/30 border-border/20 focus:border-primary/50 transition-all w-full"
+                            className="input pl-11 py-3.5 border-border/20 focus:border-primary/50 transition-all w-full"
                         />
                     </form>
                 </div>
@@ -199,7 +196,7 @@ export default function Students() {
                     <select
                         value={filters.streamId}
                         onChange={(e) => setFilters(prev => ({ ...prev, streamId: e.target.value }))}
-                        className="input py-3.5 bg-secondary/30 border-border/20 focus:border-primary/50 transition-all font-medium"
+                        className="input py-3.5 border-border/20 focus:border-primary/50 transition-all font-medium"
                         aria-label="Filter by Stream"
                     >
                         <option value="" className="bg-background">All Learning Streams</option>
@@ -212,7 +209,7 @@ export default function Students() {
                     <select
                         value={filters.isActive ? 'active' : 'inactive'}
                         onChange={(e) => setFilters(prev => ({ ...prev, isActive: e.target.value === 'active' }))}
-                        className="input py-3.5 bg-secondary/30 border-border/20 focus:border-primary/50 transition-all font-medium"
+                        className="input py-3.5 border-border/20 focus:border-primary/50 transition-all font-medium"
                         aria-label="Filter by Status"
                     >
                         <option value="active" className="bg-background">Active Enrollment</option>
@@ -393,6 +390,7 @@ export default function Students() {
                         <button
                             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                             disabled={currentPage === 1}
+                            title="Previous page"
                             className="p-3 bg-secondary/50 hover:bg-secondary text-foreground rounded-xl disabled:opacity-20 transition-all border border-border/40"
                         >
                             <ChevronLeft className="w-5 h-5" />
@@ -405,6 +403,7 @@ export default function Students() {
                         <button
                             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                             disabled={currentPage === totalPages}
+                            title="Next page"
                             className="p-3 bg-secondary/50 hover:bg-secondary/80 text-foreground rounded-xl disabled:opacity-20 transition-all border border-border/40 duration-300"
                         >
                             <ChevronRight className="w-5 h-5" />

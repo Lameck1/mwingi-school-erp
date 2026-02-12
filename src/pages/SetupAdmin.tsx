@@ -18,9 +18,13 @@ const SetupAdmin: React.FC = () => {
 
   useEffect(() => {
     const checkExistingUsers = async () => {
-      const hasUsers = await globalThis.electronAPI.hasUsers()
-      if (hasUsers) {
-        navigate('/login')
+      try {
+        const hasUsers = await globalThis.electronAPI.hasUsers()
+        if (hasUsers) {
+          navigate('/login')
+        }
+      } catch (err) {
+        console.error('Failed to check existing users:', err)
       }
     }
     void checkExistingUsers()
@@ -65,18 +69,18 @@ const SetupAdmin: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-white rounded-full mx-auto mb-4 flex items-center justify-center shadow-lg">
+          <div className="w-20 h-20 bg-card rounded-full mx-auto mb-4 flex items-center justify-center shadow-lg">
             <span className="text-3xl font-bold text-blue-600">MAS</span>
           </div>
           <h1 className="text-2xl font-bold text-white">Initial Setup</h1>
           <p className="text-blue-200 mt-1">Create the first administrator account</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <h2 className="text-xl font-semibold text-gray-800 text-center mb-6">Administrator Setup</h2>
+        <div className="bg-card rounded-2xl shadow-2xl p-4 md:p-8">
+          <h2 className="text-xl font-semibold text-foreground text-center mb-6">Administrator Setup</h2>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm">
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg text-sm">
               {error}
             </div>
           )}
@@ -139,7 +143,7 @@ const SetupAdmin: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -163,7 +167,7 @@ const SetupAdmin: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowConfirm(!showConfirm)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
                   aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'}
                 >
                   {showConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}

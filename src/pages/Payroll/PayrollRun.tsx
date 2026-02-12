@@ -1,5 +1,7 @@
-import { Calculator, Play, Download, AlertCircle, ChevronLeft, Eye, Printer, MessageSquare, Loader2, Calendar } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { Calculator, Play, AlertCircle, ChevronLeft, Eye, Printer, MessageSquare, Loader2, Calendar, CheckCircle2, CreditCard, RotateCcw, Trash2, RefreshCw, Users, TrendingDown, Wallet, FileSpreadsheet, ShieldCheck, Lock } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+
+import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 
 import { useAuthStore, useAppStore } from '../../stores'
 import { type PayrollPeriod, type PayrollEntry } from '../../types/electron-api/PayrollAPI'
@@ -18,8 +20,19 @@ export default function PayrollRun() {
     const [error, setError] = useState('')
     const [selectedPeriod, setSelectedPeriod] = useState<Partial<PayrollPeriod> | null>(null)
     const [notifying, setNotifying] = useState(false)
+    const [actionLoading, setActionLoading] = useState('')
 
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+    const summary = useMemo(() => {
+        if (payrollData.length === 0) { return null }
+        return {
+            headcount: payrollData.length,
+            totalGross: payrollData.reduce((s, p) => s + p.gross_salary, 0),
+            totalDeductions: payrollData.reduce((s, p) => s + p.total_deductions, 0),
+            totalNet: payrollData.reduce((s, p) => s + p.net_salary, 0),
+        }
+    }, [payrollData])
 
     useEffect(() => {
         void loadHistory()
@@ -46,10 +59,7 @@ export default function PayrollRun() {
             const response = await api.getPayrollDetails(periodId)
             if (response.success) {
                 setPayrollData(response.results || [])
-                setSelectedPeriod(response.period || {
-                    period_name: `Payroll Period ${periodId}`,
-                    status: 'PROCESSED'
-                })
+                setSelectedPeriod(response.period || null)
             } else {
                 setError(response.error || 'Failed to load payroll details')
             }
@@ -76,7 +86,7 @@ export default function PayrollRun() {
             const result = await api.runPayroll(month, year, user.id)
             if (result.success) {
                 setPayrollData(result.results || [])
-                setSelectedPeriod({ period_name: `${months[month - 1]} ${year}`, status: 'DRAFT' }) // Temporary period obj
+                setSelectedPeriod({ id: result.periodId, period_name: `${months[month - 1]} ${year}`, status: 'DRAFT' })
                 await loadHistory() // Refresh history
             } else {
                 setError(result.error || 'Failed to run payroll')
@@ -96,50 +106,259 @@ export default function PayrollRun() {
         void loadHistory()
     }
 
+    const handleConfirm = useCallback(async () => {
+        if (!selectedPeriod?.id || !user) { return }
+        if (!confirm('Confirm this payroll? Once confirmed, calculations are locked and the payroll is ready for payment processing.')) { return }
+        setActionLoading('confirm')
+        try {
+            const result = await globalThis.electronAPI.confirmPayroll(selectedPeriod.id, user.id)
+            if (result.success) {
+                setSelectedPeriod(prev => prev ? { ...prev, status: 'CONFIRMED' } : null)
+                await loadHistory()
+            } else {
+                setError(result.error || 'Failed to confirm payroll')
+            }
+        } catch { setError('Failed to confirm payroll') }
+        finally { setActionLoading('') }
+    }, [selectedPeriod?.id, user])
+
+    const handleMarkPaid = useCallback(async () => {
+        if (!selectedPeriod?.id || !user) { return }
+        if (!confirm(`Mark all ${payrollData.length} staff members as PAID for ${selectedPeriod.period_name}? This records todays date as the payment date.`)) { return }
+        setActionLoading('markPaid')
+        try {
+            const result = await globalThis.electronAPI.markPayrollPaid(selectedPeriod.id, user.id)
+            if (result.success) {
+                setSelectedPeriod(prev => prev ? { ...prev, status: 'PAID' } : null)
+                await loadHistory()
+            } else {
+                setError(result.error || 'Failed to mark payroll as paid')
+            }
+        } catch { setError('Failed to mark payroll as paid') }
+        finally { setActionLoading('') }
+    }, [selectedPeriod?.id, selectedPeriod?.period_name, user, payrollData.length])
+
+    const handleRevertToDraft = useCallback(async () => {
+        if (!selectedPeriod?.id || !user) { return }
+        if (!confirm('Revert this payroll back to DRAFT? This unlocks the payroll for editing and recalculation.')) { return }
+        setActionLoading('revert')
+        try {
+            const result = await globalThis.electronAPI.revertPayrollToDraft(selectedPeriod.id, user.id)
+            if (result.success) {
+                setSelectedPeriod(prev => prev ? { ...prev, status: 'DRAFT' } : null)
+                await loadHistory()
+            } else {
+                setError(result.error || 'Failed to revert payroll')
+            }
+        } catch { setError('Failed to revert payroll') }
+        finally { setActionLoading('') }
+    }, [selectedPeriod?.id, user])
+
+    const handleDelete = useCallback(async () => {
+        if (!selectedPeriod?.id || !user) { return }
+        if (!confirm(`Permanently delete the ${selectedPeriod.period_name} payroll? This action cannot be undone.`)) { return }
+        setActionLoading('delete')
+        try {
+            const result = await globalThis.electronAPI.deletePayroll(selectedPeriod.id, user.id)
+            if (result.success) {
+                handleBack()
+            } else {
+                setError(result.error || 'Failed to delete payroll')
+            }
+        } catch { setError('Failed to delete payroll') }
+        finally { setActionLoading('') }
+    }, [selectedPeriod?.id, selectedPeriod?.period_name, user])
+
+    const handleRecalculate = useCallback(async () => {
+        if (!selectedPeriod?.id || !user) { return }
+        if (!confirm('Recalculate this payroll with current staff data and statutory rates? Existing calculations will be replaced.')) { return }
+        setActionLoading('recalculate')
+        try {
+            const result = await globalThis.electronAPI.recalculatePayroll(selectedPeriod.id, user.id)
+            if (result.success) {
+                setPayrollData(result.results || [])
+            } else {
+                setError(result.error || 'Failed to recalculate payroll')
+            }
+        } catch { setError('Failed to recalculate payroll') }
+        finally { setActionLoading('') }
+    }, [selectedPeriod?.id, user])
+
+    const handleExportCSV = useCallback(() => {
+        if (payrollData.length === 0) { return }
+        const headers = ['Staff Name', 'Staff No', 'Department', 'Basic (KSh)', 'Allowances (KSh)', 'Gross (KSh)', 'PAYE (KSh)', 'NSSF (KSh)', 'SHIF (KSh)', 'Housing Levy (KSh)', 'Total Deductions (KSh)', 'Net Pay (KSh)']
+        const toCurrency = (v: number) => (v / 100).toFixed(2)
+        const rows = payrollData.map(p => [
+            p.staff_name, p.staff_number || '', p.department || '',
+            toCurrency(p.basic_salary), toCurrency(p.allowances), toCurrency(p.gross_salary),
+            toCurrency(p.paye), toCurrency(p.nssf), toCurrency(p.shif), toCurrency(p.housing_levy),
+            toCurrency(p.total_deductions), toCurrency(p.net_salary)
+        ])
+        const csv = [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n')
+        const blob = new Blob([csv], { type: 'text/csv' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `payroll-${selectedPeriod?.period_name?.replaceAll(/\s+/g, '-') || 'export'}.csv`
+        a.click()
+        URL.revokeObjectURL(url)
+    }, [payrollData, selectedPeriod?.period_name])
+
+    const getHistoryStatusColor = (s: string) => {
+        if (s === 'PAID') { return 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' }
+        if (s === 'CONFIRMED') { return 'bg-blue-500/10 border-blue-500/20 text-blue-400' }
+        return 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+    }
+
+    const statusConfig = {
+        DRAFT: { color: 'bg-amber-500/10 border-amber-500/20 text-amber-400', icon: AlertCircle, label: 'Draft' },
+        CONFIRMED: { color: 'bg-blue-500/10 border-blue-500/20 text-blue-400', icon: ShieldCheck, label: 'Confirmed' },
+        PAID: { color: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400', icon: CheckCircle2, label: 'Paid' },
+    }
+
+    const renderStatusActions = (status: string, periodId: number | undefined) => (
+        <div className="flex flex-wrap gap-2">
+            {status === 'DRAFT' && periodId && (
+                <>
+                    <button onClick={handleRecalculate} disabled={!!actionLoading}
+                        className="btn btn-secondary flex items-center gap-2 py-2 px-4 text-xs"
+                        title="Recalculate with current rates and staff">
+                        {actionLoading === 'recalculate' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                        Recalculate
+                    </button>
+                    <button onClick={handleDelete} disabled={!!actionLoading}
+                        className="btn flex items-center gap-2 py-2 px-4 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20"
+                        title="Delete this draft payroll">
+                        {actionLoading === 'delete' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        Delete Draft
+                    </button>
+                    <button onClick={handleConfirm} disabled={!!actionLoading}
+                        className="btn btn-primary flex items-center gap-2 py-2 px-5 text-xs shadow-lg shadow-primary/20"
+                        title="Lock and confirm this payroll for payment">
+                        {actionLoading === 'confirm' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                        Confirm Payroll
+                    </button>
+                </>
+            )}
+            {status === 'CONFIRMED' && periodId && (
+                <>
+                    <button onClick={handleRevertToDraft} disabled={!!actionLoading}
+                        className="btn btn-secondary flex items-center gap-2 py-2 px-4 text-xs"
+                        title="Revert back to draft for editing">
+                        {actionLoading === 'revert' ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                        Revert to Draft
+                    </button>
+                    <button onClick={handleMarkPaid} disabled={!!actionLoading}
+                        className="btn flex items-center gap-2 py-2 px-5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20"
+                        title="Record payment for all staff">
+                        {actionLoading === 'markPaid' ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                        Mark as Paid
+                    </button>
+                </>
+            )}
+            {status === 'PAID' && (
+                <span className="flex items-center gap-2 py-2 px-4 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                    <Lock className="w-3.5 h-3.5" />
+                    Payment Finalized
+                </span>
+            )}
+            <button onClick={handleExportCSV} disabled={payrollData.length === 0}
+                className="btn btn-secondary flex items-center gap-2 py-2 px-4 text-xs">
+                <FileSpreadsheet className="w-4 h-4" />
+                Export CSV
+            </button>
+            {(status === 'CONFIRMED' || status === 'PAID') && (
+                <button
+                    onClick={handleBulkNotify}
+                    disabled={notifying || payrollData.length === 0}
+                    className="btn btn-primary flex items-center gap-2 py-2 px-4 text-xs shadow-lg shadow-primary/20"
+                >
+                    {notifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+                    Notify All Staff
+                </button>
+            )}
+        </div>
+    )
+
     if (selectedPeriod || payrollData.length > 0) {
+        const status = selectedPeriod?.status || 'DRAFT'
+        const cfg = statusConfig[status]
+        const StatusIcon = cfg.icon
+        const periodId = selectedPeriod?.id
+
         return (
-            <div className="space-y-8 pb-10">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div className="flex items-center gap-5">
-                        <button
-                            onClick={handleBack}
-                            aria-label="Go back"
-                            className="p-3 bg-secondary hover:bg-primary/20 text-primary rounded-2xl transition-all hover:-translate-x-1"
-                        >
-                            <ChevronLeft className="w-5 h-5" />
-                        </button>
-                        <div>
-                            <h1 className="text-3xl font-bold text-foreground font-heading">
-                                {selectedPeriod?.period_name || 'Calculation Result'}
-                            </h1>
-                            <div className="flex items-center gap-3 mt-1">
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/40">Payroll Status:</span>
-                                <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-0.5 rounded-full border ${selectedPeriod?.status === 'PAID'
-                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                    : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                                    }`}>
-                                    {selectedPeriod?.status || 'Draft'}
-                                </span>
+            <div className="space-y-6 pb-10">
+                {/* Header */}
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-center gap-5">
+                            <button
+                                onClick={handleBack}
+                                aria-label="Go back"
+                                className="p-3 bg-secondary hover:bg-primary/20 text-primary rounded-2xl transition-all hover:-translate-x-1"
+                            >
+                                <ChevronLeft className="w-5 h-5" />
+                            </button>
+                            <div>
+                                <h1 className="text-xl md:text-3xl font-bold text-foreground font-heading">
+                                    {selectedPeriod?.period_name || 'Calculation Result'}
+                                </h1>
+                                <div className="flex items-center gap-3 mt-1">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-foreground/40">Payroll Status:</span>
+                                    <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-0.5 rounded-full border flex items-center gap-1.5 ${cfg.color}`}>
+                                        <StatusIcon className="w-3 h-3" />
+                                        {cfg.label}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {renderStatusActions(status, periodId)}
+                    </div>
+
+                    {error && (
+                        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400">
+                            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                            <p className="text-xs font-bold leading-tight">{error}</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Summary Stats */}
+                {summary && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-slide-up">
+                        <div className="card !p-4 flex items-center gap-4">
+                            <div className="p-2.5 bg-primary/10 text-primary rounded-xl"><Users className="w-5 h-5" /></div>
+                            <div>
+                                <p className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest">Staff Count</p>
+                                <p className="text-xl font-bold text-foreground">{summary.headcount}</p>
+                            </div>
+                        </div>
+                        <div className="card !p-4 flex items-center gap-4">
+                            <div className="p-2.5 bg-blue-500/10 text-blue-400 rounded-xl"><Wallet className="w-5 h-5" /></div>
+                            <div>
+                                <p className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest">Total Gross</p>
+                                <p className="text-xl font-bold text-foreground">{formatCurrencyFromCents(summary.totalGross)}</p>
+                            </div>
+                        </div>
+                        <div className="card !p-4 flex items-center gap-4">
+                            <div className="p-2.5 bg-red-500/10 text-red-400 rounded-xl"><TrendingDown className="w-5 h-5" /></div>
+                            <div>
+                                <p className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest">Total Deductions</p>
+                                <p className="text-xl font-bold text-red-400">{formatCurrencyFromCents(summary.totalDeductions)}</p>
+                            </div>
+                        </div>
+                        <div className="card !p-4 flex items-center gap-4">
+                            <div className="p-2.5 bg-emerald-500/10 text-emerald-400 rounded-xl"><CreditCard className="w-5 h-5" /></div>
+                            <div>
+                                <p className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest">Net Payable</p>
+                                <p className="text-xl font-bold text-emerald-400">{formatCurrencyFromCents(summary.totalNet)}</p>
                             </div>
                         </div>
                     </div>
+                )}
 
-                    <div className="flex flex-wrap gap-3">
-                        <button className="btn btn-secondary flex items-center gap-2 py-2.5 px-6 text-sm">
-                            <Download className="w-4 h-4" />
-                            Export Data
-                        </button>
-                        <button
-                            onClick={handleBulkNotify}
-                            disabled={notifying || payrollData.length === 0}
-                            className="btn btn-primary flex items-center gap-2 py-2.5 px-6 text-sm shadow-lg shadow-primary/20"
-                        >
-                            {notifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-                            Notify All Staff
-                        </button>
-                    </div>
-                </div>
-
+                {/* Staff compensation table */}
                 <div className="card animate-slide-up no-scrollbar">
                     <div className="flex items-center justify-between mb-8">
                         <h3 className="text-lg font-bold text-foreground">Staff Compensation Summary</h3>
@@ -154,8 +373,11 @@ export default function PayrollRun() {
                                     <th className="px-4 py-4 text-right">Basic</th>
                                     <th className="px-4 py-4 text-right">Allowances</th>
                                     <th className="px-4 py-4 text-right">Gross</th>
-                                    <th className="px-4 py-4 text-right">Deductions</th>
-                                    <th className="px-4 py-4 text-right">Net Compensation</th>
+                                    <th className="px-4 py-4 text-right">PAYE</th>
+                                    <th className="px-4 py-4 text-right">NSSF</th>
+                                    <th className="px-4 py-4 text-right">SHIF</th>
+                                    <th className="px-4 py-4 text-right">Housing</th>
+                                    <th className="px-4 py-4 text-right">Net Pay</th>
                                     <th className="px-4 py-4 text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -164,14 +386,15 @@ export default function PayrollRun() {
                                     <tr key={p.staff_id} className="group hover:bg-secondary/40 transition-colors">
                                         <td className="px-4 py-5">
                                             <p className="font-bold text-foreground group-hover:text-primary transition-colors">{p.staff_name}</p>
-                                            <p className="text-[10px] text-foreground/40 italic">ID: {p.staff_id}</p>
+                                            <p className="text-[10px] text-foreground/40 italic">{p.staff_number || `ID: ${p.staff_id}`}</p>
                                         </td>
                                         <td className="px-4 py-5 text-right text-xs font-medium text-foreground/60">{formatCurrencyFromCents(p.basic_salary)}</td>
                                         <td className="px-4 py-5 text-right text-xs font-medium text-emerald-500">+{formatCurrencyFromCents(p.allowances)}</td>
                                         <td className="px-4 py-5 text-right text-xs font-bold text-foreground">{formatCurrencyFromCents(p.gross_salary)}</td>
-                                        <td className="px-4 py-5 text-right text-xs font-medium text-red-500">
-                                            -{formatCurrencyFromCents((p.paye || 0) + (p.nhif || 0) + (p.nssf || 0))}
-                                        </td>
+                                        <td className="px-4 py-5 text-right text-xs font-medium text-red-400">{formatCurrencyFromCents(p.paye)}</td>
+                                        <td className="px-4 py-5 text-right text-xs font-medium text-red-400">{formatCurrencyFromCents(p.nssf)}</td>
+                                        <td className="px-4 py-5 text-right text-xs font-medium text-red-400">{formatCurrencyFromCents(p.shif)}</td>
+                                        <td className="px-4 py-5 text-right text-xs font-medium text-red-400">{formatCurrencyFromCents(p.housing_levy)}</td>
                                         <td className="px-4 py-5 text-right">
                                             <span className="text-sm font-bold text-foreground bg-primary/10 px-3 py-1 rounded-lg border border-primary/20">
                                                 {formatCurrencyFromCents(p.net_salary)}
@@ -191,7 +414,7 @@ export default function PayrollRun() {
                                                 <button
                                                     type="button"
                                                     onClick={() => handlePrintPayslip(p)}
-                                                    className="p-2 bg-secondary hover:bg-white/10 text-foreground/40 hover:text-white rounded-lg transition-all"
+                                                    className="p-2 bg-secondary hover:bg-secondary text-foreground/40 hover:text-foreground rounded-lg transition-all"
                                                     title="Print Payslip"
                                                     aria-label={`Print payslip for ${p.staff_name}`}
                                                 >
@@ -205,6 +428,17 @@ export default function PayrollRun() {
                         </table>
                     </div>
                 </div>
+
+                {/* Status Workflow Guide */}
+                <div className="card !p-4">
+                    <div className="flex items-center gap-6 justify-center text-[10px] font-bold uppercase tracking-widest text-foreground/30">
+                        <span className={status === 'DRAFT' ? 'text-amber-400' : 'text-foreground/20'}>① Draft</span>
+                        <span className="text-foreground/10">→</span>
+                        <span className={status === 'CONFIRMED' ? 'text-blue-400' : 'text-foreground/20'}>② Confirmed</span>
+                        <span className="text-foreground/10">→</span>
+                        <span className={status === 'PAID' ? 'text-emerald-400' : 'text-foreground/20'}>③ Paid</span>
+                    </div>
+                </div>
             </div>
         )
     }
@@ -213,7 +447,8 @@ export default function PayrollRun() {
         <div className="space-y-8 pb-10">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold text-foreground font-heading">Payroll Management</h1>
+                    <HubBreadcrumb crumbs={[{ label: 'Staff & Payroll' }, { label: 'Run Payroll' }]} />
+                    <h1 className="text-xl md:text-3xl font-bold text-foreground font-heading">Payroll Management</h1>
                     <p className="text-foreground/50 mt-1 font-medium italic">Process monthly disbursements and statutory obligations</p>
                 </div>
             </div>
@@ -237,7 +472,7 @@ export default function PayrollRun() {
                                     value={month}
                                     onChange={(e) => setMonth(Number(e.target.value))}
                                     aria-label="Select Month"
-                                    className="input bg-secondary/30 border-border/20 py-3"
+                                    className="input border-border/20 py-3"
                                 >
                                     {months.map((m, i) => (<option key={m} value={i + 1}>{m}</option>))}
                                 </select>
@@ -250,7 +485,7 @@ export default function PayrollRun() {
                                     value={year}
                                     onChange={(e) => setYear(Number(e.target.value))}
                                     aria-label="Select Year"
-                                    className="input bg-secondary/30 border-border/20 py-3"
+                                    className="input border-border/20 py-3"
                                     min={2020}
                                     max={2030}
                                 />
@@ -275,7 +510,7 @@ export default function PayrollRun() {
 
                         <div className="p-4 bg-primary/5 border border-primary/10 rounded-2xl">
                             <p className="text-[10px] text-foreground/40 font-bold uppercase tracking-widest mb-1">Current Agent</p>
-                            <p className="text-sm font-bold text-white">{user?.full_name || 'System Operator'}</p>
+                            <p className="text-sm font-bold text-foreground">{user?.full_name || 'System Operator'}</p>
                         </div>
                     </div>
                 </div>
@@ -311,16 +546,13 @@ export default function PayrollRun() {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-6">
-                                        <span className={`text-[9px] font-bold tracking-widest uppercase px-3 py-1 rounded-full border ${h.status === 'PAID'
-                                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                            : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                                            }`}>
+                                        <span className={`text-[9px] font-bold tracking-widest uppercase px-3 py-1 rounded-full border ${getHistoryStatusColor(h.status)}`}>
                                             {h.status}
                                         </span>
                                         <button
                                             onClick={() => loadPeriodDetails(h.id)}
                                             aria-label="View payroll details"
-                                            className="p-3 bg-white/5 hover:bg-primary text-foreground/40 hover:text-white rounded-xl transition-all shadow-sm"
+                                            className="p-3 bg-secondary/50 hover:bg-primary text-foreground/40 hover:text-white rounded-xl transition-all shadow-sm"
                                         >
                                             <Eye className="w-5 h-5" />
                                         </button>
@@ -415,9 +647,13 @@ export default function PayrollRun() {
                 grossSalary: staffEntry.gross_salary,
                 netSalary: staffEntry.net_salary,
                 totalDeductions: staffEntry.total_deductions,
-                // Allowances/Deductions list would ideally be fetched or passed here
                 allowancesList: [],
-                deductionsList: []
+                deductionsList: [
+                    { name: 'PAYE', amount: staffEntry.paye },
+                    { name: 'NSSF', amount: staffEntry.nssf },
+                    { name: 'SHIF', amount: staffEntry.shif },
+                    { name: 'Housing Levy', amount: staffEntry.housing_levy },
+                ]
             },
             schoolSettings: (schoolSettings as unknown as Record<string, unknown>) || {}
         })

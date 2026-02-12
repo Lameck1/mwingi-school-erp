@@ -5,6 +5,8 @@ import { formatCurrencyFromCents } from '../../../utils/format';
 
 import type { EligibleStudent, JSSFeeStructure, TransitionResult } from '../../../types/electron-api/JSSAPI';
 
+import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
+
 const JSSTransition: React.FC = () => {
   const { user } = useAuthStore();
   const [eligibleStudents, setEligibleStudents] = useState<EligibleStudent[]>([]);
@@ -125,21 +127,22 @@ const JSSTransition: React.FC = () => {
   return (
     <div className="container mx-auto p-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">JSS Student Transition</h1>
-        <p className="text-gray-600 mt-2">Automate grade promotions with fee structure updates</p>
+            <HubBreadcrumb crumbs={[{ label: 'Academics', href: '/academics' }, { label: 'JSS Transition' }]} />
+        <h1 className="text-xl md:text-3xl font-bold text-foreground">JSS Student Transition</h1>
+        <p className="text-muted-foreground mt-2">Automate grade promotions with fee structure updates</p>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4 mb-6">
-        <div className="grid grid-cols-3 gap-4">
+      <div className="bg-card rounded-lg shadow p-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <label htmlFor="from_grade" className="block text-sm font-medium text-gray-700 mb-1">From Grade</label>
+            <label htmlFor="from_grade" className="block text-sm font-medium text-foreground/70 mb-1">From Grade</label>
             <select
               id="from_grade"
               title="From Grade"
               value={filters.from_grade}
               onChange={(e) => setFilters({ ...filters, from_grade: Number.parseInt(e.target.value, 10) })}
-              className="w-full border rounded px-3 py-2"
+              className="w-full border border-border rounded px-3 py-2 bg-input text-foreground"
             >
               <option value={6}>Grade 6 (Primary)</option>
               <option value={7}>Grade 7 (JSS)</option>
@@ -147,13 +150,13 @@ const JSSTransition: React.FC = () => {
             </select>
           </div>
           <div>
-            <label htmlFor="to_grade" className="block text-sm font-medium text-gray-700 mb-1">To Grade</label>
+            <label htmlFor="to_grade" className="block text-sm font-medium text-foreground/70 mb-1">To Grade</label>
             <select
               id="to_grade"
               title="To Grade"
               value={filters.to_grade}
               onChange={(e) => setFilters({ ...filters, to_grade: Number.parseInt(e.target.value, 10) })}
-              className="w-full border rounded px-3 py-2"
+              className="w-full border border-border rounded px-3 py-2 bg-input text-foreground"
             >
               <option value={7}>Grade 7 (JSS)</option>
               <option value={8}>Grade 8 (JSS)</option>
@@ -161,13 +164,13 @@ const JSSTransition: React.FC = () => {
             </select>
           </div>
           <div>
-            <label htmlFor="academic_year" className="block text-sm font-medium text-gray-700 mb-1">Academic Year</label>
+            <label htmlFor="academic_year" className="block text-sm font-medium text-foreground/70 mb-1">Academic Year</label>
             <select
               id="academic_year"
               title="Academic Year"
               value={filters.academic_year}
               onChange={(e) => setFilters({ ...filters, academic_year: Number.parseInt(e.target.value, 10) })}
-              className="w-full border rounded px-3 py-2"
+              className="w-full border border-border rounded px-3 py-2 bg-input text-foreground"
             >
               <option value={2025}>2025</option>
               <option value={2026}>2026</option>
@@ -179,24 +182,24 @@ const JSSTransition: React.FC = () => {
 
       {/* Fee Structure Info */}
       {feeStructure && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <h3 className="text-lg font-semibold text-blue-900 mb-2">JSS Grade {feeStructure.grade} Fee Structure ({feeStructure.fiscal_year})</h3>
-          <div className="grid grid-cols-4 gap-4 text-sm">
+        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6">
+          <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400 mb-2">JSS Grade {feeStructure.grade} Fee Structure ({feeStructure.fiscal_year})</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             <div>
-              <span className="text-blue-700">Tuition:</span>
-              <div className="font-semibold text-blue-900">{formatCurrencyFromCents(feeStructure.tuition_fee_cents)}</div>
+              <span className="text-blue-600 dark:text-blue-400">Tuition:</span>
+              <div className="font-semibold text-blue-600 dark:text-blue-400">{formatCurrencyFromCents(feeStructure.tuition_fee_cents)}</div>
             </div>
             <div>
-              <span className="text-blue-700">Boarding:</span>
-              <div className="font-semibold text-blue-900">{formatCurrencyFromCents(feeStructure.boarding_fee_cents || 0)}</div>
+              <span className="text-blue-600 dark:text-blue-400">Boarding:</span>
+              <div className="font-semibold text-blue-600 dark:text-blue-400">{formatCurrencyFromCents(feeStructure.boarding_fee_cents || 0)}</div>
             </div>
             <div>
-              <span className="text-blue-700">Activity:</span>
-              <div className="font-semibold text-blue-900">{formatCurrencyFromCents(feeStructure.activity_fee_cents || 0)}</div>
+              <span className="text-blue-600 dark:text-blue-400">Activity:</span>
+              <div className="font-semibold text-blue-600 dark:text-blue-400">{formatCurrencyFromCents(feeStructure.activity_fee_cents || 0)}</div>
             </div>
             <div>
-              <span className="text-blue-700">Total:</span>
-              <div className="font-semibold text-blue-900">
+              <span className="text-blue-600 dark:text-blue-400">Total:</span>
+              <div className="font-semibold text-blue-600 dark:text-blue-400">
                 {formatCurrencyFromCents(
                   feeStructure.tuition_fee_cents +
                   (feeStructure.boarding_fee_cents || 0) +
@@ -213,19 +216,19 @@ const JSSTransition: React.FC = () => {
       )}
 
       {/* Students List */}
-      <div className="bg-white rounded-lg shadow overflow-hidden mb-6">
-        <div className="px-6 py-4 bg-gray-50 border-b flex justify-between items-center">
+      <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
+        <div className="px-6 py-4 bg-secondary border-b flex justify-between items-center">
           <div>
-            <h2 className="text-xl font-semibold text-gray-800">Eligible Students ({eligibleStudents.length})</h2>
-            <p className="text-sm text-gray-600 mt-1">{selectedStudents.size} selected</p>
+            <h2 className="text-xl font-semibold text-foreground">Eligible Students ({eligibleStudents.length})</h2>
+            <p className="text-sm text-muted-foreground mt-1">{selectedStudents.size} selected</p>
           </div>
           <button
             onClick={handleBatchTransition}
             disabled={selectedStudents.size === 0 || processing}
             className={`px-6 py-2 rounded font-medium ${
               selectedStudents.size > 0 && !processing
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                ? 'btn-primary'
+                : 'bg-gray-300 text-muted-foreground cursor-not-allowed'
             }`}
           >
             {processing ? 'Processing...' : `Promote ${selectedStudents.size} Student(s)`}
@@ -233,7 +236,7 @@ const JSSTransition: React.FC = () => {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-100">
+            <thead className="bg-secondary">
               <tr>
                 <th className="px-6 py-3 text-left">
                   <input
@@ -245,16 +248,16 @@ const JSSTransition: React.FC = () => {
                     className="rounded"
                   />
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Adm. No.</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Student Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Current Grade</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Boarding</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase">Outstanding Balance</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase">Adm. No.</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase">Student Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase">Current Grade</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase">Boarding</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-foreground/70 uppercase">Outstanding Balance</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-card divide-y divide-border">
               {eligibleStudents.map((student) => (
-                <tr key={student.student_id} className="hover:bg-gray-50">
+                <tr key={student.student_id} className="hover:bg-secondary">
                   <td className="px-6 py-4">
                     <input
                       type="checkbox"
@@ -270,13 +273,13 @@ const JSSTransition: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm">Grade {student.current_grade}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                      student.boarding_status === 'BOARDER' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
+                      student.boarding_status === 'BOARDER' ? 'bg-purple-100 text-purple-800' : 'bg-secondary text-foreground'
                     }`}>
                       {student.boarding_status === 'DAY_SCHOLAR' ? 'DAY SCHOLAR' : student.boarding_status}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <span className={student.outstanding_balance_cents > 0 ? 'text-red-600 font-semibold' : 'text-gray-900'}>
+                    <span className={student.outstanding_balance_cents > 0 ? 'text-red-600 font-semibold' : 'text-foreground'}>
                       {formatCurrencyFromCents(student.outstanding_balance_cents)}
                     </span>
                   </td>
@@ -289,7 +292,7 @@ const JSSTransition: React.FC = () => {
 
       {/* Transition Result */}
       {transitionResult && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+        <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-6">
           <h3 className="text-lg font-semibold text-green-900 mb-4">✓ Transition Complete!</h3>
           <p className="text-green-800 mb-2">
             Successfully promoted {transitionResult.successful.length} student(s) from Grade {filters.from_grade} to Grade {filters.to_grade}.

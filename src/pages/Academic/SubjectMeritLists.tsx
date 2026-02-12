@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
+import { useToast } from '../../contexts/ToastContext'
 import { useAppStore } from '../../stores'
 import { type SubjectDifficulty, type SubjectMeritListRow } from '../../types/electron-api/AcademicAPI'
 
@@ -28,19 +29,20 @@ const scoreToGrade = (score: number): string => {
   return 'E'
 }
 
-const getMarksBadgeColor = (marks: number): string => {
+const getMarksBadgeClass = (marks: number): string => {
   if (marks >= 80) {
-    return '#10b981'
+    return 'bg-emerald-500'
   }
   if (marks >= 60) {
-    return '#3b82f6'
+    return 'bg-blue-500'
   }
-  return '#ef4444'
+  return 'bg-red-500'
 }
 
 
 const SubjectMeritLists = () => {
   const { currentAcademicYear, currentTerm } = useAppStore()
+  const { showToast } = useToast()
 
   const [exams, setExams] = useState<{ id: number; name: string }[]>([])
   const [subjects, setSubjects] = useState<{ id: number; name: string }[]>([])
@@ -76,7 +78,7 @@ const SubjectMeritLists = () => {
 
   const handleGenerateMeritList = async () => {
     if (!selectedExam || !selectedSubject || !selectedStream) {
-      alert('Please select an exam, subject, and stream')
+      showToast('Please select an exam, subject, and stream', 'warning')
       return
     }
 
@@ -103,7 +105,7 @@ const SubjectMeritLists = () => {
       setDifficulty(difficulty_)
     } catch (error) {
       console.error('Failed to generate merit list:', error)
-      alert('Failed to generate merit list')
+      showToast('Failed to generate merit list', 'error')
     } finally {
       setLoading(false)
     }
@@ -111,20 +113,24 @@ const SubjectMeritLists = () => {
 
   const handleExportCSV = () => {
     if (rankings.length === 0) {
-      alert('Please generate a merit list first')
+      showToast('Please generate a merit list first', 'warning')
       return
     }
 
+    const esc = (v: string | number) => {
+      const s = String(v)
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replaceAll('"', '""')}"` : s
+    }
     const subjectName = subjects.find(s => s.id === selectedSubject)?.name || 'Subject'
     const csvContent = [
       ['Position', 'Admission No', 'Student Name', 'Marks', 'Percentage', 'Grade'],
       ...rankings.map(item => [
         item.position,
-        item.admission_number,
-        item.student_name,
+        esc(item.admission_number),
+        esc(item.student_name),
         item.marks,
         item.percentage.toFixed(1),
-        item.grade
+        esc(item.grade)
       ])
     ].map(row => row.join(',')).join('\n')
 
@@ -134,6 +140,7 @@ const SubjectMeritLists = () => {
     a.href = url
     a.download = `${subjectName}_Merit_List.csv`
     a.click()
+    globalThis.URL.revokeObjectURL(url)
   }
 
   const renderRankingsContent = () => {
@@ -157,7 +164,7 @@ const SubjectMeritLists = () => {
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="border-b border-white/10">
+            <tr className="border-b border-border">
               <th className="pb-4 pt-2 font-bold text-foreground/60">Position</th>
               <th className="pb-4 pt-2 font-bold text-foreground/60">Admission No</th>
               <th className="pb-4 pt-2 font-bold text-foreground/60">Student Name</th>
@@ -166,19 +173,16 @@ const SubjectMeritLists = () => {
               <th className="pb-4 pt-2 font-bold text-foreground/60">Grade</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/5">
+          <tbody className="divide-y divide-border">
             {rankings.map((row) => (
-              <tr key={`${row.admission_number}-${row.position}`} className="hover:bg-white/[0.02]">
+              <tr key={`${row.admission_number}-${row.position}`} className="hover:bg-secondary/30">
                 <td className="py-4 pr-4 font-semibold">{row.position}</td>
                 <td className="py-4 pr-4">{row.admission_number}</td>
                 <td className="py-4 pr-4">{row.student_name}</td>
                 <td className="py-4 pr-4">{row.marks}</td>
                 <td className="py-4 pr-4">{row.percentage.toFixed(1)}%</td>
                 <td className="py-4 pr-4">
-                  <span className="px-2 py-1 rounded text-sm font-semibold" style={{
-                    backgroundColor: getMarksBadgeColor(row.marks),
-                    color: 'white'
-                  }}>
+                  <span className={`px-2 py-1 rounded text-sm font-semibold text-white ${getMarksBadgeClass(row.marks)}`}>
                     {row.grade}
                   </span>
                 </td>
@@ -195,7 +199,7 @@ const SubjectMeritLists = () => {
       <PageHeader
         title="Subject Merit Lists"
         subtitle="Top performers in each subject with difficulty analysis"
-        breadcrumbs={[{ label: 'Academics' }, { label: 'Subject Merit Lists' }]}
+        breadcrumbs={[{ label: 'Academics', href: '/academics' }, { label: 'Subject Merit Lists' }]}
       />
 
       <div className="premium-card">
@@ -240,19 +244,19 @@ const SubjectMeritLists = () => {
 
         {difficulty && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="p-4 rounded-lg bg-white/5">
+            <div className="p-4 rounded-lg bg-secondary/50">
               <p className="text-sm text-foreground/60">Mean Score</p>
               <p className="text-2xl font-bold">{difficulty.mean_score.toFixed(1)}</p>
             </div>
-            <div className="p-4 rounded-lg bg-white/5">
+            <div className="p-4 rounded-lg bg-secondary/50">
               <p className="text-sm text-foreground/60">Pass Rate</p>
               <p className="text-2xl font-bold">{difficulty.pass_rate.toFixed(1)}%</p>
             </div>
-            <div className="p-4 rounded-lg bg-white/5">
+            <div className="p-4 rounded-lg bg-secondary/50">
               <p className="text-sm text-foreground/60">Difficulty</p>
               <p className="text-2xl font-bold">{difficulty.difficulty_index.toFixed(1)}</p>
             </div>
-            <div className="p-4 rounded-lg bg-white/5">
+            <div className="p-4 rounded-lg bg-secondary/50">
               <p className="text-sm text-foreground/60">Discrimination</p>
               <p className="text-2xl font-bold">{difficulty.discrimination_index.toFixed(2)}</p>
             </div>
@@ -262,7 +266,7 @@ const SubjectMeritLists = () => {
 
       {rankings.length > 0 && (
         <div className="premium-card">
-          <div className="flex gap-3 pb-4 border-b border-white/10">
+          <div className="flex gap-3 pb-4 border-b border-border">
             <button
               onClick={handleExportCSV}
               className="btn btn-secondary flex items-center gap-2"

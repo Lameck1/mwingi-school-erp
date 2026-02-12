@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 
 import { PageHeader } from '../../components/patterns/PageHeader';
 import { Select } from '../../components/ui/Select';
+import { useToast } from '../../contexts/ToastContext';
 import { useAppStore } from '../../stores';
 import { exportToPDF } from '../../utils/exporters';
 import { printCurrentView } from '../../utils/print';
@@ -17,24 +18,25 @@ interface MeritListItem {
   percentage?: number;
 }
 
-const getGradeBadgeColor = (grade: string): string => {
+const getGradeBadgeClass = (grade: string): string => {
   if (grade === 'A' || grade === 'A-') {
-    return '#10b981';
+    return 'bg-emerald-500';
   }
   if (grade === 'B+' || grade === 'B') {
-    return '#3b82f6';
+    return 'bg-blue-500';
   }
   if (grade === 'B-' || grade === 'C+') {
-    return '#f59e0b';
+    return 'bg-amber-500';
   }
   if (grade === 'C') {
-    return '#ef4444';
+    return 'bg-red-500';
   }
-  return '#6b7280';
+  return 'bg-gray-500';
 };
 
 const MeritLists = () => {
   const { currentAcademicYear, currentTerm } = useAppStore();
+  const { showToast } = useToast();
 
   const [streams, setStreams] = useState<{ id: number; stream_name: string }[]>([]);
   const [meritList, setMeritList] = useState<MeritListItem[]>([]);
@@ -58,7 +60,7 @@ const MeritLists = () => {
 
   const handleGenerate = async () => {
     if (!currentAcademicYear || !currentTerm || !selectedStream) {
-      alert('Please select an academic year, term, and stream.');
+      showToast('Please select an academic year, term, and stream.', 'warning');
       return;
     }
 
@@ -72,7 +74,7 @@ const MeritLists = () => {
       setMeritList(list);
     } catch (error) {
       console.error('Failed to generate merit list:', error);
-      alert('Failed to generate merit list.');
+      showToast('Failed to generate merit list.', 'error');
     } finally {
       setLoading(false);
     }
@@ -80,7 +82,7 @@ const MeritLists = () => {
 
   const handleExportPDF = async () => {
     if (meritList.length === 0) {
-      alert('Please generate a merit list first');
+      showToast('Please generate a merit list first', 'warning');
       return;
     }
 
@@ -110,7 +112,7 @@ const MeritLists = () => {
       });
     } catch (error) {
       console.error('Failed to export PDF:', error);
-      alert('Failed to export PDF');
+      showToast('Failed to export PDF', 'error');
     } finally {
       setExporting(false);
     }
@@ -118,21 +120,25 @@ const MeritLists = () => {
 
   const handleExportExcel = async () => {
     if (meritList.length === 0) {
-      alert('Please generate a merit list first');
+      showToast('Please generate a merit list first', 'warning');
       return;
     }
 
     setExporting(true);
     try {
+      const esc = (v: string | number) => {
+        const s = String(v);
+        return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replaceAll('"', '""')}"` : s;
+      };
       const csvContent = [
         ['Position', 'Admission No', 'Student Name', 'Total Marks', 'Average', 'Grade'],
         ...meritList.map(item => [
           item.position,
-          item.admission_number,
-          item.student_name,
+          esc(item.admission_number),
+          esc(item.student_name),
           item.total_marks,
           item.average_marks.toFixed(2),
-          item.grade
+          esc(item.grade)
         ])
       ].map(row => row.join(',')).join('\n');
 
@@ -142,9 +148,10 @@ const MeritLists = () => {
       a.href = url;
       a.download = `Merit_List_${currentTerm?.term_name}.csv`;
       a.click();
+      globalThis.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Failed to export Excel:', error);
-      alert('Failed to export CSV');
+      showToast('Failed to export CSV', 'error');
     } finally {
       setExporting(false);
     }
@@ -152,7 +159,7 @@ const MeritLists = () => {
 
   const handlePrint = () => {
     if (meritList.length === 0) {
-      alert('Please generate a merit list first');
+      showToast('Please generate a merit list first', 'warning');
       return;
     }
     printCurrentView({
@@ -193,7 +200,7 @@ const MeritLists = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse print:text-black">
             <thead>
-              <tr className="border-b border-white/10 print:border-black">
+              <tr className="border-b border-border print:border-black">
                 <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Position</th>
                 <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Adm No.</th>
                 <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Name</th>
@@ -202,19 +209,16 @@ const MeritLists = () => {
                 <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Grade</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5 print:divide-black">
+            <tbody className="divide-y divide-border print:divide-black">
               {meritList.map((row) => (
-                <tr key={row.admission_number} className="group hover:bg-white/[0.02] transition-colors print:hover:bg-white">
+                <tr key={row.admission_number} className="group hover:bg-secondary/30 transition-colors print:hover:bg-card">
                   <td className="py-4 pr-4 print:text-black">{row.position}</td>
                   <td className="py-4 pr-4 print:text-black">{row.admission_number}</td>
                   <td className="py-4 pr-4 print:text-black">{row.student_name}</td>
                   <td className="py-4 pr-4 print:text-black">{row.total_marks}</td>
                   <td className="py-4 pr-4 print:text-black">{row.average_marks.toFixed(2)}</td>
                   <td className="py-4 pr-4 print:text-black">
-                    <span className="px-2 py-1 rounded text-sm font-semibold" style={{
-                      backgroundColor: getGradeBadgeColor(row.grade),
-                      color: 'white'
-                    }}>
+                    <span className={`px-2 py-1 rounded text-sm font-semibold text-white ${getGradeBadgeClass(row.grade)}`}>
                       {row.grade}
                     </span>
                   </td>
@@ -232,7 +236,7 @@ const MeritLists = () => {
       <PageHeader
         title="Merit Lists"
         subtitle="Generate and view student rankings for a class"
-        breadcrumbs={[{ label: 'Academics' }, { label: 'Merit Lists' }]}
+        breadcrumbs={[{ label: 'Academics', href: '/academics' }, { label: 'Merit Lists' }]}
       />
 
       <div className="premium-card">
@@ -260,7 +264,7 @@ const MeritLists = () => {
 
       {meritList.length > 0 && (
         <div className="premium-card">
-          <div className="flex gap-3 pb-4 border-b border-white/10">
+          <div className="flex gap-3 pb-4 border-b border-border">
             <button
               onClick={handleExportPDF}
               disabled={exporting}

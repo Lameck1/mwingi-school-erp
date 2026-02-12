@@ -15,7 +15,6 @@ import { formatCurrencyFromCents } from '../../../utils/format'
 export default function StudentCostAnalysis() {
     const { showToast } = useToast()
     const { currentAcademicYear, currentTerm } = useAppStore()
-    const [, setLoading] = useState(false)
     const [students, setStudents] = useState<Student[]>([])
     const [selectedStudent, setSelectedStudent] = useState<number | ''>('')
     const [costData, setCostData] = useState<StudentCostResult | null>(null)
@@ -31,11 +30,9 @@ export default function StudentCostAnalysis() {
     }, [])
 
     const loadCostData = useCallback(async (studentId: number) => {
-        setLoading(true)
         try {
             if (!currentAcademicYear?.id || !currentTerm?.id) {
                 showToast('Select an active academic year and term to calculate costs', 'error')
-                setLoading(false)
                 return
             }
 
@@ -47,8 +44,6 @@ export default function StudentCostAnalysis() {
         } catch (error) {
             console.error(error)
             showToast('Failed to calculate student cost', 'error')
-        } finally {
-            setLoading(false)
         }
     }, [showToast, currentAcademicYear, currentTerm])
 
@@ -78,7 +73,7 @@ export default function StudentCostAnalysis() {
             <PageHeader
                 title="Student Cost Analysis"
                 subtitle="Analyze per-student cost vs revenue"
-                breadcrumbs={[{ label: 'Finance' }, { label: 'Cost Analysis' }]}
+                breadcrumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Cost Analysis' }]}
             />
 
             {/* Controls */}

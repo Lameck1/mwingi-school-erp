@@ -177,7 +177,7 @@ export default function MessageTemplates() {
                                 type="text"
                                 value={editingTemplate.template_name || ''}
                                 onChange={(e) => setEditingTemplate({ ...editingTemplate, template_name: e.target.value })}
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                                 placeholder="e.g. Fee Balance Reminder"
                             />
                         </div>
@@ -187,7 +187,7 @@ export default function MessageTemplates() {
                                 id="template-category"
                                 value={editingTemplate.category || 'GENERAL'}
                                 onChange={(e) => setEditingTemplate({ ...editingTemplate, category: e.target.value })}
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                             >
                                 <option value="GENERAL" className="bg-background">General</option>
                                 <option value="FEE_REMINDER" className="bg-background">Fee Reminder</option>
@@ -225,7 +225,7 @@ export default function MessageTemplates() {
                                 type="text"
                                 value={editingTemplate.subject || ''}
                                 onChange={(e) => setEditingTemplate({ ...editingTemplate, subject: e.target.value })}
-                                className="input w-full bg-secondary/30"
+                                className="input w-full"
                                 placeholder="Enter message subject"
                             />
                         </div>
@@ -238,7 +238,7 @@ export default function MessageTemplates() {
                             rows={6}
                             value={editingTemplate.body || ''}
                             onChange={(e) => setEditingTemplate({ ...editingTemplate, body: e.target.value })}
-                            className="input w-full font-mono text-sm bg-secondary/30 min-h-[150px]"
+                            className="input w-full font-mono text-sm min-h-[150px]"
                             placeholder="Type your message here... Use {{variable}} for dynamic data"
                         />
                         <div className="p-3 bg-primary/5 rounded-xl border border-primary/10">

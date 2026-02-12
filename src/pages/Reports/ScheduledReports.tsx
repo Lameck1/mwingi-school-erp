@@ -10,6 +10,10 @@ import { useAuthStore } from '../../stores'
 
 import type { ScheduledReport } from '../../types/electron-api/ReportsAPI'
 
+interface ScheduledReportsProps {
+    readonly embedded?: boolean
+}
+
 const REPORT_TYPES = [
     { value: 'FEE_COLLECTION', label: 'Fee Collection Summary' },
     { value: 'DEFAULTERS_LIST', label: 'Fee Defaulters List' },
@@ -28,7 +32,7 @@ const DAY_OPTIONS = [
     { label: 'S', value: 6 }
 ]
 
-export default function ScheduledReports() {
+export default function ScheduledReports({ embedded = false }: ScheduledReportsProps) {
     const { user } = useAuthStore()
 
     const [schedules, setSchedules] = useState<ScheduledReport[]>([])
@@ -106,7 +110,7 @@ export default function ScheduledReports() {
     }
 
     const addRecipient = () => {
-        if (!recipientInput || !recipientInput.includes('@')) {return}
+        if (!recipientInput?.includes('@')) {return}
         const current = getRecipients()
         setEditingSchedule({
             ...editingSchedule,
@@ -124,12 +128,36 @@ export default function ScheduledReports() {
     }
 
     return (
-        <div className="space-y-8 pb-10">
-            <PageHeader
-                title="Scheduled Reports"
-                subtitle="Automate report generation and email delivery"
-                breadcrumbs={[{ label: 'Reports' }, { label: 'Scheduler' }]}
-                actions={
+        <div className={embedded ? 'space-y-6' : 'space-y-8 pb-10'}>
+            {!embedded && (
+                <PageHeader
+                    title="Scheduled Reports"
+                    subtitle="Automate report generation and email delivery"
+                    breadcrumbs={[{ label: 'Reports', href: '/reports' }, { label: 'Scheduler' }]}
+                    actions={
+                        <button
+                            onClick={() => {
+                                setEditingSchedule({
+                                    schedule_type: 'WEEKLY',
+                                    day_of_week: 1,
+                                    time_of_day: '08:00',
+                                    recipients: JSON.stringify([]),
+                                    is_active: true,
+                                    report_type: 'FEE_COLLECTION'
+                                })
+                                setShowModal(true)
+                            }}
+                            className="btn btn-primary flex items-center gap-2"
+                        >
+                            <Plus className="w-4 h-4" />
+                            New Schedule
+                        </button>
+                    }
+                />
+            )}
+            {embedded && (
+                <div className="flex justify-between items-center">
+                    <p className="text-sm text-foreground/60">Automate report generation and email delivery</p>
                     <button
                         onClick={() => {
                             setEditingSchedule({
@@ -147,8 +175,8 @@ export default function ScheduledReports() {
                         <Plus className="w-4 h-4" />
                         New Schedule
                     </button>
-                }
-            />
+                </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {schedules.map(schedule => (

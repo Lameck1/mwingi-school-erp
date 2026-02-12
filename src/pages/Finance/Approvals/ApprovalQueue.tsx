@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '../../../stores';
 import { formatCurrencyFromCents } from '../../../utils/format';
 
+import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
+
 interface ApprovalRequest {
   id: number;
   journal_entry_id: number;
@@ -22,7 +24,7 @@ const getStatusBadge = (status: string) => {
   const colors = {
     PENDING: 'bg-yellow-100 text-yellow-800',
     APPROVED: 'bg-green-100 text-green-800',
-    REJECTED: 'bg-red-100 text-red-800'
+    REJECTED: 'bg-red-100 text-red-500'
   };
   return colors[status as keyof typeof colors] || colors.PENDING;
 };
@@ -115,7 +117,7 @@ export default function ApprovalQueuePage() {
     return (
       <div className="p-6">
         <div className="flex items-center justify-center h-64">
-          <div className="text-gray-500">Loading approvals...</div>
+          <div className="text-muted-foreground">Loading approvals...</div>
         </div>
       </div>
     );
@@ -124,17 +126,18 @@ export default function ApprovalQueuePage() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Approval Queue</h1>
-        <p className="text-gray-600 mt-1">Review and approve pending transactions</p>
+            <HubBreadcrumb crumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Approval Queue' }]} />
+        <h1 className="text-xl md:text-3xl font-bold text-foreground">Approval Queue</h1>
+        <p className="text-muted-foreground mt-1">Review and approve pending transactions</p>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-4 mb-6">
+      <div className="bg-card rounded-lg shadow p-4 mb-6">
         <div className="flex items-center gap-4">
-          <label htmlFor="field-137" className="text-sm font-medium text-gray-700">Filter:</label>
+          <label htmlFor="field-137" className="text-sm font-medium text-foreground/70">Filter:</label>
           <select id="field-137"
             value={filter}
             onChange={(e) => setFilter(e.target.value as 'PENDING' | 'ALL')}
-            className="px-3 py-2 border border-gray-300 rounded-md"
+            className="px-3 py-2 border border-border rounded-md bg-input text-foreground"
             aria-label="Filter approval requests"
           >
             <option value="PENDING">Pending Only</option>
@@ -142,12 +145,12 @@ export default function ApprovalQueuePage() {
           </select>
           <button
             onClick={loadApprovals}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/80"
           >
             Refresh
           </button>
-          {approvals.filter(a => a.status === 'PENDING').length > 0 && (
-            <span className="ml-auto bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm font-medium">
+          {approvals.some(a => a.status === 'PENDING') && (
+            <span className="ml-auto bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 px-3 py-1 rounded-full text-sm font-medium">
               {approvals.filter(a => a.status === 'PENDING').length} Pending
             </span>
           )}
@@ -155,46 +158,46 @@ export default function ApprovalQueuePage() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-          <p className="text-red-800">{error}</p>
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-6">
+          <p className="text-red-500">{error}</p>
         </div>
       )}
 
       {approvals.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <div className="text-gray-500">No approval requests found</div>
+        <div className="bg-card rounded-lg shadow p-8 text-center">
+          <div className="text-muted-foreground">No approval requests found</div>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="bg-card rounded-lg shadow overflow-hidden">
           <table className="w-full">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-secondary border-b">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Entry Ref</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rule</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Requested By</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Entry Ref</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Type</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Description</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Amount</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Rule</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Requested By</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-border">
               {approvals.map((approval) => (
-                <tr key={approval.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{approval.entry_ref}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{approval.entry_type}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                <tr key={approval.id} className="hover:bg-secondary">
+                  <td className="px-6 py-4 text-sm font-medium text-foreground">{approval.entry_ref}</td>
+                  <td className="px-6 py-4 text-sm text-foreground">{approval.entry_type}</td>
+                  <td className="px-6 py-4 text-sm text-foreground max-w-xs truncate">
                     {approval.description}
                     {approval.student_name && (
-                      <div className="text-xs text-gray-500">{approval.student_name}</div>
+                      <div className="text-xs text-muted-foreground">{approval.student_name}</div>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{formatCurrencyFromCents(approval.amount)}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900">{approval.rule_name}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900">
+                  <td className="px-6 py-4 text-sm text-foreground">{formatCurrencyFromCents(approval.amount)}</td>
+                  <td className="px-6 py-4 text-sm text-foreground">{approval.rule_name}</td>
+                  <td className="px-6 py-4 text-sm text-foreground">
                     {approval.requested_by_name}
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-muted-foreground">
                       {format(new Date(approval.requested_at), 'MMM dd, HH:mm')}
                     </div>
                   </td>
@@ -207,7 +210,7 @@ export default function ApprovalQueuePage() {
                     {approval.status === 'PENDING' && (
                       <button
                         onClick={() => setSelectedApproval(approval)}
-                        className="text-blue-600 hover:text-blue-800"
+                        className="text-primary hover:text-primary/80"
                       >
                         Review
                       </button>
@@ -223,7 +226,7 @@ export default function ApprovalQueuePage() {
       {/* Review Modal */}
       {selectedApproval && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6">
+          <div className="bg-card rounded-lg shadow-xl max-w-2xl w-full mx-4 p-6">
             <h2 className="text-2xl font-bold mb-4">Review Approval Request</h2>
 
             <div className="space-y-3 mb-6">
@@ -253,14 +256,14 @@ export default function ApprovalQueuePage() {
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-foreground/70 mb-2">
                 Review Notes {selectedApproval.status === 'PENDING' && '(Required for rejection)'}
               </label>
               <textarea
                 value={reviewNotes}
                 onChange={(e) => setReviewNotes(e.target.value)}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                className="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground"
                 placeholder="Enter your review notes..."
               />
             </div>
@@ -268,13 +271,13 @@ export default function ApprovalQueuePage() {
             <div className="flex gap-3">
               <button
                 onClick={() => handleApprove(selectedApproval.id)}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                className="flex-1 px-4 py-2 bg-success text-white rounded-md hover:bg-success/80"
               >
                 Approve
               </button>
               <button
                 onClick={() => handleReject(selectedApproval.id)}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                className="flex-1 px-4 py-2 bg-destructive text-white rounded-md hover:bg-destructive/80"
               >
                 Reject
               </button>
@@ -283,7 +286,7 @@ export default function ApprovalQueuePage() {
                   setSelectedApproval(null);
                   setReviewNotes('');
                 }}
-                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                className="px-4 py-2 border border-border rounded-md hover:bg-secondary"
               >
                 Cancel
               </button>

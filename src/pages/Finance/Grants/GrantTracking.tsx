@@ -2,17 +2,40 @@ import {
     Plus,
     Download
 } from 'lucide-react'
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 
 import { PageHeader } from '../../../components/patterns/PageHeader'
 import { Input } from '../../../components/ui/Input'
 import { Modal } from '../../../components/ui/Modal'
+import { ProgressBar } from '../../../components/ui/ProgressBar'
 import { Select } from '../../../components/ui/Select'
 import { DataTable } from '../../../components/ui/Table/DataTable'
 import { useToast } from '../../../contexts/ToastContext'
 import { useAuthStore } from '../../../stores'
 import { type Grant } from '../../../types/electron-api'
 import { formatCurrencyFromCents, shillingsToCents } from '../../../utils/format'
+
+function renderUtilizationCell(row: Grant) {
+    const percentage = row.utilization_percentage || 0;
+    return (
+        <div className="flex items-center gap-2">
+            <ProgressBar value={Math.min(percentage, 100)} fillClass={percentage >= 90 ? 'bg-red-500' : 'bg-green-500'} className="w-24" />
+            <span className="text-xs">{percentage.toFixed(1)}%</span>
+        </div>
+    )
+}
+
+function renderActionCell(row: Grant, onUtilize: (grant: Grant) => void) {
+    return (
+        <button 
+            type="button"
+            onClick={() => onUtilize(row)}
+            className="text-primary hover:underline text-sm"
+        >
+            Record Usage
+        </button>
+    )
+}
 
 export default function GrantTracking() {
     const { showToast } = useToast()
@@ -137,7 +160,12 @@ export default function GrantTracking() {
         }
     }
 
-    const columns = [
+    const openUtilizeModal = useCallback((grant: Grant) => {
+        setSelectedGrant(grant)
+        setIsUtilizeModalOpen(true)
+    }, [])
+
+    const columns = useMemo(() => [
         { key: 'grant_name', header: 'Grant Name', accessorKey: 'grant_name' },
         { key: 'grant_type', header: 'Type', accessorKey: 'grant_type' },
         { key: 'nemis_reference_number', header: 'NEMIS Ref', accessorKey: 'nemis_reference_number' },
@@ -151,46 +179,22 @@ export default function GrantTracking() {
             key: 'utilization_percentage',
             header: 'Utilization %', 
             accessorKey: 'utilization_percentage',
-            cell: (row: Grant) => {
-                const percentage = row.utilization_percentage || 0;
-                return (
-                    <div className="flex items-center gap-2">
-                        <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                            <div 
-                                className={`h-full ${percentage >= 90 ? 'bg-red-500' : 'bg-green-500'}`}
-                                style={{ width: `${Math.min(percentage, 100)}%` }}
-                            />
-                        </div>
-                        <span className="text-xs">{percentage.toFixed(1)}%</span>
-                    </div>
-                )
-            }
+            cell: renderUtilizationCell
         },
         {
             key: 'actions',
             header: 'Actions',
             accessorKey: 'id',
-            cell: (row: Grant) => (
-                <button 
-                    type="button"
-                    onClick={() => {
-                        setSelectedGrant(row)
-                        setIsUtilizeModalOpen(true)
-                    }}
-                    className="text-primary hover:underline text-sm"
-                >
-                    Record Usage
-                </button>
-            )
+            cell: (row: Grant) => renderActionCell(row, openUtilizeModal)
         }
-    ]
+    ], [openUtilizeModal])
 
     return (
         <div className="space-y-6">
             <PageHeader
                 title="Grant Tracking & NEMIS"
                 subtitle="Track government capitation and grant utilization"
-                breadcrumbs={[{ label: 'Finance' }, { label: 'Grants' }]}
+                breadcrumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Grants' }]}
                 actions={
                     <div className="flex gap-2">
                         <button 

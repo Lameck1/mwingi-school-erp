@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
 import { Modal } from '../../components/ui/Modal'
+import { useToast } from '../../contexts/ToastContext'
 import { formatCurrencyFromCents, shillingsToCents } from '../../utils/format'
 
 interface BankAccount {
@@ -19,6 +20,7 @@ interface BankAccount {
 }
 
 export default function BankAccounts() {
+    const { showToast } = useToast()
     const [accounts, setAccounts] = useState<BankAccount[]>([])
     const [loading, setLoading] = useState(true)
     const [showAddModal, setShowAddModal] = useState(false)
@@ -61,7 +63,7 @@ export default function BankAccounts() {
                 setFormData({ account_name: '', account_number: '', bank_name: '', branch: '', opening_balance: 0 })
                 void loadAccounts()
             } else {
-                alert(result.errors?.join(', ') || 'Failed to create account')
+                showToast(result.errors?.join(', ') || 'Failed to create account', 'error')
             }
         } catch (error) {
             console.error('Failed to create account:', error)
@@ -77,7 +79,7 @@ export default function BankAccounts() {
             <PageHeader
                 title="Bank Accounts"
                 subtitle="Manage bank accounts for reconciliation"
-                breadcrumbs={[{ label: 'Finance' }, { label: 'Bank Accounts' }]}
+                breadcrumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Bank Accounts' }]}
                 actions={
                     <button
                         onClick={() => setShowAddModal(true)}
@@ -132,7 +134,7 @@ export default function BankAccounts() {
                                 </div>
                                 <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${account.is_active
                                     ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                                    : 'bg-gray-500/10 text-gray-400 border border-gray-500/20'
+                                    : 'bg-gray-500/10 text-muted-foreground border border-gray-500/20'
                                     }`}>
                                     {account.is_active ? 'Active' : 'Inactive'}
                                 </span>
@@ -175,7 +177,7 @@ export default function BankAccounts() {
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <label htmlFor="field-178" className="text-sm font-bold text-foreground/60">Bank Name *</label>
                             <input id="field-178"
@@ -199,7 +201,7 @@ export default function BankAccounts() {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <label htmlFor="field-202" className="text-sm font-bold text-foreground/60">Account Number *</label>
                             <input id="field-202"
@@ -215,7 +217,7 @@ export default function BankAccounts() {
                             <label htmlFor="field-213" className="text-sm font-bold text-foreground/60">Opening Balance</label>
                             <input id="field-213"
                                 type="number"
-                                value={formData.opening_balance || ''}
+                                value={formData.opening_balance ?? ''}
                                 onChange={(e) => setFormData({ ...formData, opening_balance: Number(e.target.value) })}
                                 placeholder="0.00"
                                 min="0"

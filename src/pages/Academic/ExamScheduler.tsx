@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
+import { useToast } from '../../contexts/ToastContext'
 import { useAppStore } from '../../stores'
 
 interface ExamSlot {
@@ -44,6 +45,7 @@ interface TimetableResult {
 
 const ExamScheduler = () => {
   const { currentAcademicYear, currentTerm } = useAppStore()
+  const { showToast } = useToast()
 
   const [exams, setExams] = useState<{ id: number; name: string }[]>([])
 
@@ -71,11 +73,11 @@ const ExamScheduler = () => {
 
   const handleGenerateTimetable = async () => {
     if (schedulerDisabled) {
-      alert('Exam scheduler is temporarily unavailable. Please try again after the scheduling engine is enabled.')
+      showToast('Exam scheduler is temporarily unavailable. Please try again after the scheduling engine is enabled.', 'warning')
       return
     }
     if (!selectedExam || !startDate || !endDate) {
-      alert('Please select an exam and date range')
+      showToast('Please select an exam and date range', 'warning')
       return
     }
 
@@ -93,7 +95,7 @@ const ExamScheduler = () => {
       setStats(result?.stats || null)
     } catch (error) {
       console.error('Failed to generate timetable:', error)
-      alert('Failed to generate exam timetable')
+      showToast('Failed to generate exam timetable', 'error')
     } finally {
       setLoading(false)
     }
@@ -101,11 +103,11 @@ const ExamScheduler = () => {
 
   const handleDetectClashes = async () => {
     if (schedulerDisabled) {
-      alert('Clash detection is temporarily unavailable.')
+      showToast('Clash detection is temporarily unavailable.', 'warning')
       return
     }
     if (!selectedExam) {
-      alert('Please select an exam first')
+      showToast('Please select an exam first', 'warning')
       return
     }
 
@@ -115,11 +117,11 @@ const ExamScheduler = () => {
       setClashes(clashData || [])
 
       if (clashData?.length === 0) {
-        alert('No clashes detected!')
+        showToast('No clashes detected!', 'success')
       }
     } catch (error) {
       console.error('Failed to detect clashes:', error)
-      alert('Failed to detect clashes')
+      showToast('Failed to detect clashes', 'error')
     } finally {
       setLoading(false)
     }
@@ -127,11 +129,11 @@ const ExamScheduler = () => {
 
   const handleExportPDF = async () => {
     if (schedulerDisabled) {
-      alert('PDF export is temporarily unavailable.')
+      showToast('PDF export is temporarily unavailable.', 'warning')
       return
     }
     if (slots.length === 0) {
-      alert('Please generate a timetable first')
+      showToast('Please generate a timetable first', 'warning')
       return
     }
 
@@ -142,7 +144,7 @@ const ExamScheduler = () => {
       })
     } catch (error) {
       console.error('Failed to export PDF:', error)
-      alert('Failed to export PDF')
+      showToast('Failed to export PDF', 'error')
     }
   }
 
@@ -151,7 +153,7 @@ const ExamScheduler = () => {
       <PageHeader
         title="Exam Scheduler"
         subtitle="Generate timetables, allocate venues, detect clashes"
-        breadcrumbs={[{ label: 'Academics' }, { label: 'Exam Scheduler' }]}
+        breadcrumbs={[{ label: 'Academics', href: '/academics' }, { label: 'Exam Scheduler' }]}
       />
 
       {/* Configuration */}
@@ -178,7 +180,7 @@ const ExamScheduler = () => {
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10"
+              className="w-full px-3 py-2 rounded-lg bg-secondary/50 border border-border"
             />
           </div>
           <div>
@@ -187,7 +189,7 @@ const ExamScheduler = () => {
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10"
+              className="w-full px-3 py-2 rounded-lg bg-secondary/50 border border-border"
             />
           </div>
           <div className="flex items-end">
@@ -226,19 +228,19 @@ const ExamScheduler = () => {
         <div className="premium-card">
           <h3 className="text-lg font-semibold mb-4">Timetable Statistics</h3>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="p-4 rounded-lg bg-white/5">
+            <div className="p-4 rounded-lg bg-secondary/50">
               <p className="text-sm text-foreground/60">Total Slots</p>
               <p className="text-2xl font-bold">{stats.total_slots}</p>
             </div>
-            <div className="p-4 rounded-lg bg-white/5">
+            <div className="p-4 rounded-lg bg-secondary/50">
               <p className="text-sm text-foreground/60">Total Students</p>
               <p className="text-2xl font-bold">{stats.total_students}</p>
             </div>
-            <div className="p-4 rounded-lg bg-white/5">
+            <div className="p-4 rounded-lg bg-secondary/50">
               <p className="text-sm text-foreground/60">Venues Used</p>
               <p className="text-2xl font-bold">{stats.venues_used}</p>
             </div>
-            <div className="p-4 rounded-lg bg-white/5">
+            <div className="p-4 rounded-lg bg-secondary/50">
               <p className="text-sm text-foreground/60">Avg Capacity Usage</p>
               <p className="text-2xl font-bold">{stats.average_capacity_usage?.toFixed(1)}%</p>
             </div>
@@ -278,7 +280,7 @@ const ExamScheduler = () => {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-white/10">
+                <tr className="border-b border-border">
                   <th className="pb-4 pt-2 font-bold text-foreground/60">Subject</th>
                   <th className="pb-4 pt-2 font-bold text-foreground/60">Date</th>
                   <th className="pb-4 pt-2 font-bold text-foreground/60">Time</th>
@@ -286,15 +288,15 @@ const ExamScheduler = () => {
                   <th className="pb-4 pt-2 font-bold text-foreground/60">Capacity</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-border">
                 {slots.map((slot) => (
-                  <tr key={slot.id} className="hover:bg-white/[0.02]">
+                  <tr key={slot.id} className="hover:bg-secondary/30">
                     <td className="py-4 pr-4 font-medium">{slot.subject_name}</td>
                     <td className="py-4 pr-4">{new Date(slot.start_date).toLocaleDateString()}</td>
                     <td className="py-4 pr-4">{slot.start_time} - {slot.end_time}</td>
                     <td className="py-4 pr-4">{slot.venue_name}</td>
                     <td className="py-4 pr-4">
-                      <span className="px-2 py-1 rounded text-sm bg-white/10">
+                      <span className="px-2 py-1 rounded text-sm bg-secondary">
                         {slot.enrolled_students}/{slot.max_capacity}
                       </span>
                     </td>

@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react'
 
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
+import { useToast } from '../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../stores'
 
 interface Staff {
@@ -37,6 +38,7 @@ interface Allocation {
 export default function TeacherAllocation() {
     const { currentAcademicYear, currentTerm } = useAppStore()
     const { user } = useAuthStore()
+    const { showToast } = useToast()
 
     const [streams, setStreams] = useState<Stream[]>([])
     const [staff, setStaff] = useState<Staff[]>([])
@@ -77,9 +79,7 @@ export default function TeacherAllocation() {
 
     const loadInitialData = useCallback(async () => {
         try {
-            const [staffData] = await Promise.all([
-                globalThis.electronAPI.getStaff(),
-            ])
+            const staffData = await globalThis.electronAPI.getStaff()
             setStaff(staffData)
         } catch (error) {
             console.error('Failed to load initial data:', error)
@@ -96,7 +96,7 @@ export default function TeacherAllocation() {
 
     const handleAllocate = async () => {
         if (!currentAcademicYear || !currentTerm || !selectedStream || !selectedSubject || !selectedTeacher || !user) {
-            alert('Please select class, subject and teacher')
+            showToast('Please select class, subject and teacher', 'warning')
             return
         }
 
@@ -116,11 +116,24 @@ export default function TeacherAllocation() {
             // Reset selection
             setSelectedSubject(0)
             setSelectedTeacher(0)
+            showToast('Teacher allocated successfully', 'success')
         } catch (error) {
             console.error('Failed to allocate teacher:', error)
-            alert('Failed to save allocation')
+            showToast('Failed to save allocation', 'error')
         } finally {
             setSaving(false)
+        }
+    }
+
+    const handleDeleteAllocation = async (allocationId: number) => {
+        if (!user) return
+        try {
+            await globalThis.electronAPI.deleteTeacherAllocation(allocationId, user.id)
+            await loadAllocations()
+            showToast('Allocation removed', 'success')
+        } catch (error) {
+            console.error('Failed to delete allocation:', error)
+            showToast('Failed to remove allocation', 'error')
         }
     }
 
@@ -154,19 +167,23 @@ export default function TeacherAllocation() {
             <div className="overflow-x-auto">
                 <table className="w-full text-left">
                     <thead>
-                        <tr className="border-b border-white/10">
+                        <tr className="border-b border-border">
                             <th className="pb-3 font-bold text-foreground/60">Subject</th>
                             <th className="pb-3 font-bold text-foreground/60">Teacher</th>
                             <th className="pb-3 font-bold text-foreground/60 text-right">Actions</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5">
+                    <tbody className="divide-y divide-border">
                         {allocations.map(allocation => (
                             <tr key={allocation.id} className="group">
-                                <td className="py-4 font-medium text-white">{allocation.subject_name}</td>
+                                <td className="py-4 font-medium text-foreground">{allocation.subject_name}</td>
                                 <td className="py-4 text-foreground/80">{allocation.teacher_name}</td>
                                 <td className="py-4 text-right">
-                                    <button className="p-2 text-foreground/30 hover:text-destructive transition-colors">
+                                    <button
+                                        onClick={() => handleDeleteAllocation(allocation.id)}
+                                        className="p-2 text-foreground/30 hover:text-destructive transition-colors"
+                                        aria-label="Remove allocation"
+                                    >
                                         <Trash2 className="w-4 h-4" />
                                     </button>
                                 </td>
@@ -183,14 +200,14 @@ export default function TeacherAllocation() {
             <PageHeader
                 title="Teacher Allocations"
                 subtitle="Assign teachers to subjects for specific classes"
-                breadcrumbs={[{ label: 'Academics' }, { label: 'Allocations' }]}
+                breadcrumbs={[{ label: 'Academics', href: '/academics' }, { label: 'Allocations' }]}
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Allocation Form */}
                 <div className="lg:col-span-1 space-y-6">
                     <div className="premium-card space-y-4">
-                        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                             <UserPlus className="w-5 h-5 text-primary" />
                             New Allocation
                         </h3>
@@ -241,7 +258,7 @@ export default function TeacherAllocation() {
                 {/* Current Allocations List */}
                 <div className="lg:col-span-2">
                     <div className="premium-card min-h-[400px]">
-                        <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-foreground mb-6 flex items-center gap-2">
                             <BookOpen className="w-5 h-5 text-primary" />
                             Current Allocations
                         </h3>

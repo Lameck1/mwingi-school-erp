@@ -3,7 +3,6 @@ import {
 } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 
-import { InstitutionalHeader } from '../../components/patterns/InstitutionalHeader'
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
 import { Modal } from '../../components/ui/Modal'
@@ -226,11 +225,10 @@ export default function ReportCards() {
 
     return (
         <div className="space-y-8 pb-10">
-            <InstitutionalHeader />
             <PageHeader
                 title="Report Cards"
                 subtitle="Generate and print student report cards"
-                breadcrumbs={[{ label: 'Students' }, { label: 'Report Cards' }]}
+                breadcrumbs={[{ label: 'Academics', href: '/academics' }, { label: 'Report Cards' }, { label: 'View Report Cards' }]}
             />
 
             {/* Stats */}
@@ -274,7 +272,7 @@ export default function ReportCards() {
                             type="date"
                             value={nextTermDate}
                             onChange={(e) => setNextTermDate(e.target.value)}
-                            className="input w-full bg-secondary/10 border-border/20"
+                            className="input w-full border-border/20"
                         />
                     </div>
                 </div>

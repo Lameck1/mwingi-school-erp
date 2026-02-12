@@ -17,6 +17,7 @@ import { type FeeCollectionItem } from '../types/electron-api/ReportsAPI'
 import { formatCurrencyFromCents, formatDateTime } from '../utils/format'
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#334155', '#ec4899']
+const COLOR_CLASSES = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-slate-700', 'bg-pink-500']
 
 export default function Dashboard() {
     const { currentTerm, currentAcademicYear } = useAppStore()
@@ -32,46 +33,45 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
+        const loadDashboardData = async () => {
+            try {
+                const [data, feeData, categoryData, logs] = await Promise.all([
+                    globalThis.electronAPI.getDashboardData(),
+                    globalThis.electronAPI.getFeeCollectionReport(
+                        new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+                        new Date().toISOString().slice(0, 10)
+                    ),
+                    globalThis.electronAPI.getFeeCategoryBreakdown(),
+                    globalThis.electronAPI.getAuditLog(6)
+                ])
+
+                setDashboardData(data)
+                setFeeCategories(categoryData)
+                setRecentActivities(logs)
+
+                const monthlyData: Record<string, number> = {}
+                if (Array.isArray(feeData)) {
+                    feeData.forEach((item: FeeCollectionItem) => {
+                        const date = new Date(item.payment_date)
+                        if (Number.isNaN(date.getTime())) {return} // Skip invalid dates
+
+                        const month = date.toLocaleDateString('en-US', { month: 'short' })
+                        const amount = Number(item.amount) || 0
+                        monthlyData[month] = (monthlyData[month] || 0) + amount
+                    })
+                }
+
+                setFeeCollectionData(
+                    Object.entries(monthlyData).map(([month, total]) => ({ month, total }))
+                )
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error)
+            } finally {
+                setLoading(false)
+            }
+        }
         void loadDashboardData()
     }, [])
-
-    const loadDashboardData = async () => {
-        try {
-            const [data, feeData, categoryData, logs] = await Promise.all([
-                globalThis.electronAPI.getDashboardData(),
-                globalThis.electronAPI.getFeeCollectionReport(
-                    new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-                    new Date().toISOString().slice(0, 10)
-                ),
-                globalThis.electronAPI.getFeeCategoryBreakdown(),
-                globalThis.electronAPI.getAuditLog(6)
-            ])
-
-            setDashboardData(data)
-            setFeeCategories(categoryData)
-            setRecentActivities(logs)
-
-            const monthlyData: Record<string, number> = {}
-            if (Array.isArray(feeData)) {
-                feeData.forEach((item: FeeCollectionItem) => {
-                    const date = new Date(item.payment_date)
-                    if (Number.isNaN(date.getTime())) {return} // Skip invalid dates
-
-                    const month = date.toLocaleDateString('en-US', { month: 'short' })
-                    const amount = Number(item.amount) || 0
-                    monthlyData[month] = (monthlyData[month] || 0) + amount
-                })
-            }
-
-            setFeeCollectionData(
-                Object.entries(monthlyData).map(([month, total]) => ({ month, total }))
-            )
-        } catch (error) {
-            console.error('Failed to load dashboard data:', error)
-        } finally {
-            setLoading(false)
-        }
-    }
 
 
 
@@ -124,7 +124,7 @@ export default function Dashboard() {
             {/* Executive Summary Header */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
-                    <h1 className="text-4xl font-bold text-foreground font-heading">Financial Overview</h1>
+                    <h1 className="text-2xl md:text-4xl font-bold text-foreground font-heading">Financial Overview</h1>
                     <p className="text-foreground/50 mt-2 font-medium">
                         Insights for <span className="text-primary">{currentAcademicYear?.year_name}</span> • {currentTerm?.term_name || 'Academic Period'}
                     </p>
@@ -269,7 +269,7 @@ export default function Dashboard() {
                             {feeCategories.slice(0, 4).map((cat, i) => (
                                 <div key={cat.name} className="flex items-center justify-between text-[11px]">
                                     <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
+                                        <div className={`w-2 h-2 rounded-full ${COLOR_CLASSES[i % COLOR_CLASSES.length]}`}></div>
                                         <span className="text-foreground/70">{cat.name}</span>
                                     </div>
                                     <span className="text-foreground font-bold">{((cat.value / (dashboardData?.feeCollected || 1)) * 100).toFixed(1)}%</span>

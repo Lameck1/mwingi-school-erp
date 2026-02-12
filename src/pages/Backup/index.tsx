@@ -1,6 +1,7 @@
 import { Download, Upload, CheckCircle, Loader2, Database, ShieldAlert, History, FileStack, HardDrive } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 
+import { PageHeader } from '../../components/patterns/PageHeader'
 import { useToast } from '../../contexts/ToastContext'
 
 export default function Backup() {
@@ -76,16 +77,16 @@ export default function Backup() {
 
     return (
         <div className="space-y-8 pb-10">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                    <h1 className="text-3xl font-bold text-foreground font-heading uppercase tracking-tight">Backup & Disaster Recovery</h1>
-                    <p className="text-foreground/50 mt-1 font-medium italic">Safeguard institutional data through cryptographic snapshots and restoration protocols</p>
-                </div>
-                <div className="flex items-center gap-3 bg-emerald-500/5 p-2 px-4 rounded-xl border border-emerald-500/20">
-                    <Database className="w-5 h-5 text-emerald-500/60" />
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-500/60">Primary Database Online</span>
-                </div>
-            </div>
+            <PageHeader
+                title="Backup & Disaster Recovery"
+                subtitle="Safeguard institutional data through cryptographic snapshots and restoration protocols"
+                actions={
+                    <div className="flex items-center gap-3 bg-emerald-500/5 p-2 px-4 rounded-xl border border-emerald-500/20">
+                        <Database className="w-5 h-5 text-emerald-500/60" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-500/60">Primary Database Online</span>
+                    </div>
+                }
+            />
 
             {result && (
                 <div className={`p-5 rounded-2xl flex items-center gap-4 animate-in slide-in-from-top-4 duration-300 border shadow-lg ${result.type === 'success'
@@ -224,7 +225,7 @@ export default function Backup() {
                             <div>
                                 <p className="text-xs font-bold text-foreground/80 mb-1">Local Synchronization Path</p>
                                 <p className="text-[10px] font-mono font-medium text-foreground/40 break-all leading-relaxed uppercase tracking-tighter">
-                                    {`%APPDATA%\\mwingi-school-erp\\backups`}
+                                    {String.raw`%APPDATA%\mwingi-school-erp\backups`}
                                 </p>
                             </div>
                         </div>

@@ -99,7 +99,7 @@ export default function ReconcileAccount() {
             <PageHeader
                 title="Bank Reconciliation"
                 subtitle="Match bank statement lines with ledger entries"
-                breadcrumbs={[{ label: 'Finance' }, { label: 'Reconciliation' }]}
+                breadcrumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Reconciliation' }]}
             />
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -145,19 +145,19 @@ export default function ReconcileAccount() {
                 <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-8 min-h-[500px]">
                     {/* LEFT: Bank Statement Lines */}
                     <div className="card flex flex-col h-full">
-                        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                             <CreditCard className="w-5 h-5 text-primary" />
                             Bank Statement Lines
                         </h3>
                         <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 pr-2">
                             {lines.filter(l => !l.is_matched).map(line => (
-                                <div key={line.id} className="p-3 bg-white/[0.02] border border-white/5 rounded-lg hover:border-primary/20 transition-all cursor-pointer group">
+                                <div key={line.id} className="p-3 bg-white/[0.02] border border-border/20 rounded-lg hover:border-primary/20 transition-all cursor-pointer group">
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <p className="text-sm font-medium text-white">{line.description}</p>
+                                            <p className="text-sm font-medium text-foreground">{line.description}</p>
                                             <p className="text-xs text-foreground/50">{new Date(line.transaction_date).toLocaleDateString()}</p>
                                         </div>
-                                        <p className={`font-mono font-bold ${line.credit_amount > 0 ? 'text-emerald-400' : 'text-white'}`}>
+                                        <p className={`font-mono font-bold ${line.credit_amount > 0 ? 'text-emerald-400' : 'text-foreground'}`}>
                                             {formatCurrencyFromCents(line.credit_amount || -line.debit_amount)}
                                         </p>
                                     </div>
@@ -173,19 +173,19 @@ export default function ReconcileAccount() {
 
                     {/* RIGHT: Ledger Transactions */}
                     <div className="card flex flex-col h-full">
-                        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                             <ArrowRightLeft className="w-5 h-5 text-amber-400" />
                             Unmatched Ledger Entries
                         </h3>
                         <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 pr-2">
                             {unmatchedTransactions.map(txn => (
-                                <div key={txn.id} className="p-3 bg-white/[0.02] border border-white/5 rounded-lg hover:border-amber-400/20 transition-all cursor-pointer group">
+                                <div key={txn.id} className="p-3 bg-white/[0.02] border border-border/20 rounded-lg hover:border-amber-400/20 transition-all cursor-pointer group">
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <p className="text-sm font-medium text-white">{txn.description}</p>
+                                            <p className="text-sm font-medium text-foreground">{txn.description}</p>
                                             <p className="text-xs text-foreground/50">{txn.transaction_ref} • {new Date(txn.transaction_date).toLocaleDateString()}</p>
                                         </div>
-                                        <p className="font-mono font-bold text-white">
+                                        <p className="font-mono font-bold text-foreground">
                                             {formatCurrencyFromCents(txn.amount)}
                                         </p>
                                     </div>

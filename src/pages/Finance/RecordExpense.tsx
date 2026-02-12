@@ -1,10 +1,12 @@
-import { Plus, Check, Loader2, ArrowLeftCircle, Receipt, Tag, CreditCard, FileText, Calendar } from 'lucide-react'
+import { Plus, Check, Loader2, Receipt, Tag, CreditCard, FileText, Calendar } from 'lucide-react'
 import React, { useCallback, useEffect, useState } from 'react'
 
 import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore } from '../../stores'
 import { type TransactionCategory } from '../../types/electron-api/FinanceAPI'
 import { shillingsToCents } from '../../utils/format'
+
+import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 
 export default function RecordExpense() {
     const { user } = useAuthStore()
@@ -63,16 +65,22 @@ export default function RecordExpense() {
             showToast('Please fill in all required fields', 'warning')
             return
         }
+        if (!user?.id) {
+            showToast('User session not found. Please log in again.', 'error')
+            return
+        }
 
         setSaving(true)
         try {
             await globalThis.electronAPI.createTransaction({
                 transaction_date: formData.transaction_date,
+                transaction_type: 'EXPENSE',
                 amount: shillingsToCents(formData.amount), // Whole currency units
                 category_id: Number.parseInt(formData.category_id, 10),
-                reference: formData.payment_reference,
+                payment_method: formData.payment_method,
+                payment_reference: formData.payment_reference,
                 description: formData.description
-            }, user!.id)
+            }, user.id)
 
             showToast('Expense recorded successfully', 'success')
             setFormData({
@@ -93,19 +101,11 @@ export default function RecordExpense() {
     }
 
     return (
-        <div className="space-y-8 pb-10 max-w-5xl mx-auto">
-            <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-                <div>
-                    <h1 className="text-3xl font-bold font-heading uppercase tracking-tight text-destructive/90">Record Expense</h1>
-                    <p className="text-foreground/50 mt-1 font-medium italic">Document operational expenditures and institutional payouts</p>
-                </div>
-                <button
-                    onClick={() => globalThis.history.back()}
-                    className="flex items-center gap-2 text-foreground/40 text-[10px] font-bold uppercase tracking-widest hover:text-foreground transition-all group"
-                >
-                    <ArrowLeftCircle className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-                    <span>Return to Finance Hub</span>
-                </button>
+        <div className="space-y-8 pb-10">
+            <div>
+                <HubBreadcrumb crumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Record Expense' }]} />
+                <h1 className="text-xl md:text-3xl font-bold font-heading uppercase tracking-tight text-destructive/90">Record Expense</h1>
+                <p className="text-foreground/50 mt-1 font-medium italic">Document operational expenditures and institutional payouts</p>
             </div>
 
             <div className="card animate-slide-up relative overflow-hidden">
@@ -127,7 +127,7 @@ export default function RecordExpense() {
                                 required
                                 value={formData.transaction_date}
                                 onChange={(e) => setFormData({ ...formData, transaction_date: e.target.value })}
-                                className="input w-full bg-secondary/30 h-12 font-bold text-xs uppercase tracking-tight"
+                                className="input w-full h-12 font-bold text-xs uppercase tracking-tight"
                             />
                         </div>
 
@@ -145,7 +145,7 @@ export default function RecordExpense() {
                                 step="0.01"
                                 value={formData.amount}
                                 onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                className="input w-full bg-secondary/30 h-12 text-lg font-bold"
+                                className="input w-full h-12 text-lg font-bold"
                                 placeholder="0.00"
                             />
                         </div>
@@ -159,7 +159,7 @@ export default function RecordExpense() {
                                     required
                                     value={formData.category_id}
                                     onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                                    className="input w-full bg-secondary/30 h-12 font-bold text-xs uppercase tracking-tight"
+                                    className="input w-full h-12 font-bold text-xs uppercase tracking-tight"
                                 >
                                     <option value="">Select Category</option>
                                     {categories.map(cat => (
@@ -182,7 +182,7 @@ export default function RecordExpense() {
                                         aria-label="New Category Name"
                                         value={newCategory}
                                         onChange={(e) => setNewCategory(e.target.value)}
-                                        className="input flex-1 bg-secondary/50 h-12"
+                                        className="input flex-1 h-12"
                                         placeholder="New Cost Center Identifier"
                                     />
                                     <button
@@ -209,7 +209,7 @@ export default function RecordExpense() {
                                 required
                                 value={formData.payment_method}
                                 onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                                className="input w-full bg-secondary/30 h-12 font-bold text-xs uppercase tracking-tight"
+                                className="input w-full h-12 font-bold text-xs uppercase tracking-tight"
                             >
                                 <option value="CASH">Liquid Cash</option>
                                 <option value="MPESA">M-Pesa Mobile</option>
@@ -226,7 +226,7 @@ export default function RecordExpense() {
                                 type="text"
                                 value={formData.payment_reference}
                                 onChange={(e) => setFormData({ ...formData, payment_reference: e.target.value })}
-                                className="input w-full bg-secondary/30 h-12 font-mono text-xs tracking-wider"
+                                className="input w-full h-12 font-mono text-xs tracking-wider"
                                 placeholder="e.g. VOUCHER-99, CHQ-556"
                             />
                         </div>
@@ -243,7 +243,7 @@ export default function RecordExpense() {
                             rows={3}
                             value={formData.description}
                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            className="input w-full bg-secondary/30 p-4 min-h-[100px] leading-relaxed italic"
+                            className="input w-full p-4 min-h-[100px] leading-relaxed italic"
                             placeholder="Provide detailed narrative or payee identification for this expenditure entry..."
                         />
                     </div>

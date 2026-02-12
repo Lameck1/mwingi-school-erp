@@ -5,16 +5,18 @@ import { type HireBooking, type HireAsset, type HireClient, type HireStats } fro
 import { formatCurrencyFromCents, shillingsToCents, centsToShillings } from '../../utils/format'
 import { printDocument } from '../../utils/print'
 
+import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
+
 type TabType = 'bookings' | 'clients' | 'assets'
 
 const getStatusColor = (status: string) => {
     switch (status) {
-        case 'PENDING': return 'bg-yellow-100 text-yellow-800'
-        case 'CONFIRMED': return 'bg-blue-100 text-blue-800'
+        case 'PENDING': return 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400'
+        case 'CONFIRMED': return 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
         case 'IN_PROGRESS': return 'bg-purple-100 text-purple-800'
-        case 'COMPLETED': return 'bg-green-100 text-green-800'
-        case 'CANCELLED': return 'bg-red-100 text-red-800'
-        default: return 'bg-gray-100 text-gray-800'
+        case 'COMPLETED': return 'bg-green-500/15 text-green-600 dark:text-green-400'
+        case 'CANCELLED': return 'bg-red-500/15 text-red-600 dark:text-red-400'
+        default: return 'bg-secondary text-foreground'
     }
 }
 
@@ -234,19 +236,20 @@ export default function AssetHire() {
             {/* Header */}
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Asset Hire Management</h1>
-                    <p className="text-gray-600">Manage bus and asset rentals</p>
+                    <HubBreadcrumb crumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Asset Hire' }]} />
+                    <h1 className="text-2xl font-bold text-foreground">Asset Hire Management</h1>
+                    <p className="text-muted-foreground">Manage bus and asset rentals</p>
                 </div>
                 <div className="flex gap-2">
                     <button
                         onClick={() => setShowClientModal(true)}
-                        className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                        className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80"
                     >
                         + New Client
                     </button>
                     <button
                         onClick={() => setShowBookingModal(true)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/80"
                     >
                         + New Booking
                     </button>
@@ -256,35 +259,35 @@ export default function AssetHire() {
             {/* Stats Cards */}
             {stats && (
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="bg-white p-4 rounded-lg shadow border-l-4 border-blue-500">
-                        <div className="text-sm text-gray-500">Total Bookings</div>
+                    <div className="bg-card p-4 rounded-lg shadow border-l-4 border-blue-500">
+                        <div className="text-sm text-muted-foreground">Total Bookings</div>
                         <div className="text-2xl font-bold">{stats.totalBookings}</div>
                     </div>
-                    <div className="bg-white p-4 rounded-lg shadow border-l-4 border-green-500">
-                        <div className="text-sm text-gray-500">Total Income</div>
+                    <div className="bg-card p-4 rounded-lg shadow border-l-4 border-green-500">
+                        <div className="text-sm text-muted-foreground">Total Income</div>
                         <div className="text-2xl font-bold">{formatCurrencyFromCents(stats.totalIncome)}</div>
                     </div>
-                    <div className="bg-white p-4 rounded-lg shadow border-l-4 border-orange-500">
-                        <div className="text-sm text-gray-500">Pending Amount</div>
+                    <div className="bg-card p-4 rounded-lg shadow border-l-4 border-orange-500">
+                        <div className="text-sm text-muted-foreground">Pending Amount</div>
                         <div className="text-2xl font-bold">{formatCurrencyFromCents(stats.pendingAmount)}</div>
                     </div>
-                    <div className="bg-white p-4 rounded-lg shadow border-l-4 border-purple-500">
-                        <div className="text-sm text-gray-500">This Month</div>
+                    <div className="bg-card p-4 rounded-lg shadow border-l-4 border-purple-500">
+                        <div className="text-sm text-muted-foreground">This Month</div>
                         <div className="text-2xl font-bold">{formatCurrencyFromCents(stats.thisMonth)}</div>
                     </div>
                 </div>
             )}
 
             {/* Tabs */}
-            <div className="border-b border-gray-200">
+            <div className="border-b border-border">
                 <nav className="flex space-x-8">
                     {(['bookings', 'clients', 'assets'] as TabType[]).map(tab => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
                             className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === tab
-                                ? 'border-blue-500 text-blue-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700'
+                                ? 'border-primary text-primary'
+                                : 'border-transparent text-muted-foreground hover:text-foreground/70'
                                 }`}
                         >
                             {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -300,13 +303,13 @@ export default function AssetHire() {
                     placeholder="Search..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="px-4 py-2 border rounded-lg w-64"
+                    className="px-4 py-2 border border-border rounded-lg w-full sm:w-64 bg-input text-foreground"
                 />
                 {activeTab === 'bookings' && (
                     <select
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
-                        className="px-4 py-2 border rounded-lg"
+                        className="px-4 py-2 border border-border rounded-lg bg-input text-foreground"
                         aria-label="Filter by status"
                     >
                         <option value="">All Status</option>
@@ -320,22 +323,22 @@ export default function AssetHire() {
             </div>
 
             {/* Content */}
-            <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="bg-card rounded-lg shadow overflow-hidden">
                 {activeTab === 'bookings' && (
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                    <table className="min-w-full divide-y divide-border">
+                        <thead className="bg-secondary">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Booking #</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Asset</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Balance</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Booking #</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Client</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Asset</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Amount</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Balance</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Status</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-card divide-y divide-border">
                             {filteredBookings.map(booking => (
                                 <tr key={booking.id}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">{booking.booking_number}</td>
@@ -356,13 +359,13 @@ export default function AssetHire() {
                                             <>
                                                 <button
                                                     onClick={() => { setSelectedBooking(booking); setShowPaymentModal(true); setPaymentForm({ ...paymentForm, amount: String(centsToShillings(booking.balance || 0)) }) }}
-                                                    className="text-green-600 hover:text-green-800"
+                                                    className="text-success hover:text-success/80"
                                                 >
                                                     Pay
                                                 </button>
                                                 <button
                                                     onClick={() => handleUpdateStatus(booking.id, 'CANCELLED')}
-                                                    className="text-red-600 hover:text-red-800"
+                                                    className="text-destructive hover:text-destructive/80"
                                                 >
                                                     Cancel
                                                 </button>
@@ -371,7 +374,7 @@ export default function AssetHire() {
                                         {booking.amount_paid > 0 && (
                                             <button
                                                 onClick={() => handlePrintReceipt(booking)}
-                                                className="text-blue-600 hover:text-blue-800"
+                                                className="text-primary hover:text-primary/80"
                                             >
                                                 Print
                                             </button>
@@ -381,7 +384,7 @@ export default function AssetHire() {
                             ))}
                             {filteredBookings.length === 0 && (
                                 <tr>
-                                    <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                                    <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">
                                         No bookings found
                                     </td>
                                 </tr>
@@ -391,16 +394,16 @@ export default function AssetHire() {
                 )}
 
                 {activeTab === 'clients' && (
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                    <table className="min-w-full divide-y divide-border">
+                        <thead className="bg-secondary">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Organization</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Name</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Organization</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Phone</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Email</th>
                             </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-card divide-y divide-border">
                             {filteredClients.map(client => (
                                 <tr key={client.id}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">{client.client_name}</td>
@@ -414,16 +417,16 @@ export default function AssetHire() {
                 )}
 
                 {activeTab === 'assets' && (
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
+                    <table className="min-w-full divide-y divide-border">
+                        <thead className="bg-secondary">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Asset Name</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Default Rate</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rate Type</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Asset Name</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Type</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Default Rate</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Rate Type</th>
                             </tr>
                         </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
+                        <tbody className="bg-card divide-y divide-border">
                             {assets.map(asset => (
                                 <tr key={asset.id}>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">{asset.asset_name}</td>
@@ -440,7 +443,7 @@ export default function AssetHire() {
             {/* New Booking Modal */}
             {showBookingModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 w-full max-w-lg">
+                    <div className="bg-card rounded-lg p-6 w-full max-w-lg">
                         <h2 className="text-xl font-bold mb-4">New Booking</h2>
                         <form onSubmit={handleCreateBooking} className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
@@ -449,7 +452,7 @@ export default function AssetHire() {
                                     <select id="field-448"
                                         value={bookingForm.asset_id}
                                         onChange={(e) => setBookingForm({ ...bookingForm, asset_id: Number.parseInt(e.target.value, 10) })}
-                                        className="w-full border rounded-lg p-2"
+                                        className="w-full border border-border rounded-lg p-2 bg-input text-foreground"
                                         required
                                         aria-label="Select asset"
                                     >
@@ -464,7 +467,7 @@ export default function AssetHire() {
                                     <select id="field-463"
                                         value={bookingForm.client_id}
                                         onChange={(e) => setBookingForm({ ...bookingForm, client_id: Number.parseInt(e.target.value, 10) })}
-                                        className="w-full border rounded-lg p-2"
+                                        className="w-full border border-border rounded-lg p-2 bg-input text-foreground"
                                         required
                                         aria-label="Select client"
                                     >
@@ -482,7 +485,7 @@ export default function AssetHire() {
                                         type="date"
                                         value={bookingForm.hire_date}
                                         onChange={(e) => setBookingForm({ ...bookingForm, hire_date: e.target.value })}
-                                        className="w-full border rounded-lg p-2"
+                                        className="w-full border border-border rounded-lg p-2 bg-input text-foreground"
                                         aria-label="Hire date"
                                         required
                                     />
@@ -493,7 +496,7 @@ export default function AssetHire() {
                                         type="date"
                                         value={bookingForm.return_date}
                                         onChange={(e) => setBookingForm({ ...bookingForm, return_date: e.target.value })}
-                                        className="w-full border rounded-lg p-2"
+                                        className="w-full border border-border rounded-lg p-2 bg-input text-foreground"
                                         aria-label="Return date"
                                     />
                                 </div>
@@ -504,7 +507,7 @@ export default function AssetHire() {
                                     type="text"
                                     value={bookingForm.destination}
                                     onChange={(e) => setBookingForm({ ...bookingForm, destination: e.target.value })}
-                                    className="w-full border rounded-lg p-2"
+                                    className="w-full border border-border rounded-lg p-2 bg-input text-foreground"
                                     placeholder="e.g., Nairobi"
                                 />
                             </div>
@@ -515,7 +518,7 @@ export default function AssetHire() {
                                         type="number"
                                         value={bookingForm.distance_km}
                                         onChange={(e) => setBookingForm({ ...bookingForm, distance_km: e.target.value })}
-                                        className="w-full border rounded-lg p-2"
+                                        className="w-full border border-border rounded-lg p-2 bg-input text-foreground"
                                         placeholder="e.g., 200"
                                         aria-label="Distance in kilometers"
                                     />
@@ -526,7 +529,7 @@ export default function AssetHire() {
                                         type="number"
                                         value={bookingForm.total_amount}
                                         onChange={(e) => setBookingForm({ ...bookingForm, total_amount: e.target.value })}
-                                        className="w-full border rounded-lg p-2"
+                                        className="w-full border border-border rounded-lg p-2 bg-input text-foreground"
                                         required
                                         aria-label="Total amount in KES"
                                     />
@@ -537,7 +540,7 @@ export default function AssetHire() {
                                 <textarea id="field-536"
                                     value={bookingForm.purpose}
                                     onChange={(e) => setBookingForm({ ...bookingForm, purpose: e.target.value })}
-                                    className="w-full border rounded-lg p-2"
+                                    className="w-full border border-border rounded-lg p-2 bg-input text-foreground"
                                     rows={2}
                                     placeholder="e.g., Church trip"
                                     aria-label="Booking purpose"
@@ -547,13 +550,13 @@ export default function AssetHire() {
                                 <button
                                     type="button"
                                     onClick={() => setShowBookingModal(false)}
-                                    className="px-4 py-2 bg-gray-200 rounded-lg"
+                                    className="px-4 py-2 bg-secondary rounded-lg"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg"
+                                    className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
                                 >
                                     Create Booking
                                 </button>
@@ -566,7 +569,7 @@ export default function AssetHire() {
             {/* New Client Modal */}
             {showClientModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 w-full max-w-md">
+                    <div className="bg-card rounded-lg p-6 w-full max-w-md">
                         <h2 className="text-xl font-bold mb-4">New Client</h2>
                         <form onSubmit={handleCreateClient} className="space-y-4">
                             <div>
@@ -575,7 +578,7 @@ export default function AssetHire() {
                                     type="text"
                                     value={clientForm.client_name}
                                     onChange={(e) => setClientForm({ ...clientForm, client_name: e.target.value })}
-                                    className="w-full border rounded-lg p-2"
+                                    className="w-full border border-border rounded-lg p-2 bg-input text-foreground"
                                     required
                                     aria-label="Client name"
                                 />
@@ -586,7 +589,7 @@ export default function AssetHire() {
                                     type="text"
                                     value={clientForm.organization}
                                     onChange={(e) => setClientForm({ ...clientForm, organization: e.target.value })}
-                                    className="w-full border rounded-lg p-2"
+                                    className="w-full border border-border rounded-lg p-2 bg-input text-foreground"
                                     aria-label="Organization name"
                                 />
                             </div>
@@ -597,7 +600,7 @@ export default function AssetHire() {
                                         type="tel"
                                         value={clientForm.contact_phone}
                                         onChange={(e) => setClientForm({ ...clientForm, contact_phone: e.target.value })}
-                                        className="w-full border rounded-lg p-2"
+                                        className="w-full border border-border rounded-lg p-2 bg-input text-foreground"
                                         aria-label="Contact phone"
                                     />
                                 </div>
@@ -607,7 +610,7 @@ export default function AssetHire() {
                                         type="email"
                                         value={clientForm.contact_email}
                                         onChange={(e) => setClientForm({ ...clientForm, contact_email: e.target.value })}
-                                        className="w-full border rounded-lg p-2"
+                                        className="w-full border border-border rounded-lg p-2 bg-input text-foreground"
                                         aria-label="Contact email"
                                     />
                                 </div>
@@ -616,13 +619,13 @@ export default function AssetHire() {
                                 <button
                                     type="button"
                                     onClick={() => setShowClientModal(false)}
-                                    className="px-4 py-2 bg-gray-200 rounded-lg"
+                                    className="px-4 py-2 bg-secondary rounded-lg"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg"
+                                    className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
                                 >
                                     Save Client
                                 </button>
@@ -635,9 +638,9 @@ export default function AssetHire() {
             {/* Payment Modal */}
             {showPaymentModal && selectedBooking && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 w-full max-w-md">
+                    <div className="bg-card rounded-lg p-6 w-full max-w-md">
                         <h2 className="text-xl font-bold mb-4">Record Payment</h2>
-                        <p className="text-sm text-gray-600 mb-4">
+                        <p className="text-sm text-muted-foreground mb-4">
                             Booking: {selectedBooking.booking_number} | Balance: {formatCurrencyFromCents(selectedBooking.balance || 0)}
                         </p>
                         <form onSubmit={handleRecordPayment} className="space-y-4">
@@ -647,7 +650,7 @@ export default function AssetHire() {
                                     type="number"
                                     value={paymentForm.amount}
                                     onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-                                    className="w-full border rounded-lg p-2"
+                                    className="w-full border border-border rounded-lg p-2 bg-input text-foreground"
                                     max={selectedBooking.balance}
                                     required
                                     aria-label="Payment amount in KES"
@@ -659,7 +662,7 @@ export default function AssetHire() {
                                     <select id="field-658"
                                         value={paymentForm.payment_method}
                                         onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value })}
-                                        className="w-full border rounded-lg p-2"
+                                        className="w-full border border-border rounded-lg p-2 bg-input text-foreground"
                                         aria-label="Payment method"
                                     >
                                         <option value="CASH">Cash</option>
@@ -674,7 +677,7 @@ export default function AssetHire() {
                                         type="date"
                                         value={paymentForm.payment_date}
                                         onChange={(e) => setPaymentForm({ ...paymentForm, payment_date: e.target.value })}
-                                        className="w-full border rounded-lg p-2"
+                                        className="w-full border border-border rounded-lg p-2 bg-input text-foreground"
                                         aria-label="Payment date"
                                     />
                                 </div>
@@ -685,7 +688,7 @@ export default function AssetHire() {
                                     type="text"
                                     value={paymentForm.payment_reference}
                                     onChange={(e) => setPaymentForm({ ...paymentForm, payment_reference: e.target.value })}
-                                    className="w-full border rounded-lg p-2"
+                                    className="w-full border border-border rounded-lg p-2 bg-input text-foreground"
                                     placeholder="e.g., M-Pesa code"
                                 />
                             </div>
@@ -693,13 +696,13 @@ export default function AssetHire() {
                                 <button
                                     type="button"
                                     onClick={() => { setShowPaymentModal(false); setSelectedBooking(null); }}
-                                    className="px-4 py-2 bg-gray-200 rounded-lg"
+                                    className="px-4 py-2 bg-secondary rounded-lg"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-4 py-2 bg-green-600 text-white rounded-lg"
+                                    className="px-4 py-2 bg-success text-white rounded-lg"
                                 >
                                     Record Payment
                                 </button>

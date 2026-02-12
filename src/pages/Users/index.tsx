@@ -1,7 +1,7 @@
 import { Plus, Users, Search, Edit, Lock, Trash, Check, Loader2, UserCircle2, ShieldCheck, Fingerprint, Save } from 'lucide-react'
 import React, { useEffect, useState, useCallback } from 'react'
 
-
+import { PageHeader } from '../../components/patterns/PageHeader'
 import { Modal } from '../../components/ui/Modal'
 import { useToast } from '../../contexts/ToastContext'
 
@@ -152,19 +152,19 @@ export default function UsersPage() {
 
     return (
         <div className="space-y-8 pb-10">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                    <h1 className="text-3xl font-bold text-foreground font-heading uppercase tracking-tight">User Management</h1>
-                    <p className="text-foreground/50 mt-1 font-medium italic">Oversee system access, roles, and security credentials</p>
-                </div>
-                <button
-                    onClick={openAddModal}
-                    className="btn btn-primary flex items-center gap-2 py-3 px-8 text-sm font-bold shadow-xl shadow-primary/20 transition-all hover:-translate-y-1"
-                >
-                    <Plus className="w-5 h-5" />
-                    <span>Establish New User</span>
-                </button>
-            </div>
+            <PageHeader
+                title="User Management"
+                subtitle="Oversee system access, roles, and security credentials"
+                actions={
+                    <button
+                        onClick={openAddModal}
+                        className="btn btn-primary flex items-center gap-2 py-3 px-8 text-sm font-bold shadow-xl shadow-primary/20 transition-all hover:-translate-y-1"
+                    >
+                        <Plus className="w-5 h-5" />
+                        <span>Establish New User</span>
+                    </button>
+                }
+            />
 
             <div className="premium-card animate-slide-up">
                 <div className="relative group">
@@ -174,7 +174,7 @@ export default function UsersPage() {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Filter users by name or identity..."
-                        className="input w-full pl-12 bg-secondary/30 h-14 text-lg font-medium"
+                        className="input w-full pl-12 h-14 text-lg font-medium"
                     />
                 </div>
             </div>
@@ -288,20 +288,20 @@ export default function UsersPage() {
                         <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="user-fullname">Official Full Name</label>
                         <input id="user-fullname" type="text" required value={userData.full_name}
                             onChange={(e) => setUserData({ ...userData, full_name: e.target.value })}
-                            className="input w-full bg-secondary/30" placeholder="e.g. John Doe" />
+                            className="input w-full" placeholder="e.g. John Doe" />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="user-username">System Handle</label>
                             <input id="user-username" type="text" required value={userData.username}
                                 onChange={(e) => setUserData({ ...userData, username: e.target.value })}
-                                className="input w-full bg-secondary/30" disabled={isEditing} placeholder="jdoe" />
+                                className="input w-full" disabled={isEditing} placeholder="jdoe" />
                         </div>
                         <div className="space-y-2">
                             <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="user-role">Permission Tier</label>
                             <select id="user-role" required value={userData.role}
                                 onChange={(e) => setUserData({ ...userData, role: e.target.value as 'ADMIN' | 'ACCOUNTS_CLERK' | 'AUDITOR' })}
-                                className="input w-full bg-secondary/30">
+                                className="input w-full">
                                 <option value="ACCOUNTS_CLERK">Accounts Clerk</option>
                                 <option value="ADMIN">Administrator</option>
                                 <option value="AUDITOR">System Auditor</option>
@@ -312,14 +312,14 @@ export default function UsersPage() {
                         <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="user-email">Communications Email</label>
                         <input id="user-email" type="email" value={userData.email}
                             onChange={(e) => setUserData({ ...userData, email: e.target.value })}
-                            className="input w-full bg-secondary/30" placeholder="j.doe@school.ac.ke" />
+                            className="input w-full" placeholder="j.doe@school.ac.ke" />
                     </div>
                     {!isEditing && (
                         <div className="space-y-2">
                             <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="user-password">Initial Passkey</label>
                             <input id="user-password" type="password" required value={userData.password}
                                 onChange={(e) => setUserData({ ...userData, password: e.target.value })}
-                                className="input w-full bg-secondary/30" />
+                                className="input w-full" />
                         </div>
                     )}
                     <div className="flex justify-end gap-3 pt-4 border-t border-border/10">
@@ -349,13 +349,13 @@ export default function UsersPage() {
                         <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="new-password">New Secure Passphrase</label>
                         <input id="new-password" type="password" required value={passwordData.newPassword}
                             onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                            className="input w-full bg-secondary/30" />
+                            className="input w-full" />
                     </div>
                     <div className="space-y-2">
                         <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="confirm-password">Re-authenticate Passphrase</label>
                         <input id="confirm-password" type="password" required value={passwordData.confirmPassword}
                             onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                            className="input w-full bg-secondary/30" />
+                            className="input w-full" />
                     </div>
                     <div className="flex justify-end gap-3 pt-4 border-t border-border/10">
                         <button type="button" onClick={() => setShowPasswordModal(false)} className="btn btn-secondary px-6">Cancel</button>

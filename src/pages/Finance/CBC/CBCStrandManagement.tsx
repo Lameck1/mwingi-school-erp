@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 
 import { formatCurrencyFromCents } from '../../../utils/format';
 
+import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
+
 interface CBCStrand {
   id: number;
   code: string;
@@ -22,16 +24,15 @@ interface StrandProfitability {
 
 const getStrandColor = (profit_margin: number): string => {
   if (profit_margin >= 20) {
-    return 'bg-green-100 text-green-800';
+    return 'bg-green-500/15 text-green-600 dark:text-green-400';
   }
   if (profit_margin >= 0) {
-    return 'bg-yellow-100 text-yellow-800';
+    return 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400';
   }
-  return 'bg-red-100 text-red-800';
+  return 'bg-red-500/15 text-red-600 dark:text-red-400';
 };
 
 const CBCStrandManagement: React.FC = () => {
-  const [, setStrands] = useState<CBCStrand[]>([]);
   const [profitability, setProfitability] = useState<StrandProfitability[]>([]);
   const [loading, setLoading] = useState(true);
   const [fiscalYear, setFiscalYear] = useState(new Date().getFullYear());
@@ -47,7 +48,6 @@ const CBCStrandManagement: React.FC = () => {
       // Fetch strands from IPC (CBC handlers)
       const strandsResult = await globalThis.electronAPI.getCBCStrands();
       const strandsData: CBCStrand[] = strandsResult?.data || [];
-      setStrands(strandsData);
 
       // Profitability data derived from strand + financial data
       // For now, map strands to profitability structure if profitability endpoint exists
@@ -75,19 +75,20 @@ const CBCStrandManagement: React.FC = () => {
   return (
     <div className="container mx-auto p-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">CBC Activity Management</h1>
-        <p className="text-gray-600 mt-2">Track revenue, expenses, and profitability by CBC strand</p>
+            <HubBreadcrumb crumbs={[{ label: 'Academics', href: '/academics' }, { label: 'CBC Strands' }]} />
+        <h1 className="text-xl md:text-3xl font-bold text-foreground">CBC Activity Management</h1>
+        <p className="text-muted-foreground mt-2">Track revenue, expenses, and profitability by CBC strand</p>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4 mb-6">
+      <div className="bg-card rounded-lg shadow p-4 mb-6">
         <div className="flex gap-4 items-center">
           <div>
-            <label htmlFor="field-82" className="block text-sm font-medium text-gray-700 mb-1">Fiscal Year</label>
+            <label htmlFor="field-82" className="block text-sm font-medium text-foreground/70 mb-1">Fiscal Year</label>
             <select id="field-82"
               value={fiscalYear}
               onChange={(e) => setFiscalYear(Number.parseInt(e.target.value, 10))}
-              className="border rounded px-3 py-2"
+              className="border border-border rounded px-3 py-2 bg-input text-foreground"
               aria-label="Fiscal year"
             >
               <option value={2024}>2024</option>
@@ -96,11 +97,11 @@ const CBCStrandManagement: React.FC = () => {
             </select>
           </div>
           <div>
-            <label htmlFor="field-95" className="block text-sm font-medium text-gray-700 mb-1">Term</label>
+            <label htmlFor="field-95" className="block text-sm font-medium text-foreground/70 mb-1">Term</label>
             <select id="field-95"
               value={term}
               onChange={(e) => setTerm(Number.parseInt(e.target.value, 10))}
-              className="border rounded px-3 py-2"
+              className="border border-border rounded px-3 py-2 bg-input text-foreground"
               aria-label="Term"
             >
               <option value={1}>Term 1</option>
@@ -112,33 +113,33 @@ const CBCStrandManagement: React.FC = () => {
       </div>
 
       {/* Profitability Overview */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="px-6 py-4 bg-gray-50 border-b">
-          <h2 className="text-xl font-semibold text-gray-800">Strand Performance Summary</h2>
+      <div className="bg-card rounded-lg shadow overflow-hidden">
+        <div className="px-6 py-4 bg-secondary border-b">
+          <h2 className="text-xl font-semibold text-foreground">Strand Performance Summary</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-100">
+            <thead className="bg-secondary">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Strand</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">Revenue</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">Expenses</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">Profit/Loss</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">Margin</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-700 uppercase tracking-wider">Students</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase tracking-wider">Strand</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-foreground/70 uppercase tracking-wider">Revenue</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-foreground/70 uppercase tracking-wider">Expenses</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-foreground/70 uppercase tracking-wider">Profit/Loss</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-foreground/70 uppercase tracking-wider">Margin</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-foreground/70 uppercase tracking-wider">Students</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-card divide-y divide-border">
               {profitability.map((strand) => (
-                <tr key={strand.strand_id} className="hover:bg-gray-50">
+                <tr key={strand.strand_id} className="hover:bg-secondary">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{strand.strand_name}</div>
+                    <div className="text-sm font-medium text-foreground">{strand.strand_name}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="text-sm text-gray-900">{formatCurrencyFromCents(strand.revenue)}</div>
+                    <div className="text-sm text-foreground">{formatCurrencyFromCents(strand.revenue)}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="text-sm text-gray-900">{formatCurrencyFromCents(strand.expenses)}</div>
+                    <div className="text-sm text-foreground">{formatCurrencyFromCents(strand.expenses)}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <div className={`text-sm font-medium ${strand.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -150,7 +151,7 @@ const CBCStrandManagement: React.FC = () => {
                       {strand.profit_margin.toFixed(1)}%
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-foreground">
                     {strand.student_count}
                   </td>
                 </tr>

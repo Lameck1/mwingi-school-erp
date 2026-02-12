@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
+import { useToast } from '../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../stores'
 
 // Roles that can approve awards
@@ -38,6 +39,7 @@ interface AwardCategory {
 const AwardsManagement = () => {
   const { currentAcademicYear, currentTerm } = useAppStore()
   const { user } = useAuthStore()
+  const { showToast } = useToast()
 
   const [awards, setAwards] = useState<StudentAward[]>([])
   const [categories, setCategories] = useState<AwardCategory[]>([])
@@ -101,7 +103,7 @@ const AwardsManagement = () => {
 
   const handleAwardStudent = async () => {
     if (selectedStudent === 0 || selectedCategory === 0) {
-      alert('Please select a student and award category')
+      showToast('Please select a student and award category', 'warning')
       return
     }
 
@@ -121,10 +123,10 @@ const AwardsManagement = () => {
       setSelectedStudent(0)
       setSelectedCategory(0)
       setShowForm(false)
-      alert('Award assigned successfully!')
+      showToast('Award assigned successfully!', 'success')
     } catch (error) {
       console.error('Failed to assign award:', error)
-      alert('Failed to assign award')
+      showToast('Failed to assign award', 'error')
     } finally {
       setLoading(false)
     }
@@ -138,10 +140,10 @@ const AwardsManagement = () => {
         userId: user?.id
       })
       await loadAwards()
-      alert('Award approved successfully!')
+      showToast('Award approved successfully!', 'success')
     } catch (error) {
       console.error('Failed to approve award:', error)
-      alert('Failed to approve award')
+      showToast('Failed to approve award', 'error')
     } finally {
       setLoading(false)
     }
@@ -155,7 +157,7 @@ const AwardsManagement = () => {
 
   const handleRejectAward = async () => {
     if (!rejectionReason.trim()) {
-      alert('Please enter a reason for rejection')
+      showToast('Please enter a reason for rejection', 'warning')
       return
     }
 
@@ -170,26 +172,24 @@ const AwardsManagement = () => {
       setShowRejectModal(false)
       setRejectingAwardId(null)
       setRejectionReason('')
-      alert('Award rejected')
+      showToast('Award rejected', 'success')
     } catch (error) {
       console.error('Failed to reject award:', error)
-      alert('Failed to reject award')
+      showToast('Failed to reject award', 'error')
     } finally {
       setLoading(false)
     }
   }
 
   const handleDeleteAward = async (awardId: number) => {
-    if (!confirm('Are you sure you want to delete this award?')) {return}
-
     setLoading(true)
     try {
       await globalThis.electronAPI.deleteAward({ awardId })
       setAwards(awards.filter(a => a.id !== awardId))
-      alert('Award deleted successfully!')
+      showToast('Award deleted successfully!', 'success')
     } catch (error) {
       console.error('Failed to delete award:', error)
-      alert('Failed to delete award')
+      showToast(error instanceof Error ? error.message : 'Failed to delete award', 'error')
     } finally {
       setLoading(false)
     }
@@ -234,7 +234,7 @@ const AwardsManagement = () => {
       <PageHeader
         title="Awards Management"
         subtitle="Manage student awards and recognitions"
-        breadcrumbs={[{ label: 'Academics' }, { label: 'Awards' }]}
+        breadcrumbs={[{ label: 'Academics', href: '/academics' }, { label: 'Awards' }]}
       />
 
       {/* Award Categories */}
@@ -244,7 +244,7 @@ const AwardsManagement = () => {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {categories.slice(0, 8).map(cat => (
-            <div key={cat.id} className="p-4 rounded-lg bg-white/5 border border-white/10">
+            <div key={cat.id} className="p-4 rounded-lg bg-secondary/50 border border-border">
               <p className="font-semibold text-sm">{cat.name}</p>
               <p className="text-xs text-foreground/60 mt-1">{cat.category_type.replaceAll('_', ' ')}</p>
             </div>
@@ -266,7 +266,7 @@ const AwardsManagement = () => {
         </div>
 
         {showForm && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4 rounded-lg bg-white/5 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4 rounded-lg bg-secondary/50 mb-6">
             <Select
               label="Student"
               value={selectedStudent}
@@ -340,7 +340,7 @@ const AwardsManagement = () => {
                 key={award.id}
                 className={`flex items-center justify-between p-4 rounded-lg border transition ${award.approval_status === 'rejected'
                   ? 'bg-red-500/5 border-red-500/20'
-                  : 'bg-white/5 border-white/10 hover:bg-white/10'
+                  : 'bg-secondary/50 border-border hover:bg-secondary'
                   }`}
               >
                 <div className="flex-1">
@@ -348,7 +348,7 @@ const AwardsManagement = () => {
                     <h4 className="font-semibold">
                       {award.student_name || `${award.first_name} ${award.last_name}`}
                     </h4>
-                    <span className="text-xs px-2 py-1 rounded bg-white/10 text-foreground/60">
+                    <span className="text-xs px-2 py-1 rounded bg-secondary text-foreground/60">
                       {award.admission_number}
                     </span>
                   </div>
@@ -413,10 +413,10 @@ const AwardsManagement = () => {
       {/* Rejection Modal */}
       {showRejectModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background border border-white/10 rounded-lg p-6 w-full max-w-md">
+          <div className="bg-background border border-border rounded-lg p-6 w-full max-w-md">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Reject Award</h3>
-              <button onClick={() => setShowRejectModal(false)} className="text-foreground/50 hover:text-foreground">
+              <button onClick={() => setShowRejectModal(false)} className="text-foreground/50 hover:text-foreground" aria-label="Close">
                 <X size={20} />
               </button>
             </div>
@@ -427,7 +427,7 @@ const AwardsManagement = () => {
               value={rejectionReason}
               onChange={(e) => setRejectionReason(e.target.value)}
               placeholder="Enter rejection reason..."
-              className="w-full h-24 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm resize-none focus:outline-none focus:border-primary"
+              className="w-full h-24 px-3 py-2 bg-secondary/50 border border-border rounded-lg text-sm resize-none focus:outline-none focus:border-primary"
             />
             <div className="flex justify-end gap-3 mt-4">
               <button
