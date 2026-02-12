@@ -141,6 +141,7 @@ export interface AcademicAPI {
   deleteAcademicExam: (id: number, userId: number) => Promise<void>
   allocateTeacher: (data: unknown, userId: number) => Promise<void>
   getTeacherAllocations: (academicYearId: number, termId: number, streamId?: number) => Promise<TeacherAllocation[]>
+  deleteTeacherAllocation: (allocationId: number, userId: number) => Promise<void>
   saveAcademicResults: (examId: number, results: AcademicResult[], userId: number) => Promise<void>
   getAcademicResults: (examId: number, subjectId: number, streamId: number, userId: number) => Promise<AcademicResult[]>
 

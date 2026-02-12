@@ -92,11 +92,19 @@ export interface TransactionCategory {
 
 export interface Transaction {
   id: number
+  transaction_ref?: string
   category_id: number
+  category_name?: string
+  recorded_by?: string
   amount: number
   description: string
   transaction_date: string
+  transaction_type?: string
+  payment_method?: string
+  payment_reference?: string
+  debit_credit?: string
   reference: string
+  is_voided?: boolean
   created_at: string
   updated_at: string
 }
@@ -140,6 +148,7 @@ export interface FinanceAPI {
   recordPayment: (_data: PaymentRecordData, _userId: number) => Promise<{ success: boolean; transactionRef?: string; receipt_number?: string; errors?: string[]; message?: string }>
   getPaymentsByStudent: (_studentId: number) => Promise<Payment[]>
   payWithCredit: (_data: { studentId: number; invoiceId: number; amount: number }, _userId: number) => Promise<{ success: boolean; message?: string }>
+  voidPayment: (_transactionId: number, _voidReason: string, _userId: number, _recoveryMethod?: string) => Promise<{ success: boolean; message: string; transaction_id?: number }>
 
   // Transactions (General)
   getTransactionCategories: () => Promise<TransactionCategory[]>
