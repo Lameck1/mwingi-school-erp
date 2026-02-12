@@ -14,9 +14,6 @@ This project uses multiple static analysis tools to enforce production-grade qua
 - Purpose: architectural constraints and circular dependency detection.
 - Enforces boundaries between `src/` (renderer), `electron/main/`, and `electron/preload/`.
 
-- `webhint` (`.hintrc`)
-- Purpose: web platform quality checks (security headers, compatibility, vulnerable client libraries).
-
 - `markdownlint`
 - Purpose: documentation quality for `*.md` files.
 
@@ -31,9 +28,6 @@ This project uses multiple static analysis tools to enforce production-grade qua
 - `npm run lint:architecture`
 - Runs dependency rules and cycle detection.
 
-- `npm run lint:webhint`
-- Builds the app and runs `webhint` against `dist/index.html`.
-
 - `npm run lint:md`
 - Lints markdown files.
 
@@ -41,7 +35,7 @@ This project uses multiple static analysis tools to enforce production-grade qua
 - Strict gate: `eslint:strict + architecture + markdown`.
 
 - `npm run lint:quality:full`
-- Full gate: `lint:quality + webhint + npm audit`.
+- Full gate: `lint:quality + npm audit`.
 
 ## Professional Workflow
 
