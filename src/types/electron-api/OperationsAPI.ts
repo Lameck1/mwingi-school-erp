@@ -31,6 +31,7 @@ export interface Grant {
   nemis_reference_number?: string;
   amount_allocated: number;
   amount_received: number;
+  expiry_date?: string | null;
   utilization_percentage?: number;
   status?: 'ACTIVE' | 'EXPIRED' | 'FULLY_UTILIZED';
   created_at?: string;
@@ -43,7 +44,7 @@ export interface ExpenseRecord {
   expense_type: string;
   amount_cents: number;
   description: string;
-  gl_account_code?: string;
+  gl_account_code: string;
   fiscal_year: number;
   term: number;
   recorded_by: number;
@@ -108,7 +109,7 @@ export interface OperationsAPI {
   getTransportExpenseSummary: (routeId: number, fiscalYear: number, term?: number) => Promise<ExpenseSummary[]>
 
   // Operations - Grants
-  createGrant: (data: Omit<Grant, 'id'>, userId: number) => Promise<{ success: boolean, id?: number, message?: string }>
+  createGrant: (data: Omit<Grant, 'id'> & { fiscal_year: number; grant_type: string }, userId: number) => Promise<{ success: boolean, id?: number, error?: string }>
   recordGrantUtilization: (payload: {
     grantId: number
     amount: number
@@ -116,7 +117,7 @@ export interface OperationsAPI {
     glAccountCode: string | null
     utilizationDate: string
     userId: number
-  }) => Promise<{ success: boolean, message?: string }>
+  }) => Promise<{ success: boolean, error?: string }>
   getGrantSummary: (grantId: number) => Promise<{ success: boolean, data?: GrantSummary }>
   getGrantsByStatus: (status: 'ACTIVE' | 'EXPIRED' | 'FULLY_UTILIZED') => Promise<Grant[]>
   getExpiringGrants: (daysThreshold: number) => Promise<Grant[]>
@@ -125,7 +126,7 @@ export interface OperationsAPI {
   // Operations - Student Cost
   calculateStudentCost: (studentId: number, termId: number, academicYearId: number) => Promise<StudentCostResult>
   getStudentCostBreakdown: (studentId: number, termId: number) => Promise<StudentCostBreakdownItem[]>
-  getStudentCostVsRevenue: (studentId: number, termId: number) => Promise<{ cost: number, revenue: number, subsidy: number }>
+  getStudentCostVsRevenue: (studentId: number, termId: number) => Promise<{ cost: number, revenue: number, subsidy: number, surplus_or_deficit: number }>
   getAverageStudentCost: (grade: number, termId: number) => Promise<number>
   getStudentCostTrend: (studentId: number, periods: number) => Promise<StudentCostTrendItem[]>
 }

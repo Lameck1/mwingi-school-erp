@@ -1,62 +1,92 @@
-import { getDatabase } from '../../database'
-import { ipcMain } from '../../electron-env'
-import { BoardingCostService } from '../../services/operations/BoardingCostService'
-import { TransportCostService } from '../../services/operations/TransportCostService'
+import { container } from '../../services/base/ServiceContainer'
+import { safeHandleRaw } from '../ipc-result'
 
-import type { IpcMainInvokeEvent } from 'electron'
+import type { BoardingCostService } from '../../services/operations/BoardingCostService'
+import type { TransportCostService } from '../../services/operations/TransportCostService'
 
 type BoardingExpenseInput = Parameters<BoardingCostService['recordBoardingExpense']>[0]
 type TransportRouteInput = Parameters<TransportCostService['createRoute']>[0]
 type TransportExpenseInput = Parameters<TransportCostService['recordTransportExpense']>[0]
 
+function assertPositiveInteger(value: number, label: string): void {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${label} must be a positive integer`)
+  }
+}
+
+function assertExpensePayload(params: {
+  amount_cents: number
+  fiscal_year: number
+  gl_account_code: string
+  recorded_by: number
+  term: number
+}, context: 'Boarding' | 'Transport'): void {
+  assertPositiveInteger(params.recorded_by, `${context} expense user`)
+  if (!Number.isInteger(params.amount_cents) || params.amount_cents <= 0) {
+    throw new Error(`${context} expense amount must be greater than zero`)
+  }
+  if (!Number.isInteger(params.fiscal_year) || params.fiscal_year < 2000 || params.fiscal_year > 2100) {
+    throw new Error(`${context} expense fiscal year is invalid`)
+  }
+  if (![1, 2, 3].includes(params.term)) {
+    throw new Error(`${context} expense term must be 1, 2, or 3`)
+  }
+  if (!params.gl_account_code || !params.gl_account_code.trim()) {
+    throw new Error(`${context} expense GL account code is required`)
+  }
+}
+
 export const registerOperationsHandlers = () => {
-  const db = getDatabase()
-  const boardingService = new BoardingCostService(db)
-  const transportService = new TransportCostService(db)
+  const boardingService = container.resolve('BoardingCostService')
+  const transportService = container.resolve('TransportCostService')
 
   // Boarding Handlers
-  ipcMain.handle('operations:boarding:getAllFacilities', (_event: IpcMainInvokeEvent) => {
+  safeHandleRaw('operations:boarding:getAllFacilities', () => {
     return boardingService.getAllFacilities()
   })
 
-  ipcMain.handle('operations:boarding:getActiveFacilities', (_event: IpcMainInvokeEvent) => {
+  safeHandleRaw('operations:boarding:getActiveFacilities', () => {
     return boardingService.getActiveFacilities()
   })
 
-  ipcMain.handle('operations:boarding:recordExpense', (_event: IpcMainInvokeEvent, params: BoardingExpenseInput) => {
+  safeHandleRaw('operations:boarding:recordExpense', (_event, params: BoardingExpenseInput) => {
+    assertPositiveInteger(params.facility_id, 'Boarding facility')
+    assertExpensePayload(params, 'Boarding')
     return boardingService.recordBoardingExpense(params)
   })
 
-  ipcMain.handle('operations:boarding:getExpenses', (_event: IpcMainInvokeEvent, facilityId: number, fiscalYear: number, term?: number) => {
+  safeHandleRaw('operations:boarding:getExpenses', (_event, facilityId: number, fiscalYear: number, term?: number) => {
     return boardingService.getFacilityExpenses(facilityId, fiscalYear, term)
   })
 
-  ipcMain.handle('operations:boarding:getExpenseSummary', (_event: IpcMainInvokeEvent, facilityId: number, fiscalYear: number, term?: number) => {
+  safeHandleRaw('operations:boarding:getExpenseSummary', (_event, facilityId: number, fiscalYear: number, term?: number) => {
     return boardingService.getExpenseSummaryByType(facilityId, fiscalYear, term)
   })
 
   // Transport Handlers
-  ipcMain.handle('operations:transport:getAllRoutes', (_event: IpcMainInvokeEvent) => {
+  safeHandleRaw('operations:transport:getAllRoutes', () => {
     return transportService.getAllRoutes()
   })
 
-  ipcMain.handle('operations:transport:getActiveRoutes', (_event: IpcMainInvokeEvent) => {
+  safeHandleRaw('operations:transport:getActiveRoutes', () => {
     return transportService.getActiveRoutes()
   })
 
-  ipcMain.handle('operations:transport:createRoute', (_event: IpcMainInvokeEvent, params: TransportRouteInput) => {
+  safeHandleRaw('operations:transport:createRoute', (_event, params: TransportRouteInput) => {
     return transportService.createRoute(params)
   })
 
-  ipcMain.handle('operations:transport:recordExpense', (_event: IpcMainInvokeEvent, params: TransportExpenseInput) => {
+  safeHandleRaw('operations:transport:recordExpense', (_event, params: TransportExpenseInput) => {
+    assertPositiveInteger(params.route_id, 'Transport route')
+    assertExpensePayload(params, 'Transport')
     return transportService.recordTransportExpense(params)
   })
 
-  ipcMain.handle('operations:transport:getExpenses', (_event: IpcMainInvokeEvent, routeId: number, fiscalYear: number, term?: number) => {
+  safeHandleRaw('operations:transport:getExpenses', (_event, routeId: number, fiscalYear: number, term?: number) => {
     return transportService.getRouteExpenses(routeId, fiscalYear, term)
   })
 
-  ipcMain.handle('operations:transport:getExpenseSummary', (_event: IpcMainInvokeEvent, routeId: number, fiscalYear: number, term?: number) => {
+  safeHandleRaw('operations:transport:getExpenseSummary', (_event, routeId: number, fiscalYear: number, term?: number) => {
     return transportService.getExpenseSummaryByType(routeId, fiscalYear, term)
   })
 }

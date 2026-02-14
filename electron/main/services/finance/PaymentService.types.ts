@@ -22,6 +22,7 @@ export interface PaymentData {
   transaction_date: string
   payment_method: string
   payment_reference: string
+  idempotency_key?: string
   description?: string
   recorded_by_user_id: number
   invoice_id?: number
@@ -33,7 +34,8 @@ export interface PaymentData {
 
 export interface PaymentResult {
   success: boolean
-  message: string
+  error?: string
+  message?: string
   transaction_id?: number
   transactionRef?: string
   receiptNumber?: string

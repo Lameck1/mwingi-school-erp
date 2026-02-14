@@ -1,55 +1,96 @@
-# Quality Gates
+# Quality Gates for Business Logic Remediation
 
-This project uses multiple static analysis tools to enforce production-grade quality.
+Generated: 2026-02-14  
+Companion docs: `docs/remediation-plan.md`, `docs/remediation-checklist.md`
 
-## Tooling Stack
+## Gate G0: Baseline Integrity
 
-- `ESLint` (`eslint.config.js`)
-- Purpose: correctness, TypeScript safety, React best practices, security smells, accessibility, complexity limits, and import hygiene.
-- Includes plugins:
-- `@typescript-eslint`, `react`, `react-hooks`, `jsx-a11y`
-- `import`, `promise`, `security`, `sonarjs`, `unicorn`
+Pass criteria:
 
-- `dependency-cruiser` (`.dependency-cruiser.cjs`)
-- Purpose: architectural constraints and circular dependency detection.
-- Enforces boundaries between `src/` (renderer), `electron/main/`, and `electron/preload/`.
+- `remediation-plan.md` and `remediation-checklist.md` exist and reference BL-001..BL-020.
+- Every high/critical bug has an assigned owner and target phase.
+- Migration strategy exists for any schema-affecting fixes.
 
-- `markdownlint`
-- Purpose: documentation quality for `*.md` files.
+Evidence required:
 
-## Commands
+- Updated docs committed.
+- Bug-to-checklist traceability table complete.
 
-- `npm run lint`
-- Runs `ESLint` (warnings + errors).
+## Gate G1: Financial Write Consistency (P0)
 
-- `npm run lint:eslint:strict`
-- Runs `ESLint` and fails on warnings (`--max-warnings 0`).
+Pass criteria:
 
-- `npm run lint:architecture`
-- Runs dependency rules and cycle detection.
+- Credit payment path writes receipt, allocation, journal, and ledger consistently.
+- Payment void updates ledger + journal + invoice state atomically.
+- `source_ledger_txn_id` linkage present for all new payment journal entries.
 
-- `npm run lint:md`
-- Lints markdown files.
+Evidence required:
 
-- `npm run lint:quality`
-- Strict gate: `eslint:strict + architecture + markdown`.
+- Integration test: normal payment flow.
+- Integration test: credit payment flow.
+- Integration test: void flow with reconciliation check.
 
-- `npm run lint:quality:full`
-- Full gate: `lint:quality + npm audit`.
+## Gate G2: Reconciliation and Reporting Parity (P1)
 
-## Professional Workflow
+Pass criteria:
 
-- Local development:
-- `npm run lint` for fast feedback.
-- `npm run lint:architecture` before large refactors.
+- Reconciliation checks exclude voided payments and no longer emit false-positive invoice drift for test fixtures.
+- Dashboard transaction summary and GL reports pass parity tests for same period.
+- Bank reconciliation finalization is reachable from UI and persists expected statement status transitions.
 
-- Pre-merge:
-- `npm run lint:quality`
+Evidence required:
 
-- Release candidate:
-- `npm run lint:quality:full`
+- Reconciliation test outputs.
+- Report parity test outputs.
+- UI-to-DB test for bank `markReconciled`.
 
-## Notes
+## Gate G3: Operational Safety (P1)
 
-- Some rules are configured as warnings to support incremental remediation (for example complexity and file-length rules).
-- Hard boundaries are configured as errors (for example cross-layer imports and circular dependencies).
+Pass criteria:
+
+- Scheduler runs real execution path or unsupported schedule types are disabled by policy.
+- Backup restore path is sanitized and pre-restore safety backup failure blocks overwrite.
+- Backup-to-path uses safe write strategy (temp + atomic move).
+
+Evidence required:
+
+- Scheduler execution logs with generated output metadata.
+- Negative tests for restore path traversal and failed pre-restore backup.
+- Negative test for interrupted backup-to-path write.
+
+## Gate G4: Policy and UX Correctness (P2)
+
+Pass criteria:
+
+- Attendance date validation enforced at IPC and service layers.
+- Attendance UI date defaults use local calendar-safe formatting.
+- Budget enforcement no longer fails open and transaction create path enforces budget checks.
+
+Evidence required:
+
+- Attendance timezone/date-boundary tests.
+- Budget enforcement tests including forced over-budget path auditing.
+
+## Gate G5: Production Readiness Sign-off
+
+Pass criteria:
+
+- All checklist items CHK-001..CHK-406 are complete.
+- All bug IDs BL-001..BL-020 are marked fixed or intentionally deferred with explicit risk acceptance.
+- No open Critical/High findings without mitigation.
+
+Evidence required:
+
+- `docs/remediation-closeout.md` completed.
+- QA sign-off and product sign-off recorded.
+
+## Current Session Status (2026-02-14)
+
+| Gate | Status |
+|---|---|
+| G0 Baseline Integrity | Pass |
+| G1 Financial Write Consistency | Pass |
+| G2 Reconciliation and Reporting Parity | Pass |
+| G3 Operational Safety | Pass |
+| G4 Policy and UX Correctness | Pass |
+| G5 Production Readiness Sign-off | In Progress (external product/QA sign-off pending) |

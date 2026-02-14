@@ -1,7 +1,7 @@
-import { ipcMain } from '../../electron-env'
-import ReportCardAnalyticsService from '../../services/academic/ReportCardAnalyticsService'
+import { container } from '../../services/base/ServiceContainer'
+import { safeHandleRaw } from '../ipc-result'
 
-import type { IpcMainInvokeEvent } from 'electron'
+const getService = () => container.resolve('ReportCardAnalyticsService')
 
 interface ReportCardAnalyticsPayload {
   exam_id: number
@@ -10,9 +10,9 @@ interface ReportCardAnalyticsPayload {
 }
 
 export function registerReportCardAnalyticsHandlers() {
-  ipcMain.handle('report-card-analytics:getPerformanceSummary', async (_event: IpcMainInvokeEvent, payload: ReportCardAnalyticsPayload) => {
+  safeHandleRaw('report-card-analytics:getPerformanceSummary', async (_event, payload: ReportCardAnalyticsPayload) => {
     try {
-      return await ReportCardAnalyticsService.getPerformanceSummary(
+      return await getService().getPerformanceSummary(
         payload.exam_id,
         payload.stream_id
       )
@@ -22,9 +22,9 @@ export function registerReportCardAnalyticsHandlers() {
     }
   })
 
-  ipcMain.handle('report-card-analytics:getGradeDistribution', async (_event: IpcMainInvokeEvent, payload: ReportCardAnalyticsPayload) => {
+  safeHandleRaw('report-card-analytics:getGradeDistribution', async (_event, payload: ReportCardAnalyticsPayload) => {
     try {
-      return await ReportCardAnalyticsService.getGradeDistribution(
+      return await getService().getGradeDistribution(
         payload.exam_id,
         payload.stream_id
       )
@@ -34,9 +34,9 @@ export function registerReportCardAnalyticsHandlers() {
     }
   })
 
-  ipcMain.handle('report-card-analytics:getSubjectPerformance', async (_event: IpcMainInvokeEvent, payload: ReportCardAnalyticsPayload) => {
+  safeHandleRaw('report-card-analytics:getSubjectPerformance', async (_event, payload: ReportCardAnalyticsPayload) => {
     try {
-      return await ReportCardAnalyticsService.getSubjectPerformance(
+      return await getService().getSubjectPerformance(
         payload.exam_id,
         payload.stream_id
       )
@@ -46,9 +46,9 @@ export function registerReportCardAnalyticsHandlers() {
     }
   })
 
-  ipcMain.handle('report-card-analytics:getStrugglingStudents', async (_event: IpcMainInvokeEvent, payload: ReportCardAnalyticsPayload) => {
+  safeHandleRaw('report-card-analytics:getStrugglingStudents', async (_event, payload: ReportCardAnalyticsPayload) => {
     try {
-      return await ReportCardAnalyticsService.getStrugglingStu(
+      return await getService().getStrugglingStu(
         payload.exam_id,
         payload.stream_id,
         payload.threshold || 50
@@ -59,9 +59,9 @@ export function registerReportCardAnalyticsHandlers() {
     }
   })
 
-  ipcMain.handle('report-card-analytics:getTermComparison', async (_event: IpcMainInvokeEvent, payload: ReportCardAnalyticsPayload) => {
+  safeHandleRaw('report-card-analytics:getTermComparison', async (_event, payload: ReportCardAnalyticsPayload) => {
     try {
-      return await ReportCardAnalyticsService.getTermComparison(
+      return await getService().getTermComparison(
         payload.exam_id,
         payload.stream_id
       )

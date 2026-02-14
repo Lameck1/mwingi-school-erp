@@ -3,30 +3,20 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { getDatabase } from '../../database'
-import { ipcMain , app } from '../../electron-env'
-import {
-    AcademicSystemService,
-    type CreateExamDTO,
-    type SubjectAllocation,
-    type ExamResult,
-    type SubjectCreateData,
-    type SubjectUpdateData
+import { app } from '../../electron-env'
+import { container } from '../../services/base/ServiceContainer'
+import { safeHandleRaw } from '../ipc-result'
+
+import type {
+    CreateExamDTO,
+    SubjectAllocation,
+    ExamResult,
+    SubjectCreateData,
+    SubjectUpdateData
 } from '../../services/academic/AcademicSystemService'
-import { NotificationService } from '../../services/notifications/NotificationService'
 
-import type { IpcMainInvokeEvent } from 'electron'
-
-let cachedService: AcademicSystemService | null = null
-const getService = () => {
-    cachedService ??= new AcademicSystemService()
-    return cachedService
-}
-
-let cachedNotificationService: NotificationService | null = null
-const getNotificationService = () => {
-    cachedNotificationService ??= new NotificationService()
-    return cachedNotificationService
-}
+const getService = () => container.resolve('AcademicSystemService')
+const getNotificationService = () => container.resolve('NotificationService')
 
 interface CertificatePayload {
     studentId: number
@@ -43,45 +33,45 @@ interface EmailParentsPayload {
 }
 
 function registerSubjectAndExamHandlers(): void {
-    ipcMain.handle('academic:getSubjects', async () => getService().getAllSubjects())
-    ipcMain.handle('academic:getSubjectsAdmin', async () => getService().getAllSubjectsAdmin())
-    ipcMain.handle('academic:createSubject', async (_event: IpcMainInvokeEvent, data: SubjectCreateData, userId: number) => {
+    safeHandleRaw('academic:getSubjects', () => getService().getAllSubjects())
+    safeHandleRaw('academic:getSubjectsAdmin', () => getService().getAllSubjectsAdmin())
+    safeHandleRaw('academic:createSubject', (_event, data: SubjectCreateData, userId: number) => {
         return getService().createSubject(data, userId)
     })
-    ipcMain.handle('academic:updateSubject', async (_event: IpcMainInvokeEvent, id: number, data: SubjectUpdateData, userId: number) => {
+    safeHandleRaw('academic:updateSubject', (_event, id: number, data: SubjectUpdateData, userId: number) => {
         return getService().updateSubject(id, data, userId)
     })
-    ipcMain.handle('academic:setSubjectActive', async (_event: IpcMainInvokeEvent, id: number, isActive: boolean, userId: number) => {
+    safeHandleRaw('academic:setSubjectActive', (_event, id: number, isActive: boolean, userId: number) => {
         return getService().setSubjectActive(id, isActive, userId)
     })
-    ipcMain.handle('academic:getExams', async (_event: IpcMainInvokeEvent, academicYearId: number, termId: number) => {
+    safeHandleRaw('academic:getExams', (_event, academicYearId: number, termId: number) => {
         return getService().getAllExams(academicYearId, termId)
     })
-    ipcMain.handle('academic:createExam', async (_event: IpcMainInvokeEvent, data: unknown, userId: number) => {
+    safeHandleRaw('academic:createExam', (_event, data: unknown, userId: number) => {
         return getService().createExam(data as CreateExamDTO, userId)
     })
-    ipcMain.handle('academic:deleteExam', async (_event: IpcMainInvokeEvent, id: number, userId: number) => {
+    safeHandleRaw('academic:deleteExam', (_event, id: number, userId: number) => {
         return getService().deleteExam(id, userId)
     })
 }
 
 function registerAllocationAndResultsHandlers(): void {
-    ipcMain.handle('academic:allocateTeacher', async (_event: IpcMainInvokeEvent, data: unknown, userId: number) => {
+    safeHandleRaw('academic:allocateTeacher', (_event, data: unknown, userId: number) => {
         return getService().allocateTeacher(data as Omit<SubjectAllocation, 'id'>, userId)
     })
-    ipcMain.handle('academic:getAllocations', async (_event: IpcMainInvokeEvent, academicYearId: number, termId: number, streamId?: number) => {
+    safeHandleRaw('academic:getAllocations', (_event, academicYearId: number, termId: number, streamId?: number) => {
         return getService().getAllocations(academicYearId, termId, streamId)
     })
-    ipcMain.handle('academic:deleteAllocation', async (_event: IpcMainInvokeEvent, allocationId: number, userId: number) => {
+    safeHandleRaw('academic:deleteAllocation', (_event, allocationId: number, userId: number) => {
         return getService().deleteAllocation(allocationId, userId)
     })
-    ipcMain.handle('academic:saveResults', async (_event: IpcMainInvokeEvent, examId: number, results: unknown[], userId: number) => {
+    safeHandleRaw('academic:saveResults', (_event, examId: number, results: unknown[], userId: number) => {
         return getService().saveResults(examId, results as Omit<ExamResult, 'id' | 'exam_id'>[], userId)
     })
-    ipcMain.handle('academic:getResults', async (_event: IpcMainInvokeEvent, examId: number, subjectId: number, streamId: number, userId: number) => {
+    safeHandleRaw('academic:getResults', (_event, examId: number, subjectId: number, streamId: number, userId: number) => {
         return getService().getResults(examId, subjectId, streamId, userId)
     })
-    ipcMain.handle('academic:processResults', async (_event: IpcMainInvokeEvent, examId: number, userId: number) => {
+    safeHandleRaw('academic:processResults', (_event, examId: number, userId: number) => {
         return getService().processResults(examId, userId)
     })
 }
@@ -184,11 +174,11 @@ async function sendParentNotifications(data: EmailParentsPayload, userId: number
 }
 
 function registerCertificateAndEmailHandlers(): void {
-    ipcMain.handle('academic:generateCertificate', async (_event: IpcMainInvokeEvent, data: CertificatePayload) => {
+    safeHandleRaw('academic:generateCertificate', (_event, data: CertificatePayload) => {
         return generateCertificateFile(data)
     })
 
-    ipcMain.handle('academic:emailParents', async (_event: IpcMainInvokeEvent, data: EmailParentsPayload, userId: number) => {
+    safeHandleRaw('academic:emailParents', (_event, data: EmailParentsPayload, userId: number) => {
         return sendParentNotifications(data, userId)
     })
 }

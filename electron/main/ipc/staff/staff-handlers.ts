@@ -1,8 +1,6 @@
 import { getDatabase } from '../../database'
-import { ipcMain } from '../../electron-env'
 import { sanitizeString, validateAmount, validateId } from '../../utils/validation'
-
-import type { IpcMainInvokeEvent } from 'electron'
+import { safeHandleRaw } from '../ipc-result'
 
 interface StaffMember {
   id: number
@@ -148,20 +146,20 @@ function buildUpdateParams(data: Partial<StaffCreateData>, id: number): Array<nu
 }
 
 function registerStaffQueryHandlers(db: ReturnType<typeof getDatabase>): void {
-  ipcMain.handle('staff:getAll', async (_event: IpcMainInvokeEvent, activeOnly = true) => {
+  safeHandleRaw('staff:getAll', (_event, activeOnly = true) => {
     const query = activeOnly
       ? 'SELECT * FROM staff WHERE is_active = 1 ORDER BY staff_number'
       : 'SELECT * FROM staff ORDER BY staff_number'
     return db.prepare(query).all() as StaffMember[]
   })
 
-  ipcMain.handle('staff:getById', async (_event: IpcMainInvokeEvent, id: number) => {
+  safeHandleRaw('staff:getById', (_event, id: number) => {
     return db.prepare('SELECT * FROM staff WHERE id = ?').get(id) as StaffMember | undefined
   })
 }
 
 function registerStaffMutationHandlers(db: ReturnType<typeof getDatabase>): void {
-  ipcMain.handle('staff:create', async (_event: IpcMainInvokeEvent, data: StaffCreateData) => {
+  safeHandleRaw('staff:create', (_event, data: StaffCreateData) => {
     const validated = validateCreateData(data)
     const stmt = db.prepare(`INSERT INTO staff (
       staff_number, first_name, middle_name, last_name, id_number, kra_pin,
@@ -190,7 +188,7 @@ function registerStaffMutationHandlers(db: ReturnType<typeof getDatabase>): void
     return { success: true, id: result.lastInsertRowid }
   })
 
-  ipcMain.handle('staff:update', async (_event: IpcMainInvokeEvent, id: number, data: Partial<StaffCreateData>) => {
+  safeHandleRaw('staff:update', (_event, id: number, data: Partial<StaffCreateData>) => {
     // Validate staff ID
     const idValidation = validateId(id, 'Staff')
     if (!idValidation.success) {
@@ -221,7 +219,7 @@ function registerStaffMutationHandlers(db: ReturnType<typeof getDatabase>): void
     return { success: true }
   })
 
-  ipcMain.handle('staff:setActive', async (_event: IpcMainInvokeEvent, id: number, isActive: boolean) => {
+  safeHandleRaw('staff:setActive', (_event, id: number, isActive: boolean) => {
     db.prepare('UPDATE staff SET is_active = ? WHERE id = ?').run(isActive ? 1 : 0, id)
     return { success: true }
   })

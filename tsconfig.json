@@ -30,8 +30,7 @@
       "node",
       "react",
       "react-dom",
-      "vitest/globals",
-      "jest"
+      "vitest/globals"
     ]
   },
   "include": [

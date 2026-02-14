@@ -7,8 +7,6 @@ import { PrintPreviewHost } from './components/feedback/PrintPreviewHost'
 import Layout from './components/Layout'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { ToastProvider } from './contexts/ToastContext'
-import { GLAccountManagement } from './pages/Finance/Settings/GLAccountManagement'
-import { OpeningBalanceImport } from './pages/Finance/Settings/OpeningBalanceImport'
 import Login from './pages/Login'
 import SetupAdmin from './pages/SetupAdmin'
 import { useAuthStore } from './stores'
@@ -68,10 +66,12 @@ const Depreciation = lazy(() => import('./pages/Finance/FixedAssets/Depreciation
 const BalanceSheet = lazy(() => import('./pages/Finance/Reports/BalanceSheet'))
 const ProfitAndLoss = lazy(() => import('./pages/Finance/Reports/ProfitAndLoss'))
 const TrialBalance = lazy(() => import('./pages/Finance/Reports/TrialBalance'))
-const CBCStrandManagement = lazy(() => import('./pages/Finance/CBC/CBCStrandManagement'))
-const JSSTransition = lazy(() => import('./pages/Finance/CBC/JSSTransition'))
+const CBCStrandManagement = lazy(() => import('./pages/Academic/CBC/CBCStrandManagement'))
+const JSSTransition = lazy(() => import('./pages/Academic/CBC/JSSTransition'))
 const Integrations = lazy(() => import('./pages/Settings/Integrations'))
 const MessageTemplates = lazy(() => import('./pages/Settings/MessageTemplates'))
+const GLAccountManagement = lazy(() => import('./pages/Finance/Settings/GLAccountManagement').then(m => ({ default: m.GLAccountManagement })))
+const OpeningBalanceImport = lazy(() => import('./pages/Finance/Settings/OpeningBalanceImport').then(m => ({ default: m.OpeningBalanceImport })))
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
     const isAuthenticated = useAuthStore((state) => state.isAuthenticated)

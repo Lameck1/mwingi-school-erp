@@ -1,32 +1,28 @@
-import { ipcMain } from '../../electron-env'
-import { NotificationService, type NotificationRequest, type MessageTemplate } from '../../services/notifications/NotificationService'
+import { container } from '../../services/base/ServiceContainer'
+import { safeHandleRaw } from '../ipc-result'
 
-import type { IpcMainInvokeEvent } from 'electron'
+import type { NotificationRequest, MessageTemplate } from '../../services/notifications/NotificationService'
 
-let cachedService: NotificationService | null = null
-const getService = () => {
-    cachedService ??= new NotificationService()
-    return cachedService
-}
+const getService = () => container.resolve('NotificationService')
 
 export function registerNotificationHandlers(): void {
     // Config
-    ipcMain.handle('notifications:reloadConfig', async () => {
+    safeHandleRaw('notifications:reloadConfig', () => {
         getService().reloadConfig()
         return true
     })
 
     // Sending
-    ipcMain.handle('notifications:send', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('notifications:send', (
+        _event,
         request: NotificationRequest,
         userId: number
     ) => {
         return getService().send(request, userId)
     })
 
-    ipcMain.handle('notifications:sendBulkFeeReminders', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('notifications:sendBulkFeeReminders', (
+        _event,
         templateId: number,
         defaulters: Array<{
             student_id: number;
@@ -43,16 +39,16 @@ export function registerNotificationHandlers(): void {
     })
 
     // Templates
-    ipcMain.handle('notifications:getTemplates', async () => {
+    safeHandleRaw('notifications:getTemplates', () => {
         return getService().getTemplates()
     })
 
-    ipcMain.handle('notifications:getTemplate', async (_event: IpcMainInvokeEvent, id: number) => {
+    safeHandleRaw('notifications:getTemplate', (_event, id: number) => {
         return getService().getTemplate(id)
     })
 
-    ipcMain.handle('notifications:createTemplate', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('notifications:createTemplate', (
+        _event,
         template: Omit<MessageTemplate, 'id' | 'is_active' | 'variables'>,
         userId: number
     ) => {
@@ -66,12 +62,12 @@ export function registerNotificationHandlers(): void {
         })
     })
 
-    ipcMain.handle('notifications:getDefaultTemplates', async () => {
+    safeHandleRaw('notifications:getDefaultTemplates', () => {
         return getService().getDefaultTemplates()
     })
 
     // History
-    ipcMain.handle('notifications:getHistory', async (_event: IpcMainInvokeEvent, filters?: {
+    safeHandleRaw('notifications:getHistory', (_event, filters?: {
         recipientType?: string;
         recipientId?: number;
         channel?: string;

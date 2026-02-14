@@ -55,6 +55,7 @@ export interface AcademicYear {
 
 export interface Term {
   id: number
+  term_number?: number
   term_name: string
   start_date: string
   end_date: string
@@ -83,7 +84,6 @@ export interface AcademicSubject {
   curriculum: string
   is_compulsory?: boolean | number
   is_active?: boolean | number
-  [key: string]: unknown
 }
 
 export interface AcademicExam {
@@ -93,7 +93,6 @@ export interface AcademicExam {
   term_id?: number
   weight?: number
   created_at?: string
-  [key: string]: unknown
 }
 
 export interface TeacherAllocation {
@@ -105,7 +104,6 @@ export interface TeacherAllocation {
   stream_name?: string
   teacher_name?: string
   curriculum?: string
-  [key: string]: unknown
 }
 
 export interface AcademicResult {
@@ -115,7 +113,6 @@ export interface AcademicResult {
   score: number | null
   competency_level: number | null
   teacher_remarks?: string
-  [key: string]: unknown
 }
 
 export interface AcademicAPI {
@@ -176,9 +173,7 @@ export interface AcademicAPI {
   getGradeDistribution: (filters: { examId: number; streamId: number }) => Promise<GradeDistribution[]>
   getSubjectPerformance: (filters: { examId: number; streamId: number }) => Promise<SubjectPerformance[]>
   getStrugglingStudents: (filters: { examId: number; streamId: number; threshold: number }) => Promise<StrugglingStudent[]>
-  exportAnalyticsToPDF: (data: { examId: number; summary: PerformanceSummary; grades: GradeDistribution[]; subjects: SubjectPerformance[] }) => Promise<void>
   getTermComparison: (filters: { examId: number; streamId: number }) => Promise<TermComparison[]>
-  exportReportCardAnalyticsToPDF: (data: unknown) => Promise<void>
   getSubjectDifficulty: (filters: { examId: number; subjectId: number; streamId: number }) => Promise<SubjectDifficulty>
 
   // Timetable
@@ -191,10 +186,11 @@ export interface AcademicAPI {
   emailParents: (data: { students: ImprovedStudent[]; awardCategory: string; templateType: string }, userId: number) => Promise<{ success: boolean; sent: number; failed: number; errors: string[] }>
 
   // Report Cards (Refactored)
-  generateBatchReportCards: (data: { exam_id: number; stream_id: number }) => Promise<{ success: boolean; generated: number; failed: number }>;
+  generateBatchReportCards: (data: { exam_id: number; stream_id: number }) => Promise<{ success: boolean; generated: number; failed: number; total?: number; failures?: Array<{ student_id: number; error: string }> }>;
   emailReportCards: (data: { exam_id: number; stream_id: number; template_id: string; include_sms: boolean }) => Promise<{ success: boolean; sent: number; failed: number }>;
-  mergeReportCards: (data: { exam_id: number; stream_id: number; output_path: string }) => Promise<{ success: boolean; message?: string; filePath?: string }>;
-  downloadReportCards: (data: { exam_id: number; stream_id: number; merge: boolean }) => Promise<{ success: boolean; filePath?: string; files?: string[]; message?: string }>;
+  mergeReportCards: (data: { exam_id: number; stream_id: number; output_path: string }) => Promise<{ success: boolean; message?: string; filePath?: string; failed?: number }>;
+  downloadReportCards: (data: { exam_id: number; stream_id: number; merge: boolean }) => Promise<{ success: boolean; filePath?: string; files?: string[]; fileRecords?: Array<{ studentId: number; filePath: string }>; failed?: number; message?: string }>;
+  openReportCardFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
 
   // General Export
   exportToPDF: (data: { html?: string; content?: string; filename?: string; title?: string }) => Promise<{ success: boolean; filePath?: string; error?: string }>;

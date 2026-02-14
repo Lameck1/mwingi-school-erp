@@ -1,86 +1,140 @@
-import { ipcMain } from '../../electron-env'
-import { AttendanceService, type DailyAttendanceEntry } from '../../services/academic/AttendanceService'
+import { container } from '../../services/base/ServiceContainer'
+import { validateDate, validateId } from '../../utils/validation'
+import { safeHandleRaw } from '../ipc-result'
 
-import type { IpcMainInvokeEvent } from 'electron'
+import type { DailyAttendanceEntry } from '../../services/academic/AttendanceService'
 
-let cachedService: AttendanceService | null = null
-const getService = () => {
-    cachedService ??= new AttendanceService()
-    return cachedService
+const getService = () => container.resolve('AttendanceService')
+
+function formatLocalDate(date: Date): string {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+}
+
+function validateAttendanceDateInput(date: string): { success: boolean; error?: string; value?: string } {
+    const dateValidation = validateDate(date)
+    if (!dateValidation.success) {
+        return { success: false, error: dateValidation.error || 'Invalid attendance date' }
+    }
+
+    const normalized = dateValidation.data!.slice(0, 10)
+    if (normalized > formatLocalDate(new Date())) {
+        return { success: false, error: 'Attendance date cannot be in the future.' }
+    }
+
+    return { success: true, value: normalized }
 }
 
 export function registerAttendanceHandlers(): void {
-    type MarkAttendanceArgs = [
+    safeHandleRaw('attendance:getByDate', (
+        _event,
+        streamId: number,
+        date: string,
+        academicYearId: number,
+        termId: number
+    ) => {
+        const streamValidation = validateId(streamId, 'Stream ID')
+        const yearValidation = validateId(academicYearId, 'Academic year ID')
+        const termValidation = validateId(termId, 'Term ID')
+        const dateValidation = validateAttendanceDateInput(date)
+        if (!streamValidation.success || !yearValidation.success || !termValidation.success || !dateValidation.success) {
+            return []
+        }
+
+        return getService().getAttendanceByDate(streamValidation.data!, dateValidation.value!, yearValidation.data!, termValidation.data!)
+    })
+
+    safeHandleRaw('attendance:markAttendance', (
+        _event,
         entries: DailyAttendanceEntry[],
         streamId: number,
         date: string,
         academicYearId: number,
         termId: number,
         userId: number
-    ]
-
-    ipcMain.handle('attendance:getByDate', async (
-        _event: IpcMainInvokeEvent,
-        streamId: number,
-        date: string,
-        academicYearId: number,
-        termId: number
     ) => {
-        try {
-            return getService().getAttendanceByDate(streamId, date, academicYearId, termId)
-        } catch (error) {
-            throw new Error(`Failed to get attendance: ${(error as Error).message}`)
+        const streamValidation = validateId(streamId, 'Stream ID')
+        const yearValidation = validateId(academicYearId, 'Academic year ID')
+        const termValidation = validateId(termId, 'Term ID')
+        const userValidation = validateId(userId, 'User ID')
+        const dateValidation = validateAttendanceDateInput(date)
+        if (!streamValidation.success) {
+            return { success: false, marked: 0, errors: [streamValidation.error || 'Invalid stream ID'] }
         }
+        if (!yearValidation.success) {
+            return { success: false, marked: 0, errors: [yearValidation.error || 'Invalid academic year ID'] }
+        }
+        if (!termValidation.success) {
+            return { success: false, marked: 0, errors: [termValidation.error || 'Invalid term ID'] }
+        }
+        if (!userValidation.success) {
+            return { success: false, marked: 0, errors: [userValidation.error || 'Invalid user ID'] }
+        }
+        if (!dateValidation.success) {
+            return { success: false, marked: 0, errors: [dateValidation.error || 'Invalid attendance date'] }
+        }
+
+        if (!Array.isArray(entries) || entries.length === 0) {
+            return { success: false, marked: 0, errors: ['At least one attendance entry is required'] }
+        }
+
+        const malformed = entries.find((entry) => !entry || !Number.isFinite(entry.student_id) || entry.student_id <= 0 || typeof entry.status !== 'string')
+        if (malformed) {
+            return { success: false, marked: 0, errors: ['Attendance payload contains invalid entries'] }
+        }
+
+        return getService().markAttendance(
+            entries,
+            streamValidation.data!,
+            dateValidation.value!,
+            yearValidation.data!,
+            termValidation.data!,
+            userValidation.data!
+        )
     })
 
-    ipcMain.handle('attendance:markAttendance', async (
-        _event: IpcMainInvokeEvent,
-        ...[entries, streamId, date, academicYearId, termId, userId]: MarkAttendanceArgs
-    ) => {
-        try {
-            return getService().markAttendance(entries, streamId, date, academicYearId, termId, userId)
-        } catch (error) {
-            throw new Error(`Failed to mark attendance: ${(error as Error).message}`)
-        }
-    })
-
-    ipcMain.handle('attendance:getStudentSummary', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('attendance:getStudentSummary', (
+        _event,
         studentId: number,
         academicYearId: number,
         termId?: number
     ) => {
-        try {
-            return getService().getStudentAttendanceSummary(studentId, academicYearId, termId)
-        } catch (error) {
-            throw new Error(`Failed to get student summary: ${(error as Error).message}`)
-        }
+        return getService().getStudentAttendanceSummary(studentId, academicYearId, termId)
     })
 
-    ipcMain.handle('attendance:getClassSummary', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('attendance:getClassSummary', (
+        _event,
         streamId: number,
         date: string,
         academicYearId: number,
         termId: number
     ) => {
-        try {
-            return getService().getClassAttendanceSummary(streamId, date, academicYearId, termId)
-        } catch (error) {
-            throw new Error(`Failed to get class summary: ${(error as Error).message}`)
+        const streamValidation = validateId(streamId, 'Stream ID')
+        const yearValidation = validateId(academicYearId, 'Academic year ID')
+        const termValidation = validateId(termId, 'Term ID')
+        const dateValidation = validateAttendanceDateInput(date)
+        if (!streamValidation.success || !yearValidation.success || !termValidation.success || !dateValidation.success) {
+            return { present: 0, absent: 0, late: 0, excused: 0, total: 0 }
         }
+
+        return getService().getClassAttendanceSummary(streamValidation.data!, dateValidation.value!, yearValidation.data!, termValidation.data!)
     })
 
-    ipcMain.handle('attendance:getStudentsForMarking', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('attendance:getStudentsForMarking', (
+        _event,
         streamId: number,
         academicYearId: number,
         termId: number
     ) => {
-        try {
-            return getService().getStudentsForAttendance(streamId, academicYearId, termId)
-        } catch (error) {
-            throw new Error(`Failed to get students for marking: ${(error as Error).message}`)
+        const streamValidation = validateId(streamId, 'Stream ID')
+        const yearValidation = validateId(academicYearId, 'Academic year ID')
+        const termValidation = validateId(termId, 'Term ID')
+        if (!streamValidation.success || !yearValidation.success || !termValidation.success) {
+            return []
         }
+
+        return getService().getStudentsForAttendance(streamValidation.data!, yearValidation.data!, termValidation.data!)
     })
 }

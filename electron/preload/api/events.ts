@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron'
 
+import type { UpdateStatusData } from '../types'
 import type { IpcRendererEvent } from 'electron'
 
 /**
@@ -38,8 +39,8 @@ export function createMenuEventAPI() {
       ipcRenderer.on('check-for-updates', listener)
       return () => ipcRenderer.removeListener('check-for-updates', listener)
     },
-    onUpdateStatus: (callback: (data: unknown) => void) => {
-      const listener = (_event: IpcRendererEvent, data: unknown) => callback(data)
+    onUpdateStatus: (callback: (data: UpdateStatusData) => void) => {
+      const listener = (_event: IpcRendererEvent, data: UpdateStatusData) => callback(data)
       ipcRenderer.on('update-status', listener)
       return () => ipcRenderer.removeListener('update-status', listener)
     },

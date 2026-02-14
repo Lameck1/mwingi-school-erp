@@ -46,6 +46,8 @@ export interface HireBooking {
     balance?: number
 }
 
+export type HireBookingStatus = HireBooking['status']
+
 export interface HirePayment {
     id: number
     booking_id: number
@@ -85,7 +87,7 @@ export interface HireAPI {
     getHireBookings: (filters?: { status?: string; assetId?: number; clientId?: number; fromDate?: string; toDate?: string }) => Promise<HireBooking[]>
     getHireBookingById: (id: number) => Promise<HireBooking | undefined>
     createHireBooking: (data: Partial<HireBooking>, userId: number) => Promise<{ success: boolean; id?: number; booking_number?: string; errors?: string[] }>
-    updateHireBookingStatus: (id: number, status: string) => Promise<{ success: boolean; errors?: string[] }>
+    updateHireBookingStatus: (id: number, status: HireBookingStatus) => Promise<{ success: boolean; errors?: string[] }>
 
     // Payments
     recordHirePayment: (bookingId: number, data: Partial<HirePayment>, userId: number) => Promise<{ success: boolean; receipt_number?: string; errors?: string[] }>

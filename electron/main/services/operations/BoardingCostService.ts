@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import { getDatabase } from '../../database';
 
 interface BoardingFacility {
   id: number;
@@ -61,10 +61,69 @@ interface RevenueResult {
  * - Support budget allocation decisions
  */
 export class BoardingCostService {
-  private readonly db: Database.Database;
+  private get db() { return getDatabase(); }
 
-  constructor(db: Database.Database) {
-    this.db = db;
+  private getCurrentAcademicContext(): { fiscal_year: number; term_number: number } {
+    const current = this.db.prepare(`
+      SELECT ay.year_name, t.term_number
+      FROM academic_year ay
+      JOIN term t ON t.academic_year_id = ay.id
+      WHERE ay.is_current = 1 AND t.is_current = 1
+      LIMIT 1
+    `).get() as { term_number: number; year_name: string } | undefined
+
+    if (!current) {
+      throw new Error('No active academic year and term are configured')
+    }
+
+    const fiscalYear = Number.parseInt(current.year_name, 10)
+    if (!Number.isFinite(fiscalYear)) {
+      throw new Error(`Active academic year '${current.year_name}' is not numeric`)
+    }
+
+    return {
+      fiscal_year: fiscalYear,
+      term_number: current.term_number
+    }
+  }
+
+  private assertActiveExpensePeriod(fiscalYear: number, term: number): void {
+    const active = this.getCurrentAcademicContext()
+    if (active.fiscal_year !== fiscalYear || active.term_number !== term) {
+      throw new Error(
+        `Boarding expenses must be recorded in the active period (${active.fiscal_year} term ${active.term_number})`
+      )
+    }
+  }
+
+  private assertValidGLAccount(glAccountCode: string): void {
+    if (!glAccountCode || !glAccountCode.trim()) {
+      throw new Error('GL account code is required')
+    }
+
+    const account = this.db.prepare(`
+      SELECT account_code
+      FROM gl_account
+      WHERE account_code = ? AND is_active = 1
+      LIMIT 1
+    `).get(glAccountCode.trim()) as { account_code: string } | undefined
+
+    if (!account) {
+      throw new Error(`Invalid or inactive GL account code: ${glAccountCode}`)
+    }
+  }
+
+  private assertValidRecorder(userId: number): void {
+    const user = this.db.prepare(`
+      SELECT id
+      FROM user
+      WHERE id = ? AND is_active = 1
+      LIMIT 1
+    `).get(userId) as { id: number } | undefined
+
+    if (!user) {
+      throw new Error('Recorded by user is invalid or inactive')
+    }
   }
 
   /**
@@ -103,6 +162,36 @@ export class BoardingCostService {
     description: string;
     recorded_by: number;
   }): number {
+    if (!Number.isFinite(params.facility_id) || params.facility_id <= 0) {
+      throw new Error('Valid boarding facility is required')
+    }
+    if (!Number.isFinite(params.fiscal_year) || params.fiscal_year < 2000 || params.fiscal_year > 2100) {
+      throw new Error('Invalid fiscal year for boarding expense')
+    }
+    if (![1, 2, 3].includes(params.term)) {
+      throw new Error('Invalid academic term for boarding expense')
+    }
+    if (!Number.isInteger(params.amount_cents) || params.amount_cents <= 0) {
+      throw new Error('Expense amount must be greater than zero')
+    }
+    if (!Number.isInteger(params.recorded_by) || params.recorded_by <= 0) {
+      throw new Error('Recorded by user is required')
+    }
+
+    this.assertActiveExpensePeriod(params.fiscal_year, params.term)
+    this.assertValidGLAccount(params.gl_account_code)
+    this.assertValidRecorder(params.recorded_by)
+
+    const facility = this.db.prepare(`
+      SELECT id
+      FROM boarding_facility
+      WHERE id = ? AND is_active = 1
+      LIMIT 1
+    `).get(params.facility_id) as { id: number } | undefined
+    if (!facility) {
+      throw new Error('Selected boarding facility is invalid or inactive')
+    }
+
     const query = `
       INSERT INTO boarding_expense (
         facility_id, gl_account_code, fiscal_year, term,
@@ -118,7 +207,7 @@ export class BoardingCostService {
       params.term,
       params.amount_cents,
       params.expense_type,
-      params.description,
+      params.description?.trim() || null,
       params.recorded_by
     );
 

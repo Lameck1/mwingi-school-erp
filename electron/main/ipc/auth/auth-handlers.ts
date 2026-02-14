@@ -3,10 +3,9 @@ import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
-import { ipcMain } from '../../electron-env'
 import { getSession, setSession, clearSession, type AuthSession } from '../../security/session'
-
-import type { IpcMainInvokeEvent } from 'electron'
+import { validatePassword } from '../../utils/validation'
+import { safeHandleRaw } from '../ipc-result'
 
 const bcrypt = require('bcryptjs')
 
@@ -27,7 +26,6 @@ interface UserUpdateData {
     full_name?: string
     email?: string
     role?: string
-    [key: string]: unknown
 }
 
 interface NewUser {
@@ -38,8 +36,46 @@ interface NewUser {
     role: string
 }
 
+// ── Login Rate Limiting ─────────────────────────────────────────
+const MAX_ATTEMPTS = 5
+const BASE_LOCKOUT_MS = 30_000 // 30 seconds
+const MAX_LOCKOUT_MS = 15 * 60_000 // 15 minutes
+
+interface LoginAttemptRecord {
+    failedCount: number
+    lastFailedAt: number
+    lockoutUntil: number
+}
+
+const loginAttempts = new Map<string, LoginAttemptRecord>()
+
+function checkRateLimit(username: string): string | null {
+    const record = loginAttempts.get(username)
+    if (!record) {return null}
+    if (record.lockoutUntil > Date.now()) {
+        const remainingSec = Math.ceil((record.lockoutUntil - Date.now()) / 1000)
+        return `Too many failed attempts. Try again in ${remainingSec} seconds.`
+    }
+    return null
+}
+
+function recordFailedLogin(username: string): void {
+    const record = loginAttempts.get(username) ?? { failedCount: 0, lastFailedAt: 0, lockoutUntil: 0 }
+    record.failedCount++
+    record.lastFailedAt = Date.now()
+    if (record.failedCount >= MAX_ATTEMPTS) {
+        const multiplier = Math.pow(2, Math.floor((record.failedCount - MAX_ATTEMPTS) / MAX_ATTEMPTS))
+        record.lockoutUntil = Date.now() + Math.min(BASE_LOCKOUT_MS * multiplier, MAX_LOCKOUT_MS)
+    }
+    loginAttempts.set(username, record)
+}
+
+function clearFailedLogins(username: string): void {
+    loginAttempts.delete(username)
+}
+
 function registerSessionHandlers(db: ReturnType<typeof getDatabase>): void {
-    ipcMain.handle('auth:getSession', async (): Promise<AuthSession | null> => {
+    safeHandleRaw('auth:getSession', async (): Promise<AuthSession | null> => {
         const session = await getSession()
         if (!session?.user.id) {return null}
 
@@ -58,19 +94,19 @@ function registerSessionHandlers(db: ReturnType<typeof getDatabase>): void {
         return refreshed
     })
 
-    ipcMain.handle('auth:setSession', async (_event: IpcMainInvokeEvent, session: AuthSession): Promise<{ success: boolean }> => {
+    safeHandleRaw('auth:setSession', async (_event, session: AuthSession): Promise<{ success: boolean }> => {
         await setSession(session)
         return { success: true }
     })
 
-    ipcMain.handle('auth:clearSession', async (): Promise<{ success: boolean }> => {
+    safeHandleRaw('auth:clearSession', async (): Promise<{ success: boolean }> => {
         await clearSession()
         return { success: true }
     })
 }
 
 function registerUserManagementHandlers(db: ReturnType<typeof getDatabase>): void {
-    ipcMain.handle('user:update', async (_event: IpcMainInvokeEvent, id: number, data: UserUpdateData): Promise<{ success: boolean; error?: string }> => {
+    safeHandleRaw('user:update', (_event, id: number, data: UserUpdateData): { success: boolean; error?: string } => {
         const stmt = db.prepare(`
             UPDATE user 
             SET full_name = COALESCE(?, full_name),
@@ -84,23 +120,33 @@ function registerUserManagementHandlers(db: ReturnType<typeof getDatabase>): voi
         return { success: true }
     })
 
-    ipcMain.handle('user:getAll', async (_event: IpcMainInvokeEvent): Promise<Omit<User, 'password_hash'>[]> => {
+    safeHandleRaw('user:getAll', (): Omit<User, 'password_hash'>[] => {
         return db.prepare('SELECT id, username, full_name, email, role, is_active, last_login, created_at FROM user').all() as Omit<User, 'password_hash'>[]
     })
 
-    ipcMain.handle('user:create', async (_event: IpcMainInvokeEvent, data: NewUser): Promise<{ success: boolean; id?: number }> => {
+    safeHandleRaw('user:create', async (_event, data: NewUser): Promise<{ success: boolean; id?: number; error?: string }> => {
+        const pwCheck = validatePassword(data.password)
+        if (!pwCheck.success) {
+            return { success: false, error: pwCheck.error }
+        }
+
         const hash = await bcrypt.hash(data.password, 10)
         const stmt = db.prepare('INSERT INTO user (username, password_hash, full_name, email, role) VALUES (?, ?, ?, ?, ?)')
         const result = stmt.run(data.username, hash, data.full_name, data.email, data.role)
         return { success: true, id: result.lastInsertRowid as number }
     })
 
-    ipcMain.handle('user:toggleStatus', async (_event: IpcMainInvokeEvent, id: number, isActive: boolean): Promise<{ success: boolean }> => {
+    safeHandleRaw('user:toggleStatus', (_event, id: number, isActive: boolean): { success: boolean } => {
         db.prepare('UPDATE user SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(isActive ? 1 : 0, id)
         return { success: true }
     })
 
-    ipcMain.handle('user:resetPassword', async (_event: IpcMainInvokeEvent, id: number, newPassword: string): Promise<{ success: boolean }> => {
+    safeHandleRaw('user:resetPassword', async (_event, id: number, newPassword: string): Promise<{ success: boolean; error?: string }> => {
+        const pwCheck = validatePassword(newPassword)
+        if (!pwCheck.success) {
+            return { success: false, error: pwCheck.error }
+        }
+
         const hash = await bcrypt.hash(newPassword, 10)
         db.prepare('UPDATE user SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(hash, id)
         return { success: true }
@@ -110,15 +156,20 @@ function registerUserManagementHandlers(db: ReturnType<typeof getDatabase>): voi
 export function registerAuthHandlers(): void {
     const db = getDatabase()
 
-    ipcMain.handle('auth:hasUsers', async (): Promise<boolean> => {
+    safeHandleRaw('auth:hasUsers', (): boolean => {
         const row = db.prepare('SELECT id FROM user WHERE is_active = 1 LIMIT 1').get() as { id: number } | undefined
         return Boolean(row?.id)
     })
 
-    ipcMain.handle('auth:setupAdmin', async (_event: IpcMainInvokeEvent, data: { username: string; password: string; full_name: string; email: string }): Promise<{ success: boolean; id?: number; error?: string }> => {
+    safeHandleRaw('auth:setupAdmin', async (_event, data: { username: string; password: string; full_name: string; email: string }): Promise<{ success: boolean; id?: number; error?: string }> => {
         const existing = db.prepare('SELECT id FROM user WHERE is_active = 1 LIMIT 1').get() as { id: number } | undefined
         if (existing) {
             return { success: false, error: 'Admin setup is only available on first run' }
+        }
+
+        const pwCheck = validatePassword(data.password)
+        if (!pwCheck.success) {
+            return { success: false, error: pwCheck.error }
         }
 
         const hash = await bcrypt.hash(data.password, 10)
@@ -128,22 +179,28 @@ export function registerAuthHandlers(): void {
     })
 
     // ======== AUTH ========
-    ipcMain.handle('auth:login', async (_event: IpcMainInvokeEvent, username: string, password: string): Promise<{ success: boolean; user?: Omit<User, 'password_hash'>; error?: string }> => {
-        // console.log('Login attempt for:', username)
+    safeHandleRaw('auth:login', async (_event, username: string, password: string): Promise<{ success: boolean; user?: Omit<User, 'password_hash'>; error?: string }> => {
+        const rateLimitError = checkRateLimit(username)
+        if (rateLimitError) {
+            return { success: false, error: rateLimitError }
+        }
+
         const user = db.prepare('SELECT * FROM user WHERE username = ? AND is_active = 1').get(username) as User | undefined
 
         if (!user) {
-            // console.log('User not found:', username)
+            recordFailedLogin(username)
             return { success: false, error: 'Invalid username or password' }
         }
 
-        // console.log('User found, comparing password...')
         try {
             const valid = await bcrypt.compare(password, user.password_hash)
-            // console.log('Password valid:', valid)
 
-            if (!valid) {return { success: false, error: 'Invalid username or password' }}
+            if (!valid) {
+                recordFailedLogin(username)
+                return { success: false, error: 'Invalid username or password' }
+            }
 
+            clearFailedLogins(username)
             db.prepare('UPDATE user SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(user.id)
             logAudit(user.id, 'LOGIN', 'user', user.id, null, { action: 'Login' })
 
@@ -157,12 +214,15 @@ export function registerAuthHandlers(): void {
 
     registerSessionHandlers(db)
 
-    ipcMain.handle('auth:changePassword', async (_event: IpcMainInvokeEvent, userId: number, oldPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    safeHandleRaw('auth:changePassword', async (_event, userId: number, oldPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
         const user = db.prepare('SELECT password_hash FROM user WHERE id = ?').get(userId) as { password_hash: string } | undefined
         if (!user) {return { success: false, error: 'User not found' }}
 
         const valid = await bcrypt.compare(oldPassword, user.password_hash)
         if (!valid) {return { success: false, error: 'Current password is incorrect' }}
+
+        const pwCheck = validatePassword(newPassword)
+        if (!pwCheck.success) {return { success: false, error: pwCheck.error }}
 
         const hash = await bcrypt.hash(newPassword, 10)
         db.prepare('UPDATE user SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(hash, userId)

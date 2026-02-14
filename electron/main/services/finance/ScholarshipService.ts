@@ -532,17 +532,18 @@ export class ScholarshipService
 
   async revokeScholarship(params: { allocationId?: number; allocation_id?: number; reason?: string; userId?: number; user_id?: number }): Promise<{
     success: boolean
-    message: string
+    error?: string
+    message?: string
   }> {
     const allocationId = params.allocationId ?? params.allocation_id
     const reason = params.reason || ''
 
     if (!allocationId) {
-      return { success: false, message: 'Allocation ID is required' }
+      return { success: false, error: 'Allocation ID is required' }
     }
 
     if (!reason) {
-      return { success: false, message: 'Revocation reason is required' }
+      return { success: false, error: 'Revocation reason is required' }
     }
 
     const allocation = this.db
@@ -550,11 +551,11 @@ export class ScholarshipService
       .get(allocationId) as StudentScholarship | undefined
 
     if (!allocation) {
-      return { success: false, message: 'Allocation not found' }
+      return { success: false, error: 'Allocation not found' }
     }
 
     if (allocation.status === 'REVOKED') {
-      return { success: false, message: 'Allocation already revoked' }
+      return { success: false, error: 'Allocation already revoked' }
     }
 
     this.db

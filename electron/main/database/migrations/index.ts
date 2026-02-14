@@ -4,6 +4,15 @@ import { up as seedCoreUp } from './current/0010_seed_core_data.js'
 import { up as seedAcademicUp } from './current/0020_seed_academic_data.js'
 import { up as journalBridgeUp } from './incremental/1001_journal_entry_bridge.js'
 import { up as financeSchemaFixesUp } from './incremental/1002_finance_schema_fixes.js'
+import { up as budgetAllocationUp } from './incremental/1003_budget_allocation.js'
+import { up as enrollmentUniqUp } from './incremental/1004_enrollment_active_uniqueness.js'
+import { up as journalEntryTypeExpansionUp } from './incremental/1005_journal_entry_type_expansion.js'
+import { up as paymentInvoiceAllocationUp } from './incremental/1006_payment_invoice_allocation.js'
+import { up as paymentIdempotencyInvoiceUniqUp } from './incremental/1007_payment_idempotency_and_invoice_uniqueness.js'
+import { up as attendanceAndReconciliationUniqUp } from './incremental/1008_attendance_and_reconciliation_uniqueness.js'
+import { up as grantExpiryDateUp } from './incremental/1009_grant_expiry_date.js'
+import { up as bankReconciliationConstraintsUp } from './incremental/1010_bank_reconciliation_constraints.js'
+import { up as approvalCanonicalizationUp } from './incremental/1011_approval_canonicalization.js'
 
 import type * as Database from 'better-sqlite3'
 
@@ -36,6 +45,15 @@ const migrations: Migration[] = [
     // Add entries below as the app evolves after first release.
     { name: '1001_journal_entry_bridge', fn: journalBridgeUp },
     { name: '1002_finance_schema_fixes', fn: financeSchemaFixesUp },
+    { name: '1003_budget_allocation', fn: budgetAllocationUp },
+    { name: '1004_enrollment_active_uniqueness', fn: enrollmentUniqUp },
+    { name: '1005_journal_entry_type_expansion', fn: journalEntryTypeExpansionUp },
+    { name: '1006_payment_invoice_allocation', fn: paymentInvoiceAllocationUp },
+    { name: '1007_payment_idempotency_and_invoice_uniqueness', fn: paymentIdempotencyInvoiceUniqUp },
+    { name: '1008_attendance_and_reconciliation_uniqueness', fn: attendanceAndReconciliationUniqUp },
+    { name: '1009_grant_expiry_date', fn: grantExpiryDateUp },
+    { name: '1010_bank_reconciliation_constraints', fn: bankReconciliationConstraintsUp },
+    { name: '1011_approval_canonicalization', fn: approvalCanonicalizationUp },
 ]
 
 /**

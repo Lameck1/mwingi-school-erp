@@ -38,13 +38,15 @@ export class GLAccountService {
           COALESCE(
             SUM(
               CASE 
+                WHEN je.id IS NULL THEN 0
                 WHEN g.normal_balance = 'DEBIT' THEN (COALESCE(jel.debit_amount, 0) - COALESCE(jel.credit_amount, 0))
                 ELSE (COALESCE(jel.credit_amount, 0) - COALESCE(jel.debit_amount, 0))
               END
             ), 0
           ) as current_balance
         FROM gl_account g
-        LEFT JOIN journal_entry_line jel ON g.account_code = jel.gl_account_code
+        LEFT JOIN journal_entry_line jel ON g.id = jel.gl_account_id
+        LEFT JOIN journal_entry je ON je.id = jel.journal_entry_id AND je.is_posted = 1 AND je.is_voided = 0
         WHERE 1=1
       `;
       const params: unknown[] = [];
@@ -69,19 +71,19 @@ export class GLAccountService {
     }
   }
 
-  async getById(id: number): Promise<{ success: boolean; data?: GLAccount; message?: string }> {
+  async getById(id: number): Promise<{ success: boolean; data?: GLAccount; error?: string }> {
     try {
       const account = this.findAccountById(id);
       if (account === undefined) {
-        return { success: false, message: ACCOUNT_NOT_FOUND };
+        return { success: false, error: ACCOUNT_NOT_FOUND };
       }
       return { success: true, data: account };
     } catch (error) {
-      return { success: false, message: (error as Error).message };
+      return { success: false, error: (error as Error).message };
     }
   }
 
-  async create(data: GLAccountData, userId: number): Promise<{ success: boolean; data?: GLAccount; message?: string }> {
+  async create(data: GLAccountData, userId: number): Promise<{ success: boolean; data?: GLAccount; error?: string; message?: string }> {
     try {
       const result = this.db.prepare(`
         INSERT INTO gl_account (
@@ -108,20 +110,20 @@ export class GLAccountService {
       return { success: true, data: newAccount.data, message: 'Account created successfully' };
     } catch (error) {
       console.error('Error creating GL account:', error);
-      return { success: false, message: (error as Error).message };
+      return { success: false, error: (error as Error).message };
     }
   }
 
-  async update(id: number, data: Partial<GLAccountData>, userId: number): Promise<{ success: boolean; data?: GLAccount; message?: string }> {
+  async update(id: number, data: Partial<GLAccountData>, userId: number): Promise<{ success: boolean; data?: GLAccount; error?: string; message?: string }> {
     try {
       const currentAccount = this.findAccountById(id);
       if (currentAccount === undefined) {
-        return { success: false, message: ACCOUNT_NOT_FOUND };
+        return { success: false, error: ACCOUNT_NOT_FOUND };
       }
 
       // Don't allow changing system accounts critical fields if it is a system account
       if (currentAccount.is_system_account && (data.account_code !== undefined && data.account_code !== currentAccount.account_code)) {
-         return { success: false, message: 'Cannot change account code of a system account' };
+         return { success: false, error: 'Cannot change account code of a system account' };
       }
 
       const { fields, params } = this.buildUpdatePayload(data);
@@ -140,23 +142,23 @@ export class GLAccountService {
       return { success: true, data: updatedAccount.data, message: 'Account updated successfully' };
     } catch (error) {
       console.error('Error updating GL account:', error);
-      return { success: false, message: (error as Error).message };
+      return { success: false, error: (error as Error).message };
     }
   }
 
-  async delete(id: number, userId: number): Promise<{ success: boolean; message: string }> {
+  async delete(id: number, userId: number): Promise<{ success: boolean; error?: string; message?: string }> {
     try {
       const currentAccount = this.findAccountById(id);
       if (currentAccount === undefined) {
-        return { success: false, message: ACCOUNT_NOT_FOUND };
+        return { success: false, error: ACCOUNT_NOT_FOUND };
       }
 
       if (currentAccount.is_system_account) {
-        return { success: false, message: 'Cannot delete a system account' };
+        return { success: false, error: 'Cannot delete a system account' };
       }
 
       // Check for usage in journal entries
-      const usage = this.db.prepare(`SELECT COUNT(*) as count FROM journal_entry_line WHERE gl_account_code = ?`).get(currentAccount.account_code) as { count: number };
+      const usage = this.db.prepare(`SELECT COUNT(*) as count FROM journal_entry_line WHERE gl_account_id = ?`).get(currentAccount.id) as { count: number };
       if (usage.count > 0) {
         // Soft delete (deactivate) instead
         this.db.prepare(`UPDATE gl_account SET is_active = 0 WHERE id = ?`).run(id);
@@ -170,7 +172,7 @@ export class GLAccountService {
       return { success: true, message: 'Account deleted successfully' };
     } catch (error) {
       console.error('Error deleting GL account:', error);
-      return { success: false, message: (error as Error).message };
+      return { success: false, error: (error as Error).message };
     }
   }
 

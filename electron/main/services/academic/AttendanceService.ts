@@ -44,6 +44,77 @@ type MarkAttendanceArgs = [
 
 export class AttendanceService {
     private get db() { return getDatabase() }
+    private static readonly ALLOWED_STATUSES = new Set<DailyAttendanceEntry['status']>(['PRESENT', 'ABSENT', 'LATE', 'EXCUSED'])
+    private static readonly ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
+
+    private formatLocalDate(date: Date): string {
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        return `${year}-${month}-${day}`
+    }
+
+    private isIsoDate(date: string): boolean {
+        if (!AttendanceService.ISO_DATE_REGEX.test(date)) {
+            return false
+        }
+        const parsed = new Date(`${date}T00:00:00`)
+        return !Number.isNaN(parsed.getTime()) && this.formatLocalDate(parsed) === date
+    }
+
+    private hasColumn(tableName: string, columnName: string): boolean {
+        try {
+            const columns = this.db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>
+            return columns.some((column) => column.name === columnName)
+        } catch {
+            return false
+        }
+    }
+
+    private validateAttendanceDatePolicy(date: string, academicYearId: number, termId: number): string | null {
+        if (!this.isIsoDate(date)) {
+            return 'Attendance date must be in YYYY-MM-DD format'
+        }
+
+        const today = this.formatLocalDate(new Date())
+        if (date > today) {
+            return 'Attendance date cannot be in the future'
+        }
+
+        const hasTermDates = this.hasColumn('term', 'start_date') && this.hasColumn('term', 'end_date')
+        if (hasTermDates) {
+            const termWindow = this.db.prepare(`
+                SELECT start_date, end_date
+                FROM term
+                WHERE id = ? AND academic_year_id = ?
+            `).get(termId, academicYearId) as { start_date: string; end_date: string } | undefined
+
+            if (!termWindow) {
+                return 'Selected term context is invalid for attendance date validation'
+            }
+            if (date < termWindow.start_date || date > termWindow.end_date) {
+                return 'Attendance date must be within the selected term period'
+            }
+        }
+
+        const hasYearDates = this.hasColumn('academic_year', 'start_date') && this.hasColumn('academic_year', 'end_date')
+        if (hasYearDates) {
+            const yearWindow = this.db.prepare(`
+                SELECT start_date, end_date
+                FROM academic_year
+                WHERE id = ?
+            `).get(academicYearId) as { start_date: string; end_date: string } | undefined
+
+            if (!yearWindow) {
+                return 'Selected academic year context is invalid for attendance date validation'
+            }
+            if (date < yearWindow.start_date || date > yearWindow.end_date) {
+                return 'Attendance date must be within the selected academic year period'
+            }
+        }
+
+        return null
+    }
 
     /**
      * Get attendance records for a specific date and stream
@@ -74,40 +145,113 @@ export class AttendanceService {
     async markAttendance(
         ...[entries, streamId, date, academicYearId, termId, userId]: MarkAttendanceArgs
     ): Promise<{ success: boolean; marked: number; errors?: string[] }> {
+        if (!Number.isFinite(streamId) || streamId <= 0 || !Number.isFinite(academicYearId) || academicYearId <= 0 || !Number.isFinite(termId) || termId <= 0) {
+            return { success: false, marked: 0, errors: ['Invalid attendance context (stream/year/term)'] }
+        }
+        if (!Number.isFinite(userId) || userId <= 0) {
+            return { success: false, marked: 0, errors: ['Invalid user context for attendance marking'] }
+        }
+        if (!Array.isArray(entries) || entries.length === 0) {
+            return { success: false, marked: 0, errors: ['At least one attendance entry is required'] }
+        }
+
+        const datePolicyError = this.validateAttendanceDatePolicy(date, academicYearId, termId)
+        if (datePolicyError) {
+            return { success: false, marked: 0, errors: [datePolicyError] }
+        }
+
+        const validationErrors: string[] = []
+        const seenStudents = new Set<number>()
+        const enrollmentCheckStmt = this.db.prepare(`
+            SELECT 1
+            FROM enrollment
+            WHERE student_id = ?
+              AND stream_id = ?
+              AND academic_year_id = ?
+              AND term_id = ?
+              AND status = 'ACTIVE'
+            LIMIT 1
+        `)
+
+        for (const entry of entries) {
+            if (!Number.isFinite(entry.student_id) || entry.student_id <= 0) {
+                validationErrors.push('Attendance payload contains invalid student IDs')
+                continue
+            }
+            if (seenStudents.has(entry.student_id)) {
+                validationErrors.push(`Duplicate attendance entry detected for student ${entry.student_id}`)
+                continue
+            }
+            seenStudents.add(entry.student_id)
+
+            if (!AttendanceService.ALLOWED_STATUSES.has(entry.status)) {
+                validationErrors.push(`Invalid attendance status for student ${entry.student_id}`)
+                continue
+            }
+
+            const enrolled = enrollmentCheckStmt.get(entry.student_id, streamId, academicYearId, termId)
+            if (!enrolled) {
+                validationErrors.push(`Student ${entry.student_id} is not actively enrolled in the selected stream/term`)
+            }
+        }
+
+        if (validationErrors.length > 0) {
+            return { success: false, marked: 0, errors: Array.from(new Set(validationErrors)) }
+        }
+
         let marked = 0
 
         try {
+            const updateStmt = this.db.prepare(`
+                UPDATE attendance
+                SET status = ?, notes = ?, marked_by_user_id = ?, stream_id = ?
+                WHERE student_id = ?
+                  AND attendance_date = ?
+                  AND academic_year_id = ?
+                  AND term_id = ?
+            `)
+            const insertStmt = this.db.prepare(`
+                INSERT INTO attendance (
+                    student_id, stream_id, academic_year_id, term_id,
+                    attendance_date, status, notes, marked_by_user_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `)
+
             const transaction = this.db.transaction(() => {
-                // Delete existing records for this date/stream
-                this.db.prepare(`
-          DELETE FROM attendance 
-          WHERE stream_id = ? AND attendance_date = ? AND academic_year_id = ? AND term_id = ?
-        `).run(streamId, date, academicYearId, termId)
-
-                // Insert new records
-                const insertStmt = this.db.prepare(`
-          INSERT INTO attendance (student_id, stream_id, academic_year_id, term_id, attendance_date, status, notes, marked_by_user_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `)
-
                 for (const entry of entries) {
-                    insertStmt.run(
-                        entry.student_id,
-                        streamId,
-                        academicYearId,
-                        termId,
-                        date,
+                    const normalizedNotes = entry.notes?.trim() ? entry.notes.trim() : null
+                    const updateResult = updateStmt.run(
                         entry.status,
-                        entry.notes || null,
-                        userId
+                        normalizedNotes,
+                        userId,
+                        streamId,
+                        entry.student_id,
+                        date,
+                        academicYearId,
+                        termId
                     )
-                    marked++
+
+                    if (updateResult.changes === 0) {
+                        insertStmt.run(
+                            entry.student_id,
+                            streamId,
+                            academicYearId,
+                            termId,
+                            date,
+                            entry.status,
+                            normalizedNotes,
+                            userId
+                        )
+                    }
+
+                    marked += 1
                 }
             })
 
             transaction()
 
-            logAudit(userId, 'BULK_CREATE', 'attendance', 0, null, {
+            logAudit(userId, 'BULK_UPSERT', 'attendance', 0, null, {
                 stream_id: streamId,
                 date,
                 count: marked

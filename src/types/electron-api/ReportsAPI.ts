@@ -137,10 +137,10 @@ export interface ReportsAPI {
   generateReportCard: (studentId: number, yearId: number, termId: number) => Promise<ReportCardData | null>
 
   // Financial Reports
-  getProfitAndLoss: (startDate: string, endDate: string) => Promise<{ success: boolean; data: ProfitAndLossReport; message?: string }>
-  getBalanceSheet: (asOfDate: string) => Promise<{ success: boolean; data: BalanceSheetReport; message?: string }>
-  getTrialBalance: (startDate: string, endDate: string) => Promise<{ success: boolean; data: TrialBalanceReport; message?: string }>
-  getComparativeProfitAndLoss: (currentStart: string, currentEnd: string, priorStart: string, priorEnd: string) => Promise<{ success: boolean; data: ProfitAndLossReport; message?: string }>
+  getProfitAndLoss: (startDate: string, endDate: string) => Promise<{ success: boolean; data: ProfitAndLossReport; error?: string }>
+  getBalanceSheet: (asOfDate: string) => Promise<{ success: boolean; data: BalanceSheetReport; error?: string }>
+  getTrialBalance: (startDate: string, endDate: string) => Promise<{ success: boolean; data: TrialBalanceReport; error?: string }>
+  getComparativeProfitAndLoss: (currentStart: string, currentEnd: string, priorStart: string, priorEnd: string) => Promise<{ success: boolean; data: ProfitAndLossReport; error?: string }>
 
   // Scheduled Reports
   getScheduledReports: () => Promise<ScheduledReport[]>
@@ -153,11 +153,13 @@ export interface ScheduledReport {
   id: number
   report_name: string
   report_type: string
+  parameters: string
   schedule_type: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'TERM_END' | 'YEAR_END'
   day_of_week: number | null
   day_of_month: number | null
   time_of_day: string
   recipients: string
+  export_format: 'PDF' | 'EXCEL' | 'CSV'
   is_active: boolean
   last_run_at: string | null
 }

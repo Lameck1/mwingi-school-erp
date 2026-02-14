@@ -16,7 +16,7 @@ export function PrintPreviewHost() {
 
     const handlePrint = React.useCallback(() => {
         const frameWindow = frameRef.current?.contentWindow
-        if (!frameWindow) {return}
+        if (!frameWindow) { return }
         frameWindow.focus()
         frameWindow.print()
     }, [])
@@ -51,7 +51,7 @@ export function PrintPreviewHost() {
                             ref={frameRef}
                             title={preview.title}
                             srcDoc={preview.html}
-                            sandbox="allow-same-origin allow-modals"
+                            sandbox="allow-same-origin allow-modals allow-scripts"
                             className="w-full h-[72vh] bg-card"
                         />
                     </div>

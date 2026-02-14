@@ -1,37 +1,52 @@
-import { ipcMain } from '../../electron-env'
 import { container } from '../../services/base/ServiceContainer'
-import { type BudgetService, type BudgetFilters, type CreateBudgetData } from '../../services/finance/BudgetService'
-
-import type { IpcMainInvokeEvent } from 'electron'
+import { type BudgetFilters, type CreateBudgetData } from '../../services/finance/BudgetService'
+import { validateId } from '../../utils/validation'
+import { safeHandleRaw } from '../ipc-result'
 
 export function registerBudgetHandlers(): void {
-    ipcMain.handle('budget:getAll', async (_event: IpcMainInvokeEvent, filters: BudgetFilters = {}) => {
-        const service = container.resolve<BudgetService>('BudgetService')
+    safeHandleRaw('budget:getAll', (_event, filters: BudgetFilters = {}) => {
+        const service = container.resolve('BudgetService')
         return service.findAll(filters)
     })
 
-    ipcMain.handle('budget:getById', async (_event: IpcMainInvokeEvent, id: number) => {
-        const service = container.resolve<BudgetService>('BudgetService')
-        return service.getBudgetWithLineItems(id)
+    safeHandleRaw('budget:getById', (_event, id: number) => {
+        const v = validateId(id, 'Budget ID')
+        if (!v.success) { return { success: false, error: v.error } }
+        const service = container.resolve('BudgetService')
+        return service.getBudgetWithLineItems(v.data!)
     })
 
-    ipcMain.handle('budget:create', async (_event: IpcMainInvokeEvent, data: CreateBudgetData, userId: number) => {
-        const service = container.resolve<BudgetService>('BudgetService')
-        return service.create(data, userId)
+    safeHandleRaw('budget:create', (_event, data: CreateBudgetData, userId: number) => {
+        const vUser = validateId(userId, 'User ID')
+        if (!vUser.success) { return { success: false, error: vUser.error } }
+        const service = container.resolve('BudgetService')
+        return service.create(data, vUser.data!)
     })
 
-    ipcMain.handle('budget:update', async (_event: IpcMainInvokeEvent, id: number, data: Partial<CreateBudgetData>, userId: number) => {
-        const service = container.resolve<BudgetService>('BudgetService')
-        return service.update(id, data, userId)
+    safeHandleRaw('budget:update', (_event, id: number, data: Partial<CreateBudgetData>, userId: number) => {
+        const vId = validateId(id, 'Budget ID')
+        const vUser = validateId(userId, 'User ID')
+        if (!vId.success) { return { success: false, error: vId.error } }
+        if (!vUser.success) { return { success: false, error: vUser.error } }
+        const service = container.resolve('BudgetService')
+        return service.update(vId.data!, data, vUser.data!)
     })
 
-    ipcMain.handle('budget:submit', async (_event: IpcMainInvokeEvent, budgetId: number, userId: number) => {
-        const service = container.resolve<BudgetService>('BudgetService')
-        return service.submitForApproval(budgetId, userId)
+    safeHandleRaw('budget:submit', (_event, budgetId: number, userId: number) => {
+        const vId = validateId(budgetId, 'Budget ID')
+        const vUser = validateId(userId, 'User ID')
+        if (!vId.success) { return { success: false, error: vId.error } }
+        if (!vUser.success) { return { success: false, error: vUser.error } }
+        const service = container.resolve('BudgetService')
+        return service.submitForApproval(vId.data!, vUser.data!)
     })
 
-    ipcMain.handle('budget:approve', async (_event: IpcMainInvokeEvent, budgetId: number, userId: number) => {
-        const service = container.resolve<BudgetService>('BudgetService')
-        return service.approve(budgetId, userId)
+    safeHandleRaw('budget:approve', (_event, budgetId: number, userId: number) => {
+        const vId = validateId(budgetId, 'Budget ID')
+        const vUser = validateId(userId, 'User ID')
+        if (!vId.success) { return { success: false, error: vId.error } }
+        if (!vUser.success) { return { success: false, error: vUser.error } }
+        const service = container.resolve('BudgetService')
+        return service.approve(vId.data!, vUser.data!)
     })
 }

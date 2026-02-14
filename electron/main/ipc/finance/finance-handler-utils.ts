@@ -144,20 +144,27 @@ const createBatchInvoiceNumber = (academicYearId: number, termId: number, studen
     return `INV-${academicYearId}-${termId}-${studentId}-${Date.now().toString().slice(-4)}`
 }
 
-export const generateBatchInvoices = (context: FinanceContext, academicYearId: number, termId: number, userId: number): { success: boolean, count?: number, message?: string } => {
+export const generateBatchInvoices = (context: FinanceContext, academicYearId: number, termId: number, userId: number): { success: boolean, count?: number, error?: string } => {
     const { db, exemptionService } = context
     const structure = fetchFeeStructure(db, academicYearId, termId)
     if (structure.length === 0) {
-        return { success: false, message: NO_FEE_STRUCTURE_MESSAGE }
+        return { success: false, error: NO_FEE_STRUCTURE_MESSAGE }
     }
 
     const enrollments = fetchActiveEnrollments(db, academicYearId, termId)
     if (enrollments.length === 0) {
-        return { success: false, message: NO_ENROLLMENTS_MESSAGE }
+        return { success: false, error: NO_ENROLLMENTS_MESSAGE }
     }
 
     let count = 0
-    const checkInvoiceStmt = db.prepare('SELECT id FROM fee_invoice WHERE student_id = ? AND term_id = ?')
+    const checkInvoiceStmt = db.prepare(`
+        SELECT id
+        FROM fee_invoice
+        WHERE student_id = ?
+          AND term_id = ?
+          AND (status IS NULL OR status != 'CANCELLED')
+        LIMIT 1
+    `)
     const insertInvoiceStmt = db.prepare(`
         INSERT INTO fee_invoice (
             invoice_number, student_id, term_id, academic_term_id,
@@ -222,6 +229,100 @@ export const generateBatchInvoices = (context: FinanceContext, academicYearId: n
         return { success: true, count }
     } catch (error) {
         console.error(error)
-        return { success: false, message: getErrorMessage(error, UNKNOWN_ERROR_OCCURRED_MESSAGE) }
+        return { success: false, error: getErrorMessage(error, UNKNOWN_ERROR_OCCURRED_MESSAGE) }
+    }
+}
+
+export const generateSingleStudentInvoice = (
+    context: FinanceContext,
+    studentId: number,
+    academicYearId: number,
+    termId: number,
+    userId: number | null
+): { success: boolean; invoiceNumber?: string; error?: string } => {
+    const { db, exemptionService } = context
+
+    const structure = fetchFeeStructure(db, academicYearId, termId)
+    if (structure.length === 0) {
+        return { success: false, error: NO_FEE_STRUCTURE_MESSAGE }
+    }
+
+    // Check for existing invoice
+    const existing = db.prepare(`
+        SELECT id, invoice_number
+        FROM fee_invoice
+        WHERE student_id = ?
+          AND term_id = ?
+          AND (status IS NULL OR status != 'CANCELLED')
+        LIMIT 1
+    `).get(studentId, termId) as { id: number; invoice_number: string } | undefined
+    if (existing) {
+        return { success: true, invoiceNumber: existing.invoice_number }
+    }
+
+    // Look up enrollment
+    const enrollment = db.prepare(`
+        SELECT e.*, s.first_name, s.last_name
+        FROM enrollment e
+        JOIN student s ON e.student_id = s.id
+        WHERE e.student_id = ? AND e.academic_year_id = ? AND e.term_id = ? AND e.status = 'ACTIVE'
+    `).get(studentId, academicYearId, termId) as EnrollmentRecord | undefined
+
+    if (!enrollment) {
+        return { success: false, error: 'No active enrollment found for this student in the selected term. Please enroll the student first.' }
+    }
+
+    const fees = getApplicableFees(structure, enrollment)
+    if (fees.length === 0) {
+        return { success: false, error: 'No fee structure defined for this student\'s stream and type' }
+    }
+
+    const exemptions = exemptionService.getStudentExemptions(studentId, academicYearId, termId) as StudentExemption[]
+    const { invoiceItems, invoiceTotal, originalTotal } = computeInvoiceItems(fees, exemptions)
+    const invoiceDate = getTodayDate()
+    const invoiceNumber = createBatchInvoiceNumber(academicYearId, termId, studentId)
+
+    try {
+        db.transaction(() => {
+            const insertResult = db.prepare(`
+                INSERT INTO fee_invoice (
+                    invoice_number, student_id, term_id, academic_term_id,
+                    invoice_date, due_date, total_amount, amount, amount_due, original_amount, created_by_user_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+                invoiceNumber, studentId, termId, termId,
+                invoiceDate, invoiceDate, invoiceTotal, invoiceTotal, invoiceTotal, originalTotal, userId || null
+            )
+
+            const invoiceId = insertResult.lastInsertRowid
+            const insertItemStmt = db.prepare(`
+                INSERT INTO invoice_item (invoice_id, fee_category_id, description, amount, exemption_id, original_amount, exemption_amount)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            `)
+            for (const item of invoiceItems) {
+                insertItemStmt.run(invoiceId, item.fee_category_id, item.description, item.amount, item.exemption_id, item.original_amount, item.exemption_amount)
+            }
+        })()
+
+        return { success: true, invoiceNumber }
+    } catch (error) {
+        const message = getErrorMessage(error, UNKNOWN_ERROR_OCCURRED_MESSAGE)
+        if (message.includes('idx_fee_invoice_active_unique')) {
+            const concurrentInvoice = db.prepare(`
+                SELECT invoice_number
+                FROM fee_invoice
+                WHERE student_id = ?
+                  AND term_id = ?
+                  AND (status IS NULL OR status != 'CANCELLED')
+                ORDER BY id DESC
+                LIMIT 1
+            `).get(studentId, termId) as { invoice_number: string } | undefined
+            if (concurrentInvoice?.invoice_number) {
+                return { success: true, invoiceNumber: concurrentInvoice.invoice_number }
+            }
+        }
+        console.error('Single student invoice generation error:', error)
+        return { success: false, error: message }
     }
 }

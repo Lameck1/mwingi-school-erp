@@ -29,13 +29,13 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     login: (user) => {
         const lastActivity = Date.now()
         set({ user, isAuthenticated: true, lastActivity, isSessionLoaded: true })
-        globalThis.electronAPI.setSession({ user, lastActivity }).catch((error) => {
+        globalThis.electronAPI.auth.setSession({ user, lastActivity }).catch((error) => {
             console.error(SESSION_PERSIST_ERROR, error)
         })
     },
     logout: () => {
         set({ user: null, isAuthenticated: false, lastActivity: null, isSessionLoaded: true })
-        globalThis.electronAPI.clearSession().catch((error) => {
+        globalThis.electronAPI.auth.clearSession().catch((error) => {
             console.error(SESSION_CLEAR_ERROR, error)
         })
     },
@@ -44,7 +44,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         if (state.isAuthenticated && state.user) {
             const lastActivity = Date.now()
             set({ lastActivity })
-            globalThis.electronAPI.setSession({ user: state.user, lastActivity }).catch((error) => {
+            globalThis.electronAPI.auth.setSession({ user: state.user, lastActivity }).catch((error) => {
                 console.error(SESSION_PERSIST_ERROR, error)
             })
         }
@@ -55,7 +55,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         const elapsed = Date.now() - state.lastActivity
         if (elapsed > SESSION_TIMEOUT_MS) {
             set({ user: null, isAuthenticated: false, lastActivity: null, isSessionLoaded: true })
-            globalThis.electronAPI.clearSession().catch((error) => {
+            globalThis.electronAPI.auth.clearSession().catch((error) => {
                 console.error(SESSION_CLEAR_ERROR, error)
             })
             return false
@@ -68,7 +68,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
             set({ isSessionLoaded: true })
             return
         }
-        const session = await globalThis.electronAPI.getSession()
+        const session = await globalThis.electronAPI.auth.getSession()
         const latest = get()
         if (latest.isAuthenticated && latest.user) {
             set({ isSessionLoaded: true })
@@ -81,7 +81,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         const elapsed = Date.now() - session.lastActivity
         if (elapsed > SESSION_TIMEOUT_MS) {
             set({ user: null, isAuthenticated: false, lastActivity: null, isSessionLoaded: true })
-            globalThis.electronAPI.clearSession().catch((error) => {
+            globalThis.electronAPI.auth.clearSession().catch((error) => {
                 console.error(SESSION_CLEAR_ERROR, error)
             })
             return

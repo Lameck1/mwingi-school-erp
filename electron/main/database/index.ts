@@ -2,14 +2,19 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 
 import { app } from '../electron-env'
+import log from '../utils/logger'
 
 import type Database from 'better-sqlite3'
 
-export let db: Database.Database | null = null // NOSONAR - re-assigned during init/recovery lifecycle
+let db: Database.Database | null = null // NOSONAR - re-assigned during init/recovery lifecycle
 
 export function getDatabase(): Database.Database {
     if (!db) {throw new Error('Database not initialized')}
     return db
+}
+
+export function isDatabaseInitialized(): boolean {
+    return db !== null
 }
 
 export function getDatabasePath(): string {
@@ -76,19 +81,19 @@ function prepareUnencryptedDatabase(DatabaseClass: typeof Database, dbPath: stri
         database.prepare('SELECT count(*) FROM sqlite_master').get()
 
         const modeBefore = database.pragma('journal_mode', { simple: true })
-        console.error(`Current journal_mode: ${modeBefore}`)
+        log.info(`Current journal_mode: ${modeBefore}`)
         database.pragma('journal_mode = DELETE')
 
         const modeAfter = database.pragma('journal_mode', { simple: true })
-        console.error(`New journal_mode: ${modeAfter}`)
+        log.info(`New journal_mode: ${modeAfter}`)
         if (modeAfter !== 'delete') {
             throw new Error(`Failed to switch to DELETE mode. Current mode: ${modeAfter}`)
         }
 
         if (key) {
-            console.error('Database is unencrypted. Encrypting now...')
+            log.info('Database is unencrypted. Encrypting now...')
             applyKeyPragma(database, key, 'rekey')
-            console.error('Encryption complete. Verifying...')
+            log.info('Encryption complete. Verifying...')
         }
 
         return database
@@ -114,10 +119,10 @@ function recoverDatabaseFile(DatabaseClass: typeof Database, dbPath: string, key
 
 async function openOrRecoverDatabase(DatabaseClass: typeof Database, dbPath: string, key: string): Promise<Database.Database> {
     try {
-        console.error('Attempting to open database...')
+        log.info('Attempting to open database...')
         return openAndTest(DatabaseClass, dbPath, key)
     } catch {
-        console.error('Failed to open with key. Assuming unencrypted or corrupted. Attempting migration/reset...')
+        log.warn('Failed to open with key. Assuming unencrypted or corrupted. Attempting migration/reset...')
     }
 
     closeSilently(db)
@@ -126,8 +131,8 @@ async function openOrRecoverDatabase(DatabaseClass: typeof Database, dbPath: str
     try {
         return prepareUnencryptedDatabase(DatabaseClass, dbPath, key)
     } catch (migrationError: unknown) {
-        console.error('Migration/Recovery failed:', migrationError)
-        console.error('Migration/Recovery stack:', (migrationError as Error).stack)
+        log.error('Migration/Recovery failed:', migrationError)
+        log.error('Migration/Recovery stack:', (migrationError as Error).stack)
     }
 
     closeSilently(db)
@@ -136,7 +141,7 @@ async function openOrRecoverDatabase(DatabaseClass: typeof Database, dbPath: str
     try {
         return recoverDatabaseFile(DatabaseClass, dbPath, key)
     } catch (criticalError) {
-        console.error('Critical Database Failure: Could not reset database.', criticalError)
+        log.error('Critical Database Failure: Could not reset database.', criticalError)
         throw criticalError
     }
 }
@@ -220,7 +225,7 @@ export async function backupDatabase(backupPath: string): Promise<void> {
         checkpointWal(db)
         copyDatabaseFiles(dbPath, backupPath)
     } catch (fallbackError) {
-        console.error('Fallback backup failed:', fallbackError)
+        log.error('Fallback backup failed:', fallbackError)
         throw fallbackError
     }
 }

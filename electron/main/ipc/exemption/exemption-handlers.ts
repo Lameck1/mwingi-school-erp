@@ -1,48 +1,55 @@
-import { ipcMain } from '../../electron-env'
-import { ExemptionService, type ExemptionCreateData } from '../../services/finance/ExemptionService'
+import { container } from '../../services/base/ServiceContainer'
+import { validateId } from '../../utils/validation'
+import { safeHandleRaw } from '../ipc-result'
 
-import type { IpcMainInvokeEvent } from 'electron'
+import type { ExemptionCreateData } from '../../services/finance/ExemptionService'
 
 export function registerExemptionHandlers(): void {
-    const exemptionService = new ExemptionService()
-    type CalculateExemptionArgs = [
-        studentId: number,
-        academicYearId: number,
-        termId: number,
-        categoryId: number,
-        originalAmount: number
-    ]
+    const svc = () => container.resolve('ExemptionService')
 
-    ipcMain.handle('exemption:getAll', async (_event: IpcMainInvokeEvent, filters?: {
+    safeHandleRaw('exemption:getAll', (_event, filters?: {
         studentId?: number;
         academicYearId?: number;
         termId?: number;
         status?: string
     }) => {
-        return exemptionService.getExemptions(filters)
+        return svc().getExemptions(filters)
     })
 
-    ipcMain.handle('exemption:getById', async (_event: IpcMainInvokeEvent, id: number) => {
-        return exemptionService.getExemptionById(id)
+    safeHandleRaw('exemption:getById', (_event, id: number) => {
+        const v = validateId(id, 'Exemption ID')
+        if (!v.success) { return { success: false, error: v.error } }
+        return svc().getExemptionById(v.data!)
     })
 
-    ipcMain.handle('exemption:getStudentExemptions', async (_event: IpcMainInvokeEvent, studentId: number, academicYearId: number, termId: number) => {
-        return exemptionService.getStudentExemptions(studentId, academicYearId, termId)
+    safeHandleRaw('exemption:getStudentExemptions', (_event, studentId: number, academicYearId: number, termId: number) => {
+        const vStudent = validateId(studentId, 'Student ID')
+        const vYear = validateId(academicYearId, 'Academic Year ID')
+        const vTerm = validateId(termId, 'Term ID')
+        if (!vStudent.success) { return { success: false, error: vStudent.error } }
+        if (!vYear.success) { return { success: false, error: vYear.error } }
+        if (!vTerm.success) { return { success: false, error: vTerm.error } }
+        return svc().getStudentExemptions(vStudent.data!, vYear.data!, vTerm.data!)
     })
 
-    ipcMain.handle('exemption:calculate', async (_event: IpcMainInvokeEvent, ...[studentId, academicYearId, termId, categoryId, originalAmount]: CalculateExemptionArgs) => {
-        return exemptionService.calculateExemption(studentId, academicYearId, termId, categoryId, originalAmount)
+    safeHandleRaw('exemption:calculate', (_event, studentId: number, academicYearId: number, termId: number, categoryId: number, originalAmount: number) => {
+        return svc().calculateExemption(studentId, academicYearId, termId, categoryId, originalAmount)
     })
 
-    ipcMain.handle('exemption:create', async (_event: IpcMainInvokeEvent, data: ExemptionCreateData, userId: number) => {
-        return exemptionService.createExemption(data, userId)
+    safeHandleRaw('exemption:create', (_event, data: ExemptionCreateData, userId: number) => {
+        return svc().createExemption(data, userId)
     })
 
-    ipcMain.handle('exemption:revoke', async (_event: IpcMainInvokeEvent, id: number, reason: string, userId: number) => {
-        return exemptionService.revokeExemption(id, reason, userId)
+    safeHandleRaw('exemption:revoke', (_event, id: number, reason: string, userId: number) => {
+        const vId = validateId(id, 'Exemption ID')
+        const vUser = validateId(userId, 'User ID')
+        if (!vId.success) { return { success: false, error: vId.error } }
+        if (!vUser.success) { return { success: false, error: vUser.error } }
+        if (!reason || typeof reason !== 'string' || !reason.trim()) { return { success: false, error: 'Revoke reason is required' } }
+        return svc().revokeExemption(vId.data!, reason.trim(), vUser.data!)
     })
 
-    ipcMain.handle('exemption:getStats', async (_event: IpcMainInvokeEvent, academicYearId?: number) => {
-        return exemptionService.getExemptionStats(academicYearId)
+    safeHandleRaw('exemption:getStats', (_event, academicYearId?: number) => {
+        return svc().getExemptionStats(academicYearId)
     })
 }

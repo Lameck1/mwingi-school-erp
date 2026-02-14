@@ -88,8 +88,8 @@ export interface GradeTransition {
 
 export interface JSSAPI {
   initiateTransition: (data: SingleTransitionData) => Promise<{ success: boolean; data?: number; message?: string }>
-  bulkTransition: (data: BulkTransitionData) => Promise<{ success: boolean; data?: TransitionResult; message?: string }>
-  getEligibleStudents: (fromGrade: number, fiscalYear: number) => Promise<{ success: boolean; data: EligibleStudent[]; message?: string }>
+  bulkJSSTransition: (data: BulkTransitionData) => Promise<{ success: boolean; data?: TransitionResult; message?: string }>
+  getJSSEligibleStudents: (fromGrade: number, fiscalYear: number) => Promise<{ success: boolean; data: EligibleStudent[]; message?: string }>
   getJSSFeeStructure: (grade: number, fiscalYear: number) => Promise<{ success: boolean; data: JSSFeeStructure | null; message?: string }>
   setJSSFeeStructure: (data: JSSFeeStructureInput) => Promise<{ success: boolean; data?: number; message?: string }>
   getTransitionReport: (studentId: number) => Promise<{ success: boolean; data: GradeTransition[]; message?: string }>

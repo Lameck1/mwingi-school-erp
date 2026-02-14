@@ -1,7 +1,6 @@
-import { ipcMain } from '../../electron-env'
-import { HireService } from '../../services/finance/HireService'
-
-import type { IpcMainInvokeEvent } from 'electron'
+import { container } from '../../services/base/ServiceContainer'
+import { validateDate, validateId } from '../../utils/validation'
+import { safeHandleRaw } from '../ipc-result'
 
 // Local interfaces to avoid importing from src/ which is not in electron tsconfig
 interface HireClient {
@@ -12,80 +11,119 @@ interface HireAsset {
 }
 interface HireBooking {
     id: number; asset_id: number; client_id: number; hire_date: string; total_amount: number; status: 'PENDING' | 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+    return_date?: string;
 }
 interface HirePayment {
     id: number; booking_id: number; amount: number; payment_date: string;
 }
 
+const ALLOWED_BOOKING_STATUSES = ['PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as const
+
+const svc = () => container.resolve('HireService')
+
 export function registerHireHandlers(): void {
-    const hireService = new HireService()
-
     // ========== CLIENTS ==========
-    ipcMain.handle('hire:getClients', async (_event: IpcMainInvokeEvent, filters?: { search?: string; isActive?: boolean }) => {
-        return hireService.getClients(filters)
+    safeHandleRaw('hire:getClients', (_event, filters?: { search?: string; isActive?: boolean }) => {
+        return svc().getClients(filters)
     })
 
-    ipcMain.handle('hire:getClientById', async (_event: IpcMainInvokeEvent, id: number) => {
-        return hireService.getClientById(id)
+    safeHandleRaw('hire:getClientById', (_event, id: number) => {
+        const v = validateId(id, 'Client ID')
+        if (!v.success) { return { success: false, error: v.error } }
+        return svc().getClientById(v.data!)
     })
 
-    ipcMain.handle('hire:createClient', async (_event: IpcMainInvokeEvent, data: Partial<HireClient>) => {
-        return hireService.createClient(data)
+    safeHandleRaw('hire:createClient', (_event, data: Partial<HireClient>) => {
+        return svc().createClient(data)
     })
 
-    ipcMain.handle('hire:updateClient', async (_event: IpcMainInvokeEvent, id: number, data: Partial<HireClient>) => {
-        return hireService.updateClient(id, data)
+    safeHandleRaw('hire:updateClient', (_event, id: number, data: Partial<HireClient>) => {
+        const v = validateId(id, 'Client ID')
+        if (!v.success) { return { success: false, error: v.error } }
+        return svc().updateClient(v.data!, data)
     })
 
     // ========== ASSETS ==========
-    ipcMain.handle('hire:getAssets', async (_event: IpcMainInvokeEvent, filters?: { type?: string; isActive?: boolean }) => {
-        return hireService.getAssets(filters)
+    safeHandleRaw('hire:getAssets', (_event, filters?: { type?: string; isActive?: boolean }) => {
+        return svc().getAssets(filters)
     })
 
-    ipcMain.handle('hire:getAssetById', async (_event: IpcMainInvokeEvent, id: number) => {
-        return hireService.getAssetById(id)
+    safeHandleRaw('hire:getAssetById', (_event, id: number) => {
+        const v = validateId(id, 'Asset ID')
+        if (!v.success) { return { success: false, error: v.error } }
+        return svc().getAssetById(v.data!)
     })
 
-    ipcMain.handle('hire:createAsset', async (_event: IpcMainInvokeEvent, data: Partial<HireAsset>) => {
-        return hireService.createAsset(data)
+    safeHandleRaw('hire:createAsset', (_event, data: Partial<HireAsset>) => {
+        return svc().createAsset(data)
     })
 
-    ipcMain.handle('hire:updateAsset', async (_event: IpcMainInvokeEvent, id: number, data: Partial<HireAsset>) => {
-        return hireService.updateAsset(id, data)
+    safeHandleRaw('hire:updateAsset', (_event, id: number, data: Partial<HireAsset>) => {
+        const v = validateId(id, 'Asset ID')
+        if (!v.success) { return { success: false, error: v.error } }
+        return svc().updateAsset(v.data!, data)
     })
 
-    ipcMain.handle('hire:checkAvailability', async (_event: IpcMainInvokeEvent, assetId: number, hireDate: string, returnDate?: string) => {
-        return hireService.checkAssetAvailability(assetId, hireDate, returnDate)
+    safeHandleRaw('hire:checkAvailability', (_event, assetId: number, hireDate: string, returnDate?: string) => {
+        return svc().checkAssetAvailability(assetId, hireDate, returnDate)
     })
 
     // ========== BOOKINGS ==========
-    ipcMain.handle('hire:getBookings', async (_event: IpcMainInvokeEvent, filters?: { status?: string; assetId?: number; clientId?: number }) => {
-        return hireService.getBookings(filters)
+    safeHandleRaw('hire:getBookings', (_event, filters?: { status?: string; assetId?: number; clientId?: number }) => {
+        return svc().getBookings(filters)
     })
 
-    ipcMain.handle('hire:getBookingById', async (_event: IpcMainInvokeEvent, id: number) => {
-        return hireService.getBookingById(id)
+    safeHandleRaw('hire:getBookingById', (_event, id: number) => {
+        return svc().getBookingById(id)
     })
 
-    ipcMain.handle('hire:createBooking', async (_event: IpcMainInvokeEvent, data: Partial<HireBooking>, userId: number) => {
-        return hireService.createBooking(data, userId)
+    safeHandleRaw('hire:createBooking', (_event, data: Partial<HireBooking>, userId: number) => {
+        const vUser = validateId(userId, 'User ID')
+        if (!vUser.success) { return { success: false, error: vUser.error } }
+        const vAsset = validateId(data.asset_id, 'Asset ID')
+        if (!vAsset.success) { return { success: false, error: vAsset.error } }
+        const vClient = validateId(data.client_id, 'Client ID')
+        if (!vClient.success) { return { success: false, error: vClient.error } }
+        const vHireDate = validateDate(data.hire_date)
+        if (!vHireDate.success) { return { success: false, error: vHireDate.error } }
+        if (data.return_date) {
+            const vReturnDate = validateDate(data.return_date)
+            if (!vReturnDate.success) { return { success: false, error: vReturnDate.error } }
+            if (vReturnDate.data! < vHireDate.data!) {
+                return { success: false, error: 'Return date cannot be earlier than hire date' }
+            }
+        }
+        if (!Number.isFinite(data.total_amount) || (data.total_amount || 0) <= 0) {
+            return { success: false, error: 'Booking amount must be greater than zero' }
+        }
+
+        return svc().createBooking(data, userId)
     })
 
-    ipcMain.handle('hire:updateBookingStatus', async (_event: IpcMainInvokeEvent, id: number, status: string) => {
-        return hireService.updateBookingStatus(id, status)
+    safeHandleRaw('hire:updateBookingStatus', (_event, id: number, status: string) => {
+        const v = validateId(id, 'Booking ID')
+        if (!v.success) { return { success: false, error: v.error } }
+        if (!ALLOWED_BOOKING_STATUSES.includes(status as (typeof ALLOWED_BOOKING_STATUSES)[number])) {
+            return { success: false, error: `Invalid booking status: ${status}` }
+        }
+        return svc().updateBookingStatus(v.data!, status)
     })
 
     // ========== PAYMENTS ==========
-    ipcMain.handle('hire:recordPayment', async (_event: IpcMainInvokeEvent, bookingId: number, data: Partial<HirePayment>, userId: number) => {
-        return hireService.recordPayment(bookingId, data, userId)
+    safeHandleRaw('hire:recordPayment', (_event, bookingId: number, data: Partial<HirePayment>, userId: number) => {
+        const vBooking = validateId(bookingId, 'Booking ID')
+        const vUser = validateId(userId, 'User ID')
+        if (!vBooking.success) { return { success: false, error: vBooking.error } }
+        if (!vUser.success) { return { success: false, error: vUser.error } }
+        return svc().recordPayment(vBooking.data!, data, vUser.data!)
     })
 
-    ipcMain.handle('hire:getPaymentsByBooking', async (_event: IpcMainInvokeEvent, bookingId: number) => {
-        return hireService.getPaymentsByBooking(bookingId)
+    safeHandleRaw('hire:getPaymentsByBooking', (_event, bookingId: number) => {
+        return svc().getPaymentsByBooking(bookingId)
     })
 
     // ========== STATS ==========
-    ipcMain.handle('hire:getStats', async () => {
-        return hireService.getHireStats()
+    safeHandleRaw('hire:getStats', () => {
+        return svc().getHireStats()
     })
 }

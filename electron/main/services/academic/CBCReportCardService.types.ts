@@ -10,6 +10,7 @@ export interface StudentReportCard {
     subject_name: string
     marks: number
     grade: string
+    points: number
     percentage: number
     teacher_comment: string
     competency_level: string
@@ -17,6 +18,8 @@ export interface StudentReportCard {
   total_marks: number
   average_marks: number
   overall_grade: string
+  total_points: number
+  average_points: number
   position_in_class: number
   position_in_stream: number
   learning_areas: {
@@ -80,6 +83,7 @@ export interface SubjectGradeResult {
 export interface AttendanceResult {
   days_present: number
   days_absent: number
+  total_days: number
 }
 
 export interface ClassPositionResult {
@@ -121,4 +125,11 @@ export interface ReportCardSubjectRecord {
   percentage: number
   teacher_comment: string
   competency_level: string
+}
+
+export interface BatchGenerationResult {
+  generated: StudentReportCard[]
+  failed: number
+  total: number
+  failures: Array<{ student_id: number; error: string }>
 }

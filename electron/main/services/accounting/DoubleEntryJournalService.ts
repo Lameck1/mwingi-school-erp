@@ -1,6 +1,7 @@
 
 import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
+import { randomUUID } from 'node:crypto';
 
 import type Database from 'better-sqlite3';
 
@@ -27,6 +28,7 @@ export interface JournalEntryData {
   created_by_user_id: number;
   lines: JournalEntryLineData[];
   requires_approval?: boolean;
+  source_ledger_txn_id?: number;
 }
 
 export interface JournalEntryLineData {
@@ -54,8 +56,11 @@ type RecordPaymentArgs = [
   paymentMethod: string,
   paymentReference: string,
   paymentDate: string,
-  userId: number
+  userId: number,
+  sourceLedgerTxnId?: number
 ];
+
+type JournalWriteResult = { success: boolean; error?: string; message?: string; entry_id?: number };
 
 export interface JournalEntryLine {
   id: number;
@@ -90,9 +95,59 @@ export interface AccountBalance {
 
 export class DoubleEntryJournalService {
   private readonly db: Database.Database;
+  private sourceLedgerColumnAvailable: boolean | null = null;
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase();
+  }
+
+  private hasSourceLedgerTxnColumn(): boolean {
+    if (this.sourceLedgerColumnAvailable !== null) {
+      return this.sourceLedgerColumnAvailable;
+    }
+    const columns = this.db.prepare('PRAGMA table_info(journal_entry)').all() as Array<{ name: string }>;
+    this.sourceLedgerColumnAvailable = columns.some((column) => column.name === 'source_ledger_txn_id');
+    return this.sourceLedgerColumnAvailable;
+  }
+
+  private tableExists(tableName: string): boolean {
+    const row = this.db.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table' AND name = ?
+    `).get(tableName) as { name: string } | undefined;
+    return Boolean(row?.name);
+  }
+
+  private tableHasColumn(tableName: string, columnName: string): boolean {
+    if (!this.tableExists(tableName)) {
+      return false;
+    }
+
+    const columns = this.db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+    return columns.some((column) => column.name === columnName);
+  }
+
+  private getOrCreateWorkflowId(entityType: string, workflowName: string): number | null {
+    if (!this.tableExists('approval_workflow')) {
+      return null;
+    }
+
+    const existing = this.db.prepare(`
+      SELECT id
+      FROM approval_workflow
+      WHERE entity_type = ?
+      LIMIT 1
+    `).get(entityType) as { id: number } | undefined;
+    if (existing?.id) {
+      return existing.id;
+    }
+
+    const insert = this.db.prepare(`
+      INSERT INTO approval_workflow (workflow_name, entity_type, is_active)
+      VALUES (?, ?, 1)
+    `).run(workflowName, entityType);
+    return insert.lastInsertRowid as number;
   }
 
   /**
@@ -177,7 +232,27 @@ export class DoubleEntryJournalService {
     totalDebits: number
   ): number {
     const insert = this.db.transaction(() => {
-      const headerResult = this.db.prepare(`
+      const supportsSourceLedgerLink = this.hasSourceLedgerTxnColumn();
+      const headerResult = supportsSourceLedgerLink ? this.db.prepare(`
+          INSERT INTO journal_entry (
+            entry_ref, entry_date, entry_type, description,
+            student_id, staff_id, term_id,
+            requires_approval, approval_status,
+            created_by_user_id, source_ledger_txn_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+        entryRef,
+        data.entry_date,
+        data.entry_type,
+        data.description,
+        data.student_id || null,
+        data.staff_id || null,
+        data.term_id || null,
+        requiresApproval ? 1 : 0,
+        requiresApproval ? 'PENDING' : 'APPROVED',
+        data.created_by_user_id,
+        data.source_ledger_txn_id || null
+      ) : this.db.prepare(`
           INSERT INTO journal_entry (
             entry_ref, entry_date, entry_type, description,
             student_id, staff_id, term_id,
@@ -219,7 +294,8 @@ export class DoubleEntryJournalService {
           entry_type: data.entry_type,
           total_debits: totalDebits,
           total_credits: totalCredits,
-          requires_approval: requiresApproval
+          requires_approval: requiresApproval,
+          source_ledger_txn_id: data.source_ledger_txn_id || null
         }
       );
 
@@ -229,25 +305,25 @@ export class DoubleEntryJournalService {
     return insert();
   }
 
-  async createJournalEntry(data: JournalEntryData): Promise<{ success: boolean; message: string; entry_id?: number }> {
+  createJournalEntrySync(data: JournalEntryData): JournalWriteResult {
     try {
       const lineCountValidation = this.validateLineCount(data.lines);
       if (!lineCountValidation.valid) {
-        return { success: false, message: lineCountValidation.message || 'Invalid journal entry line count' };
+        return { success: false, error: lineCountValidation.message || 'Invalid journal entry line count' };
       }
 
       const balancingValidation = this.validateBalancing(data.lines);
       if (!balancingValidation.valid) {
-        return { success: false, message: balancingValidation.message || 'Journal entry is not balanced' };
+        return { success: false, error: balancingValidation.message || 'Journal entry is not balanced' };
       }
 
       const accountValidation = this.validateGlAccounts(data.lines);
       if (!accountValidation.valid) {
-        return { success: false, message: accountValidation.message || 'Invalid GL account' };
+        return { success: false, error: accountValidation.message || 'Invalid GL account' };
       }
 
       // Check if approval required
-      const requiresApproval = data.requires_approval || await this.checkApprovalRequired(data);
+      const requiresApproval = data.requires_approval || this.checkApprovalRequiredSync(data);
 
       // Generate entry reference
       const entryRef = this.generateEntryRef(data.entry_type);
@@ -269,9 +345,13 @@ export class DoubleEntryJournalService {
     } catch (error) {
       return {
         success: false,
-        message: `Failed to create journal entry: ${(error as Error).message}`
+        error: `Failed to create journal entry: ${(error as Error).message}`
       };
     }
+  }
+
+  async createJournalEntry(data: JournalEntryData): Promise<JournalWriteResult> {
+    return this.createJournalEntrySync(data);
   }
 
   /**
@@ -279,9 +359,9 @@ export class DoubleEntryJournalService {
    * Debit: Bank/Cash
    * Credit: Student Receivable
    */
-  async recordPayment(
-    ...[studentId, amount, paymentMethod, paymentReference, paymentDate, userId]: RecordPaymentArgs
-  ): Promise<{ success: boolean; message: string; entry_id?: number }> {
+  recordPaymentSync(
+    ...[studentId, amount, paymentMethod, paymentReference, paymentDate, userId, sourceLedgerTxnId]: RecordPaymentArgs
+  ): JournalWriteResult {
     // Determine cash/bank account
     const cashAccountCode = paymentMethod === 'CASH' ? '1010' : '1020';
 
@@ -291,6 +371,7 @@ export class DoubleEntryJournalService {
       description: `Fee payment received - ${paymentMethod} - Ref: ${paymentReference}`,
       student_id: studentId,
       created_by_user_id: userId,
+      source_ledger_txn_id: sourceLedgerTxnId,
       lines: [
         {
           gl_account_code: cashAccountCode,
@@ -307,7 +388,13 @@ export class DoubleEntryJournalService {
       ]
     };
 
-    return this.createJournalEntry(journalData);
+    return this.createJournalEntrySync(journalData);
+  }
+
+  async recordPayment(
+    ...args: RecordPaymentArgs
+  ): Promise<JournalWriteResult> {
+    return this.recordPaymentSync(...args);
   }
 
   /**
@@ -315,12 +402,12 @@ export class DoubleEntryJournalService {
    * Debit: Student Receivable
    * Credit: Revenue (Tuition/Boarding/Transport)
    */
-  async recordInvoice(
+  recordInvoiceSync(
     studentId: number,
     invoiceItems: Array<{ gl_account_code: string; amount: number; description: string }>,
     invoiceDate: string,
     userId: number
-  ): Promise<{ success: boolean; message: string; entry_id?: number }> {
+  ): JournalWriteResult {
     const totalAmount = invoiceItems.reduce((sum, item) => sum + item.amount, 0);
 
     const lines: JournalEntryLineData[] = [
@@ -351,7 +438,16 @@ export class DoubleEntryJournalService {
       lines
     };
 
-    return this.createJournalEntry(journalData);
+    return this.createJournalEntrySync(journalData);
+  }
+
+  async recordInvoice(
+    studentId: number,
+    invoiceItems: Array<{ gl_account_code: string; amount: number; description: string }>,
+    invoiceDate: string,
+    userId: number
+  ): Promise<JournalWriteResult> {
+    return this.recordInvoiceSync(studentId, invoiceItems, invoiceDate, userId);
   }
 
   /**
@@ -387,28 +483,74 @@ export class DoubleEntryJournalService {
       const totalAmount = originalEntry.reduce((sum, line) => sum + (line.debit_amount || 0), 0);
 
       const needsApproval = this.db.prepare(`
-        SELECT id FROM approval_rule
+        SELECT id, rule_name FROM approval_rule
         WHERE transaction_type = 'VOID'
           AND is_active = 1
           AND (
             (min_amount IS NOT NULL AND ? >= min_amount)
             OR (days_since_transaction IS NOT NULL AND ? >= days_since_transaction)
           )
-      `).get(totalAmount, daysOld) as { id: number } | undefined;
+      `).get(totalAmount, daysOld) as { id: number; rule_name: string } | undefined;
 
       if (needsApproval) {
-        // Create approval request
-        const _approvalResult = this.db.prepare(`
-          INSERT INTO transaction_approval (
-            journal_entry_id, approval_rule_id,
-            requested_by_user_id, status
-          ) VALUES (?, ?, ?, 'PENDING')
-        `).run(entryId, needsApproval.id, userId);
+        // Canonical approval path: approval_request table.
+        if (this.tableExists('approval_request')) {
+          const workflowId = this.getOrCreateWorkflowId('JOURNAL_ENTRY', 'Journal Entry Approvals');
+          if (!workflowId) {
+            throw new Error('Approval workflow unavailable for journal approvals');
+          }
+
+          const supportsRuleColumn = this.tableHasColumn('approval_request', 'approval_rule_id');
+          const requestResult = supportsRuleColumn ? this.db.prepare(`
+            INSERT INTO approval_request (
+              workflow_id, entity_type, entity_id,
+              status, requested_by_user_id, approval_rule_id
+            ) VALUES (?, 'JOURNAL_ENTRY', ?, 'PENDING', ?, ?)
+          `).run(workflowId, entryId, userId, needsApproval.id) : this.db.prepare(`
+            INSERT INTO approval_request (
+              workflow_id, entity_type, entity_id,
+              status, requested_by_user_id
+            ) VALUES (?, 'JOURNAL_ENTRY', ?, 'PENDING', ?)
+          `).run(workflowId, entryId, userId);
+
+          if (this.tableExists('approval_history')) {
+            this.db.prepare(`
+              INSERT INTO approval_history (
+                approval_request_id, action, action_by, previous_status, new_status, notes
+              ) VALUES (?, 'REQUESTED', ?, NULL, 'PENDING', ?)
+            `).run(
+              requestResult.lastInsertRowid as number,
+              userId,
+              `Void requires approval: ${needsApproval.rule_name}`
+            );
+          }
+
+          return {
+            success: true,
+            message: 'Void request submitted for approval',
+            requires_approval: true
+          };
+        }
+
+        // Legacy fallback for environments that have not yet migrated.
+        if (this.tableExists('transaction_approval')) {
+          this.db.prepare(`
+            INSERT INTO transaction_approval (
+              journal_entry_id, approval_rule_id,
+              requested_by_user_id, status
+            ) VALUES (?, ?, ?, 'PENDING')
+          `).run(entryId, needsApproval.id, userId);
+
+          return {
+            success: true,
+            message: 'Void request submitted for approval',
+            requires_approval: true
+          };
+        }
 
         return {
-          success: true,
-          message: 'Void request submitted for approval',
-          requires_approval: true
+          success: false,
+          message: 'Approval subsystem is not available'
         };
       }
 
@@ -540,7 +682,24 @@ export class DoubleEntryJournalService {
       }
     });
 
-    // Calculate net income from Revenue and Expense accounts
+    const netIncome = this.calculateNetIncome(asOfDate);
+
+    return {
+      assets,
+      liabilities,
+      equity,
+      total_assets: totalAssets,
+      total_liabilities: totalLiabilities,
+      total_equity: totalEquity,
+      net_income: netIncome,
+      is_balanced: Math.abs(totalAssets - (totalLiabilities + totalEquity + netIncome)) < 1 // Allow 1 cent rounding
+    };
+  }
+
+  /**
+   * Helper: Calculate net income (Revenue - Expenses) as of a given date
+   */
+  private calculateNetIncome(asOfDate: string): number {
     const incomeData = this.db.prepare(`
       SELECT
         ga.account_type,
@@ -563,28 +722,15 @@ export class DoubleEntryJournalService {
     let totalRevenue = 0;
     let totalExpenses = 0;
 
-    incomeData.forEach((row) => {
+    for (const row of incomeData) {
       if (row.account_type === 'REVENUE') {
-        // Revenue normal balance is CREDIT
         totalRevenue = (row.total_credit || 0) - (row.total_debit || 0);
       } else if (row.account_type === 'EXPENSE') {
-        // Expense normal balance is DEBIT
         totalExpenses = (row.total_debit || 0) - (row.total_credit || 0);
       }
-    });
+    }
 
-    const netIncome = totalRevenue - totalExpenses;
-
-    return {
-      assets,
-      liabilities,
-      equity,
-      total_assets: totalAssets,
-      total_liabilities: totalLiabilities,
-      total_equity: totalEquity,
-      net_income: netIncome,
-      is_balanced: Math.abs(totalAssets - (totalLiabilities + totalEquity + netIncome)) < 1 // Allow 1 cent rounding
-    };
+    return totalRevenue - totalExpenses;
   }
 
   /**
@@ -593,13 +739,14 @@ export class DoubleEntryJournalService {
   private generateEntryRef(entryType: string): string {
     const prefix = entryType.substring(0, 3).toUpperCase();
     const timestamp = Date.now();
-    return `${prefix}-${timestamp}`;
+    const nonce = randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase();
+    return `${prefix}-${timestamp}-${nonce}`;
   }
 
   /**
    * Helper: Check if approval required
    */
-  private async checkApprovalRequired(data: JournalEntryData): Promise<boolean> {
+  private checkApprovalRequiredSync(data: JournalEntryData): boolean {
     const totalAmount = data.lines.reduce((sum, line) => sum + line.debit_amount, 0);
 
     const rule = this.db.prepare(`
@@ -610,5 +757,9 @@ export class DoubleEntryJournalService {
     `).get(data.entry_type, totalAmount);
 
     return !!rule;
+  }
+
+  private async checkApprovalRequired(data: JournalEntryData): Promise<boolean> {
+    return this.checkApprovalRequiredSync(data);
   }
 }

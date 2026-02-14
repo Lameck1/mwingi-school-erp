@@ -2,8 +2,11 @@
  * Preload Bridge — Electron ↔ Renderer IPC contract
  *
  * Organized by domain. Each domain module exports a factory that returns
- * its slice of the API. All slices are spread into a single flat object
- * so the renderer can call `electronAPI.<method>()` without changes.
+ * its slice of the API.
+ *
+ * Access via namespaced sub-objects:
+ *   electronAPI.auth.login(...)
+ *   electronAPI.finance.getFeeCategories(...)
  *
  * Domain modules live in ./api/ — add new IPC methods there, not here.
  */
@@ -23,15 +26,15 @@ import { createStudentAPI } from './api/students'
 import { createSystemAPI } from './api/system'
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  ...createAuthAPI(),
-  ...createSettingsAPI(),
-  ...createAcademicAPI(),
-  ...createFinanceAPI(),
-  ...createStudentAPI(),
-  ...createStaffAPI(),
-  ...createOperationsAPI(),
-  ...createReportsAPI(),
-  ...createCommunicationsAPI(),
-  ...createSystemAPI(),
-  ...createMenuEventAPI(),
+  auth: createAuthAPI(),
+  settings: createSettingsAPI(),
+  academic: createAcademicAPI(),
+  finance: createFinanceAPI(),
+  students: createStudentAPI(),
+  staff: createStaffAPI(),
+  operations: createOperationsAPI(),
+  reports: createReportsAPI(),
+  communications: createCommunicationsAPI(),
+  system: createSystemAPI(),
+  menuEvents: createMenuEventAPI(),
 })

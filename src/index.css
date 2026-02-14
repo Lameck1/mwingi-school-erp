@@ -31,7 +31,7 @@
     --success-foreground: 0 0% 100%;
     --warning-foreground: 0 0% 100%;
     --border: 217 32% 17%;
-    --input: 217 32% 17%;
+    --input: 217 32% 21%;
     --ring: 231 92% 62%;
   }
 
@@ -141,7 +141,7 @@
   /* Sophisticated Input (Minimalist) */
   .input,
   .form-input {
-    @apply w-full bg-input border border-border/60 rounded-lg px-4 py-3 text-sm focus:bg-input focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all duration-300 placeholder:text-muted-foreground/30;
+    @apply w-full bg-input border border-border/60 rounded-lg px-4 py-3 text-sm focus:bg-input focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-all duration-300 placeholder:text-muted-foreground/50;
   }
 
   /* Data Table (Modern Clean) */

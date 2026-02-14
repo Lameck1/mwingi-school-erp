@@ -63,7 +63,7 @@ export interface AttendanceEntry {
 export interface StudentAPI {
   getStudents(filters?: StudentFilters): Promise<Student[]>
   getStudentById(id: number): Promise<Student>
-  createStudent(data: Partial<Student>): Promise<{ success: boolean; id: number }>
+  createStudent(data: Partial<Student>, userId?: number): Promise<{ success: boolean; id: number; invoiceGenerated?: boolean; invoiceNumber?: string; invoiceError?: string }>
   updateStudent(id: number, data: Partial<Student>): Promise<{ success: boolean }>
   getStudentBalance(studentId: number): Promise<number>
   // Attendance

@@ -19,7 +19,8 @@ export interface FinancialPeriod {
 
 export interface LockResult {
   success: boolean
-  message: string
+  error?: string
+  message?: string
 }
 
 export interface TransactionAllowanceResult {
@@ -34,6 +35,10 @@ export class PeriodLockingService {
     this.db = db || getDatabase()
   }
 
+  private failure(message: string): LockResult {
+    return { success: false, error: message, message }
+  }
+
   lockPeriod(periodId: number, lockedBy: number): LockResult {
     try {
       const period = this.db.prepare(`
@@ -41,15 +46,15 @@ export class PeriodLockingService {
       `).get(periodId) as FinancialPeriod | undefined
 
       if (!period) {
-        return { success: false, message: FINANCIAL_PERIOD_NOT_FOUND }
+        return this.failure(FINANCIAL_PERIOD_NOT_FOUND)
       }
 
       if (period.status === 'LOCKED') {
-        return { success: false, message: `Period is already locked` }
+        return this.failure('Period is already locked')
       }
 
       if (period.status === 'CLOSED') {
-        return { success: false, message: `Period is closed and cannot be locked` }
+        return this.failure('Period is closed and cannot be locked')
       }
 
       const now = new Date().toISOString()
@@ -74,7 +79,7 @@ export class PeriodLockingService {
 
       return { success: true, message: `Period '${period.name}' locked successfully` }
     } catch (error) {
-      return { success: false, message: `Failed to lock period: ${(error as Error).message}` }
+      return this.failure(`Failed to lock period: ${(error as Error).message}`)
     }
   }
 
@@ -85,15 +90,15 @@ export class PeriodLockingService {
       `).get(periodId) as FinancialPeriod | undefined
 
       if (!period) {
-        return { success: false, message: FINANCIAL_PERIOD_NOT_FOUND }
+        return this.failure(FINANCIAL_PERIOD_NOT_FOUND)
       }
 
       if (period.status === 'OPEN') {
-        return { success: false, message: `Period is not currently locked` }
+        return this.failure('Period is not currently locked')
       }
 
       if (period.status === 'CLOSED') {
-        return { success: false, message: `Period is closed and cannot be unlocked` }
+        return this.failure('Period is closed and cannot be unlocked')
       }
 
       const _now = new Date().toISOString()
@@ -118,7 +123,7 @@ export class PeriodLockingService {
 
       return { success: true, message: `Period '${period.name}' unlocked successfully` }
     } catch (error) {
-      return { success: false, message: `Failed to unlock period: ${(error as Error).message}` }
+      return this.failure(`Failed to unlock period: ${(error as Error).message}`)
     }
   }
 
@@ -129,15 +134,15 @@ export class PeriodLockingService {
       `).get(periodId) as FinancialPeriod | undefined
 
       if (!period) {
-        return { success: false, message: FINANCIAL_PERIOD_NOT_FOUND }
+        return this.failure(FINANCIAL_PERIOD_NOT_FOUND)
       }
 
       if (period.status === 'CLOSED') {
-        return { success: false, message: `Period is already closed` }
+        return this.failure('Period is already closed')
       }
 
       if (period.status !== 'LOCKED') {
-        return { success: false, message: `Period must be locked before closing. Current status: ${period.status}` }
+        return this.failure(`Period must be locked before closing. Current status: ${period.status}`)
       }
 
       const now = new Date().toISOString()
@@ -162,7 +167,7 @@ export class PeriodLockingService {
 
       return { success: true, message: `Period '${period.name}' closed successfully` }
     } catch (error) {
-      return { success: false, message: `Failed to close period: ${(error as Error).message}` }
+      return this.failure(`Failed to close period: ${(error as Error).message}`)
     }
   }
 

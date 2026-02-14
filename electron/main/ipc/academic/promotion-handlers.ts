@@ -1,26 +1,10 @@
-import { ipcMain } from '../../electron-env'
-import { PromotionService } from '../../services/academic/PromotionService'
+import { container } from '../../services/base/ServiceContainer'
+import { safeHandleRaw } from '../ipc-result'
 
-import type { IpcMainInvokeEvent } from 'electron'
-
-let cachedService: PromotionService | null = null
-const getService = () => {
-    cachedService ??= new PromotionService()
-    return cachedService
-}
+const getService = () => container.resolve('PromotionService')
 
 export function registerPromotionHandlers(): void {
-    type BatchPromoteArgs = [
-        studentIds: number[],
-        fromStreamId: number,
-        toStreamId: number,
-        fromAcademicYearId: number,
-        toAcademicYearId: number,
-        toTermId: number,
-        userId: number
-    ]
-
-    ipcMain.handle('promotion:getStreams', async () => {
+    safeHandleRaw('promotion:getStreams', () => {
         try {
             return getService().getStreams()
         } catch (error) {
@@ -28,8 +12,8 @@ export function registerPromotionHandlers(): void {
         }
     })
 
-    ipcMain.handle('promotion:getStudentsForPromotion', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('promotion:getStudentsForPromotion', (
+        _event,
         streamId: number,
         academicYearId: number
     ) => {
@@ -40,8 +24,8 @@ export function registerPromotionHandlers(): void {
         }
     })
 
-    ipcMain.handle('promotion:promoteStudent', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('promotion:promoteStudent', (
+        _event,
         data: {
             student_id: number
             from_stream_id: number
@@ -59,9 +43,15 @@ export function registerPromotionHandlers(): void {
         }
     })
 
-    ipcMain.handle('promotion:batchPromote', async (
-        _event: IpcMainInvokeEvent,
-        ...[studentIds, fromStreamId, toStreamId, fromAcademicYearId, toAcademicYearId, toTermId, userId]: BatchPromoteArgs
+    safeHandleRaw('promotion:batchPromote', (
+        _event,
+        studentIds: number[],
+        fromStreamId: number,
+        toStreamId: number,
+        fromAcademicYearId: number,
+        toAcademicYearId: number,
+        toTermId: number,
+        userId: number
     ) => {
         try {
             return getService().batchPromote(
@@ -73,8 +63,8 @@ export function registerPromotionHandlers(): void {
         }
     })
 
-    ipcMain.handle('promotion:getStudentHistory', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('promotion:getStudentHistory', (
+        _event,
         studentId: number
     ) => {
         try {
@@ -84,8 +74,8 @@ export function registerPromotionHandlers(): void {
         }
     })
 
-    ipcMain.handle('promotion:getNextStream', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('promotion:getNextStream', (
+        _event,
         currentStreamId: number
     ) => {
         return getService().getNextStream(currentStreamId)

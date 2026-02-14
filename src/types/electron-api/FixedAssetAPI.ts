@@ -33,7 +33,25 @@ export interface AssetFilters {
     search?: string
 }
 
+export interface AssetCategory {
+    id: number
+    category_name: string
+    depreciation_method: 'STRAIGHT_LINE' | 'DECLINING_BALANCE' | 'NONE'
+    useful_life_years: number
+    depreciation_rate: number | null
+}
+
+export interface FinancialPeriod {
+    id: number
+    period_name: string
+    start_date: string
+    end_date: string
+    is_locked: boolean
+}
+
 export interface FixedAssetAPI {
+    getAssetCategories: () => Promise<AssetCategory[]>
+    getFinancialPeriods: () => Promise<FinancialPeriod[]>
     getAssets: (filters?: AssetFilters) => Promise<FixedAsset[]>
     getAsset: (id: number) => Promise<FixedAsset | null>
     createAsset: (data: CreateAssetData, userId: number) => Promise<{ success: boolean; id: number; errors?: string[] }>

@@ -1,33 +1,27 @@
-import { ipcMain } from '../../electron-env'
-import { ApprovalService } from '../../services/workflow/ApprovalService'
+import { container } from '../../services/base/ServiceContainer'
+import { safeHandleRaw } from '../ipc-result'
 
-import type { IpcMainInvokeEvent } from 'electron'
-
-let cachedService: ApprovalService | null = null
-const getService = () => {
-    cachedService ??= new ApprovalService()
-    return cachedService
-}
+const getService = () => container.resolve('ApprovalService')
 
 export function registerApprovalHandlers(): void {
     // Get pending approvals
-    ipcMain.handle('approval:getPending', async (_event: IpcMainInvokeEvent, userId?: number) => {
+    safeHandleRaw('approval:getPending', (_event, userId?: number) => {
         return getService().getPendingApprovals(userId)
     })
 
     // Get all approvals with filters
-    ipcMain.handle('approval:getAll', async (_event: IpcMainInvokeEvent, filters?: { status?: string; entity_type?: string }) => {
+    safeHandleRaw('approval:getAll', (_event, filters?: { status?: string; entity_type?: string }) => {
         return getService().getAllApprovals(filters)
     })
 
     // Get approval counts for dashboard
-    ipcMain.handle('approval:getCounts', async () => {
+    safeHandleRaw('approval:getCounts', () => {
         return getService().getApprovalCounts()
     })
 
     // Create approval request
-    ipcMain.handle('approval:create', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('approval:create', (
+        _event,
         entityType: string,
         entityId: number,
         requestedByUserId: number
@@ -36,8 +30,8 @@ export function registerApprovalHandlers(): void {
     })
 
     // Approve request
-    ipcMain.handle('approval:approve', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('approval:approve', (
+        _event,
         requestId: number,
         approverId: number
     ) => {
@@ -45,8 +39,8 @@ export function registerApprovalHandlers(): void {
     })
 
     // Reject request
-    ipcMain.handle('approval:reject', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('approval:reject', (
+        _event,
         requestId: number,
         approverId: number,
         reason: string
@@ -55,8 +49,8 @@ export function registerApprovalHandlers(): void {
     })
 
     // Cancel request
-    ipcMain.handle('approval:cancel', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('approval:cancel', (
+        _event,
         requestId: number,
         userId: number
     ) => {

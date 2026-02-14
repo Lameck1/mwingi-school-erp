@@ -1,3 +1,4 @@
+// NOTE: Keep in sync with src/utils/format.ts (renderer counterpart)
 export function shillingsToCents(value: number | string | null | undefined): number {
   if (value === null || value === undefined || value === '') {return 0}
   const num = Number(value)

@@ -78,7 +78,7 @@ export function CommandPalette() {
             }
         }
         document.addEventListener('keydown', down)
-        const unsubscribe = globalThis.electronAPI.onOpenCommandPalette(() => setOpen(true))
+        const unsubscribe = globalThis.electronAPI.menuEvents.onOpenCommandPalette(() => setOpen(true))
         return () => {
             document.removeEventListener('keydown', down)
             unsubscribe()

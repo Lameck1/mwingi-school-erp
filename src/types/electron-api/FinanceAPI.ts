@@ -117,6 +117,7 @@ export interface PaymentRecordData {
   description?: string
   transaction_date: string
   term_id: number
+  idempotency_key?: string
 }
 
 export interface FinanceApprovalRequest {
@@ -142,13 +143,14 @@ export interface FinanceAPI {
   getFeeStructure: (_academicYearId: number, _termId: number) => Promise<FeeStructure[]>
   saveFeeStructure: (_data: FeeStructureCreateData[], _academicYearId: number, _termId: number) => Promise<FeeStructure[]>
   generateBatchInvoices: (_academicYearId: number, _termId: number, _userId: number) => Promise<{ success: boolean; count: number }>
+  generateStudentInvoice: (_studentId: number, _yearId: number, _termId: number, _userId: number) => Promise<{ success: boolean; invoiceNumber?: string; error?: string }>
   getInvoices: (_filters?: Partial<Invoice>) => Promise<Invoice[]>
 
   // Payments
-  recordPayment: (_data: PaymentRecordData, _userId: number) => Promise<{ success: boolean; transactionRef?: string; receipt_number?: string; errors?: string[]; message?: string }>
+  recordPayment: (_data: PaymentRecordData, _userId: number) => Promise<{ success: boolean; transactionRef?: string; receipt_number?: string; errors?: string[]; error?: string }>
   getPaymentsByStudent: (_studentId: number) => Promise<Payment[]>
-  payWithCredit: (_data: { studentId: number; invoiceId: number; amount: number }, _userId: number) => Promise<{ success: boolean; message?: string }>
-  voidPayment: (_transactionId: number, _voidReason: string, _userId: number, _recoveryMethod?: string) => Promise<{ success: boolean; message: string; transaction_id?: number }>
+  payWithCredit: (_data: { studentId: number; invoiceId: number; amount: number }, _userId: number) => Promise<{ success: boolean; error?: string }>
+  voidPayment: (_transactionId: number, _voidReason: string, _userId: number, _recoveryMethod?: string) => Promise<{ success: boolean; error?: string; transaction_id?: number }>
 
   // Transactions (General)
   getTransactionCategories: () => Promise<TransactionCategory[]>
@@ -167,9 +169,9 @@ export interface FinanceAPI {
   getForecast: (months: number) => Promise<FinancialForecast>
 
   // Approvals
-  getApprovalQueue: (filter: 'PENDING' | 'ALL') => Promise<{ success: boolean; data: FinanceApprovalRequest[]; message?: string }>
-  approveTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) => Promise<{ success: boolean; message?: string }>
-  rejectTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) => Promise<{ success: boolean; message?: string }>
+  getApprovalQueue: (filter: 'PENDING' | 'ALL') => Promise<{ success: boolean; data: FinanceApprovalRequest[]; error?: string }>
+  approveTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) => Promise<{ success: boolean; error?: string }>
+  rejectTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) => Promise<{ success: boolean; error?: string }>
 
   // Manual Fixes
 }

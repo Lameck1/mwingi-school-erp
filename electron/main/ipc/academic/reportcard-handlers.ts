@@ -4,19 +4,17 @@ import nodemailer from 'nodemailer'
 import { PDFDocument } from 'pdf-lib'
 
 import { getDatabase } from '../../database'
-import { ipcMain } from '../../electron-env'
+import { shell } from '../../electron-env'
 import { getSession } from '../../security/session'
-import { CBCReportCardService, type StudentReportCard } from '../../services/academic/CBCReportCardService'
-import { ReportCardService } from '../../services/academic/ReportCardService'
+import { container } from '../../services/base/ServiceContainer'
 import { ConfigService } from '../../services/ConfigService'
 import { renderHtmlToPdfBuffer, resolveOutputPath, writePdfBuffer } from '../../utils/pdf'
+import { safeHandleRaw } from '../ipc-result'
 
-import type { IpcMainInvokeEvent } from 'electron'
+import type { StudentReportCard } from '../../services/academic/CBCReportCardService'
 
-
-
-const cbcService = new CBCReportCardService()
-const legacyService = new ReportCardService()
+const getCbcService = () => container.resolve('CBCReportCardService')
+const getLegacyService = () => container.resolve('ReportCardService')
 const UNKNOWN_ERROR = 'Unknown error'
 const REPORT_CARDS_DIR = 'report-cards'
 
@@ -57,9 +55,9 @@ function resolveSmtpConfig(): { config: SmtpConfig | null; error?: string } {
 
 async function generateBatchReportCardFiles(examId: number, streamId: number) {
     const userId = await getSessionUserId()
-    const reportCards = await cbcService.generateBatchReportCards(examId, streamId, userId)
-    const files = await generateReportCardPdfs(reportCards, `exam_${examId}_stream_${streamId}`)
-    return { files, userId }
+    const result = await getCbcService().generateBatchReportCards(examId, streamId, userId)
+    const files = await generateReportCardPdfs(result.generated, `exam_${examId}_stream_${streamId}`)
+    return { files, userId, failed: result.failed, total: result.total }
 }
 
 async function sendReportCardEmails(
@@ -112,7 +110,7 @@ function registerCbcReportCardHandlers(): void {
 }
 
 function registerCbcBaseHandlers(): void {
-    ipcMain.handle('report-card:getSubjects', async (_event: IpcMainInvokeEvent, examId?: number) => {
+    safeHandleRaw('report-card:getSubjects', (_event, examId?: number) => {
         try {
             const db = getDatabase()
             // Return subjects that have results for the given exam, or all active subjects
@@ -134,25 +132,31 @@ function registerCbcBaseHandlers(): void {
         }
     })
 
-    ipcMain.handle('report-card:get', async (_event: IpcMainInvokeEvent, examId: number, studentId: number) => {
-        return cbcService.getReportCard(examId, studentId)
+    safeHandleRaw('report-card:get', (_event, examId: number, studentId: number) => {
+        return getCbcService().getReportCard(examId, studentId)
     })
 
-    ipcMain.handle('report-card:generate', async (_event: IpcMainInvokeEvent, studentId: number, examId: number) => {
+    safeHandleRaw('report-card:generate', async (_event, studentId: number, examId: number) => {
         const userId = await getSessionUserId()
-        return cbcService.generateReportCard(studentId, examId, userId)
+        return getCbcService().generateReportCard(studentId, examId, userId)
     })
 
-    ipcMain.handle('report-card:generateBatch', async (_event: IpcMainInvokeEvent, data: { exam_id: number; stream_id: number }) => {
+    safeHandleRaw('report-card:generateBatch', async (_event, data: { exam_id: number; stream_id: number }) => {
         const userId = await getSessionUserId()
-        const result = await cbcService.generateBatchReportCards(data.exam_id, data.stream_id, userId)
-        return { success: true, generated: result.length, failed: 0 }
+        const result = await getCbcService().generateBatchReportCards(data.exam_id, data.stream_id, userId)
+        return {
+            success: true,
+            generated: result.generated.length,
+            failed: result.failed,
+            total: result.total,
+            failures: result.failures
+        }
     })
 }
 
 function registerCbcEmailHandlers(): void {
-    ipcMain.handle('report-card:emailReports', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('report-card:emailReports', async (
+        _event,
         data: { exam_id: number; stream_id: number; template_id: string; include_sms: boolean }
     ) => {
         try {
@@ -161,9 +165,9 @@ function registerCbcEmailHandlers(): void {
                 return { success: false, sent: 0, failed: 0, message: error }
             }
 
-            const { files } = await generateBatchReportCardFiles(data.exam_id, data.stream_id)
+            const { files, failed: generationFailed } = await generateBatchReportCardFiles(data.exam_id, data.stream_id)
             const { sent, failed } = await sendReportCardEmails(files, config)
-            return { success: true, sent: sent.length, failed: failed.length }
+            return { success: true, sent: sent.length, failed: failed.length + generationFailed }
         } catch (error) {
             console.error('Email report cards failed:', error)
             return { success: false, sent: 0, failed: 0, message: error instanceof Error ? error.message : UNKNOWN_ERROR }
@@ -172,9 +176,9 @@ function registerCbcEmailHandlers(): void {
 }
 
 function registerCbcMergeHandlers(): void {
-    ipcMain.handle('report-card:mergePDFs', async (_event: IpcMainInvokeEvent, data: { exam_id: number; stream_id: number; output_path: string }) => {
+    safeHandleRaw('report-card:mergePDFs', async (_event, data: { exam_id: number; stream_id: number; output_path: string }) => {
         try {
-            const { files } = await generateBatchReportCardFiles(data.exam_id, data.stream_id)
+            const { files, failed } = await generateBatchReportCardFiles(data.exam_id, data.stream_id)
             const merged = await PDFDocument.create()
 
             for (const file of files) {
@@ -189,20 +193,25 @@ function registerCbcMergeHandlers(): void {
             const filePath = resolveOutputPath(outputFile, REPORT_CARDS_DIR)
             fs.writeFileSync(filePath, mergedBytes)
 
-            return { success: true, message: 'Merged', filePath }
+            return { success: true, message: 'Merged', filePath, failed }
         } catch (error) {
             console.error('Merge report cards failed:', error)
-            return { success: false, message: error instanceof Error ? error.message : UNKNOWN_ERROR }
+            return { success: false, error: error instanceof Error ? error.message : UNKNOWN_ERROR }
         }
     })
 }
 
 function registerCbcDownloadHandlers(): void {
-    ipcMain.handle('report-card:downloadReports', async (_event: IpcMainInvokeEvent, data: { exam_id: number; stream_id: number; merge: boolean }) => {
+    safeHandleRaw('report-card:downloadReports', async (_event, data: { exam_id: number; stream_id: number; merge: boolean }) => {
         try {
-            const { files } = await generateBatchReportCardFiles(data.exam_id, data.stream_id)
+            const { files, failed } = await generateBatchReportCardFiles(data.exam_id, data.stream_id)
             if (!data.merge) {
-                return { success: true, files: files.map(f => f.filePath) }
+                return {
+                    success: true,
+                    files: files.map(f => f.filePath),
+                    fileRecords: files.map(f => ({ studentId: f.studentId, filePath: f.filePath })),
+                    failed
+                }
             }
 
             const merged = await PDFDocument.create()
@@ -216,52 +225,64 @@ function registerCbcDownloadHandlers(): void {
             const mergedBytes = await merged.save()
             const filePath = resolveOutputPath(`report_cards_${data.exam_id}_${data.stream_id}.pdf`, REPORT_CARDS_DIR)
             fs.writeFileSync(filePath, mergedBytes)
-            return { success: true, filePath }
+            return { success: true, filePath, failed }
         } catch (error) {
             console.error('Download report cards failed:', error)
-            return { success: false, message: error instanceof Error ? error.message : UNKNOWN_ERROR }
+            return { success: false, error: error instanceof Error ? error.message : UNKNOWN_ERROR }
         }
+    })
+
+    safeHandleRaw('report-card:openFile', async (_event, filePath: string) => {
+        if (!filePath || typeof filePath !== 'string') {
+            return { success: false, error: 'Invalid report card file path' }
+        }
+        const openResult = await shell.openPath(filePath)
+        if (openResult) {
+            return { success: false, error: openResult }
+        }
+        return { success: true }
     })
 }
 
 function registerLegacyReportCardHandlers(): void {
     // Legacy report card handlers for term/year-based report cards (used in Reports > Report Cards)
-    ipcMain.handle('reportcard:getSubjects', async () => {
-        return legacyService.getSubjects()
+    safeHandleRaw('reportcard:getSubjects', () => {
+        return getLegacyService().getSubjects()
     })
 
-    ipcMain.handle('reportcard:getStudentGrades', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('reportcard:getStudentGrades', (
+        _event,
         studentId: number,
         academicYearId: number,
         termId: number
     ) => {
-        return legacyService.getStudentGrades(studentId, academicYearId, termId)
+        return getLegacyService().getStudentGrades(studentId, academicYearId, termId)
     })
 
-    ipcMain.handle('reportcard:generate', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('reportcard:generate', (
+        _event,
         studentId: number,
         academicYearId: number,
         termId: number
     ) => {
-        return legacyService.generateReportCard(studentId, academicYearId, termId)
+        return getLegacyService().generateReportCard(studentId, academicYearId, termId)
     })
 
-    ipcMain.handle('reportcard:getStudentsForGeneration', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('reportcard:getStudentsForGeneration', (
+        _event,
         streamId: number,
         academicYearId: number,
         termId: number
     ) => {
-        return legacyService.getStudentsForReportCards(streamId, academicYearId, termId)
+        return getLegacyService().getStudentsForReportCards(streamId, academicYearId, termId)
     })
 }
 
 async function generateReportCardPdfs(reportCards: StudentReportCard[], folderLabel: string): Promise<Array<{ studentId: number; filePath: string }>> {
+    const schoolName = getSchoolName()
     const results: Array<{ studentId: number; filePath: string }> = []
     for (const card of reportCards) {
-        const html = buildReportCardHtml(card)
+        const html = buildReportCardHtml(card, schoolName)
         const buffer = await renderHtmlToPdfBuffer(html)
         const filename = `${card.admission_number || card.student_id}_${Date.now()}.pdf`
         const filePath = resolveOutputPath(filename, path.join(REPORT_CARDS_DIR, folderLabel))
@@ -271,13 +292,22 @@ async function generateReportCardPdfs(reportCards: StudentReportCard[], folderLa
     return results
 }
 
-function buildReportCardHtml(card: StudentReportCard): string {
+export function getSchoolName(): string {
+    const db = getDatabase()
+    const row = db.prepare('SELECT school_name FROM school_settings WHERE id = 1').get() as { school_name?: string } | undefined
+    return row?.school_name || 'School'
+}
+
+export function buildReportCardHtml(card: StudentReportCard, schoolName: string): string {
     const subjectsRows = card.subjects.map(subject => `
         <tr>
             <td>${subject.subject_name}</td>
-            <td>${subject.marks}</td>
-            <td>${subject.grade}</td>
-            <td>${subject.teacher_comment}</td>
+            <td class="center">${subject.marks}</td>
+            <td class="center">${subject.percentage.toFixed(1)}%</td>
+            <td class="center grade">${subject.grade}</td>
+            <td class="center">${subject.points.toFixed(1)}</td>
+            <td>${subject.competency_level}</td>
+            <td>${subject.teacher_comment || '-'}</td>
         </tr>
     `).join('')
 
@@ -286,33 +316,137 @@ function buildReportCardHtml(card: StudentReportCard): string {
         <head>
           <meta charset="utf-8" />
           <style>
-            body { font-family: Arial, sans-serif; padding: 24px; }
-            h1 { font-size: 20px; margin-bottom: 4px; }
-            p { font-size: 12px; color: #4b5563; margin: 0 0 6px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-            th, td { border: 1px solid #e5e7eb; padding: 6px; font-size: 12px; }
-            th { background: #f3f4f6; text-align: left; }
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px 28px; font-size: 11px; color: #1a1a1a; }
+            .header { text-align: center; margin-bottom: 10px; border-bottom: 3px double #1a5276; padding-bottom: 10px; }
+            .school-name { font-size: 22px; font-weight: bold; color: #1a5276; text-transform: uppercase; letter-spacing: 1px; }
+            .school-motto { font-size: 10px; color: #666; margin-top: 2px; font-style: italic; }
+            .report-title { font-size: 14px; font-weight: bold; margin-top: 6px; color: #2c3e50; text-transform: uppercase; background: #eaf2f8; padding: 4px 12px; display: inline-block; border-radius: 3px; }
+            .student-info { display: flex; flex-wrap: wrap; gap: 0; margin: 10px 0; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 8px 12px; }
+            .info-item { width: 50%; font-size: 11px; padding: 2px 0; }
+            .info-item strong { color: #2c3e50; }
+            table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+            th, td { border: 1px solid #cbd5e0; padding: 5px 6px; font-size: 10.5px; }
+            th { background: #1a5276; color: white; text-align: center; font-weight: 600; text-transform: uppercase; font-size: 9.5px; letter-spacing: 0.5px; }
+            td.center { text-align: center; }
+            td.grade { font-weight: bold; color: #1a5276; }
+            .summary-row td { background: #eaf2f8; font-weight: bold; }
+            .section-title { font-size: 12px; font-weight: bold; color: #1a5276; margin: 12px 0 4px; border-bottom: 1px solid #1a5276; padding-bottom: 2px; text-transform: uppercase; }
+            .comments-section { margin: 10px 0; }
+            .comment-box { border: 1px solid #dee2e6; padding: 6px 10px; margin-bottom: 6px; border-radius: 3px; min-height: 36px; }
+            .comment-label { font-weight: bold; color: #2c3e50; font-size: 10.5px; margin-bottom: 2px; }
+            .signature-line { margin-top: 8px; display: flex; justify-content: space-between; }
+            .sig-item { width: 45%; }
+            .sig-line { border-bottom: 1px solid #333; margin-top: 20px; }
+            .sig-label { font-size: 9px; color: #666; margin-top: 2px; }
+            .grading-key { margin-top: 10px; }
+            .grading-key table { font-size: 9.5px; }
+            .grading-key th { background: #2c3e50; font-size: 9px; }
+            .grading-key td { padding: 3px 6px; }
+            .attendance-row { display: flex; gap: 20px; margin: 6px 0; font-size: 11px; }
+            .att-item strong { color: #2c3e50; }
+            .overall-box { display: flex; gap: 12px; margin: 6px 0; padding: 6px 10px; background: #eaf2f8; border-radius: 4px; border: 1px solid #1a5276; }
+            .overall-item { font-size: 11px; }
+            .overall-item .value { font-weight: bold; font-size: 13px; color: #1a5276; }
           </style>
         </head>
         <body>
-          <h1>Report Card</h1>
-          <p><strong>Student:</strong> ${card.student_name} (${card.admission_number})</p>
-          <p><strong>Stream:</strong> ${card.stream_name}</p>
-          <p><strong>Academic Year:</strong> ${card.academic_year} | <strong>Term:</strong> ${card.term_name}</p>
-          <p><strong>Average:</strong> ${card.average_marks.toFixed(2)} | <strong>Grade:</strong> ${card.overall_grade}</p>
+          <div class="header">
+            <div class="school-name">${schoolName}</div>
+            <div class="school-motto">Excellence in Education</div>
+            <div class="report-title">CBC Report Card</div>
+          </div>
+
+          <div class="student-info">
+            <div class="info-item"><strong>Student Name:</strong> ${card.student_name}</div>
+            <div class="info-item"><strong>Adm No:</strong> ${card.admission_number}</div>
+            <div class="info-item"><strong>Grade/Stream:</strong> ${card.stream_name}</div>
+            <div class="info-item"><strong>Term:</strong> ${card.term_name}</div>
+            <div class="info-item"><strong>Academic Year:</strong> ${card.academic_year}</div>
+            <div class="info-item"><strong>Position:</strong> ${card.position_in_class}</div>
+          </div>
+
+          <div class="section-title">Subject Performance</div>
           <table>
             <thead>
               <tr>
                 <th>Subject</th>
                 <th>Marks</th>
+                <th>Percent</th>
                 <th>Grade</th>
-                <th>Comment</th>
+                <th>Points</th>
+                <th>Performance Level</th>
+                <th>Teacher's Comment</th>
               </tr>
             </thead>
             <tbody>
               ${subjectsRows}
+              <tr class="summary-row">
+                <td><strong>TOTAL / AVERAGE</strong></td>
+                <td class="center">${card.total_marks}</td>
+                <td class="center">${card.average_marks.toFixed(1)}%</td>
+                <td class="center grade">${card.overall_grade}</td>
+                <td class="center">${card.total_points?.toFixed(1) || '-'}</td>
+                <td colspan="2" class="center">Average Points: ${card.average_points?.toFixed(2) || '-'}</td>
+              </tr>
             </tbody>
           </table>
+
+          <div class="attendance-row">
+            <div class="att-item"><strong>Days Present:</strong> ${card.days_present}</div>
+            <div class="att-item"><strong>Days Absent:</strong> ${card.days_absent}</div>
+            <div class="att-item"><strong>Attendance:</strong> ${card.attendance_percentage.toFixed(1)}%</div>
+          </div>
+
+          <div class="comments-section">
+            <div class="section-title">Comments</div>
+            <div class="comment-box">
+              <div class="comment-label">Class Teacher's Comment:</div>
+              <div>${card.class_teacher_comment || ''}</div>
+            </div>
+            <div class="comment-box">
+              <div class="comment-label">Headteacher's Comment:</div>
+              <div>${card.principal_comment || ''}</div>
+            </div>
+          </div>
+
+          ${card.fees_balance > 0 ? `<p style="margin: 6px 0; color: #c0392b;"><strong>Fee Balance:</strong> KES ${card.fees_balance.toLocaleString()}</p>` : ''}
+          ${card.next_term_begin_date ? `<p style="margin: 4px 0;"><strong>Next Term Begins:</strong> ${card.next_term_begin_date}</p>` : ''}
+
+          <div class="signature-line">
+            <div class="sig-item">
+              <div class="sig-line"></div>
+              <div class="sig-label">Class Teacher's Signature / Date</div>
+            </div>
+            <div class="sig-item">
+              <div class="sig-line"></div>
+              <div class="sig-label">Parent / Guardian Signature / Date</div>
+            </div>
+          </div>
+
+          <div class="grading-key">
+            <div class="section-title">Grading Key</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Grade</th>
+                  <th>Marks Range</th>
+                  <th>Points</th>
+                  <th>Performance Level</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td class="center">EE1</td><td class="center">90–100</td><td class="center">4.0</td><td>Exceeding Expectation</td></tr>
+                <tr><td class="center">EE2</td><td class="center">75–89</td><td class="center">3.5</td><td>Exceeding Expectation</td></tr>
+                <tr><td class="center">ME1</td><td class="center">58–74</td><td class="center">3.0</td><td>Meeting Expectation</td></tr>
+                <tr><td class="center">ME2</td><td class="center">41–57</td><td class="center">2.5</td><td>Meeting Expectation</td></tr>
+                <tr><td class="center">AE1</td><td class="center">31–40</td><td class="center">2.0</td><td>Approaching Expectation</td></tr>
+                <tr><td class="center">AE2</td><td class="center">21–30</td><td class="center">1.5</td><td>Approaching Expectation</td></tr>
+                <tr><td class="center">BE1</td><td class="center">11–20</td><td class="center">1.0</td><td>Below Expectation</td></tr>
+                <tr><td class="center">BE2</td><td class="center">1–10</td><td class="center">0.5</td><td>Below Expectation</td></tr>
+              </tbody>
+            </table>
+          </div>
         </body>
       </html>
     `

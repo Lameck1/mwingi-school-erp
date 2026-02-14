@@ -49,7 +49,6 @@ export interface UnmatchedTransaction {
     transaction_ref: string
     transaction_date: string
     amount: number
-    [key: string]: unknown
 }
 
 export interface BankReconciliationAPI {
@@ -60,10 +59,10 @@ export interface BankReconciliationAPI {
     getBankStatements: (bankAccountId?: number) => Promise<BankStatement[]>
     getBankStatementWithLines: (statementId: number) => Promise<{ statement: BankStatement; lines: BankStatementLine[] } | null>
     createBankStatement: (bankAccountId: number, statementDate: string, openingBalance: number, closingBalance: number, reference?: string) => Promise<{ success: boolean; id?: number; errors?: string[] }>
-    matchBankTransaction: (lineId: number, transactionId: number) => Promise<{ success: boolean }>
+    matchBankTransaction: (lineId: number, transactionId: number) => Promise<{ success: boolean; error?: string }>
     unmatchBankTransaction: (lineId: number) => Promise<{ success: boolean }>
-    getUnmatchedTransactions: (startDate: string, endDate: string) => Promise<UnmatchedTransaction[]>
-    markStatementReconciled: (statementId: number, userId: number) => Promise<{ success: boolean }>
+    getUnmatchedTransactions: (startDate: string, endDate: string, bankAccountId?: number) => Promise<UnmatchedTransaction[]>
+    markStatementReconciled: (statementId: number, userId: number) => Promise<{ success: boolean; error?: string }>
 
     // Canonical names
     getAccounts: () => Promise<BankAccount[]>
@@ -72,9 +71,9 @@ export interface BankReconciliationAPI {
     getStatements: (bankAccountId?: number) => Promise<BankStatement[]>
     getStatementWithLines: (statementId: number) => Promise<{ statement: BankStatement; lines: BankStatementLine[] } | null>
     createStatement: (bankAccountId: number, statementDate: string, openingBalance: number, closingBalance: number, reference?: string) => Promise<{ success: boolean; id?: number; errors?: string[] }>
-    addStatementLine: (statementId: number, line: unknown) => Promise<{ success: boolean; id?: number }>
-    matchTransaction: (lineId: number, transactionId: number) => Promise<{ success: boolean }>
+    addStatementLine: (statementId: number, line: unknown) => Promise<{ success: boolean; id?: number; errors?: string[] }>
+    matchTransaction: (lineId: number, transactionId: number) => Promise<{ success: boolean; error?: string }>
     unmatchTransaction: (lineId: number) => Promise<{ success: boolean }>
-    markReconciled: (statementId: number, userId: number) => Promise<{ success: boolean }>
+    markReconciled: (statementId: number, userId: number) => Promise<{ success: boolean; error?: string }>
 }
 

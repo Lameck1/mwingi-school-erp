@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Toast, type ToastType } from '../components/ui/Toast'
 
@@ -16,17 +16,30 @@ const ToastContext = createContext<ToastContextType | undefined>(undefined)
 
 export function ToastProvider({ children }: Readonly<{ children: React.ReactNode }>) {
     const [toasts, setToasts] = useState<ToastMessage[]>([])
+    const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+    useEffect(() => {
+        const timers = timersRef.current
+        return () => {
+            for (const timer of timers.values()) { clearTimeout(timer) }
+            timers.clear()
+        }
+    }, [])
 
     const removeToastById = useCallback((id: string) => {
         setToasts(prev => prev.filter(toast => toast.id !== id))
+        const timer = timersRef.current.get(id)
+        if (timer) { clearTimeout(timer); timersRef.current.delete(id) }
     }, [])
 
     const showToast = useCallback((message: string, type: ToastType = 'info') => {
         const id = globalThis.crypto.randomUUID()
         setToasts(prev => [...prev, { id, message, type }])
-        setTimeout(() => {
+        const timer = setTimeout(() => {
+            timersRef.current.delete(id)
             removeToastById(id)
         }, 5000)
+        timersRef.current.set(id, timer)
     }, [removeToastById])
 
     const removeToast = useCallback((id: string) => {

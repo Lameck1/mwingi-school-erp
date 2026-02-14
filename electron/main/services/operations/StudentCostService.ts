@@ -232,7 +232,7 @@ export class StudentCostService {
         return cost.breakdown
     }
 
-    async getCostVsRevenue(studentId: number, termId: number): Promise<{ cost: number, revenue: number, subsidy: number }> {
+    async getCostVsRevenue(studentId: number, termId: number): Promise<{ cost: number, revenue: number, subsidy: number, surplus_or_deficit: number }> {
         const cost = await this.getCostBreakdown(studentId, termId)
         const totalCost = Object.values(cost).reduce((a, b) => a + b, 0)
 
@@ -242,11 +242,13 @@ export class StudentCostService {
         `).get(studentId, termId) as { total_amount: number } | undefined
 
         const revenue = invoice?.total_amount || 0
+        const surplusOrDeficit = revenue - totalCost
 
         return {
             cost: totalCost,
             revenue,
-            subsidy: Math.max(0, totalCost - revenue)
+            subsidy: Math.max(0, totalCost - revenue),
+            surplus_or_deficit: surplusOrDeficit
         }
     }
 

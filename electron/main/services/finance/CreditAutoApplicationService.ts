@@ -44,6 +44,14 @@ export interface CreditTransaction {
   created_at: string
 }
 
+interface LegacyInvoiceRow {
+  amount_due: number
+  amount_paid: number
+  id: number
+  invoice_number: string | null
+  status: string | null
+}
+
 export interface AllocationResult {
   success: boolean
   message: string
@@ -88,13 +96,24 @@ class CreditRepository {
 
   async getCreditTransactions(studentId: number, limit?: number): Promise<CreditTransaction[]> {
     const db = this.db
-    const query = `
-      SELECT * FROM credit_transaction
-      WHERE student_id = ?
-      ORDER BY created_at DESC
-      ${limit ? `LIMIT ${limit}` : ''}
-    `
-    return db.prepare(query).all(studentId) as CreditTransaction[]
+    const safeLimit = typeof limit === 'number' && Number.isInteger(limit) && limit > 0
+      ? Math.min(limit, 500)
+      : null
+    const query = safeLimit !== null
+      ? `
+        SELECT * FROM credit_transaction
+        WHERE student_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+      `
+      : `
+        SELECT * FROM credit_transaction
+        WHERE student_id = ?
+        ORDER BY created_at DESC
+      `
+    return (safeLimit !== null
+      ? db.prepare(query).all(studentId, safeLimit)
+      : db.prepare(query).all(studentId)) as CreditTransaction[]
   }
 
   recordCreditTransaction(data: {
@@ -152,9 +171,14 @@ class InvoiceRepository {
     db.prepare(`
       UPDATE fee_invoice
       SET amount_paid = amount_paid + ?,
+          status = CASE
+            WHEN amount_paid + ? >= total_amount THEN 'PAID'
+            WHEN amount_paid + ? > 0 THEN 'PARTIAL'
+            ELSE 'PENDING'
+          END,
           updated_at = ?
       WHERE id = ?
-    `).run(amountToAdd, new Date().toISOString(), invoiceId)
+    `).run(amountToAdd, amountToAdd, amountToAdd, new Date().toISOString(), invoiceId)
   }
 }
 
@@ -351,7 +375,7 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
   /**
    * Manually add credit to student account (e.g., overpayment, refund)
    */
-  async addCreditToStudent(studentId: number, amount: number, notes: string, userId: number): Promise<{ success: boolean; message: string; credit_id: number }> {
+  async addCreditToStudent(studentId: number, amount: number, notes: string, userId: number): Promise<{ success: boolean; error?: string; message?: string; credit_id?: number }> {
     try {
       const creditRepo = new CreditRepository(this.db)
       const creditId = creditRepo.recordCreditTransaction({
@@ -383,56 +407,92 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
   /**
    * Auto-apply credits (synchronous wrapper for allocateCreditsToInvoices)
    */
-  autoApplyCredits(studentId: number, userId?: number): { success: boolean; message: string; credits_applied?: number; remaining_credit?: number; invoices_affected?: number } {
+  autoApplyCredits(studentId: number, userId?: number): { success: boolean; error?: string; message?: string; credits_applied?: number; remaining_credit?: number; invoices_affected?: number } {
     try {
-      const _creditRepo = new CreditRepository(this.db)
-      const _invoiceRepo = new InvoiceRepository(this.db)
+      const creditResult = this.db.prepare(`
+        SELECT COALESCE(SUM(
+          CASE
+            WHEN transaction_type = 'CREDIT_RECEIVED' THEN amount
+            WHEN transaction_type = 'CREDIT_APPLIED' THEN -amount
+            WHEN transaction_type = 'CREDIT_REFUNDED' THEN -amount
+            ELSE 0
+          END
+        ), 0) as balance
+        FROM credit_transaction
+        WHERE student_id = ?
+      `).get(studentId) as { balance: number } | undefined
 
-      // Get student's credit balance
-      const creditResult = this.db.prepare(
-        'SELECT amount FROM credit_transaction WHERE student_id = ? ORDER BY created_at DESC LIMIT 1'
-      ).get(studentId) as { amount: number } | undefined
-
-      const creditBalance = creditResult?.amount || 0
+      const creditBalance = creditResult?.balance ?? 0
 
       if (creditBalance === 0) {
         return { success: true, message: 'No credits to apply', credits_applied: 0 }
       }
 
-      // Get outstanding invoices sorted by priority (due date, oldest first)
       const invoices = this.db.prepare(`
-        SELECT id, amount as amount_due, amount_paid, due_date 
-        FROM fee_invoice 
-        WHERE student_id = ? AND (amount_paid < amount OR status = 'OUTSTANDING')
+        SELECT
+          id,
+          COALESCE(total_amount, amount) as amount_due,
+          COALESCE(amount_paid, 0) as amount_paid,
+          invoice_number,
+          status
+        FROM fee_invoice
+        WHERE student_id = ? AND COALESCE(amount_paid, 0) < COALESCE(total_amount, amount)
         ORDER BY due_date ASC, id ASC
-      `).all(studentId) as { id: number, amount_due: number, amount_paid: number, due_date: string }[]
+      `).all(studentId) as LegacyInvoiceRow[]
 
-      let remainingCredit = creditBalance
-      let applicationsCount = 0
+      const applyTransaction = this.db.transaction(() => {
+        let remainingCredit = creditBalance
+        let applicationsCount = 0
 
-      for (const invoice of invoices) {
-        if (remainingCredit === 0) {break}
+        for (const invoice of invoices) {
+          if (remainingCredit <= 0) { break }
 
-        const amountDue = invoice.amount_due - invoice.amount_paid
-        const applicationAmount = Math.min(remainingCredit, amountDue)
+          const amountDue = Math.max(0, invoice.amount_due - invoice.amount_paid)
+          if (amountDue <= 0) { continue }
 
-        this.db.prepare(
-          'UPDATE fee_invoice SET amount_paid = amount_paid + ? WHERE id = ?'
-        ).run(applicationAmount, invoice.id)
+          const applicationAmount = Math.min(remainingCredit, amountDue)
+          const newAmountPaid = invoice.amount_paid + applicationAmount
+          const nextStatus = newAmountPaid >= invoice.amount_due
+            ? 'PAID'
+            : newAmountPaid > 0
+              ? 'PARTIAL'
+              : (invoice.status === 'OUTSTANDING' ? 'OUTSTANDING' : 'PENDING')
 
-        remainingCredit -= applicationAmount
-        applicationsCount++
+          this.db.prepare(`
+            UPDATE fee_invoice
+            SET amount_paid = ?,
+                status = ?,
+                updated_at = ?
+            WHERE id = ?
+          `).run(newAmountPaid, nextStatus, new Date().toISOString(), invoice.id)
 
-        // Log the credit application
-        logAudit(
-          userId || 0,
-          'CREDIT_APPLY',
-          'fee_invoice',
-          invoice.id,
-          null,
-          { student_id: studentId, amount_applied: applicationAmount }
-        )
-      }
+          this.db.prepare(`
+            INSERT INTO credit_transaction (student_id, amount, transaction_type, reference_invoice_id, notes)
+            VALUES (?, ?, 'CREDIT_APPLIED', ?, ?)
+          `).run(
+            studentId,
+            applicationAmount,
+            invoice.id,
+            `Auto-applied to invoice ${invoice.invoice_number ?? invoice.id}`
+          )
+
+          remainingCredit -= applicationAmount
+          applicationsCount++
+
+          logAudit(
+            userId || 0,
+            'CREDIT_APPLY',
+            'fee_invoice',
+            invoice.id,
+            null,
+            { student_id: studentId, amount_applied: applicationAmount, status: nextStatus }
+          )
+        }
+
+        return { remainingCredit, applicationsCount }
+      })
+
+      const { remainingCredit, applicationsCount } = applyTransaction()
 
       return {
         success: true,
@@ -442,23 +502,22 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
         invoices_affected: applicationsCount
       }
     } catch (error) {
-      return { success: false, message: `Failed to apply credits: ${(error as Error).message}` }
+      return { success: false, error: `Failed to apply credits: ${(error as Error).message}` }
     }
   }
 
   /**
    * Add a manual credit
    */
-  addCredit(studentId: number, amount: number, notes?: string, userId?: number): { success: boolean; message: string; credit_id?: number } {
-    if (amount < 0) {
-      return { success: false, message: 'Credit amount must be positive' }
+  addCredit(studentId: number, amount: number, notes?: string, userId?: number): { success: boolean; error?: string; message?: string; credit_id?: number } {
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return { success: false, error: 'Credit amount must be positive' }
     }
 
     try {
-      const _creditRepo = new CreditRepository(this.db)
       const creditId = this.db.prepare(
         'INSERT INTO credit_transaction (student_id, amount, transaction_type, notes, created_at) VALUES (?, ?, ?, ?, ?)'
-      ).run(studentId, amount, 'MANUAL_CREDIT', notes || '', new Date().toISOString()).lastInsertRowid
+      ).run(studentId, amount, 'CREDIT_RECEIVED', notes?.trim() || 'Manual credit adjustment', new Date().toISOString()).lastInsertRowid
 
       logAudit(
         userId || 0,
@@ -475,30 +534,40 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
         credit_id: Number(creditId)
       }
     } catch (error) {
-      return { success: false, message: `Failed to add credit: ${(error as Error).message}` }
+      return { success: false, error: `Failed to add credit: ${(error as Error).message}` }
     }
   }
 
   /**
    * Reverse a credit transaction
    */
-  reverseCredit(creditId: number, reason?: string, userId?: number): { success: boolean; message: string; credit_id?: number } {
+  reverseCredit(creditId: number, reason?: string, userId?: number): { success: boolean; error?: string; message?: string; credit_id?: number } {
     try {
       const credit = this.db.prepare('SELECT * FROM credit_transaction WHERE id = ?').get(creditId) as CreditTransaction | undefined
 
       if (!credit) {
-        return { success: false, message: 'Credit transaction not found' }
+        return { success: false, error: 'Credit transaction not found' }
       }
 
-      this.db.prepare(
-        'UPDATE credit_transaction SET amount = 0, notes = ? WHERE id = ?'
-      ).run(`Reversed - ${reason || 'No reason provided'}`, creditId)
+      if (credit.transaction_type !== 'CREDIT_RECEIVED') {
+        return { success: false, error: 'Only received credits can be reversed' }
+      }
+
+      const reverseResult = this.db.prepare(`
+        INSERT INTO credit_transaction (student_id, amount, transaction_type, reference_invoice_id, notes)
+        VALUES (?, ?, 'CREDIT_REFUNDED', ?, ?)
+      `).run(
+        credit.student_id,
+        credit.amount,
+        credit.reference_invoice_id ?? null,
+        `Reversal of credit #${creditId}: ${reason?.trim() || 'No reason provided'}`
+      )
 
       logAudit(
         userId || 0,
         'CREDIT_REVERSE',
         'credit_transaction',
-        creditId,
+        reverseResult.lastInsertRowid as number,
         credit,
         { reason }
       )
@@ -506,10 +575,10 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
       return {
         success: true,
         message: `Credit transaction reversed`,
-        credit_id: creditId
+        credit_id: reverseResult.lastInsertRowid as number
       }
     } catch (error) {
-      return { success: false, message: `Failed to reverse credit: ${(error as Error).message}` }
+      return { success: false, error: `Failed to reverse credit: ${(error as Error).message}` }
     }
   }
 
@@ -518,7 +587,16 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
    */
   getCreditBalance(studentId: number): number {
     const result = this.db.prepare(
-      'SELECT SUM(amount) as total FROM credit_transaction WHERE student_id = ?'
+      `SELECT COALESCE(SUM(
+        CASE
+          WHEN transaction_type = 'CREDIT_RECEIVED' THEN amount
+          WHEN transaction_type = 'CREDIT_APPLIED' THEN -amount
+          WHEN transaction_type = 'CREDIT_REFUNDED' THEN -amount
+          ELSE 0
+        END
+      ), 0) as total
+      FROM credit_transaction
+      WHERE student_id = ?`
     ).get(studentId) as { total: number } | undefined
     
     return result?.total || 0

@@ -1,49 +1,47 @@
-import { getDatabase } from '../../database'
-import { ipcMain } from '../../electron-env'
-import { JSSTransitionService } from '../../services/cbc/JSSTransitionService'
+import { container } from '../../services/base/ServiceContainer'
+import { safeHandleRaw } from '../ipc-result'
 
-import type { IpcMainInvokeEvent } from 'electron'
+import type { JSSTransitionService } from '../../services/cbc/JSSTransitionService'
 
 type TransitionPayload = Parameters<JSSTransitionService['processStudentTransition']>[0]
 type BulkTransitionPayload = Parameters<JSSTransitionService['batchProcessTransitions']>[0]
 type FeeStructurePayload = Parameters<JSSTransitionService['setJSSFeeStructure']>[0]
 
 export function registerJSSHandlers() {
-    const db = getDatabase()
-    const jssService = new JSSTransitionService(db)
+    const jssService = container.resolve('JSSTransitionService')
 
     // Initiate transition for single student
-    ipcMain.handle('jss:initiateTransition', async (_event: IpcMainInvokeEvent, data: TransitionPayload) => {
+    safeHandleRaw('jss:initiateTransition', (_event, data: TransitionPayload) => {
         try {
             const id = jssService.processStudentTransition(data)
             return { success: true, data: id }
         } catch (error) {
-            return { success: false, message: (error as Error).message }
+            return { success: false, error: (error as Error).message }
         }
     })
 
     // Bulk transition
-    ipcMain.handle('jss:bulkTransition', async (_event: IpcMainInvokeEvent, data: BulkTransitionPayload) => {
+    safeHandleRaw('jss:bulkTransition', (_event, data: BulkTransitionPayload) => {
         try {
             const result = jssService.batchProcessTransitions(data)
             return { success: true, data: result }
         } catch (error) {
-            return { success: false, message: (error as Error).message }
+            return { success: false, error: (error as Error).message }
         }
     })
 
     // Get eligible students
-    ipcMain.handle('jss:getEligibleStudents', async (_event: IpcMainInvokeEvent, fromGrade: number, fiscalYear: number) => {
+    safeHandleRaw('jss:getEligibleStudents', (_event, fromGrade: number, fiscalYear: number) => {
         try {
             const students = jssService.getEligibleStudentsForTransition(fromGrade, fiscalYear)
             return { success: true, data: students }
         } catch (error) {
-            return { success: false, message: (error as Error).message }
+            return { success: false, error: (error as Error).message }
         }
     })
 
     // Get fee structure
-    ipcMain.handle('jss:getFeeStructure', async (_event: IpcMainInvokeEvent, grade: number, fiscalYear: number) => {
+    safeHandleRaw('jss:getFeeStructure', (_event, grade: number, fiscalYear: number) => {
         try {
             const structure = jssService.getJSSFeeStructure(grade, fiscalYear)
             if (structure) {
@@ -55,12 +53,12 @@ export function registerJSSHandlers() {
             }
             return { success: true, data: null }
         } catch (error) {
-            return { success: false, message: (error as Error).message }
+            return { success: false, error: (error as Error).message }
         }
     })
 
     // Set fee structure
-    ipcMain.handle('jss:setFeeStructure', async (_event: IpcMainInvokeEvent, data: FeeStructurePayload) => {
+    safeHandleRaw('jss:setFeeStructure', (_event, data: FeeStructurePayload) => {
         try {
             // Store data directly as provided (assuming frontend sends cents or normalized values)
             // But wait, if frontend sends shillings, we MUST convert here if we want consistency?
@@ -88,27 +86,27 @@ export function registerJSSHandlers() {
             const id = jssService.setJSSFeeStructure(data) // Pass data directly
             return { success: true, data: id }
         } catch (error) {
-            return { success: false, message: (error as Error).message }
+            return { success: false, error: (error as Error).message }
         }
     })
 
     // Get transition report (history)
-    ipcMain.handle('jss:getTransitionReport', async (_event: IpcMainInvokeEvent, studentId: number) => {
+    safeHandleRaw('jss:getTransitionReport', (_event, studentId: number) => {
         try {
             const history = jssService.getStudentTransitionHistory(studentId)
             return { success: true, data: history }
         } catch (error) {
-            return { success: false, message: (error as Error).message }
+            return { success: false, error: (error as Error).message }
         }
     })
 
     // Get transition summary
-    ipcMain.handle('jss:getTransitionSummary', async (_event: IpcMainInvokeEvent, fiscalYear: number) => {
+    safeHandleRaw('jss:getTransitionSummary', (_event, fiscalYear: number) => {
         try {
             const summary = jssService.getTransitionSummary(fiscalYear)
             return { success: true, data: summary }
         } catch (error) {
-            return { success: false, message: (error as Error).message }
+            return { success: false, error: (error as Error).message }
         }
     })
 }

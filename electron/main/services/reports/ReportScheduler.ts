@@ -1,6 +1,7 @@
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 import { NotificationService } from '../notifications/NotificationService'
+import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
 
 
 export interface ScheduledReport {
@@ -30,6 +31,27 @@ export class ReportScheduler {
     }
     private checkInterval: ReturnType<typeof setInterval> | null = null
     private isRunning = false
+
+    private formatLocalDate(date: Date): string {
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        return `${year}-${month}-${day}`
+    }
+
+    private parseRecipients(raw: string): string[] {
+        try {
+            const parsed = JSON.parse(raw) as unknown
+            if (!Array.isArray(parsed)) {
+                return []
+            }
+            return parsed
+                .map(value => String(value).trim())
+                .filter(value => value.length > 3 && value.includes('@'))
+        } catch {
+            return []
+        }
+    }
 
     /**
      * Initialize the scheduler
@@ -130,7 +152,13 @@ export class ReportScheduler {
         data: Omit<ScheduledReport, 'id' | 'last_run_at' | 'next_run_at' | 'created_at'>,
         userId: number
     ): { success: boolean; id?: number; errors?: string[] } {
-        const errors = this.validateSchedule(data)
+        const normalized = {
+            ...data,
+            parameters: data.parameters || '{}',
+            export_format: data.export_format || 'PDF',
+            recipients: data.recipients || '[]'
+        }
+        const errors = this.validateSchedule(normalized)
         if (errors.length > 0) {
             return { success: false, errors }
         }
@@ -143,20 +171,20 @@ export class ReportScheduler {
           export_format, is_active, created_by_user_id
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-                data.report_name,
-                data.report_type,
-                data.parameters,
-                data.schedule_type,
-                data.day_of_week,
-                data.day_of_month,
-                data.time_of_day,
-                data.recipients,
-                data.export_format,
-                data.is_active ? 1 : 0,
+                normalized.report_name,
+                normalized.report_type,
+                normalized.parameters,
+                normalized.schedule_type,
+                normalized.day_of_week,
+                normalized.day_of_month,
+                normalized.time_of_day,
+                normalized.recipients,
+                normalized.export_format,
+                normalized.is_active ? 1 : 0,
                 userId
             )
 
-            logAudit(userId, 'CREATE', 'scheduled_report', result.lastInsertRowid as number, null, { report_name: data.report_name })
+            logAudit(userId, 'CREATE', 'scheduled_report', result.lastInsertRowid as number, null, { report_name: normalized.report_name })
 
             return { success: true, id: result.lastInsertRowid as number }
         } catch (error) {
@@ -175,6 +203,15 @@ export class ReportScheduler {
         const existing = this.db.prepare('SELECT * FROM scheduled_report WHERE id = ?').get(id) as ScheduledReport | undefined
         if (!existing) {
             return { success: false, errors: ['Schedule not found'] }
+        }
+
+        const mergedSchedule: ScheduledReport = {
+            ...existing,
+            ...data
+        }
+        const errors = this.validateSchedule(mergedSchedule)
+        if (errors.length > 0) {
+            return { success: false, errors }
         }
 
         // Update database
@@ -218,47 +255,179 @@ export class ReportScheduler {
         return { success: true }
     }
 
+    private resolveWindow(schedule: ScheduledReport, runAt: Date): { endDate: string; startDate: string } {
+        const defaultEnd = this.formatLocalDate(runAt)
+        const defaultStart = `${defaultEnd.slice(0, 8)}01`
+
+        try {
+            const parsed = schedule.parameters ? JSON.parse(schedule.parameters) as { end_date?: string; start_date?: string } : {}
+            const hasIsoDate = (value?: string) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+
+            return {
+                startDate: hasIsoDate(parsed.start_date) ? parsed.start_date! : defaultStart,
+                endDate: hasIsoDate(parsed.end_date) ? parsed.end_date! : defaultEnd
+            }
+        } catch {
+            return { startDate: defaultStart, endDate: defaultEnd }
+        }
+    }
+
+    private async generateReportPayload(schedule: ScheduledReport, startDate: string, endDate: string): Promise<unknown> {
+        switch (schedule.report_type) {
+            case 'FEE_COLLECTION':
+                return this.db.prepare(`
+                    SELECT DATE(transaction_date) as payment_date, payment_method, COUNT(*) as count, SUM(amount) as amount
+                    FROM ledger_transaction
+                    WHERE transaction_type = 'FEE_PAYMENT'
+                      AND COALESCE(is_voided, 0) = 0
+                      AND transaction_date BETWEEN ? AND ?
+                    GROUP BY DATE(transaction_date), payment_method
+                    ORDER BY DATE(transaction_date) ASC
+                `).all(startDate, endDate)
+            case 'DEFAULTERS_LIST':
+                return this.db.prepare(`
+                    SELECT
+                        fi.invoice_number,
+                        fi.student_id,
+                        s.admission_number,
+                        s.first_name,
+                        s.last_name,
+                        (fi.total_amount - fi.amount_paid) as balance,
+                        fi.due_date
+                    FROM fee_invoice fi
+                    JOIN student s ON s.id = fi.student_id
+                    WHERE fi.status IN ('PENDING', 'PARTIAL', 'OUTSTANDING')
+                      AND (fi.total_amount - fi.amount_paid) > 0
+                    ORDER BY balance DESC
+                `).all()
+            case 'EXPENSE_SUMMARY':
+                return this.db.prepare(`
+                    SELECT
+                        COALESCE(tc.category_name, 'Uncategorized') as category_name,
+                        SUM(lt.amount) as amount
+                    FROM ledger_transaction lt
+                    LEFT JOIN transaction_category tc ON tc.id = lt.category_id
+                    WHERE lt.transaction_type IN ('EXPENSE', 'SALARY_PAYMENT', 'REFUND')
+                      AND COALESCE(lt.is_voided, 0) = 0
+                      AND lt.transaction_date BETWEEN ? AND ?
+                    GROUP BY COALESCE(tc.category_name, 'Uncategorized')
+                    ORDER BY amount DESC
+                `).all(startDate, endDate)
+            case 'TRIAL_BALANCE': {
+                const journalService = new DoubleEntryJournalService(this.db)
+                return journalService.getTrialBalance(startDate, endDate)
+            }
+            case 'STUDENT_LIST':
+                return this.db.prepare(`
+                    SELECT admission_number, first_name, last_name, gender, admission_date
+                    FROM student
+                    WHERE is_active = 1
+                    ORDER BY admission_number ASC
+                `).all()
+            default:
+                throw new Error(`Unsupported report type for scheduler: ${schedule.report_type}`)
+        }
+    }
+
+    private buildEmailBody(schedule: ScheduledReport, startDate: string, endDate: string, payload: unknown): string {
+        const summary = typeof payload === 'string'
+            ? payload
+            : JSON.stringify(payload, null, 2)
+        return [
+            `Scheduled report: ${schedule.report_name}`,
+            `Type: ${schedule.report_type}`,
+            `Window: ${startDate} to ${endDate}`,
+            '',
+            summary
+        ].join('\n')
+    }
+
     private async executeReport(schedule: ScheduledReport): Promise<void> {
         this.logInfo(`Executing scheduled report: ${schedule.report_name}`)
 
-        // In a real implementation:
-        // 1. Generate report (PDF/Excel) using ReportEngine
-        // 2. Email it using NotificationService
-        // 3. Log execution
-
         try {
-            // Simulate execution
-            this.logInfo('Simulating report generation and email...')
+            const recipients = this.parseRecipients(schedule.recipients)
+            if (recipients.length === 0) {
+                throw new Error('No valid recipients configured for scheduled report')
+            }
 
-            // Update last run time
+            const now = new Date()
+            const { startDate, endDate } = this.resolveWindow(schedule, now)
+            const payload = await this.generateReportPayload(schedule, startDate, endDate)
+            const body = this.buildEmailBody(schedule, startDate, endDate, payload)
+            const subject = `[Scheduled Report] ${schedule.report_name}`
+
+            let recipientsNotified = 0
+            const recipientErrors: string[] = []
+
+            for (const recipient of recipients) {
+                const sendResult = await this.notificationService.send({
+                    recipientType: 'STAFF',
+                    recipientId: schedule.created_by_user_id,
+                    channel: 'EMAIL',
+                    to: recipient,
+                    subject,
+                    message: body,
+                }, schedule.created_by_user_id)
+
+                if (sendResult.success) {
+                    recipientsNotified += 1
+                } else {
+                    recipientErrors.push(`${recipient}: ${sendResult.error || 'failed to send'}`)
+                }
+            }
+
+            if (recipientsNotified === 0) {
+                throw new Error(recipientErrors.join('; ') || 'Failed to notify all recipients')
+            }
+
             this.db.prepare(`
-            UPDATE scheduled_report 
-            SET last_run_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        `).run(schedule.id)
+                UPDATE scheduled_report 
+                SET last_run_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            `).run(schedule.id)
 
-            // Log success
             this.db.prepare(`
-            INSERT INTO report_execution_log (scheduled_report_id, execution_time, status, recipients_notified)
-            VALUES (?, CURRENT_TIMESTAMP, 'SUCCESS', ?)
-        `).run(schedule.id, 1)
-
+                INSERT INTO report_execution_log (scheduled_report_id, execution_time, status, recipients_notified, error_message)
+                VALUES (?, CURRENT_TIMESTAMP, 'SUCCESS', ?, ?)
+            `).run(
+                schedule.id,
+                recipientsNotified,
+                recipientErrors.length > 0 ? recipientErrors.join('; ') : null
+            )
         } catch (error) {
             console.error('Report execution failed:', error)
-            // Log failure
             this.db.prepare(`
-            INSERT INTO report_execution_log (scheduled_report_id, execution_time, status, error_message)
-            VALUES (?, CURRENT_TIMESTAMP, 'FAILED', ?)
-        `).run(schedule.id, error instanceof Error ? error.message : 'Unknown error')
+                INSERT INTO report_execution_log (scheduled_report_id, execution_time, status, error_message)
+                VALUES (?, CURRENT_TIMESTAMP, 'FAILED', ?)
+            `).run(schedule.id, error instanceof Error ? error.message : 'Unknown error')
         }
     }
 
     private validateSchedule(data: Partial<ScheduledReport>): string[] {
         const errors: string[] = []
-        if (!data.report_name) {errors.push('Report name is required')}
-        if (!data.report_type) {errors.push('Report type is required')}
-        if (!data.time_of_day) {errors.push('Time is required')}
-        if (!data.recipients) {errors.push('At least one recipient is required')}
+        if (!data.report_name?.trim()) {errors.push('Report name is required')}
+        if (!data.report_type?.trim()) {errors.push('Report type is required')}
+        if (!data.time_of_day?.trim()) {errors.push('Time is required')}
+        if (!data.recipients?.trim()) {errors.push('At least one recipient is required')}
+        if (data.time_of_day && !/^\d{2}:\d{2}$/.test(data.time_of_day)) {
+            errors.push('Time must be in HH:MM 24-hour format')
+        }
+        if (data.schedule_type === 'WEEKLY' && (data.day_of_week == null || data.day_of_week < 0 || data.day_of_week > 6)) {
+            errors.push('Weekly schedules require day_of_week between 0 and 6')
+        }
+        if (data.schedule_type === 'MONTHLY' && (data.day_of_month == null || data.day_of_month < 1 || data.day_of_month > 31)) {
+            errors.push('Monthly schedules require day_of_month between 1 and 31')
+        }
+        if (data.schedule_type === 'TERM_END' || data.schedule_type === 'YEAR_END') {
+            errors.push('TERM_END and YEAR_END schedules are not supported in this release')
+        }
+        if (data.recipients) {
+            const recipients = this.parseRecipients(data.recipients)
+            if (recipients.length === 0) {
+                errors.push('At least one valid recipient email is required')
+            }
+        }
         return errors
     }
 

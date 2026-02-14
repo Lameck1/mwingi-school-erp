@@ -1,22 +1,14 @@
 import { getDatabase } from '../../database'
-import { ipcMain } from '../../electron-env'
-import { NEMISExportService } from '../../services/reports/NEMISExportService'
+import { container } from '../../services/base/ServiceContainer'
+import { REPORT_EXPENSE_TRANSACTION_TYPES, REPORT_INCOME_TRANSACTION_TYPES, OUTSTANDING_INVOICE_STATUSES, asSqlInList } from '../../utils/financeTransactionTypes'
+import { safeHandleRaw } from '../ipc-result'
 
 import type { NEMISExportConfig, NEMISStudent } from '../../services/reports/NEMISExportService.types'
-import type { IpcMainInvokeEvent } from 'electron'
 
 interface CountResult { count: number }
 interface TotalResult { total: number }
-interface TransactionRow {
-    amount: number
-    date: string
-    dc: string
-    description: string
-    ref: string
-}
-
 function registerStudentAccountReports(db: ReturnType<typeof getDatabase>): void {
-    ipcMain.handle('report:defaulters', async (_event: IpcMainInvokeEvent, termId?: number) => {
+    safeHandleRaw('report:defaulters', (_event, termId?: number) => {
         let query = `SELECT s.id, s.admission_number, s.first_name, s.last_name, 
             s.guardian_phone, st.stream_name, fi.invoice_number, fi.total_amount, fi.amount_paid,
             (fi.total_amount - fi.amount_paid) as balance, fi.due_date
@@ -37,42 +29,10 @@ function registerStudentAccountReports(db: ReturnType<typeof getDatabase>): void
         query += ` ORDER BY balance DESC`
         return db.prepare(query).all(...params)
     })
-
-    ipcMain.handle('report:studentLedger', async (_event: IpcMainInvokeEvent, studentId: number) => {
-        const student = db.prepare('SELECT * FROM student WHERE id = ?').get(studentId)
-        if (!student) {return { success: false, error: 'Student not found' }}
-
-        const entries = db.prepare(`
-            SELECT invoice_date as date, 'DEBIT' as dc, total_amount as amount, 'Invoice: ' || invoice_number as description, invoice_number as ref
-            FROM fee_invoice 
-            WHERE student_id = ?
-            UNION ALL
-            SELECT lt.transaction_date as date, lt.debit_credit as dc, lt.amount as amount, lt.description, r.receipt_number as ref
-            FROM ledger_transaction lt
-            LEFT JOIN receipt r ON lt.id = r.transaction_id
-            WHERE lt.student_id = ? AND lt.is_voided = 0
-            ORDER BY date ASC
-        `).all(studentId, studentId) as TransactionRow[]
-
-        let runningBalance = 0
-        const ledger = entries.map((item) => {
-            runningBalance += item.dc === 'DEBIT' ? item.amount : -item.amount
-            return {
-                transaction_date: item.date,
-                debit_credit: item.dc,
-                amount: item.amount,
-                description: item.description,
-                ref: item.ref,
-                runningBalance
-            }
-        })
-
-        return { student, openingBalance: 0, ledger: [...ledger].reverse(), closingBalance: runningBalance }
-    })
 }
 
 function registerAttendanceAndCollectionReports(db: ReturnType<typeof getDatabase>): void {
-    ipcMain.handle('report:attendance', async (_event: IpcMainInvokeEvent, startDate: string, endDate: string, streamId?: number) => {
+    safeHandleRaw('report:attendance', (_event, startDate: string, endDate: string, streamId?: number) => {
         let query = `
             SELECT 
                 s.id, s.admission_number, s.first_name, s.last_name,
@@ -99,7 +59,7 @@ function registerAttendanceAndCollectionReports(db: ReturnType<typeof getDatabas
         return db.prepare(query).all(...params)
     })
 
-    ipcMain.handle('report:dailyCollection', async (_event: IpcMainInvokeEvent, date: string) => {
+    safeHandleRaw('report:dailyCollection', (_event, date: string) => {
         return db.prepare(`
             SELECT 
                 lt.transaction_date as date,
@@ -125,17 +85,21 @@ function registerAttendanceAndCollectionReports(db: ReturnType<typeof getDatabas
 }
 
 function registerFinancialSummaryAndDashboardReports(db: ReturnType<typeof getDatabase>): void {
-    ipcMain.handle('report:financialSummary', async (_event: IpcMainInvokeEvent, startDate: string, endDate: string) => {
+    const incomeTypesSql = asSqlInList(REPORT_INCOME_TRANSACTION_TYPES)
+    const expenseTypesSql = asSqlInList(REPORT_EXPENSE_TRANSACTION_TYPES)
+    const outstandingStatusesSql = asSqlInList(OUTSTANDING_INVOICE_STATUSES)
+
+    safeHandleRaw('report:financialSummary', (_event, startDate: string, endDate: string) => {
         const income = db.prepare(`
             SELECT SUM(amount) as total FROM ledger_transaction 
-            WHERE (transaction_type IN ('INCOME', 'FEE_PAYMENT', 'DONATION', 'GRANT'))
+            WHERE (transaction_type IN (${incomeTypesSql}))
             AND is_voided = 0 
             AND transaction_date BETWEEN ? AND ?
         `).get(startDate, endDate) as TotalResult | undefined
 
         const expenses = db.prepare(`
             SELECT SUM(amount) as total FROM ledger_transaction 
-            WHERE (transaction_type IN ('EXPENSE', 'SALARY_PAYMENT'))
+            WHERE (transaction_type IN (${expenseTypesSql}))
             AND is_voided = 0 
             AND transaction_date BETWEEN ? AND ?
         `).get(startDate, endDate) as TotalResult | undefined
@@ -154,13 +118,13 @@ function registerFinancialSummaryAndDashboardReports(db: ReturnType<typeof getDa
         }
     })
 
-    ipcMain.handle('report:dashboard', async () => {
+    safeHandleRaw('report:dashboard', () => {
         const totalStudents = db.prepare('SELECT COUNT(*) as count FROM student WHERE is_active = 1').get() as CountResult | undefined
         const totalStaff = db.prepare('SELECT COUNT(*) as count FROM staff WHERE is_active = 1').get() as CountResult | undefined
         const feeCollected = db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM ledger_transaction 
       WHERE transaction_type = 'FEE_PAYMENT' AND is_voided = 0`).get() as TotalResult | undefined
         const outstandingBalance = db.prepare(`SELECT COALESCE(SUM(total_amount - amount_paid), 0) as total 
-      FROM fee_invoice WHERE status IN ('PENDING', 'PARTIAL')`).get() as TotalResult | undefined
+      FROM fee_invoice WHERE status IN (${outstandingStatusesSql})`).get() as TotalResult | undefined
 
         return {
             totalStudents: totalStudents?.count || 0,
@@ -172,39 +136,42 @@ function registerFinancialSummaryAndDashboardReports(db: ReturnType<typeof getDa
 }
 
 function registerCategoryBreakdownReports(db: ReturnType<typeof getDatabase>): void {
-    ipcMain.handle('report:revenueByCategory', async (_event: IpcMainInvokeEvent, startDate: string, endDate: string) => {
+    const incomeTypesSql = asSqlInList(REPORT_INCOME_TRANSACTION_TYPES)
+    const expenseTypesSql = asSqlInList(REPORT_EXPENSE_TRANSACTION_TYPES)
+
+    safeHandleRaw('report:revenueByCategory', (_event, startDate: string, endDate: string) => {
         return db.prepare(`
             SELECT 
-                tc.category_name as name, 
+                COALESCE(tc.category_name, 'Uncategorized') as name, 
                 SUM(lt.amount) as value
             FROM ledger_transaction lt
-            JOIN transaction_category tc ON lt.category_id = tc.id
-            WHERE lt.transaction_type IN ('INCOME', 'FEE_PAYMENT', 'DONATION', 'GRANT')
+            LEFT JOIN transaction_category tc ON lt.category_id = tc.id
+            WHERE lt.transaction_type IN (${incomeTypesSql})
             AND lt.is_voided = 0
             AND lt.transaction_date BETWEEN ? AND ?
-            GROUP BY tc.id, tc.category_name
+            GROUP BY COALESCE(tc.id, 0), COALESCE(tc.category_name, 'Uncategorized')
             HAVING value > 0
             ORDER BY value DESC
         `).all(startDate, endDate)
     })
 
-    ipcMain.handle('report:expenseByCategory', async (_event: IpcMainInvokeEvent, startDate: string, endDate: string) => {
+    safeHandleRaw('report:expenseByCategory', (_event, startDate: string, endDate: string) => {
         return db.prepare(`
             SELECT 
-                tc.category_name as name, 
+                COALESCE(tc.category_name, 'Uncategorized') as name, 
                 SUM(lt.amount) as value
             FROM ledger_transaction lt
-            JOIN transaction_category tc ON lt.category_id = tc.id
-            WHERE lt.transaction_type IN ('EXPENSE', 'SALARY_PAYMENT', 'REFUND')
+            LEFT JOIN transaction_category tc ON lt.category_id = tc.id
+            WHERE lt.transaction_type IN (${expenseTypesSql})
             AND lt.is_voided = 0
             AND lt.transaction_date BETWEEN ? AND ?
-            GROUP BY tc.id, tc.category_name
+            GROUP BY COALESCE(tc.id, 0), COALESCE(tc.category_name, 'Uncategorized')
             HAVING value > 0
             ORDER BY value DESC
         `).all(startDate, endDate)
     })
 
-    ipcMain.handle('report:feeCategoryBreakdown', async () => {
+    safeHandleRaw('report:feeCategoryBreakdown', () => {
         return db.prepare(`
             SELECT 
                 tc.category_name as name, 
@@ -221,7 +188,7 @@ function registerCategoryBreakdownReports(db: ReturnType<typeof getDatabase>): v
 }
 
 function registerOperationsReports(db: ReturnType<typeof getDatabase>): void {
-    ipcMain.handle('report:inventoryValuation', async () => {
+    safeHandleRaw('report:inventoryValuation', () => {
         return db.prepare(`
             SELECT 
                 i.item_code, i.item_name, c.category_name,
@@ -234,9 +201,9 @@ function registerOperationsReports(db: ReturnType<typeof getDatabase>): void {
         `).all()
     })
 
-    ipcMain.handle('report:staffPayroll', async (_event: IpcMainInvokeEvent, periodId: number) => {
+    safeHandleRaw('report:staffPayroll', (_event, periodId: number) => {
         const period = db.prepare('SELECT * FROM payroll_period WHERE id = ?').get(periodId)
-        if (!period) {return { success: false, error: 'Payroll period not found' }}
+        if (!period) { return { success: false, error: 'Payroll period not found' } }
 
         const payroll = db.prepare(`
             SELECT 
@@ -260,7 +227,7 @@ function registerOperationsReports(db: ReturnType<typeof getDatabase>): void {
         return { period, payroll, summary }
     })
 
-    ipcMain.handle('report:feeCollection', async (_event: IpcMainInvokeEvent, startDate: string, endDate: string) => {
+    safeHandleRaw('report:feeCollection', (_event, startDate: string, endDate: string) => {
         return db.prepare(`
             SELECT 
                 DATE(transaction_date) as payment_date, 
@@ -277,9 +244,9 @@ function registerOperationsReports(db: ReturnType<typeof getDatabase>): void {
 }
 
 function registerNemisExportHandlers(): void {
-    const nemisService = new NEMISExportService()
+    const nemisService = container.resolve('NEMISExportService')
 
-    ipcMain.handle('reports:extractStudentData', async (_event: IpcMainInvokeEvent, filters?: {
+    safeHandleRaw('reports:extractStudentData', async (_event, filters?: {
         academicYear?: string
         streamId?: number
         status?: string
@@ -291,7 +258,7 @@ function registerNemisExportHandlers(): void {
         }
     })
 
-    ipcMain.handle('reports:extractStaffData', async (_event: IpcMainInvokeEvent) => {
+    safeHandleRaw('reports:extractStaffData', async () => {
         try {
             return await nemisService.extractStaffData()
         } catch (error) {
@@ -299,7 +266,7 @@ function registerNemisExportHandlers(): void {
         }
     })
 
-    ipcMain.handle('reports:extractEnrollmentData', async (_event: IpcMainInvokeEvent, academicYear: string) => {
+    safeHandleRaw('reports:extractEnrollmentData', async (_event, academicYear: string) => {
         try {
             return await nemisService.extractEnrollmentData(academicYear)
         } catch (error) {
@@ -307,15 +274,15 @@ function registerNemisExportHandlers(): void {
         }
     })
 
-    ipcMain.handle('reports:createNEMISExport', async (_event: IpcMainInvokeEvent, exportConfig: NEMISExportConfig, userId: number) => {
+    safeHandleRaw('reports:createNEMISExport', async (_event, exportConfig: NEMISExportConfig, userId: number) => {
         try {
             return await nemisService.createExport(exportConfig, userId)
         } catch (error) {
-            return { success: false, message: error instanceof Error ? error.message : 'Unknown error' }
+            return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
         }
     })
 
-    ipcMain.handle('reports:getNEMISExportHistory', async (_event: IpcMainInvokeEvent, limit?: number) => {
+    safeHandleRaw('reports:getNEMISExportHistory', async (_event, limit?: number) => {
         try {
             return await nemisService.getExportHistory(limit)
         } catch (error) {
@@ -323,7 +290,7 @@ function registerNemisExportHandlers(): void {
         }
     })
 
-    ipcMain.handle('reports:validateNEMISStudentData', async (_event: IpcMainInvokeEvent, student: NEMISStudent) => {
+    safeHandleRaw('reports:validateNEMISStudentData', (_event, student: NEMISStudent) => {
         try {
             return nemisService.validateStudentData(student)
         } catch (error) {

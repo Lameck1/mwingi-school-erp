@@ -1,8 +1,8 @@
-import { ipcMain } from '../../electron-env';
-import { BudgetEnforcementService } from '../../services/accounting/BudgetEnforcementService';
-import { ReconciliationService } from '../../services/accounting/ReconciliationService';
+import { container } from '../../services/base/ServiceContainer';
+import { safeHandleRaw } from '../ipc-result';
 
-import type { IpcMainInvokeEvent } from 'electron';
+import type { BudgetEnforcementService } from '../../services/accounting/BudgetEnforcementService';
+import type { ReconciliationService } from '../../services/accounting/ReconciliationService';
 
 /**
  * Reconciliation and Budget IPC Handlers
@@ -14,23 +14,23 @@ import type { IpcMainInvokeEvent } from 'electron';
  */
 
 export function registerReconciliationAndBudgetHandlers(): void {
-  const reconciliationService = new ReconciliationService();
-  const budgetService = new BudgetEnforcementService();
+  const reconciliationService = container.resolve('ReconciliationService');
+  const budgetService = container.resolve('BudgetEnforcementService');
   registerReconciliationHandlers(reconciliationService)
   registerBudgetHandlers(budgetService)
 }
 
 function registerReconciliationHandlers(reconciliationService: ReconciliationService): void {
-  ipcMain.handle(
+  safeHandleRaw(
     'reconciliation:runAll',
-    async (_event: IpcMainInvokeEvent, userId: number) => {
+    async (_event, userId: number) => {
       return await reconciliationService.runAllChecks(userId);
     }
   );
 
-  ipcMain.handle(
+  safeHandleRaw(
     'reconciliation:getHistory',
-    async (_event: IpcMainInvokeEvent, limit: number = 30) => {
+    async (_event, limit: number = 30) => {
       return await reconciliationService.getReconciliationHistory(limit);
     }
   );
@@ -38,7 +38,7 @@ function registerReconciliationHandlers(reconciliationService: ReconciliationSer
   /**
    * Get latest reconciliation summary
    */
-  ipcMain.handle(
+  safeHandleRaw(
     'reconciliation:getLatest',
     async () => {
       return await reconciliationService.getLatestReconciliationSummary();
@@ -47,19 +47,15 @@ function registerReconciliationHandlers(reconciliationService: ReconciliationSer
 }
 
 function registerBudgetHandlers(budgetService: BudgetEnforcementService): void {
-  type SetAllocationArgs = [
-    glAccountCode: string,
-    fiscalYear: number,
-    allocatedAmount: number,
-    department: string | null,
-    userId: number
-  ]
-
-  ipcMain.handle(
+  safeHandleRaw(
     'budget:setAllocation',
     async (
-      _event: IpcMainInvokeEvent,
-      ...[glAccountCode, fiscalYear, allocatedAmount, department, userId]: SetAllocationArgs
+      _event,
+      glAccountCode: string,
+      fiscalYear: number,
+      allocatedAmount: number,
+      department: string | null,
+      userId: number
     ) => {
       return await budgetService.setBudgetAllocation(
         glAccountCode,
@@ -74,10 +70,10 @@ function registerBudgetHandlers(budgetService: BudgetEnforcementService): void {
   /**
    * Validate transaction against budget
    */
-  ipcMain.handle(
+  safeHandleRaw(
     'budget:validateTransaction',
     async (
-      _event: IpcMainInvokeEvent,
+      _event,
       glAccountCode: string,
       amount: number,
       fiscalYear: number,
@@ -95,9 +91,9 @@ function registerBudgetHandlers(budgetService: BudgetEnforcementService): void {
   /**
    * Get all budget allocations for a fiscal year
    */
-  ipcMain.handle(
+  safeHandleRaw(
     'budget:getAllocations',
-    async (_event: IpcMainInvokeEvent, fiscalYear: number) => {
+    async (_event, fiscalYear: number) => {
       return await budgetService.getBudgetAllocations(fiscalYear);
     }
   );
@@ -105,9 +101,9 @@ function registerBudgetHandlers(budgetService: BudgetEnforcementService): void {
   /**
    * Generate budget variance report
    */
-  ipcMain.handle(
+  safeHandleRaw(
     'budget:getVarianceReport',
-    async (_event: IpcMainInvokeEvent, fiscalYear: number) => {
+    async (_event, fiscalYear: number) => {
       return await budgetService.generateBudgetVarianceReport(fiscalYear);
     }
   );
@@ -115,10 +111,10 @@ function registerBudgetHandlers(budgetService: BudgetEnforcementService): void {
   /**
    * Get budget alerts
    */
-  ipcMain.handle(
+  safeHandleRaw(
     'budget:getAlerts',
     async (
-      _event: IpcMainInvokeEvent,
+      _event,
       fiscalYear: number,
       thresholdPercentage: number = 80
     ) => {
@@ -126,9 +122,9 @@ function registerBudgetHandlers(budgetService: BudgetEnforcementService): void {
     }
   );
 
-  ipcMain.handle(
+  safeHandleRaw(
     'budget:deactivateAllocation',
-    async (_event: IpcMainInvokeEvent, allocationId: number, userId: number) => {
+    async (_event, allocationId: number, userId: number) => {
       return await budgetService.deactivateBudgetAllocation(allocationId, userId);
     }
   );

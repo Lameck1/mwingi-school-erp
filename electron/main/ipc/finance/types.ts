@@ -4,6 +4,7 @@ export interface PaymentData {
   student_id: number
   payment_method: string
   payment_reference: string
+  idempotency_key?: string
   description?: string
   term_id?: number
   invoice_id?: number
@@ -12,8 +13,13 @@ export interface PaymentData {
 
 export interface PaymentResult {
   success: boolean
-  transactionRef: string
-  receiptNumber: string
+  error?: string
+  message?: string
+  transaction_id?: number
+  transactionRef?: string
+  receiptNumber?: string
+  approval_request_id?: number
+  requires_approval?: boolean
 }
 
 export interface InvoiceItem {

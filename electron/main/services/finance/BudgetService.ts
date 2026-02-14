@@ -138,6 +138,10 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
     }
 
     protected executeCreate(data: CreateBudgetData): { lastInsertRowid: number | bigint } {
+        return this.executeCreateWithUser(data, 0)
+    }
+
+    private executeCreateWithUser(data: CreateBudgetData, userId: number): { lastInsertRowid: number | bigint } {
         const result = this.db.transaction(() => {
             const budgetResult = this.db.prepare(`
         INSERT INTO budget (budget_name, academic_year_id, term_id, notes, status, created_by_user_id)
@@ -147,7 +151,7 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
                 data.academic_year_id,
                 data.term_id || null,
                 data.notes || null,
-                1 // Admin user ID as fallback
+                userId
             )
 
             const budgetId = budgetResult.lastInsertRowid as number
@@ -178,38 +182,6 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
     }
 
     protected executeUpdate(id: number, data: Partial<CreateBudgetData>): void {
-        const _sets: string[] = []
-        const _params: unknown[] = []
-        // Implementation omitted for executeUpdate? No, this is replacing executeUpdate, so I should implement it or keep it.
-        // Wait, the previous attempt to replace executeUpdate failed.
-        // The file content I read shows:
-        /*
-        178:     protected executeUpdate(id: number, data: Partial<CreateBudgetData>): void {
-        179:         const sets: string[] = []
-        180:         const params: unknown[] = []
-        181:         if (filters.academic_year_id) {
-        */
-        // It seems the file IS messed up. The previous multi_replace was partially successful or left it in a bad state?
-        // Step 1266 output said "chunk 1: replacement overlaps".
-        // Step 1281 view_file shows that `executeUpdate` body was replaced with `const sets... const params...` AND THEN `if (filters...)`.
-        // `filters` is not defined in `executeUpdate`. `filters` belongs in `applyFilters`.
-        // I need to RESTORE `executeUpdate` and `applyFilters` properly.
-
-        // Let's reconstruct `executeUpdate` and `applyFilters`.
-        // The original `executeUpdate` (from lines 178-207 in step 1256, before my botched edit):
-        /*
-        this.db.transaction(() => { ... })()
-        */
-        // The current state (from lines 178-194 in step 1281):
-        /*
-        protected executeUpdate(id: number, data: Partial<CreateBudgetData>): void {
-            const sets: string[] = []
-            const params: unknown[] = []
-            if (filters.academic_year_id) { ... }
-        }
-        */
-        // This is definitely broken. I removed the original `executeUpdate` logic and pasted `applyFilters` logic into it, but with missing function signature for `applyFilters`.
-
         this.db.transaction(() => {
             if (data.budget_name || data.notes !== undefined) {
                 this.db.prepare(`
@@ -297,5 +269,25 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
 
         logAudit(userId, 'APPROVE', 'budget', budgetId, { status: 'SUBMITTED' }, { status: 'APPROVED' })
         return { success: true }
+    }
+
+    async create(data: CreateBudgetData, userId: number): Promise<{ success: boolean; id: number; errors?: string[] }> {
+        const errors = this.validateCreate(data)
+        if (errors) {
+            return { success: false, id: 0, errors }
+        }
+
+        try {
+            const result = this.executeCreateWithUser(data, userId)
+            const id = result.lastInsertRowid as number
+            logAudit(userId, 'CREATE', this.getTableName(), id, null, data)
+            return { success: true, id }
+        } catch (error) {
+            return {
+                success: false,
+                id: 0,
+                errors: [error instanceof Error ? error.message : 'Unknown error']
+            }
+        }
     }
 }

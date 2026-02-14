@@ -1,8 +1,9 @@
 import { getDatabase } from '../../database'
-import { ipcMain } from '../../electron-env'
+import { container } from '../../services/base/ServiceContainer'
+import { toDbGender, fromDbGender, toDbActiveFlag } from '../../utils/transforms'
 import { sanitizeString, validateId } from '../../utils/validation'
-
-import type { IpcMainInvokeEvent } from 'electron'
+import { createGetOrCreateCategoryId, generateSingleStudentInvoice, type FinanceContext } from '../finance/finance-handler-utils'
+import { safeHandleRaw } from '../ipc-result'
 
 interface Student {
   id: number
@@ -59,21 +60,9 @@ interface EnrollmentContext {
   termId: number
 }
 
-const toDbGender = (gender: string) => {
-  const normalized = gender.toUpperCase()
-  if (normalized === 'MALE') {return 'M'}
-  if (normalized === 'FEMALE') {return 'F'}
-  return gender
-}
-
-const fromDbGender = (gender: string) => {
-  if (gender === 'M') {return 'MALE'}
-  if (gender === 'F') {return 'FEMALE'}
-  return gender
-}
-
-function toDbActiveFlag(value: boolean): number {
-  return value ? 1 : 0
+interface AutoInvoiceResult {
+  invoiceGenerated: boolean
+  invoiceNumber?: string
 }
 
 function coalesceValue<T>(incoming: T | undefined, current: T): T {
@@ -107,13 +96,22 @@ function createEnrollment(
     enrollmentDate: string
     useCurrentDate: boolean
   },
-): void {
+): EnrollmentContext {
   const context = resolveEnrollmentContext(db)
   if (!context) {
-    return
+    throw new Error('No active academic year/term configured for enrollment')
   }
 
   const dateExpression = params.useCurrentDate ? "DATE('now')" : '?'
+  db.prepare(`
+    UPDATE enrollment
+    SET status = 'INACTIVE'
+    WHERE student_id = ?
+      AND academic_year_id = ?
+      AND term_id = ?
+      AND status = 'ACTIVE'
+  `).run(params.studentId, context.yearId, context.termId)
+
   const sql = `
     INSERT INTO enrollment (
       student_id,
@@ -130,10 +128,59 @@ function createEnrollment(
   const stmt = db.prepare(sql)
   if (params.useCurrentDate) {
     stmt.run(params.studentId, context.yearId, context.termId, context.termId, params.streamId, params.studentType)
-    return
+    return context
   }
 
   stmt.run(params.studentId, context.yearId, context.termId, context.termId, params.streamId, params.studentType, params.enrollmentDate)
+  return context
+}
+
+function generateAutoInvoice(
+  db: ReturnType<typeof getDatabase>,
+  studentId: number,
+  enrollmentContext: EnrollmentContext,
+  userId: number,
+): AutoInvoiceResult {
+  const financeContext: FinanceContext = {
+    db,
+    exemptionService: container.resolve('ExemptionService'),
+    paymentService: container.resolve('PaymentService'),
+    getOrCreateCategoryId: createGetOrCreateCategoryId(db),
+  }
+
+  const result = generateSingleStudentInvoice(
+    financeContext,
+    studentId,
+    enrollmentContext.yearId,
+    enrollmentContext.termId,
+    userId,
+  )
+
+  if (!result.success) {
+    throw new Error(result.error || 'Failed to generate initial invoice')
+  }
+
+  return {
+    invoiceGenerated: true,
+    invoiceNumber: result.invoiceNumber,
+  }
+}
+
+function normalizeStreamId(streamId: unknown): number | null {
+  if (typeof streamId === 'number' && Number.isFinite(streamId) && streamId > 0) {
+    return streamId
+  }
+  return null
+}
+
+function getUnknownErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+  if (typeof error === 'string') {
+    return error
+  }
+  return fallback
 }
 
 function mergeStudentUpdate(student: Student, data: Partial<StudentCreateData>) {
@@ -166,7 +213,7 @@ export function registerStudentHandlers(): void {
 }
 
 function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
-  ipcMain.handle('student:getAll', async (_event: IpcMainInvokeEvent, filters?: StudentFilters) => {
+  safeHandleRaw('student:getAll', (_event, filters?: StudentFilters) => {
     let query = `SELECT s.*, st.stream_name, e.student_type as current_type,
         (SELECT COALESCE(SUM(total_amount - amount_paid), 0)
          FROM fee_invoice
@@ -198,7 +245,7 @@ function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
     return students.map((student) => ({ ...student, gender: fromDbGender(student.gender) })) as Student[]
   })
 
-  ipcMain.handle('student:getById', async (_event: IpcMainInvokeEvent, id: number) => {
+  safeHandleRaw('student:getById', (_event, id: number) => {
     const student = db.prepare('SELECT * FROM student WHERE id = ?').get(id) as Student | undefined
     if (!student) {
       return
@@ -222,7 +269,7 @@ function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
     }
   })
 
-  ipcMain.handle('student:getBalance', async (_event: IpcMainInvokeEvent, studentId: number) => {
+  safeHandleRaw('student:getBalance', (_event, studentId: number) => {
     const invoices = db.prepare(`
       SELECT COALESCE(SUM(total_amount - amount_paid), 0) as balance
       FROM fee_invoice
@@ -238,65 +285,84 @@ function registerStudentWriteHandlers(db: ReturnType<typeof getDatabase>): void 
 }
 
 function registerCreateStudentHandler(db: ReturnType<typeof getDatabase>): void {
-  ipcMain.handle('student:create', async (_event: IpcMainInvokeEvent, data: StudentCreateData) => {
+  safeHandleRaw('student:create', (_event, data: StudentCreateData, userId?: number) => {
     // Validate and sanitize input
     const admissionNumber = sanitizeString(data.admission_number, 50)
     const firstName = sanitizeString(data.first_name, 100)
     const lastName = sanitizeString(data.last_name, 100)
-    
+
     if (!admissionNumber || !firstName || !lastName) {
       return { success: false, error: 'Admission number, first name, and last name are required' }
     }
 
-    const stmt = db.prepare(`
-      INSERT INTO student (
-        admission_number, first_name, middle_name, last_name, date_of_birth, gender,
-        student_type, admission_date, guardian_name, guardian_phone, guardian_email,
-        guardian_relationship, address, notes
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `)
-
-    const result = stmt.run(
-      admissionNumber,
-      firstName,
-      sanitizeString(data.middle_name, 100),
-      lastName,
-      data.date_of_birth,
-      toDbGender(data.gender),
-      data.student_type,
-      data.admission_date,
-      sanitizeString(data.guardian_name, 200),
-      sanitizeString(data.guardian_phone, 20),
-      sanitizeString(data.guardian_email, 100),
-      sanitizeString(data.guardian_relationship, 50),
-      sanitizeString(data.address, 500),
-      sanitizeString(data.notes, 1000),
-    )
-    const newStudentId = Number(result.lastInsertRowid)
-
     try {
-      if (data.stream_id) {
-        const streamValidation = validateId(data.stream_id, 'Stream')
-        if (streamValidation.success) {
-          createEnrollment(db, {
+      const createStudentTx = db.transaction(() => {
+        const stmt = db.prepare(`
+          INSERT INTO student (
+            admission_number, first_name, middle_name, last_name, date_of_birth, gender,
+            student_type, admission_date, guardian_name, guardian_phone, guardian_email,
+            guardian_relationship, address, notes
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+
+        const result = stmt.run(
+          admissionNumber,
+          firstName,
+          sanitizeString(data.middle_name, 100),
+          lastName,
+          data.date_of_birth,
+          toDbGender(data.gender),
+          data.student_type,
+          data.admission_date,
+          sanitizeString(data.guardian_name, 200),
+          sanitizeString(data.guardian_phone, 20),
+          sanitizeString(data.guardian_email, 100),
+          sanitizeString(data.guardian_relationship, 50),
+          sanitizeString(data.address, 500),
+          sanitizeString(data.notes, 1000),
+        )
+
+        const newStudentId = Number(result.lastInsertRowid)
+        let autoInvoice: AutoInvoiceResult = { invoiceGenerated: false }
+
+        const streamId = normalizeStreamId(data.stream_id)
+        if (streamId) {
+          const streamValidation = validateId(streamId, 'Stream')
+          if (!streamValidation.success) {
+            throw new Error(streamValidation.error || 'Invalid stream ID')
+          }
+
+          const enrollmentContext = createEnrollment(db, {
             studentId: newStudentId,
             streamId: streamValidation.data!,
             studentType: data.student_type,
             enrollmentDate: data.admission_date,
             useCurrentDate: false,
           })
-        }
-      }
-    } catch {
-      // Ignore enrollment side effect failures and keep student creation successful.
-    }
 
-    return { success: true, id: newStudentId }
+          autoInvoice = generateAutoInvoice(db, newStudentId, enrollmentContext, userId || 1)
+        }
+
+        return {
+          id: newStudentId,
+          invoiceGenerated: autoInvoice.invoiceGenerated,
+          invoiceNumber: autoInvoice.invoiceNumber,
+        }
+      })
+
+      const created = createStudentTx()
+      return { success: true, ...created }
+    } catch (error) {
+      return {
+        success: false,
+        error: getUnknownErrorMessage(error, 'Failed to create student'),
+      }
+    }
   })
 }
 
 function registerUpdateStudentHandler(db: ReturnType<typeof getDatabase>): void {
-  ipcMain.handle('student:update', async (_event: IpcMainInvokeEvent, id: number, data: Partial<StudentCreateData>) => {
+  safeHandleRaw('student:update', (_event, id: number, data: Partial<StudentCreateData>) => {
     // Validate student ID
     const idValidation = validateId(id, 'Student')
     if (!idValidation.success) {
@@ -308,39 +374,44 @@ function registerUpdateStudentHandler(db: ReturnType<typeof getDatabase>): void 
       return { success: false, error: 'Student not found' }
     }
 
-    const merged = mergeStudentUpdate(student, data)
-    const stmt = db.prepare(`
-      UPDATE student SET
-        admission_number = ?, first_name = ?, middle_name = ?, last_name = ?,
-        date_of_birth = ?, gender = ?, student_type = ?, admission_date = ?,
-        guardian_name = ?, guardian_phone = ?, guardian_email = ?,
-        guardian_relationship = ?, address = ?, notes = ?,
-        is_active = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `)
-    stmt.run(
-      sanitizeString(merged.admission_number, 50),
-      sanitizeString(merged.first_name, 100),
-      sanitizeString(merged.middle_name, 100),
-      sanitizeString(merged.last_name, 100),
-      merged.date_of_birth,
-      merged.gender,
-      merged.student_type,
-      merged.admission_date,
-      sanitizeString(merged.guardian_name, 200),
-      sanitizeString(merged.guardian_phone, 20),
-      sanitizeString(merged.guardian_email, 100),
-      sanitizeString(merged.guardian_relationship, 50),
-      sanitizeString(merged.address, 500),
-      sanitizeString(merged.notes, 1000),
-      merged.is_active,
-      idValidation.data!,
-    )
-
     try {
-      if (data.stream_id) {
-        const streamValidation = validateId(data.stream_id, 'Stream')
-        if (streamValidation.success) {
+      const updateStudentTx = db.transaction(() => {
+        const merged = mergeStudentUpdate(student, data)
+        const stmt = db.prepare(`
+          UPDATE student SET
+            admission_number = ?, first_name = ?, middle_name = ?, last_name = ?,
+            date_of_birth = ?, gender = ?, student_type = ?, admission_date = ?,
+            guardian_name = ?, guardian_phone = ?, guardian_email = ?,
+            guardian_relationship = ?, address = ?, notes = ?,
+            is_active = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `)
+        stmt.run(
+          sanitizeString(merged.admission_number, 50),
+          sanitizeString(merged.first_name, 100),
+          sanitizeString(merged.middle_name, 100),
+          sanitizeString(merged.last_name, 100),
+          merged.date_of_birth,
+          merged.gender,
+          merged.student_type,
+          merged.admission_date,
+          sanitizeString(merged.guardian_name, 200),
+          sanitizeString(merged.guardian_phone, 20),
+          sanitizeString(merged.guardian_email, 100),
+          sanitizeString(merged.guardian_relationship, 50),
+          sanitizeString(merged.address, 500),
+          sanitizeString(merged.notes, 1000),
+          merged.is_active,
+          idValidation.data!,
+        )
+
+        const streamId = normalizeStreamId(data.stream_id)
+        if (streamId) {
+          const streamValidation = validateId(streamId, 'Stream')
+          if (!streamValidation.success) {
+            throw new Error(streamValidation.error || 'Invalid stream ID')
+          }
+
           createEnrollment(db, {
             studentId: idValidation.data!,
             streamId: streamValidation.data!,
@@ -349,11 +420,15 @@ function registerUpdateStudentHandler(db: ReturnType<typeof getDatabase>): void 
             useCurrentDate: true,
           })
         }
-      }
-    } catch {
-      // Ignore enrollment side effect failures and keep student update successful.
-    }
+      })
 
-    return { success: true }
+      updateStudentTx()
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: getUnknownErrorMessage(error, 'Failed to update student'),
+      }
+    }
   })
 }

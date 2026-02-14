@@ -96,12 +96,18 @@ function createEditMenu(isMac: boolean): MenuItemConstructorOptions {
 }
 
 function createViewMenu(): MenuItemConstructorOptions {
+    const devItems: MenuItemConstructorOptions[] = app.isPackaged
+        ? []
+        : [
+            { role: 'forceReload' as const },
+            { role: 'toggleDevTools' as const },
+        ]
+
     return {
         label: 'View',
         submenu: [
             { role: 'reload' as const },
-            { role: 'forceReload' as const },
-            { role: 'toggleDevTools' as const },
+            ...devItems,
             { type: 'separator' },
             { role: 'resetZoom' as const },
             { role: 'zoomIn' as const },

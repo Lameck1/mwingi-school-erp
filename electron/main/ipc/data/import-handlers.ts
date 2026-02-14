@@ -1,15 +1,14 @@
 import * as fs from 'node:fs'
 
-import { ipcMain, dialog, BrowserWindow } from '../../electron-env'
+import { dialog, BrowserWindow } from '../../electron-env'
 import { dataImportService, type ImportConfig } from '../../services/data/DataImportService'
-
-import type { IpcMainInvokeEvent } from 'electron'
+import { safeHandleRaw } from '../ipc-result'
 
 
 export function registerDataImportHandlers(): void {
     // Import from file
-    ipcMain.handle('data:import', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('data:import', (
+        _event,
         filePath: string,
         config: ImportConfig,
         userId: number
@@ -37,12 +36,12 @@ export function registerDataImportHandlers(): void {
     })
 
     // Get Template
-    ipcMain.handle('data:getTemplate', async (_event: IpcMainInvokeEvent, entityType: string) => {
+    safeHandleRaw('data:getTemplate', (_event, entityType: string) => {
         return dataImportService.getImportTemplate(entityType)
     })
 
     // Download Template
-    ipcMain.handle('data:downloadTemplate', async (event: IpcMainInvokeEvent, entityType: string) => {
+    safeHandleRaw('data:downloadTemplate', async (event, entityType: string) => {
         try {
             const buffer = await dataImportService.generateTemplateFile(entityType)
             const win = BrowserWindow.fromWebContents(event.sender)

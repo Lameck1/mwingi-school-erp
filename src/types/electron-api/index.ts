@@ -56,43 +56,31 @@ export * from './NotificationAPI'
 export * from './UpdateAPI'
 export * from './MenuEventAPI'
 
+import type { DataImportAPI } from './DataImportAPI'
 import type { OperationsAPI } from './OperationsAPI'
 import type { ReportsAPI } from './ReportsAPI'
 import type { UserAPI } from './UserAPI'
 
+export * from './DataImportAPI'
 export * from './OperationsAPI'
 export * from './JSSAPI'
 
-// Combined interface for backward compatibility
-export interface ElectronAPI
-  extends AuthAPI,
-  SettingsAPI,
-  AcademicAPI,
-  FinanceAPI,
-  StudentAPI,
-  StaffAPI,
-  PayrollAPI,
-  InventoryAPI,
-  ReportsAPI,
-  BackupAPI,
-  UserAPI,
-  AuditAPI,
-  BudgetAPI,
-  MessagingAPI,
-  FixedAssetAPI,
-  BankReconciliationAPI,
-  GLAccountAPI,
-  OpeningBalanceAPI,
-  HireAPI,
-  ExemptionAPI,
-  ApprovalAPI,
-  NotificationAPI,
-  OperationsAPI,
-  JSSAPI,
-  UpdateAPI,
-  MenuEventAPI {
-  // Data Import/Export (General)
-  downloadImportTemplate: (entityType: string) => Promise<{ success: boolean; filePath: string }>
-  getImportTemplate: (entityType: string) => Promise<{ columns: { name: string; required: boolean }[] }>
-  importData: (filePath: string, config: unknown, userId: number) => Promise<{ success: boolean; totalRows: number; imported: number; skipped: number; errors: Array<{ row: number; message: string }> }>
+// Namespaced API interface — all access via domain sub-objects
+export interface ElectronAPI {
+  auth: AuthAPI
+  settings: SettingsAPI
+  academic: AcademicAPI & JSSAPI
+    & Pick<StudentAPI, 'getStudentsForAttendance' | 'getAttendanceByDate' | 'markAttendance' | 'getStudentsForReportCards'>
+    & Pick<OperationsAPI, 'getCBCStrands' | 'getActiveCBCStrands' | 'linkFeeCategoryToStrand'>
+    & Pick<ReportsAPI, 'generateReportCard'>
+  finance: FinanceAPI & BudgetAPI & BankReconciliationAPI & GLAccountAPI & OpeningBalanceAPI & FixedAssetAPI & ExemptionAPI
+    & Pick<ReportsAPI, 'getBalanceSheet' | 'getProfitAndLoss' | 'getTrialBalance' | 'getComparativeProfitAndLoss'>
+    & Pick<AcademicAPI, 'exportToPDF'>
+  students: StudentAPI
+  staff: StaffAPI & PayrollAPI
+  operations: OperationsAPI & InventoryAPI & HireAPI
+  reports: ReportsAPI & AuditAPI
+  communications: MessagingAPI & NotificationAPI
+  system: BackupAPI & UserAPI & UpdateAPI & ApprovalAPI & DataImportAPI
+  menuEvents: MenuEventAPI
 }

@@ -50,6 +50,23 @@ export interface UpdateAssetData extends Partial<CreateAssetData> {
     status?: FixedAsset['status']
 }
 
+export interface AssetCategory {
+    id: number
+    category_name: string
+    depreciation_method: 'STRAIGHT_LINE' | 'DECLINING_BALANCE' | 'NONE'
+    useful_life_years: number
+    depreciation_rate: number | null
+    is_active: number
+}
+
+export interface FinancialPeriod {
+    id: number
+    period_name: string
+    start_date: string
+    end_date: string
+    is_locked: number
+}
+
 export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, UpdateAssetData, AssetFilters> {
     protected getTableName(): string { return 'fixed_asset' }
     protected getPrimaryKey(): string { return 'id' }
@@ -157,15 +174,65 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
 
     // Custom Methods
 
+    async getCategories(): Promise<AssetCategory[]> {
+        return this.db.prepare(`
+            SELECT id, category_name, depreciation_method, useful_life_years, depreciation_rate, is_active
+            FROM asset_category
+            WHERE is_active = 1
+            ORDER BY category_name
+        `).all() as AssetCategory[]
+    }
+
+    async getFinancialPeriods(): Promise<FinancialPeriod[]> {
+        return this.db.prepare(`
+            SELECT id, period_name, start_date, end_date, is_locked
+            FROM financial_period
+            ORDER BY end_date DESC
+        `).all() as FinancialPeriod[]
+    }
+
     async runDepreciation(assetId: number, periodId: number, userId: number): Promise<{ success: boolean; error?: string }> {
         const asset = await this.findById(assetId)
         if (!asset) {return { success: false, error: 'Asset not found' }}
         if (asset.current_value <= 0) {return { success: false, error: 'Asset already fully depreciated' }}
 
-        // Simple Straight Line Depreciation (10% default for now)
-        // In real app, fetch rate from category
-        const rate = 0.1
-        const depreciationAmount = Math.round(asset.acquisition_cost * rate)
+        const category = this.db.prepare(`
+            SELECT depreciation_method, useful_life_years, depreciation_rate
+            FROM asset_category
+            WHERE id = ?
+        `).get(asset.category_id) as { depreciation_method: 'STRAIGHT_LINE' | 'DECLINING_BALANCE' | 'NONE'; useful_life_years: number; depreciation_rate: number | null } | undefined
+        if (!category) {return { success: false, error: 'Asset category not found' }}
+
+        const period = this.db.prepare(`
+            SELECT id, is_locked
+            FROM financial_period
+            WHERE id = ?
+        `).get(periodId) as { id: number; is_locked: number } | undefined
+        if (!period) {return { success: false, error: 'Financial period not found' }}
+        if (period.is_locked) {return { success: false, error: 'Financial period is locked' }}
+
+        const existing = this.db.prepare(`
+            SELECT id
+            FROM asset_depreciation
+            WHERE asset_id = ? AND financial_period_id = ?
+        `).get(assetId, periodId) as { id: number } | undefined
+        if (existing) {return { success: false, error: 'Depreciation already posted for this period' }}
+
+        if (category.depreciation_method === 'NONE') {
+            return { success: false, error: 'Selected asset category is non-depreciable' }
+        }
+
+        const categoryRate = category.depreciation_rate !== null
+            ? category.depreciation_rate / 100
+            : (category.useful_life_years > 0 ? 1 / category.useful_life_years : 0)
+        if (categoryRate <= 0) {
+            return { success: false, error: 'Invalid depreciation setup for asset category' }
+        }
+
+        const depreciationAmount = category.depreciation_method === 'DECLINING_BALANCE'
+            ? Math.round(asset.current_value * categoryRate)
+            : Math.round(asset.acquisition_cost * categoryRate)
+        if (depreciationAmount <= 0) {return { success: false, error: 'Calculated depreciation amount is zero' }}
 
         const newAccumulated = asset.accumulated_depreciation + depreciationAmount
         const newValue = Math.max(0, asset.current_value - depreciationAmount)

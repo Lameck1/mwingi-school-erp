@@ -55,10 +55,10 @@ function escapeHtml(value: string): string {
 }
 
 function safeString(value: unknown): string {
-  if (typeof value === 'string') return value
-  if (value == null) return ''
-  if (typeof value === 'object') return JSON.stringify(value)
-  return String(value as string | number | boolean)
+  if (typeof value === 'string') { return value }
+  if (value == null) { return '' }
+  if (typeof value === 'object') { return JSON.stringify(value) }
+  return String(value)
 }
 
 function buildHtmlDocument(params: {
@@ -141,6 +141,9 @@ export function printDocument(options: PrintOptions): void {
   })
 }
 
+const safeStr = (v: unknown, fallback: string): string => (typeof v === 'string' && v) ? v : fallback
+const safeNum = (v: unknown, fallback: number): number => (typeof v === 'number') ? v : fallback
+
 function generatePrintHTML(
   template: string,
   data: Record<string, unknown>,
@@ -161,10 +164,10 @@ function generatePrintHTML(
     description?: string
   }
 
-  const schoolName = (settings?.['schoolName'] as string) || 'Mwingi Adventist School'
-  const schoolAddress = (settings?.['address'] as string) || 'P.O Box 123, Mwingi'
-  const schoolPhone = (settings?.['phone'] as string) || '0700 000 000'
-  const schoolEmail = (settings?.['email'] as string) || 'info@mwingischool.ac.ke'
+  const schoolName = safeStr(settings?.['schoolName'], 'Mwingi Adventist School')
+  const schoolAddress = safeStr(settings?.['address'], 'P.O Box 123, Mwingi')
+  const schoolPhone = safeStr(settings?.['phone'], '0700 000 000')
+  const schoolEmail = safeStr(settings?.['email'], 'info@mwingischool.ac.ke')
 
   const css = `
     html, body {
@@ -209,7 +212,7 @@ function generatePrintHTML(
   let content = ''
 
   if (template === 'statement') {
-    const ledger = (data.ledger as LedgerRow[] | undefined) || []
+    const ledger = (Array.isArray(data.ledger) ? data.ledger : []) as LedgerRow[]
     content = `
       <div class="meta-grid">
         <div class="meta-box">
@@ -220,11 +223,11 @@ function generatePrintHTML(
         </div>
         <div class="meta-box">
           <div class="meta-label">Statement Summary</div>
-          <div>Opening: ${formatCurrencyFromCents((data.openingBalance as number) || 0)}</div>
+          <div>Opening: ${formatCurrencyFromCents(safeNum(data.openingBalance, 0))}</div>
           <div style="margin-top: 5px; font-weight: bold;">
-            ${(data.closingBalance as number) < 0
-        ? `Credit Surplus: <span style="color: #10b981">${formatCurrencyFromCents(Math.abs(data.closingBalance as number))} (CR)</span>`
-        : `Balance Due: <span style="color: #f59e0b">${formatCurrencyFromCents(data.closingBalance as number)}</span>`
+            ${safeNum(data.closingBalance, 0) < 0
+        ? `Credit Surplus: <span style="color: #10b981">${formatCurrencyFromCents(Math.abs(safeNum(data.closingBalance, 0)))} (CR)</span>`
+        : `Balance Due: <span style="color: #f59e0b">${formatCurrencyFromCents(safeNum(data.closingBalance, 0))}</span>`
       }
           </div>
         </div>
@@ -281,7 +284,7 @@ function generatePrintHTML(
         <div class="meta-box">
           <div class="meta-label">Receipt Details</div>
           <div class="meta-value">No: ${escapeHtml(safeString(data.receiptNumber))}</div>
-          <div>Date: ${new Date(data.date as string).toLocaleDateString()}</div>
+          <div>Date: ${new Date(safeStr(data.date, '')).toLocaleDateString()}</div>
           <div>Mode: ${escapeHtml(safeString(data.paymentMode))}</div>
         </div>
       </div>
@@ -289,7 +292,7 @@ function generatePrintHTML(
       <div style="background: #f8fafc; padding: 20px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
         <div style="font-size: 14px; text-align: center;">Amount Received</div>
         <div style="font-size: 24px; font-weight: bold; text-align: center; margin: 10px 0;">
-          ${formatCurrencyFromCents(data.amount as number)}
+          ${formatCurrencyFromCents(safeNum(data.amount, 0))}
         </div>
         <div style="text-align: center; font-style: italic; color: #64748b;">
           ${escapeHtml(safeString(data.amountInWords))}
@@ -299,6 +302,167 @@ function generatePrintHTML(
       <div class="signatures">
         <div class="sig-line">Authorized Signatory</div>
       </div>
+    `
+  } else if (template === 'invoice') {
+    interface InvoiceItem {
+      description?: string
+      amount?: number
+    }
+    const items = (Array.isArray(data.items) ? data.items : []) as InvoiceItem[]
+    const totalAmount = safeNum(data.totalAmount, items.reduce((sum, item) => sum + safeNum(item.amount, 0), 0))
+
+    content = `
+      <div class="meta-grid">
+        <div class="meta-box">
+          <div class="meta-label">Bill To</div>
+          <div class="meta-value">${escapeHtml(safeString(data.studentName))}</div>
+          <div>ADM: ${escapeHtml(safeString(data.admissionNumber))}</div>
+          <div>Stream: ${escapeHtml(safeString(data.streamName))}</div>
+        </div>
+        <div class="meta-box">
+          <div class="meta-label">Invoice Details</div>
+          <div class="meta-value">No: ${escapeHtml(safeString(data.invoiceNumber))}</div>
+          <div>Date: ${new Date(safeStr(data.date, '')).toLocaleDateString()}</div>
+          <div>Due: ${data.dueDate ? new Date(safeStr(data.dueDate, '')).toLocaleDateString() : 'On Receipt'}</div>
+          <div>Term: ${escapeHtml(safeString(data.termName))}</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 60%">Description</th>
+            <th style="text-align: right">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map((item) => `
+            <tr>
+              <td>${escapeHtml(safeString(item.description))}</td>
+              <td style="text-align: right">${formatCurrencyFromCents(safeNum(item.amount, 0))}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td style="font-weight: bold; text-align: right">Total</td>
+            <td style="font-weight: bold; text-align: right">${formatCurrencyFromCents(totalAmount)}</td>
+          </tr>
+          ${data.amountPaid != null ? `
+          <tr>
+            <td style="text-align: right">Amount Paid</td>
+            <td style="text-align: right">${formatCurrencyFromCents(safeNum(data.amountPaid, 0))}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; text-align: right">Balance Due</td>
+            <td style="font-weight: bold; text-align: right; color: ${safeNum(data.balanceDue, 0) > 0 ? '#f59e0b' : '#10b981'};">
+              ${formatCurrencyFromCents(safeNum(data.balanceDue, 0))}
+            </td>
+          </tr>
+          ` : ''}
+        </tfoot>
+      </table>
+
+      <div class="signatures">
+        <div class="sig-line">School Accountant</div>
+        <div class="sig-line">Parent/Guardian</div>
+      </div>
+    `
+  } else if (template === 'payslip') {
+    interface PayslipLine {
+      name?: string
+      amount?: number
+    }
+    const allowances = (Array.isArray(data.allowancesList) ? data.allowancesList : []) as PayslipLine[]
+    const deductions = (Array.isArray(data.deductionsList) ? data.deductionsList : []) as PayslipLine[]
+
+    content = `
+      <div class="meta-grid">
+        <div class="meta-box">
+          <div class="meta-label">Employee Details</div>
+          <div class="meta-value">${escapeHtml(safeString(data.staff_name))}</div>
+          <div>Staff No: ${escapeHtml(safeString(data.staff_number))}</div>
+          <div>Department: ${escapeHtml(safeString(data.department))}</div>
+        </div>
+        <div class="meta-box">
+          <div class="meta-label">Pay Period</div>
+          <div class="meta-value">${escapeHtml(safeString(data.periodName))}</div>
+        </div>
+      </div>
+
+      <div class="meta-grid">
+        <div>
+          <table>
+            <thead><tr><th colspan="2">Earnings</th></tr></thead>
+            <tbody>
+              <tr><td>Basic Salary</td><td style="text-align: right">${formatCurrencyFromCents(safeNum(data.basicSalary, 0))}</td></tr>
+              ${allowances.map((a) => `
+                <tr><td>${escapeHtml(safeString(a.name))}</td><td style="text-align: right">${formatCurrencyFromCents(safeNum(a.amount, 0))}</td></tr>
+              `).join('')}
+              <tr style="font-weight: bold; border-top: 2px solid #e2e8f0">
+                <td>Gross Salary</td>
+                <td style="text-align: right">${formatCurrencyFromCents(safeNum(data.grossSalary, 0))}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <table>
+            <thead><tr><th colspan="2">Deductions</th></tr></thead>
+            <tbody>
+              ${deductions.map((d) => `
+                <tr><td>${escapeHtml(safeString(d.name))}</td><td style="text-align: right">${formatCurrencyFromCents(safeNum(d.amount, 0))}</td></tr>
+              `).join('')}
+              <tr style="font-weight: bold; border-top: 2px solid #e2e8f0">
+                <td>Total Deductions</td>
+                <td style="text-align: right">${formatCurrencyFromCents(safeNum(data.totalDeductions, 0))}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="background: #f8fafc; padding: 20px; border: 1px solid #e2e8f0; margin: 20px 0; text-align: center;">
+        <div style="font-size: 14px;">Net Pay</div>
+        <div style="font-size: 24px; font-weight: bold; margin: 10px 0;">${formatCurrencyFromCents(safeNum(data.netSalary, 0))}</div>
+      </div>
+
+      <div class="signatures">
+        <div class="sig-line">HR / Payroll Officer</div>
+        <div class="sig-line">Employee Signature</div>
+      </div>
+    `
+  } else if (template === 'report') {
+    interface ReportRow {
+      [key: string]: unknown
+    }
+    const columns = (Array.isArray(data.columns) ? data.columns : []) as string[]
+    const rows = (Array.isArray(data.rows) ? data.rows : []) as ReportRow[]
+    const summary = safeString(data.summary)
+
+    content = `
+      ${summary ? `<div style="margin-bottom: 15px; color: #64748b; font-size: 11px;">${escapeHtml(summary)}</div>` : ''}
+
+      <table>
+        <thead>
+          <tr>
+            ${columns.map((col) => `<th>${escapeHtml(safeString(col))}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row) => `
+            <tr>
+              ${columns.map((col) => `<td>${escapeHtml(safeString(row[col]))}</td>`).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+
+      ${data.totals ? `
+        <div style="text-align: right; font-weight: bold; margin-top: 10px; padding: 10px; border-top: 2px solid #e2e8f0;">
+          ${escapeHtml(safeString(data.totals))}
+        </div>
+      ` : ''}
     `
   }
 

@@ -356,13 +356,13 @@ function tableExists(db: Database, tableName: string): boolean {
 }
 
 function columnExists(db: Database, tableName: string, columnName: string): boolean {
-  if (!tableExists(db, tableName)) {return false}
+  if (!tableExists(db, tableName)) { return false }
   const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as { name: string }[]
   return columns.some(col => col.name === columnName)
 }
 
 function addColumnIfMissing(db: Database, tableName: string, columnDef: string, columnName: string): void {
-  if (!tableExists(db, tableName)) {return}
+  if (!tableExists(db, tableName)) { return }
   if (!columnExists(db, tableName, columnName)) {
     db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnDef}`)
   }
@@ -381,7 +381,7 @@ function executeStatements(db: Database, statements: readonly string[]): void {
 }
 
 function syncAcademicTermRecords(db: Database): void {
-  if (!tableExists(db, 'term') || !tableExists(db, 'academic_year')) {return}
+  if (!tableExists(db, 'term') || !tableExists(db, 'academic_year')) { return }
   const termHasCreatedAt = columnExists(db, 'term', 'created_at')
   const termCreatedAtExpression = termHasCreatedAt ? 't.created_at' : 'CURRENT_TIMESTAMP'
   const termNewCreatedAtExpression = termHasCreatedAt ? 'NEW.created_at' : 'CURRENT_TIMESTAMP'
@@ -466,4 +466,35 @@ export function up(db: Database): void {
   addColumnsIfMissing(db, 'invoice_item', INVOICE_ITEM_COMPATIBILITY_COLUMNS)
   applyAcademicTermCompatibilityBackfill(db)
   applyInvoiceCompatibilityBackfill(db)
+  migrateCBCGradingScale(db)
+}
+
+function migrateCBCGradingScale(db: Database): void {
+  if (!tableExists(db, 'grading_scale')) return
+
+  // Remove old 4-level CBC/ECDE grades
+  db.exec(`DELETE FROM grading_scale WHERE curriculum IN ('CBC', 'ECDE') AND grade IN (
+    'Exceeding Expectations', 'Meeting Expectations', 'Approaching Expectations', 'Below Expectations'
+  )`)
+
+  // Insert new 8-level grades (INSERT OR IGNORE to avoid duplicate issues)
+  db.exec(`
+    INSERT OR IGNORE INTO grading_scale (curriculum, grade, min_score, max_score, points, remarks) VALUES
+    ('CBC', 'EE1', 90, 100, 4.0, 'Exceeding Expectation'),
+    ('CBC', 'EE2', 75, 89, 3.5, 'Exceeding Expectation'),
+    ('CBC', 'ME1', 58, 74, 3.0, 'Meeting Expectation'),
+    ('CBC', 'ME2', 41, 57, 2.5, 'Meeting Expectation'),
+    ('CBC', 'AE1', 31, 40, 2.0, 'Approaching Expectation'),
+    ('CBC', 'AE2', 21, 30, 1.5, 'Approaching Expectation'),
+    ('CBC', 'BE1', 11, 20, 1.0, 'Below Expectation'),
+    ('CBC', 'BE2', 1, 10, 0.5, 'Below Expectation'),
+    ('ECDE', 'EE1', 90, 100, 4.0, 'Exceeding Expectation'),
+    ('ECDE', 'EE2', 75, 89, 3.5, 'Exceeding Expectation'),
+    ('ECDE', 'ME1', 58, 74, 3.0, 'Meeting Expectation'),
+    ('ECDE', 'ME2', 41, 57, 2.5, 'Meeting Expectation'),
+    ('ECDE', 'AE1', 31, 40, 2.0, 'Approaching Expectation'),
+    ('ECDE', 'AE2', 21, 30, 1.5, 'Approaching Expectation'),
+    ('ECDE', 'BE1', 11, 20, 1.0, 'Below Expectation'),
+    ('ECDE', 'BE2', 1, 10, 0.5, 'Below Expectation');
+  `)
 }

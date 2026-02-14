@@ -1,34 +1,30 @@
-import { ipcMain } from '../../electron-env';
-import { GLAccountService, type GLAccountData } from '../../services/finance/GLAccountService';
+import { container } from '../../services/base/ServiceContainer';
+import { safeHandleRaw } from '../ipc-result';
 
-import type { IpcMainInvokeEvent } from 'electron';
+import type { GLAccountService, GLAccountData } from '../../services/finance/GLAccountService';
 
-let cachedService: GLAccountService | null = null;
-const getService = () => {
-  cachedService ??= new GLAccountService();
-  return cachedService;
-};
+const getService = () => container.resolve('GLAccountService');
 
 type GLAccountFilters = Parameters<GLAccountService['getAll']>[0]
 
 export function registerGLAccountHandlers() {
-  ipcMain.handle('gl:get-accounts', async (_event: IpcMainInvokeEvent, filters?: GLAccountFilters) => {
+  safeHandleRaw('gl:get-accounts', async (_event, filters?: GLAccountFilters) => {
     return await getService().getAll(filters);
   });
 
-  ipcMain.handle('gl:get-account', async (_event: IpcMainInvokeEvent, id: number) => {
+  safeHandleRaw('gl:get-account', async (_event, id: number) => {
     return await getService().getById(id);
   });
 
-  ipcMain.handle('gl:create-account', async (_event: IpcMainInvokeEvent, data: GLAccountData, userId: number) => {
+  safeHandleRaw('gl:create-account', async (_event, data: GLAccountData, userId: number) => {
     return await getService().create(data, userId);
   });
 
-  ipcMain.handle('gl:update-account', async (_event: IpcMainInvokeEvent, id: number, data: Partial<GLAccountData>, userId: number) => {
+  safeHandleRaw('gl:update-account', async (_event, id: number, data: Partial<GLAccountData>, userId: number) => {
     return await getService().update(id, data, userId);
   });
 
-  ipcMain.handle('gl:delete-account', async (_event: IpcMainInvokeEvent, id: number, userId: number) => {
+  safeHandleRaw('gl:delete-account', async (_event, id: number, userId: number) => {
     return await getService().delete(id, userId);
   });
 }

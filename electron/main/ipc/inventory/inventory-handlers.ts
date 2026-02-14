@@ -1,8 +1,7 @@
-import { ipcMain } from '../../electron-env'
 import { container } from '../../services/base/ServiceContainer'
+import { safeHandleRaw } from '../ipc-result'
 
 import type { InventoryService } from '../../services/inventory/InventoryService'
-import type { IpcMainInvokeEvent } from 'electron'
 
 type InventoryFilters = Parameters<InventoryService['findAll']>[0]
 type InventoryCreateInput = Parameters<InventoryService['create']>[0]
@@ -15,50 +14,42 @@ interface InventoryMovementInput {
     unit_cost?: number
 }
 
+const svc = () => container.resolve('InventoryService')
+
 export function registerInventoryHandlers() {
-    ipcMain.handle('inventory:getAll', async (_event: IpcMainInvokeEvent, filters?: InventoryFilters) => {
-        const service = container.resolve<InventoryService>('InventoryService')
-        return await service.findAll(filters)
+    safeHandleRaw('inventory:getAll', (_event, filters?: InventoryFilters) => {
+        return svc().findAll(filters)
     })
 
-    ipcMain.handle('inventory:getItem', async (_event: IpcMainInvokeEvent, id: number) => {
-        const service = container.resolve<InventoryService>('InventoryService')
-        return await service.findById(id)
+    safeHandleRaw('inventory:getItem', (_event, id: number) => {
+        return svc().findById(id)
     })
 
-    ipcMain.handle('inventory:createItem', async (_event: IpcMainInvokeEvent, data: InventoryCreateInput, userId: number) => {
-        const service = container.resolve<InventoryService>('InventoryService')
-        return await service.create(data, userId)
+    safeHandleRaw('inventory:createItem', (_event, data: InventoryCreateInput, userId: number) => {
+        return svc().create(data, userId)
     })
 
-    ipcMain.handle('inventory:updateItem', async (_event: IpcMainInvokeEvent, id: number, data: InventoryUpdateInput, userId: number) => {
-        const service = container.resolve<InventoryService>('InventoryService')
-        return await service.update(id, data, userId)
+    safeHandleRaw('inventory:updateItem', (_event, id: number, data: InventoryUpdateInput, userId: number) => {
+        return svc().update(id, data, userId)
     })
 
-    ipcMain.handle('inventory:recordMovement', async (_event: IpcMainInvokeEvent, data: InventoryMovementInput, userId: number) => {
-        const service = container.resolve<InventoryService>('InventoryService')
-        // In the service, adjustStock might be the underlying method
-        return await service.adjustStock(data.item_id, data.quantity, data.movement_type, userId, data.description, data.unit_cost)
+    safeHandleRaw('inventory:recordMovement', (_event, data: InventoryMovementInput, userId: number) => {
+        return svc().adjustStock(data.item_id, data.quantity, data.movement_type, userId, data.description, data.unit_cost)
     })
 
-    ipcMain.handle('inventory:getHistory', async (_event: IpcMainInvokeEvent, itemId: number) => {
-        const service = container.resolve<InventoryService>('InventoryService')
-        return await service.getHistory(itemId)
+    safeHandleRaw('inventory:getHistory', (_event, itemId: number) => {
+        return svc().getHistory(itemId)
     })
 
-    ipcMain.handle('inventory:getLowStock', async (_event: IpcMainInvokeEvent) => {
-        const service = container.resolve<InventoryService>('InventoryService')
-        return await service.getLowStock()
+    safeHandleRaw('inventory:getLowStock', () => {
+        return svc().getLowStock()
     })
 
-    ipcMain.handle('inventory:getCategories', async (_event: IpcMainInvokeEvent) => {
-        const service = container.resolve<InventoryService>('InventoryService')
-        return await service.getCategories()
+    safeHandleRaw('inventory:getCategories', () => {
+        return svc().getCategories()
     })
 
-    ipcMain.handle('inventory:getSuppliers', async (_event: IpcMainInvokeEvent) => {
-        const service = container.resolve<InventoryService>('InventoryService')
-        return await service.getSuppliers()
+    safeHandleRaw('inventory:getSuppliers', () => {
+        return svc().getSuppliers()
     })
 }

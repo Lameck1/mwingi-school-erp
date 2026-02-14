@@ -140,8 +140,10 @@ export class BudgetEnforcementService {
       // Check if allocation already exists
       const existing = this.db.prepare(`
         SELECT id FROM budget_allocation
-        WHERE gl_account_code = ? AND fiscal_year = ? AND department = ?
-      `).get(glAccountCode, fiscalYear, department) as { id: number } | undefined;
+        WHERE gl_account_code = ?
+          AND fiscal_year = ?
+          AND (department = ? OR (department IS NULL AND ? IS NULL))
+      `).get(glAccountCode, fiscalYear, department, department) as { id: number } | undefined;
 
       if (existing) {
         // Update existing
@@ -251,11 +253,11 @@ export class BudgetEnforcementService {
         budget_status,
       };
     } catch (error: unknown) {
-      // On error, allow transaction but log the issue
+      // Fail closed to prevent silent overspending when validation cannot run.
       console.error('Budget validation error:', error);
       return {
-        is_allowed: true,
-        message: `Budget validation failed: ${getErrorMessage(error)}. Transaction allowed.`,
+        is_allowed: false,
+        message: `Budget validation failed: ${getErrorMessage(error)}. Transaction blocked until budget checks recover.`,
       };
     }
   }
@@ -266,7 +268,7 @@ export class BudgetEnforcementService {
   private calculateSpentAmount(
     glAccountCode: string,
     fiscalYear: number,
-    department: string | null
+    _department: string | null
   ): number {
     // Get fiscal year start/end dates
     const fiscalYearStart = `${fiscalYear}-01-01`;

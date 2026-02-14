@@ -1,11 +1,13 @@
 import { ipcRenderer } from 'electron'
 
+import type { StudentData, StudentFilters } from '../types'
+
 export function createStudentAPI() {
   return {
-    getStudents: (filters?: unknown) => ipcRenderer.invoke('student:getAll', filters),
+    getStudents: (filters?: StudentFilters) => ipcRenderer.invoke('student:getAll', filters),
     getStudentById: (id: number) => ipcRenderer.invoke('student:getById', id),
-    createStudent: (data: unknown) => ipcRenderer.invoke('student:create', data),
-    updateStudent: (id: number, data: unknown) => ipcRenderer.invoke('student:update', id, data),
+    createStudent: (data: Partial<StudentData>, userId?: number) => ipcRenderer.invoke('student:create', data, userId),
+    updateStudent: (id: number, data: Partial<StudentData>) => ipcRenderer.invoke('student:update', id, data),
     getStudentBalance: (studentId: number) => ipcRenderer.invoke('student:getBalance', studentId),
   }
 }

@@ -19,14 +19,22 @@ export function up(db: Database): void {
     ('8-4-4', 'E', 0, 29, 1, 'Poor');
 
     INSERT OR IGNORE INTO grading_scale (curriculum, grade, min_score, max_score, points, remarks) VALUES
-    ('CBC', 'Exceeding Expectations', 80, 100, 4, 'The learner demonstrates proficiency beyond the level expected'),
-    ('CBC', 'Meeting Expectations', 60, 79, 3, 'The learner demonstrates proficiency in the level expected'),
-    ('CBC', 'Approaching Expectations', 40, 59, 2, 'The learner is yet to demonstrate full proficiency in the level expected'),
-    ('CBC', 'Below Expectations', 0, 39, 1, 'The learner demonstrates basic proficiency in the level expected with support'),
-    ('ECDE', 'Exceeding Expectations', 80, 100, 4, 'Exceeding Expectations'),
-    ('ECDE', 'Meeting Expectations', 60, 79, 3, 'Meeting Expectations'),
-    ('ECDE', 'Approaching Expectations', 40, 59, 2, 'Approaching Expectations'),
-    ('ECDE', 'Below Expectations', 0, 39, 1, 'Below Expectations');
+    ('CBC', 'EE1', 90, 100, 4.0, 'Exceeding Expectation'),
+    ('CBC', 'EE2', 75, 89, 3.5, 'Exceeding Expectation'),
+    ('CBC', 'ME1', 58, 74, 3.0, 'Meeting Expectation'),
+    ('CBC', 'ME2', 41, 57, 2.5, 'Meeting Expectation'),
+    ('CBC', 'AE1', 31, 40, 2.0, 'Approaching Expectation'),
+    ('CBC', 'AE2', 21, 30, 1.5, 'Approaching Expectation'),
+    ('CBC', 'BE1', 11, 20, 1.0, 'Below Expectation'),
+    ('CBC', 'BE2', 1, 10, 0.5, 'Below Expectation'),
+    ('ECDE', 'EE1', 90, 100, 4.0, 'Exceeding Expectation'),
+    ('ECDE', 'EE2', 75, 89, 3.5, 'Exceeding Expectation'),
+    ('ECDE', 'ME1', 58, 74, 3.0, 'Meeting Expectation'),
+    ('ECDE', 'ME2', 41, 57, 2.5, 'Meeting Expectation'),
+    ('ECDE', 'AE1', 31, 40, 2.0, 'Approaching Expectation'),
+    ('ECDE', 'AE2', 21, 30, 1.5, 'Approaching Expectation'),
+    ('ECDE', 'BE1', 11, 20, 1.0, 'Below Expectation'),
+    ('ECDE', 'BE2', 1, 10, 0.5, 'Below Expectation');
 
     INSERT OR IGNORE INTO subject (code, name, curriculum, is_compulsory) VALUES
     ('E-LANG', 'Language Activities', 'ECDE', 1),

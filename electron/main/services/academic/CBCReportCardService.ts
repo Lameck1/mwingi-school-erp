@@ -1,6 +1,7 @@
 import { getDatabase } from '../../database'
 
 import type {
+  BatchGenerationResult,
   AcademicYearResult,
   AttendanceResult,
   ClassPositionResult,
@@ -58,19 +59,23 @@ export class CBCReportCardService {
         s.name as subject_name,
         er.score as marks,
         CASE
-          WHEN er.score >= 80 THEN 'A'
-          WHEN er.score >= 75 THEN 'A-'
-          WHEN er.score >= 70 THEN 'B+'
-          WHEN er.score >= 65 THEN 'B'
-          WHEN er.score >= 60 THEN 'B-'
-          WHEN er.score >= 55 THEN 'C+'
-          WHEN er.score >= 50 THEN 'C'
-          WHEN er.score >= 45 THEN 'C-'
-          ELSE 'E'
+          WHEN er.score >= 90 THEN 'EE1'
+          WHEN er.score >= 75 THEN 'EE2'
+          WHEN er.score >= 58 THEN 'ME1'
+          WHEN er.score >= 41 THEN 'ME2'
+          WHEN er.score >= 31 THEN 'AE1'
+          WHEN er.score >= 21 THEN 'AE2'
+          WHEN er.score >= 11 THEN 'BE1'
+          ELSE 'BE2'
         END as grade,
-        ROUND((er.score / 100) * 100, 1) as percentage,
+        ROUND(er.score, 1) as percentage,
         COALESCE(er.teacher_remarks, '') as teacher_comment,
-        'Meets Expectations' as competency_level
+        CASE
+          WHEN er.score >= 75 THEN 'Exceeding Expectation'
+          WHEN er.score >= 41 THEN 'Meeting Expectation'
+          WHEN er.score >= 21 THEN 'Approaching Expectation'
+          ELSE 'Below Expectation'
+        END as competency_level
       FROM exam_result er
       JOIN subject s ON er.subject_id = s.id
       WHERE er.exam_id = ? AND er.student_id = ?
@@ -84,13 +89,18 @@ export class CBCReportCardService {
     return subjects
   }
 
-  private calculatePerformance(subjects: SubjectGradeResult[]): { totalMarks: number; averageMarks: number; overallGrade: string } {
+  private calculatePerformance(subjects: SubjectGradeResult[]): { totalMarks: number; averageMarks: number; overallGrade: string; totalPoints: number; averagePoints: number } {
     const totalMarks = subjects.reduce((sum, subject) => sum + subject.marks, 0)
     const averageMarks = totalMarks / subjects.length
+    const overallGrade = this.getGrade(averageMarks)
+    const totalPoints = subjects.reduce((sum, subject) => sum + this.getPoints(this.getGrade(subject.marks)), 0)
+    const averagePoints = totalPoints / subjects.length
     return {
       totalMarks,
       averageMarks,
-      overallGrade: this.getGrade(averageMarks)
+      overallGrade,
+      totalPoints,
+      averagePoints
     }
   }
 
@@ -109,18 +119,25 @@ export class CBCReportCardService {
     `).all() as LearningAreaResult[]
   }
 
-  private getAttendanceMetrics(studentId: number): { daysPresent: number; daysAbsent: number; attendancePercentage: number } {
+  private getAttendanceMetrics(
+    studentId: number,
+    academicYearId: number,
+    termId: number
+  ): { daysPresent: number; daysAbsent: number; attendancePercentage: number } {
     const attendance = this.db.prepare(`
       SELECT
-        COUNT(*) as days_present,
-        COALESCE((SELECT COUNT(*) FROM attendance WHERE student_id = ? AND is_present = 0), 0) as days_absent
+        COALESCE(SUM(CASE WHEN status = 'PRESENT' THEN 1 ELSE 0 END), 0) as days_present,
+        COALESCE(SUM(CASE WHEN status = 'ABSENT' THEN 1 ELSE 0 END), 0) as days_absent,
+        COUNT(*) as total_days
       FROM attendance
-      WHERE student_id = ? AND is_present = 1
-    `).get(studentId, studentId) as AttendanceResult | undefined
+      WHERE student_id = ?
+        AND academic_year_id = ?
+        AND term_id = ?
+    `).get(studentId, academicYearId, termId) as AttendanceResult | undefined
 
     const daysPresent = attendance?.days_present || 0
     const daysAbsent = attendance?.days_absent || 0
-    const totalDays = daysPresent + daysAbsent
+    const totalDays = attendance?.total_days || 0
     const attendancePercentage = totalDays > 0 ? (daysPresent / totalDays) * 100 : 0
 
     return { daysPresent, daysAbsent, attendancePercentage }
@@ -232,6 +249,7 @@ export class CBCReportCardService {
       subject_name: subject.subject_name,
       marks: subject.marks,
       grade: subject.grade,
+      points: this.getPoints(subject.grade),
       percentage: subject.percentage,
       teacher_comment: subject.teacher_comment,
       competency_level: subject.competency_level
@@ -271,9 +289,9 @@ export class CBCReportCardService {
       const term = this.getRecordById<TermResult>('term', termId)
 
       const subjects = this.getSubjectGradesOrThrow(examId, studentId)
-      const { totalMarks, averageMarks, overallGrade } = this.calculatePerformance(subjects)
+      const { totalMarks, averageMarks, overallGrade, totalPoints, averagePoints } = this.calculatePerformance(subjects)
       const learningAreas = this.getLearningAreas()
-      const { daysPresent, daysAbsent, attendancePercentage } = this.getAttendanceMetrics(studentId)
+      const { daysPresent, daysAbsent, attendancePercentage } = this.getAttendanceMetrics(studentId, exam.academic_year_id, exam.term_id)
       const classPosition = this.getClassPosition(exam, streamId, studentId, examId)
       const qrCodeToken = this.generateQRToken(studentId, examId)
       const now = new Date().toISOString()
@@ -306,6 +324,8 @@ export class CBCReportCardService {
         total_marks: totalMarks,
         average_marks: averageMarks,
         overall_grade: overallGrade,
+        total_points: totalPoints,
+        average_points: averagePoints,
         position_in_class: classPosition,
         position_in_stream: classPosition,
         learning_areas: this.mapLearningAreas(learningAreas),
@@ -314,7 +334,7 @@ export class CBCReportCardService {
         attendance_percentage: attendancePercentage,
         class_teacher_comment: 'Excellent performance this term. Keep up the good work!',
         principal_comment: 'Well done on your academic progress.',
-        next_term_begin_date: this.getNextTermDate(termId),
+        next_term_begin_date: this.getNextTermDate(exam.academic_year_id, termId),
         fees_balance: feesBalance,
         qr_code_token: qrCodeToken,
         generated_at: now
@@ -333,10 +353,10 @@ export class CBCReportCardService {
     examId: number,
     streamId: number,
     generatedByUserId: number
-  ): Promise<StudentReportCard[]> {
+  ): Promise<BatchGenerationResult> {
     try {
       const exam = this.db.prepare('SELECT * FROM exam WHERE id = ?').get(examId) as ExamResult | undefined
-      if (!exam) {throw new Error('Exam not found')}
+      if (!exam) { throw new Error('Exam not found') }
 
       const students = this.db.prepare(`
         SELECT s.id
@@ -347,6 +367,7 @@ export class CBCReportCardService {
       `).all(streamId, exam.academic_year_id, exam.term_id) as { id: number }[]
 
       const reportCards: StudentReportCard[] = []
+      const failures: Array<{ student_id: number; error: string }> = []
 
       for (const student of students) {
         try {
@@ -357,12 +378,18 @@ export class CBCReportCardService {
           )
           reportCards.push(reportCard)
         } catch (error) {
-          console.error(`Failed to generate report card for student ${student.id}:`, error)
-          // Continue with next student
+          const message = error instanceof Error ? error.message : String(error)
+          failures.push({ student_id: student.id, error: message })
+          console.error(`Failed to generate report card for student ${student.id}:`, message)
         }
       }
 
-      return reportCards
+      return {
+        generated: reportCards,
+        failed: failures.length,
+        total: students.length,
+        failures
+      }
     } catch (error) {
       throw new Error(
         `Failed to batch generate report cards: ${error instanceof Error ? error.message : String(error)}`
@@ -382,7 +409,7 @@ export class CBCReportCardService {
         SELECT * FROM report_card WHERE exam_id = ? AND student_id = ?
       `).get(examId, studentId) as ReportCardRecord | undefined
 
-      if (!rc) {return null}
+      if (!rc) { return null }
 
       // Reconstruct full report card
       return this.buildReportCardFromRecord(rc, examId, studentId)
@@ -392,18 +419,34 @@ export class CBCReportCardService {
   }
 
   /**
-   * Private helper methods
+   * Private helper methods — CBC/CBE grading scale
    */
   private getGrade(score: number): string {
-    if (score >= 80) {return 'A'}
-    if (score >= 75) {return 'A-'}
-    if (score >= 70) {return 'B+'}
-    if (score >= 65) {return 'B'}
-    if (score >= 60) {return 'B-'}
-    if (score >= 55) {return 'C+'}
-    if (score >= 50) {return 'C'}
-    if (score >= 45) {return 'C-'}
-    return 'E'
+    if (score >= 90) return 'EE1'
+    if (score >= 75) return 'EE2'
+    if (score >= 58) return 'ME1'
+    if (score >= 41) return 'ME2'
+    if (score >= 31) return 'AE1'
+    if (score >= 21) return 'AE2'
+    if (score >= 11) return 'BE1'
+    return 'BE2'
+  }
+
+  private getPoints(grade: string): number {
+    const pointsMap: Record<string, number> = {
+      'EE1': 4.0, 'EE2': 3.5,
+      'ME1': 3.0, 'ME2': 2.5,
+      'AE1': 2.0, 'AE2': 1.5,
+      'BE1': 1.0, 'BE2': 0.5,
+    }
+    return pointsMap[grade] ?? 0
+  }
+
+  private getPerformanceLevel(grade: string): string {
+    if (grade.startsWith('EE')) return 'Exceeding Expectation'
+    if (grade.startsWith('ME')) return 'Meeting Expectation'
+    if (grade.startsWith('AE')) return 'Approaching Expectation'
+    return 'Below Expectation'
   }
 
   private generateQRToken(studentId: number, examId: number): string {
@@ -412,11 +455,52 @@ export class CBCReportCardService {
     return `RC-${studentId}-${examId}-${timestamp}`
   }
 
-  private getNextTermDate(_termId: number): string {
-    // Calculate next term start date (typically 3 months after current term)
-    const today = new Date()
-    const nextTerm = new Date(today.getFullYear(), today.getMonth() + 3, 1)
-    return nextTerm.toISOString().split('T')[0]
+  private getNextTermDate(academicYearId: number, currentTermId: number): string {
+    const currentTerm = this.db.prepare(`
+      SELECT term_number
+      FROM term
+      WHERE id = ?
+      LIMIT 1
+    `).get(currentTermId) as { term_number: number } | undefined
+
+    if (!currentTerm) {
+      return ''
+    }
+
+    const nextInYear = this.db.prepare(`
+      SELECT start_date
+      FROM term
+      WHERE academic_year_id = ?
+        AND term_number > ?
+      ORDER BY term_number ASC
+      LIMIT 1
+    `).get(academicYearId, currentTerm.term_number) as { start_date: string } | undefined
+
+    if (nextInYear?.start_date) {
+      return nextInYear.start_date
+    }
+
+    const nextAcademicYear = this.db.prepare(`
+      SELECT id
+      FROM academic_year
+      WHERE id > ?
+      ORDER BY id ASC
+      LIMIT 1
+    `).get(academicYearId) as { id: number } | undefined
+
+    if (!nextAcademicYear?.id) {
+      return ''
+    }
+
+    const firstTermNextYear = this.db.prepare(`
+      SELECT start_date
+      FROM term
+      WHERE academic_year_id = ?
+      ORDER BY term_number ASC
+      LIMIT 1
+    `).get(nextAcademicYear.id) as { start_date: string } | undefined
+
+    return firstTermNextYear?.start_date || ''
   }
 
   private mapStoredReportCardSubjects(reportCardId: number): StudentReportCard['subjects'] {
@@ -429,6 +513,7 @@ export class CBCReportCardService {
       subject_name: '',
       marks: subject.marks,
       grade: subject.grade,
+      points: this.getPoints(subject.grade),
       percentage: subject.percentage,
       teacher_comment: subject.teacher_comment || '',
       competency_level: subject.competency_level || ''
@@ -477,6 +562,8 @@ export class CBCReportCardService {
       total_marks: rc.total_marks,
       average_marks: rc.average_marks,
       overall_grade: rc.overall_grade,
+      total_points: subjects.reduce((sum, s) => sum + s.points, 0),
+      average_points: subjects.length > 0 ? subjects.reduce((sum, s) => sum + s.points, 0) / subjects.length : 0,
       position_in_class: rc.position_in_class,
       position_in_stream: rc.position_in_stream,
       learning_areas: [],

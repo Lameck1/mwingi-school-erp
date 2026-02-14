@@ -4,21 +4,11 @@
 
 /**
  * Format a number as Kenyan Shillings (KES) currency
- * @param amount - The amount to format
- * @returns Formatted currency string (e.g., "KES 1,500")
- */
-/**
- * Format a number as Kenyan Shillings (KES) currency
  * @param amount - The amount to format (in whole currency units)
- * @returns Formatted currency string (e.g., "KES 34,000.00")
- */
-/**
- * Format a number as Kenyan Shillings (KES) currency
- * @param amount - The amount to format (in whole currency units)
- * @returns Formatted currency string (e.g., "KES 34,000.00")
+ * @returns Formatted currency string (e.g., "Ksh 34,000.00")
  */
 export function formatCurrency(amount?: number | null): string {
-    if (amount === null || amount === undefined || isNaN(Number(amount))) {
+    if (amount === null || amount === undefined || Number.isNaN(Number(amount))) {
         return 'Ksh 0.00'
     }
 
@@ -101,3 +91,11 @@ export function formatDateTime(dateString?: string | Date | null): string {
     })
 }
 
+/**
+ * Escape a value for safe inclusion in a CSV cell.
+ * Wraps the value in quotes if it contains commas, quotes, or newlines.
+ */
+export function escapeCsvField(v: string | number): string {
+    const s = String(v)
+    return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replaceAll('"', '""')}"` : s
+}

@@ -1,20 +1,16 @@
-import { ipcMain } from '../../electron-env';
-import { OpeningBalanceService, type OpeningBalanceImport, type StudentOpeningBalance } from '../../services/accounting/OpeningBalanceService';
+import { container } from '../../services/base/ServiceContainer';
+import { safeHandleRaw } from '../ipc-result';
 
-import type { IpcMainInvokeEvent } from 'electron';
+import type { OpeningBalanceImport, StudentOpeningBalance } from '../../services/accounting/OpeningBalanceService';
 
-let cachedService: OpeningBalanceService | null = null;
-const getService = () => {
-  cachedService ??= new OpeningBalanceService();
-  return cachedService;
-};
+const getService = () => container.resolve('OpeningBalanceService');
 
 export function registerOpeningBalanceHandlers() {
-  ipcMain.handle('opening-balance:import-student', async (_event: IpcMainInvokeEvent, balances: StudentOpeningBalance[], academicYearId: number, importSource: string, userId: number) => {
+  safeHandleRaw('opening-balance:import-student', async (_event, balances: StudentOpeningBalance[], academicYearId: number, importSource: string, userId: number) => {
     return await getService().importStudentOpeningBalances(balances, academicYearId, importSource, userId);
   });
 
-  ipcMain.handle('opening-balance:import-gl', async (_event: IpcMainInvokeEvent, balances: OpeningBalanceImport[], userId: number) => {
+  safeHandleRaw('opening-balance:import-gl', async (_event, balances: OpeningBalanceImport[], userId: number) => {
     return await getService().importGLOpeningBalances(balances, userId);
   });
 }

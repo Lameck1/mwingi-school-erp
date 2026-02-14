@@ -1,20 +1,19 @@
 import { getDatabase } from '../../database'
-import { ipcMain } from '../../electron-env'
+import { app } from '../../electron-env'
 import { container } from '../../services/base/ServiceContainer'
 import { ConfigService } from '../../services/ConfigService'
 import { type SystemMaintenanceService } from '../../services/SystemMaintenanceService'
-
-import type { IpcMainInvokeEvent } from 'electron'
+import { safeHandleRaw } from '../ipc-result'
 
 export function registerSettingsHandlers(): void {
     const db = getDatabase()
 
     // ======== SCHOOL SETTINGS ========
-    ipcMain.handle('settings:get', async () => {
+    safeHandleRaw('settings:get', () => {
         return db.prepare('SELECT * FROM school_settings WHERE id = 1').get()
     })
 
-    ipcMain.handle('settings:update', async (_event: IpcMainInvokeEvent, data: unknown) => {
+    safeHandleRaw('settings:update', (_event, data: unknown) => {
         // Use explicit UPDATE statement instead of dynamic builder for maximum security
         const settings = data as Record<string, unknown>
         const stmt = db.prepare(`
@@ -43,29 +42,31 @@ export function registerSettingsHandlers(): void {
 
 
     // ======== SECURE CONFIG ========
-    ipcMain.handle('settings:getSecure', async (_event: IpcMainInvokeEvent, key: string) => {
-        // Return masked value if encrypted
+    safeHandleRaw('settings:getSecure', (_event, key: string) => {
         const val = ConfigService.getConfig(key)
         if (!val) {return null}
         return val
     })
 
-    ipcMain.handle('settings:saveSecure', async (_event: IpcMainInvokeEvent, key: string, value: string) => {
+    safeHandleRaw('settings:saveSecure', (_event, key: string, value: string) => {
         return ConfigService.saveConfig(key, value, true)
     })
 
-    ipcMain.handle('settings:getAllConfigs', async () => {
+    safeHandleRaw('settings:getAllConfigs', () => {
         return ConfigService.getAllConfigs()
     })
 
     // ======== SYSTEM MAINTENANCE ========
-    ipcMain.handle('system:resetAndSeed', async (_event: IpcMainInvokeEvent, userId: number) => {
-        const maintenanceService = container.resolve<SystemMaintenanceService>('SystemMaintenanceService')
+    safeHandleRaw('system:resetAndSeed', (_event, userId: number) => {
+        if (app.isPackaged) {
+            return { success: false, error: 'Database reset is disabled in production builds.' }
+        }
+        const maintenanceService = container.resolve('SystemMaintenanceService') as SystemMaintenanceService
         return maintenanceService.resetAndSeed2026(userId)
     })
 
-    ipcMain.handle('system:normalizeCurrencyScale', async (_event: IpcMainInvokeEvent, userId: number) => {
-        const maintenanceService = container.resolve<SystemMaintenanceService>('SystemMaintenanceService')
+    safeHandleRaw('system:normalizeCurrencyScale', (_event, userId: number) => {
+        const maintenanceService = container.resolve('SystemMaintenanceService') as SystemMaintenanceService
         return maintenanceService.normalizeCurrencyScale(userId)
     })
 }

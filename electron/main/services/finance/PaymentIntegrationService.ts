@@ -55,7 +55,8 @@ export interface DoubleEntryPaymentData {
 
 export interface PaymentResult {
   success: boolean;
-  message: string;
+  error?: string;
+  message?: string;
   transaction_id?: number;
   journal_entry_id?: number;
   receipt_number?: string;

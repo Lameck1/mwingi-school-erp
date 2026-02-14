@@ -35,18 +35,7 @@ export function getEncryptionKey(): string {
                 fs.writeFileSync(keyPath, encryptedKey)
                 return newKey
             } else {
-                 // Fallback for dev environments or systems without safeStorage (WARN: INSECURE)
-                 // In a real prod app, we might want to enforce safeStorage or ask user for password
-                 console.warn('WARNING: SafeStorage not available. Saving key in plaintext (INSECURE).')
-                 // For now, we will still save it but it's not encrypted by OS. 
-                 // Ideally we should block this or use a different strategy.
-                 // But preventing app startup might be too harsh for a verify. 
-                 // We'll mimic the shape but just base64 it so we at least have a file.
-                 // ACTUALLY: Let's throw for now to be strict.
-                 // throw new Error('SafeStorage not available')
-                 
-                 // Re-reading usage: safeStorage on Windows relies on DPAPI. Should be available.
-                 throw new Error('Encryption not available on this device.')
+                throw new Error('Encryption not available on this device.')
             }
         }
     } catch (error) {

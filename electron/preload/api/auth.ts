@@ -1,5 +1,7 @@
 import { ipcRenderer } from 'electron'
 
+import type { SessionData } from '../types'
+
 export function createAuthAPI() {
   return {
     login: (username: string, password: string) => ipcRenderer.invoke('auth:login', username, password),
@@ -9,7 +11,7 @@ export function createAuthAPI() {
     setupAdmin: (data: { username: string; password: string; full_name: string; email: string }) =>
       ipcRenderer.invoke('auth:setupAdmin', data),
     getSession: () => ipcRenderer.invoke('auth:getSession'),
-    setSession: (session: { user: unknown; lastActivity: number }) => ipcRenderer.invoke('auth:setSession', session),
+    setSession: (session: SessionData) => ipcRenderer.invoke('auth:setSession', session),
     clearSession: () => ipcRenderer.invoke('auth:clearSession'),
   }
 }

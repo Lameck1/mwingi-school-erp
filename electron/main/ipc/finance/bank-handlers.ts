@@ -1,25 +1,20 @@
-import { ipcMain } from '../../electron-env'
-import { BankReconciliationService } from '../../services/finance/BankReconciliationService'
+import { container } from '../../services/base/ServiceContainer'
+import { validateId, validatePastOrTodayDate } from '../../utils/validation'
+import { safeHandleRaw } from '../ipc-result'
 
-import type { IpcMainInvokeEvent } from 'electron'
-
-let cachedService: BankReconciliationService | null = null
-const getService = () => {
-    cachedService ??= new BankReconciliationService()
-    return cachedService
-}
+const getService = () => container.resolve('BankReconciliationService')
 
 export function registerBankReconciliationHandlers(): void {
     // Bank Accounts
-    ipcMain.handle('bank:getAccounts', async () => {
+    safeHandleRaw('bank:getAccounts', () => {
         return getService().getBankAccounts()
     })
 
-    ipcMain.handle('bank:getAccountById', async (_event: IpcMainInvokeEvent, id: number) => {
+    safeHandleRaw('bank:getAccountById', (_event, id: number) => {
         return getService().getBankAccountById(id)
     })
 
-    ipcMain.handle('bank:createAccount', async (_event: IpcMainInvokeEvent, data: {
+    safeHandleRaw('bank:createAccount', (_event, data: {
         account_name: string
         account_number: string
         bank_name: string
@@ -32,23 +27,39 @@ export function registerBankReconciliationHandlers(): void {
     })
 
     // Bank Statements
-    ipcMain.handle('bank:getStatements', async (_event: IpcMainInvokeEvent, bankAccountId?: number) => {
+    safeHandleRaw('bank:getStatements', (_event, bankAccountId?: number) => {
         return getService().getStatements(bankAccountId)
     })
 
-    ipcMain.handle('bank:getStatementWithLines', async (_event: IpcMainInvokeEvent, statementId: number) => {
+    safeHandleRaw('bank:getStatementWithLines', (_event, statementId: number) => {
         return getService().getStatementWithLines(statementId)
     })
 
-    ipcMain.handle('bank:createStatement', async (
-        _event: IpcMainInvokeEvent,
-        ...[bankAccountId, statementDate, openingBalance, closingBalance, reference]: CreateStatementArgs
+    safeHandleRaw('bank:createStatement', (
+        _event,
+        bankAccountId: number,
+        statementDate: string,
+        openingBalance: number,
+        closingBalance: number,
+        reference?: string
     ) => {
+        const accountValidation = validateId(bankAccountId, 'Bank account ID')
+        if (!accountValidation.success) {
+            return { success: false, errors: [accountValidation.error || 'Invalid bank account ID'] }
+        }
+        const dateValidation = validatePastOrTodayDate(statementDate)
+        if (!dateValidation.success) {
+            return { success: false, errors: [dateValidation.error || 'Invalid statement date'] }
+        }
+        if (!Number.isFinite(openingBalance) || !Number.isFinite(closingBalance)) {
+            return { success: false, errors: ['Statement balances must be valid numbers'] }
+        }
+
         return getService().createStatement(bankAccountId, statementDate, openingBalance, closingBalance, reference)
     })
 
-    ipcMain.handle('bank:addStatementLine', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('bank:addStatementLine', (
+        _event,
         statementId: number,
         line: {
             transaction_date: string
@@ -59,46 +70,85 @@ export function registerBankReconciliationHandlers(): void {
             running_balance?: number | null
         }
     ) => {
+        const statementValidation = validateId(statementId, 'Bank statement ID')
+        if (!statementValidation.success) {
+            return { success: false, errors: [statementValidation.error || 'Invalid bank statement ID'] }
+        }
+
+        const dateValidation = validatePastOrTodayDate(line?.transaction_date)
+        if (!dateValidation.success) {
+            return { success: false, errors: [dateValidation.error || 'Invalid statement line date'] }
+        }
+
+        const description = line?.description?.trim() || ''
+        if (!description) {
+            return { success: false, errors: ['Statement line description is required'] }
+        }
+
+        const debitAmount = Number(line?.debit_amount)
+        const creditAmount = Number(line?.credit_amount)
+        if (!Number.isFinite(debitAmount) || !Number.isFinite(creditAmount)) {
+            return { success: false, errors: ['Debit and credit amounts must be valid numbers'] }
+        }
+        if (debitAmount < 0 || creditAmount < 0) {
+            return { success: false, errors: ['Debit and credit amounts cannot be negative'] }
+        }
+        const hasDebit = debitAmount > 0
+        const hasCredit = creditAmount > 0
+        if (hasDebit === hasCredit) {
+            return { success: false, errors: ['Exactly one of debit amount or credit amount must be greater than zero'] }
+        }
+        if (line?.running_balance != null && !Number.isFinite(Number(line.running_balance))) {
+            return { success: false, errors: ['Running balance must be a valid number when provided'] }
+        }
+
         return getService().addStatementLine(statementId, {
             ...line,
+            transaction_date: dateValidation.data!,
+            description,
+            debit_amount: debitAmount,
+            credit_amount: creditAmount,
             reference: line.reference ?? null,
             running_balance: line.running_balance ?? null
         })
     })
 
     // Reconciliation
-    ipcMain.handle('bank:matchTransaction', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('bank:matchTransaction', (
+        _event,
         lineId: number,
         transactionId: number
     ) => {
         return getService().matchTransaction(lineId, transactionId)
     })
 
-    ipcMain.handle('bank:unmatchTransaction', async (_event: IpcMainInvokeEvent, lineId: number) => {
+    safeHandleRaw('bank:unmatchTransaction', (_event, lineId: number) => {
         return getService().unmatchTransaction(lineId)
     })
 
-    ipcMain.handle('bank:getUnmatchedTransactions', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('bank:getUnmatchedTransactions', (
+        _event,
         startDate: string,
-        endDate: string
+        endDate: string,
+        bankAccountId?: number
     ) => {
-        return getService().getUnmatchedLedgerTransactions(startDate, endDate)
+        return getService().getUnmatchedLedgerTransactions(startDate, endDate, bankAccountId)
     })
 
-    ipcMain.handle('bank:markReconciled', async (
-        _event: IpcMainInvokeEvent,
+    safeHandleRaw('bank:markReconciled', (
+        _event,
         statementId: number,
         userId: number
     ) => {
-        return getService().markStatementReconciled(statementId, userId)
+        const statementValidation = validateId(statementId, 'Statement ID')
+        const userValidation = validateId(userId, 'User ID')
+        if (!statementValidation.success) {
+            return { success: false, error: statementValidation.error || 'Invalid statement ID' }
+        }
+        if (!userValidation.success) {
+            return { success: false, error: userValidation.error || 'Invalid user ID' }
+        }
+
+        return getService().markStatementReconciled(statementValidation.data!, userValidation.data!)
     })
 }
-    type CreateStatementArgs = [
-        bankAccountId: number,
-        statementDate: string,
-        openingBalance: number,
-        closingBalance: number,
-        reference?: string
-    ]

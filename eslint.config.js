@@ -236,10 +236,10 @@ export default [
   {
     files: ['src/pages/**/*.{ts,tsx}'],
     rules: {
-      'max-lines': 'off',
-      'max-lines-per-function': 'off',
-      'max-statements': 'off',
-      'complexity': 'off',
+      'max-lines': ['warn', { max: 800, skipBlankLines: true, skipComments: true }],
+      'max-lines-per-function': ['warn', { max: 200, skipBlankLines: true, skipComments: true, IIFEs: true }],
+      'max-statements': ['warn', 60],
+      'complexity': ['warn', 25],
       'sonarjs/no-duplicate-string': 'off',
       '@typescript-eslint/no-unnecessary-condition': 'off',
     },

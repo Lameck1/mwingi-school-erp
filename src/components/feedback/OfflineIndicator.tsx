@@ -14,7 +14,7 @@ export function OfflineIndicator() {
             globalThis.addEventListener('offline', handleOffline)
 
         // Listen for database errors from main process
-        const unsubscribe = globalThis.electronAPI.onDatabaseError((message) => {
+        const unsubscribe = globalThis.electronAPI.menuEvents.onDatabaseError((message) => {
             setDbError(message)
         })
 

@@ -1,7 +1,8 @@
 import log from 'electron-log'
 import { autoUpdater, type UpdateInfo, type ProgressInfo } from 'electron-updater'
 
-import { dialog, ipcMain } from '../electron-env'
+import { dialog } from '../electron-env'
+import { safeHandleRaw } from '../ipc/ipc-result'
 
 import type { BrowserWindow } from 'electron'
 
@@ -93,10 +94,10 @@ export class AutoUpdateManager {
     }
 
     private setupIPC(): void {
-        ipcMain.handle('check-for-updates', () => this.checkForUpdates(false))
-        ipcMain.handle('download-update', () => this.downloadUpdate())
-        ipcMain.handle('install-update', () => this.installUpdate())
-        ipcMain.handle('get-update-status', () => ({
+        safeHandleRaw('check-for-updates', () => this.checkForUpdates(false))
+        safeHandleRaw('download-update', () => this.downloadUpdate())
+        safeHandleRaw('install-update', () => this.installUpdate())
+        safeHandleRaw('get-update-status', () => ({
             isAvailable: this.isUpdateAvailable,
             downloadProgress: this.downloadProgress
         }))

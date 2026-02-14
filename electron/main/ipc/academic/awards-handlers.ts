@@ -1,10 +1,10 @@
 import { getDatabase } from '../../database';
-import { ipcMain } from '../../electron-env';
-
-import type { IpcMainInvokeEvent } from 'electron';
+import { safeHandleRaw } from '../ipc-result';
 
 // Roles that can approve awards
 const APPROVER_ROLES = new Set(['ADMIN', 'PRINCIPAL', 'DEPUTY_PRINCIPAL']);
+const SELECT_AWARD_STATUS = 'SELECT approval_status FROM student_award WHERE id = ?';
+const AWARD_NOT_FOUND = 'Award not found';
 
 interface AwardAssignParams {
   studentId: number;
@@ -34,7 +34,7 @@ export function registerAwardsHandlers() {
 }
 
 function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void {
-  ipcMain.handle('awards:assign', async (_event: IpcMainInvokeEvent, params: AwardAssignParams) => {
+  safeHandleRaw('awards:assign', (_event, params: AwardAssignParams) => {
     try {
       // Auto-approve if user is ADMIN/PRINCIPAL/DEPUTY_PRINCIPAL
       const autoApprove = APPROVER_ROLES.has(params.userRole);
@@ -66,11 +66,11 @@ function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void
     }
   });
 
-  ipcMain.handle('awards:approve', async (_event: IpcMainInvokeEvent, params: AwardApproveParams) => {
+  safeHandleRaw('awards:approve', (_event, params: AwardApproveParams) => {
     try {
       // Verify the award exists and is in pending state
-      const award = db.prepare('SELECT approval_status FROM student_award WHERE id = ?').get(params.awardId) as { approval_status: string } | undefined;
-      if (!award) { throw new Error('Award not found'); }
+      const award = db.prepare(SELECT_AWARD_STATUS).get(params.awardId) as { approval_status: string } | undefined;
+      if (!award) { throw new Error(AWARD_NOT_FOUND); }
       if (award.approval_status !== 'pending') {
         throw new Error(`Cannot approve award — current status is "${award.approval_status}"`);
       }
@@ -91,11 +91,11 @@ function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void
   });
 
   // Reject an award
-  ipcMain.handle('awards:reject', async (_event: IpcMainInvokeEvent, params: AwardRejectParams) => {
+  safeHandleRaw('awards:reject', (_event, params: AwardRejectParams) => {
     try {
       // Verify the award exists and is in pending state
-      const award = db.prepare('SELECT approval_status FROM student_award WHERE id = ?').get(params.awardId) as { approval_status: string } | undefined;
-      if (!award) { throw new Error('Award not found'); }
+      const award = db.prepare(SELECT_AWARD_STATUS).get(params.awardId) as { approval_status: string } | undefined;
+      if (!award) { throw new Error(AWARD_NOT_FOUND); }
       if (award.approval_status !== 'pending') {
         throw new Error(`Cannot reject award — current status is "${award.approval_status}"`);
       }
@@ -116,15 +116,17 @@ function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void
     }
   });
 
-  ipcMain.handle('awards:delete', async (_event: IpcMainInvokeEvent, awardId: number, userId?: number) => {
+  registerAwardDeleteHandler(db);
+}
+
+function registerAwardDeleteHandler(db: ReturnType<typeof getDatabase>): void {
+  safeHandleRaw('awards:delete', (_event, awardId: number, _userId?: number) => {
     try {
-      // Only allow deleting pending awards
-      const award = db.prepare('SELECT approval_status FROM student_award WHERE id = ?').get(awardId) as { approval_status: string } | undefined;
-      if (!award) { throw new Error('Award not found'); }
+      const award = db.prepare(SELECT_AWARD_STATUS).get(awardId) as { approval_status: string } | undefined;
+      if (!award) { throw new Error(AWARD_NOT_FOUND); }
       if (award.approval_status === 'approved') {
         throw new Error('Cannot delete an approved award — revoke it first');
       }
-
       db.prepare(`DELETE FROM student_award WHERE id = ?`).run(awardId);
       return { status: 'success', message: 'Award deleted' };
     } catch (error: unknown) {
@@ -185,7 +187,7 @@ function buildAwardQueryFilters(params?: {
 }
 
 function registerAwardQueryHandlers(db: ReturnType<typeof getDatabase>): void {
-  ipcMain.handle('awards:getAll', async (_event: IpcMainInvokeEvent, params?: {
+  safeHandleRaw('awards:getAll', (_event, params?: {
     status?: string;
     categoryId?: number;
     academicYearId?: number;
@@ -201,7 +203,7 @@ function registerAwardQueryHandlers(db: ReturnType<typeof getDatabase>): void {
   });
 
   // Get pending awards count (for badge/notification)
-  ipcMain.handle('awards:getPendingCount', async () => {
+  safeHandleRaw('awards:getPendingCount', () => {
     try {
       const result = db.prepare(`
         SELECT COUNT(*) as count FROM student_award WHERE approval_status = 'pending'
@@ -214,7 +216,7 @@ function registerAwardQueryHandlers(db: ReturnType<typeof getDatabase>): void {
   });
 
   // Get student awards
-  ipcMain.handle('awards:getStudentAwards', async (_event: IpcMainInvokeEvent, studentId: number) => {
+  safeHandleRaw('awards:getStudentAwards', (_event, studentId: number) => {
     try {
       return db.prepare(`
         SELECT sa.*, ac.name as category_name, ac.category_type
@@ -230,7 +232,7 @@ function registerAwardQueryHandlers(db: ReturnType<typeof getDatabase>): void {
   });
 
   // Get award by ID
-  ipcMain.handle('awards:getById', async (_event: IpcMainInvokeEvent, awardId: number) => {
+  safeHandleRaw('awards:getById', (_event, awardId: number) => {
     try {
       return db.prepare(`
         SELECT sa.*, ac.name as category_name, ac.category_type, 
@@ -247,7 +249,7 @@ function registerAwardQueryHandlers(db: ReturnType<typeof getDatabase>): void {
   });
 
   // Get award categories
-  ipcMain.handle('awards:getCategories', async () => {
+  safeHandleRaw('awards:getCategories', () => {
     try {
       return db.prepare(`
         SELECT * FROM award_category

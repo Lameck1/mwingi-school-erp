@@ -54,7 +54,7 @@ function mapTemplateToMappings(template: ImportTemplate): ImportMapping[] {
 }
 
 async function fetchTemplateMappings(entityType: string): Promise<ImportMapping[]> {
-    const template = await globalThis.electronAPI.getImportTemplate(entityType) as ImportTemplate
+    const template = await globalThis.electronAPI.system.getImportTemplate(entityType) as ImportTemplate
     return mapTemplateToMappings(template)
 }
 
@@ -269,7 +269,7 @@ function useImportDialogController(
         },
         handleDownloadTemplate: async () => {
             try {
-                const result = await globalThis.electronAPI.downloadImportTemplate(entityType)
+                const result = await globalThis.electronAPI.system.downloadImportTemplate(entityType)
                 if (result.success) { alert(`Template downloaded to: ${result.filePath}`) }
             } catch (downloadError) {
                 console.error(downloadError)
@@ -283,7 +283,7 @@ function useImportDialogController(
             try {
                 const mappings = await fetchTemplateMappings(entityType)
                 const config = { entityType, mappings, skipDuplicates: true, duplicateKey: entityType === 'STUDENT' ? 'admission_number' : 'id' }
-                const importResponse = await globalThis.electronAPI.importData((file as File & { path: string }).path, config, user.id)
+                const importResponse = await globalThis.electronAPI.system.importData((file as File & { path: string }).path, config, user.id)
                 const result = importResponse as ImportResult
                 setImportResult(result)
                 setStep('RESULT')

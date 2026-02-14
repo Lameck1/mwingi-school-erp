@@ -37,7 +37,36 @@ export const validateDate = (date?: unknown): ValidationResult<string> => {
     return { success: true, data: date }
 }
 
+export const validatePastOrTodayDate = (date?: unknown): ValidationResult<string> => {
+    const base = validateDate(date)
+    if (!base.success) {
+        return base
+    }
+
+    const normalized = base.data!.slice(0, 10)
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    if (normalized > today) {
+        return { success: false, error: 'Date cannot be in the future.' }
+    }
+
+    return { success: true, data: normalized }
+}
+
 export const sanitizeString = (str?: unknown, maxLength: number = 255): string => {
     if (typeof str !== 'string') {return ''}
     return str.trim().slice(0, maxLength)
+}
+
+export const validatePassword = (password?: unknown): ValidationResult<string> => {
+    if (typeof password !== 'string' || password.length < 8) {
+        return { success: false, error: 'Password must be at least 8 characters long.' }
+    }
+    if (!/[A-Z]/.test(password)) {
+        return { success: false, error: 'Password must contain at least one uppercase letter.' }
+    }
+    if (!/\d/.test(password)) {
+        return { success: false, error: 'Password must contain at least one digit.' }
+    }
+    return { success: true, data: password }
 }

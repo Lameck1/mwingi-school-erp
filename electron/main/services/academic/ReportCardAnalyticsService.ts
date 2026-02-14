@@ -157,12 +157,15 @@ class ReportCardAnalyticsService {
           GROUP BY rcs.grade
           ORDER BY 
             CASE 
-              WHEN rcs.grade = 'A' THEN 1
-              WHEN rcs.grade = 'B' THEN 2
-              WHEN rcs.grade = 'C' THEN 3
-              WHEN rcs.grade = 'D' THEN 4
-              WHEN rcs.grade = 'E' THEN 5
-              ELSE 6
+              WHEN rcs.grade = 'EE1' THEN 1
+              WHEN rcs.grade = 'EE2' THEN 2
+              WHEN rcs.grade = 'ME1' THEN 3
+              WHEN rcs.grade = 'ME2' THEN 4
+              WHEN rcs.grade = 'AE1' THEN 5
+              WHEN rcs.grade = 'AE2' THEN 6
+              WHEN rcs.grade = 'BE1' THEN 7
+              WHEN rcs.grade = 'BE2' THEN 8
+              ELSE 9
             END
         `)
         .all(examId, streamId) as Array<{ grade: string; count: number }>
@@ -332,11 +335,11 @@ class ReportCardAnalyticsService {
           LIMIT 2
         `)
         .all(currentExam.academic_year_id, currentExam.academic_year_id, currentExam.term_id) as Array<{
-        id: number
-        name: string
-        term_id: number
-        academic_year_id: number
-      }>
+          id: number
+          name: string
+          term_id: number
+          academic_year_id: number
+        }>
 
       const comparison: TermComparison[] = []
 

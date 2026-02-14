@@ -1,5 +1,7 @@
 import { ipcRenderer } from 'electron'
 
+import type { ImportConfig, UserCreateData, UserUpdateData } from '../types'
+
 export function createSystemAPI() {
   return {
     // Backup
@@ -11,8 +13,8 @@ export function createSystemAPI() {
 
     // Users
     getUsers: () => ipcRenderer.invoke('user:getAll'),
-    createUser: (data: unknown) => ipcRenderer.invoke('user:create', data),
-    updateUser: (id: number, data: unknown) => ipcRenderer.invoke('user:update', id, data),
+    createUser: (data: UserCreateData) => ipcRenderer.invoke('user:create', data),
+    updateUser: (id: number, data: UserUpdateData) => ipcRenderer.invoke('user:update', id, data),
     toggleUserStatus: (id: number, isActive: boolean) => ipcRenderer.invoke('user:toggleStatus', id, isActive),
     resetUserPassword: (id: number, newPassword: string) => ipcRenderer.invoke('user:resetPassword', id, newPassword),
 
@@ -26,7 +28,7 @@ export function createSystemAPI() {
     cancelApprovalRequest: (requestId: number, userId: number) => ipcRenderer.invoke('approval:cancel', requestId, userId),
 
     // Data Import
-    importData: (filePath: string, config: unknown, userId: number) => ipcRenderer.invoke('data:import', filePath, config, userId),
+    importData: (filePath: string, config: ImportConfig, userId: number) => ipcRenderer.invoke('data:import', filePath, config, userId),
     getImportTemplate: (entityType: string) => ipcRenderer.invoke('data:getTemplate', entityType),
     downloadImportTemplate: (entityType: string) => ipcRenderer.invoke('data:downloadTemplate', entityType),
 

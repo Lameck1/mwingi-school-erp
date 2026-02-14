@@ -39,7 +39,7 @@ export interface HireBooking {
     hours?: number
     total_amount: number
     amount_paid: number
-    status: 'PENDING' | 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
+    status: HireBookingStatus
     notes?: string
     recorded_by_user_id: number
     created_at: string
@@ -63,8 +63,25 @@ export interface HirePayment {
     created_at: string
 }
 
+export type HireBookingStatus = 'PENDING' | 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
+
 export class HireService {
     private readonly db = getDatabase()
+    private static readonly ALLOWED_STATUS_TRANSITIONS: Record<HireBookingStatus, readonly HireBookingStatus[]> = {
+        PENDING: ['CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'],
+        CONFIRMED: ['IN_PROGRESS', 'COMPLETED', 'CANCELLED'],
+        IN_PROGRESS: ['COMPLETED', 'CANCELLED'],
+        COMPLETED: [],
+        CANCELLED: []
+    }
+
+    private isValidBookingStatus(status: string): status is HireBookingStatus {
+        return ['PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'].includes(status)
+    }
+
+    private canTransitionStatus(from: HireBookingStatus, to: HireBookingStatus): boolean {
+        return HireService.ALLOWED_STATUS_TRANSITIONS[from].includes(to)
+    }
 
     // ========== CLIENTS ==========
     getClients(filters?: { search?: string; isActive?: boolean }): HireClient[] {
@@ -268,8 +285,36 @@ export class HireService {
 
     updateBookingStatus(id: number, status: string): { success: boolean; errors?: string[] } {
         try {
-            this.db.prepare('UPDATE hire_booking SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-                .run(status, id)
+            if (!this.isValidBookingStatus(status)) {
+                return { success: false, errors: [`Invalid booking status: ${status}`] }
+            }
+
+            const booking = this.getBookingById(id)
+            if (!booking) {
+                return { success: false, errors: ['Booking not found'] }
+            }
+
+            if (booking.status === status) {
+                return { success: true }
+            }
+
+            if (!this.canTransitionStatus(booking.status, status)) {
+                return { success: false, errors: [`Invalid status transition: ${booking.status} -> ${status}`] }
+            }
+
+            if (status === 'COMPLETED' && booking.amount_paid < booking.total_amount) {
+                return { success: false, errors: ['Cannot mark booking as completed before full payment'] }
+            }
+
+            const result = this.db.prepare(`
+                UPDATE hire_booking
+                SET status = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND status = ?
+            `).run(status, id, booking.status)
+
+            if (result.changes === 0) {
+                return { success: false, errors: ['Booking status was changed by another operation. Refresh and retry.'] }
+            }
             return { success: true }
         } catch (error) {
             return { success: false, errors: [error instanceof Error ? error.message : 'Failed to update status'] }
@@ -311,14 +356,15 @@ export class HireService {
 
                 // Update booking amount_paid and potentially status
                 const newAmountPaid = booking.amount_paid + amount
-                const _newStatus = newAmountPaid >= booking.total_amount ? 'COMPLETED' : booking.status
+                const shouldComplete = newAmountPaid >= booking.total_amount
+                    && this.canTransitionStatus(booking.status, 'COMPLETED')
 
                 this.db.prepare(`
                     UPDATE hire_booking 
                     SET amount_paid = ?, status = CASE WHEN ? >= total_amount THEN 'COMPLETED' ELSE status END,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
-                `).run(newAmountPaid, newAmountPaid, bookingId)
+                `).run(newAmountPaid, shouldComplete ? newAmountPaid : 0, bookingId)
 
                 // Record income in ledger
                 const catId = this.db.prepare(`SELECT id FROM transaction_category WHERE category_name = 'Other Income' LIMIT 1`).get() as { id: number } | undefined

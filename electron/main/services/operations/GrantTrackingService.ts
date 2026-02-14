@@ -9,6 +9,7 @@ export interface Grant {
     amount_allocated: number
     amount_received: number
     date_received: string | null
+    expiry_date: string | null
     nemis_reference_number: string | null
     conditions: string | null
     is_utilized: boolean
@@ -35,6 +36,7 @@ export interface CreateGrantDTO {
     amount_allocated: number
     amount_received: number
     date_received?: string
+    expiry_date?: string
     nemis_reference_number?: string
     conditions?: string
 }
@@ -57,16 +59,45 @@ export class GrantTrackingService {
         return getDatabase()
     }
 
-    async createGrant(data: CreateGrantDTO, userId: number): Promise<{ success: boolean, id?: number, message?: string }> {
-        try {
-            const stmt = this.db.prepare(`
-                INSERT INTO ${GRANT_TABLE} (
-                    grant_name, grant_type, fiscal_year, amount_allocated, 
-                    amount_received, date_received, nemis_reference_number, conditions
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            `)
+    private columnExists(tableName: string, columnName: string): boolean {
+        const columns = this.db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>
+        return columns.some(column => column.name === columnName)
+    }
 
-            const result = stmt.run(
+    private getGrantExpiryExpression(): string {
+        return this.columnExists(GRANT_TABLE, 'expiry_date')
+            ? `COALESCE(expiry_date, printf('%04d-12-31', fiscal_year))`
+            : `printf('%04d-12-31', fiscal_year)`
+    }
+
+    private resolveExpiryDate(data: CreateGrantDTO): string {
+        if (data.expiry_date && /^\d{4}-\d{2}-\d{2}$/.test(data.expiry_date)) {
+            return data.expiry_date
+        }
+        return `${data.fiscal_year}-12-31`
+    }
+
+    private withComputedExpiry(grants: Array<Grant & { computed_expiry_date?: string | null }>): Grant[] {
+        return grants.map((grant) => ({
+            ...grant,
+            expiry_date: grant.expiry_date ?? grant.computed_expiry_date ?? `${grant.fiscal_year}-12-31`
+        }))
+    }
+
+    async createGrant(data: CreateGrantDTO, userId: number): Promise<{ success: boolean, id?: number, error?: string }> {
+        try {
+            const hasExpiryDateColumn = this.columnExists(GRANT_TABLE, 'expiry_date')
+            const columns = [
+                'grant_name',
+                'grant_type',
+                'fiscal_year',
+                'amount_allocated',
+                'amount_received',
+                'date_received',
+                'nemis_reference_number',
+                'conditions'
+            ]
+            const values: unknown[] = [
                 data.grant_name,
                 data.grant_type,
                 data.fiscal_year,
@@ -75,7 +106,20 @@ export class GrantTrackingService {
                 data.date_received || null,
                 data.nemis_reference_number || null,
                 data.conditions || null
-            )
+            ]
+
+            if (hasExpiryDateColumn) {
+                columns.push('expiry_date')
+                values.push(this.resolveExpiryDate(data))
+            }
+
+            const placeholders = columns.map(() => '?').join(', ')
+            const stmt = this.db.prepare(`
+                INSERT INTO ${GRANT_TABLE} (${columns.join(', ')})
+                VALUES (${placeholders})
+            `)
+
+            const result = stmt.run(...values)
 
             const grantId = result.lastInsertRowid as number
             logAudit(userId, 'CREATE', GRANT_TABLE, grantId, null, data)
@@ -83,22 +127,22 @@ export class GrantTrackingService {
             return { success: true, id: grantId }
         } catch (error) {
             console.error('Error creating grant:', error)
-            return { success: false, message: error instanceof Error ? error.message : UNKNOWN_ERROR }
+            return { success: false, error: error instanceof Error ? error.message : UNKNOWN_ERROR }
         }
     }
 
-    async recordUtilization(data: RecordUtilizationDTO): Promise<{ success: boolean, message?: string }> {
+    async recordUtilization(data: RecordUtilizationDTO): Promise<{ success: boolean, error?: string }> {
         try {
             // Check grant exists and has funds
             const grant = this.db.prepare(`SELECT * FROM ${GRANT_TABLE} WHERE id = ?`).get(data.grantId) as Grant | undefined
-            if (!grant) {return { success: false, message: GRANT_NOT_FOUND }}
+            if (!grant) {return { success: false, error: GRANT_NOT_FOUND }}
 
             const usedSoFar = this.db.prepare('SELECT SUM(amount_used) as total FROM grant_utilization WHERE grant_id = ?').get(data.grantId) as { total: number | null }
             const amountUsedSoFar = usedSoFar.total ?? 0
             const totalUsed = amountUsedSoFar + data.amount
 
             if (totalUsed > grant.amount_allocated) {
-                return { success: false, message: `Insufficient grant funds. Available: ${grant.amount_allocated - amountUsedSoFar}, Requested: ${data.amount}` }
+                return { success: false, error: `Insufficient grant funds. Available: ${grant.amount_allocated - amountUsedSoFar}, Requested: ${data.amount}` }
             }
 
             // Begin transaction
@@ -132,7 +176,7 @@ export class GrantTrackingService {
             return { success: true }
         } catch (error) {
             console.error('Error recording utilization:', error)
-            return { success: false, message: error instanceof Error ? error.message : UNKNOWN_ERROR }
+            return { success: false, error: error instanceof Error ? error.message : UNKNOWN_ERROR }
         }
     }
 
@@ -156,35 +200,44 @@ export class GrantTrackingService {
     }
 
     async getGrantsByStatus(status: 'ACTIVE' | 'EXPIRED' | 'FULLY_UTILIZED'): Promise<Grant[]> {
-        let query = `SELECT * FROM ${GRANT_TABLE} WHERE 1=1`
+        const expiryExpr = this.getGrantExpiryExpression()
+        let query = `
+            SELECT *, ${expiryExpr} as computed_expiry_date
+            FROM ${GRANT_TABLE}
+            WHERE 1=1
+        `
         const params: unknown[] = []
 
         if (status === 'FULLY_UTILIZED') {
             query += ' AND is_utilized = 1'
         } else if (status === 'ACTIVE') {
-            query += ' AND is_utilized = 0'
+            query += ` AND is_utilized = 0 AND date(${expiryExpr}) >= date('now')`
+        } else if (status === 'EXPIRED') {
+            query += ` AND is_utilized = 0 AND date(${expiryExpr}) < date('now')`
         }
 
-        // "EXPIRED" logic depends on fiscal year or specific date logic not explicitly in schema
-        // Assuming active grants are those not fully utilized for now.
+        query += ` ORDER BY date(${expiryExpr}) ASC, created_at DESC`
 
-        return this.db.prepare(query).all(...params) as Grant[]
+        const grants = this.db.prepare(query).all(...params) as Array<Grant & { computed_expiry_date?: string | null }>
+        return this.withComputedExpiry(grants)
     }
 
-    async getExpiringGrants(_daysThreshold: number): Promise<Grant[]> {
-        // Since there is no "expiry_date" in schema, we might infer from fiscal year end?
-        // Or maybe 'date_received' + 1 year?
-        // Roadmap says: "getExpiringGrants(daysThreshold) - Alert for grants expiring soon"
-        // But schema only has `fiscal_year`.
-        // We will assume fiscal year end is Dec 31st of that year.
+    async getExpiringGrants(daysThreshold: number): Promise<Grant[]> {
+        if (!Number.isInteger(daysThreshold) || daysThreshold <= 0) {
+            return []
+        }
 
-        const _currentYear = new Date().getFullYear()
-        // If current date is close to Dec 31st of the grant's fiscal year.
+        const expiryExpr = this.getGrantExpiryExpression()
+        const grants = this.db.prepare(`
+            SELECT *, ${expiryExpr} as computed_expiry_date
+            FROM ${GRANT_TABLE}
+            WHERE is_utilized = 0
+              AND date(${expiryExpr}) >= date('now')
+              AND date(${expiryExpr}) <= date('now', '+' || ? || ' days')
+            ORDER BY date(${expiryExpr}) ASC
+        `).all(daysThreshold) as Array<Grant & { computed_expiry_date?: string | null }>
 
-        // Just return empty for now if no clear logic, or check logic:
-        // Grants are usually per fiscal year.
-
-        return []
+        return this.withComputedExpiry(grants)
     }
 
     async generateNEMISExport(fiscalYear: number): Promise<string> {

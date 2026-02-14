@@ -1,32 +1,31 @@
 import * as path from 'node:path'
 
-import { ipcMain, shell, app } from '../../electron-env'
+import { shell, app } from '../../electron-env'
 import { BackupService } from '../../services/BackupService'
-
-import type { IpcMainInvokeEvent } from 'electron'
+import { safeHandleRaw } from '../ipc-result'
 
 export function registerBackupHandlers(): void {
 
-    ipcMain.handle('backup:create', async () => {
+    safeHandleRaw('backup:create', async () => {
         const result = await BackupService.createBackup()
         return { ...result, cancelled: false }
     })
 
-    ipcMain.handle('backup:createTo', async (_event: IpcMainInvokeEvent, filePath: string) => {
+    safeHandleRaw('backup:createTo', async (_event, filePath: string) => {
         const result = await BackupService.createBackupToPath(filePath)
         return { ...result, cancelled: false }
     })
 
-    ipcMain.handle('backup:getList', async () => {
+    safeHandleRaw('backup:getList', () => {
         return BackupService.listBackups()
     })
 
-    ipcMain.handle('backup:restore', async (_event: IpcMainInvokeEvent, filename: string) => {
+    safeHandleRaw('backup:restore', async (_event, filename: string) => {
         const success = await BackupService.restoreBackup(filename)
         return { success, message: success ? 'Restore initiated. App will restart.' : 'Restore failed', cancelled: false }
     })
 
-    ipcMain.handle('backup:openFolder', async () => {
+    safeHandleRaw('backup:openFolder', async () => {
         // We need to access private static or just reconstruct path
         // It's cleaner to ask Service for path or just use userData/backups
         // Let's add a openFolder method to Service or just do it here

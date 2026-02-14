@@ -1,19 +1,17 @@
-
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// Initialize logger FIRST — explicit log.xxx() calls work immediately;
-// console overrides are installed after app.whenReady() below.
-import { installConsoleOverrides, log } from './utils/logger'
-
-import { BackupService } from './services/BackupService'
 import { closeDatabase, initializeDatabase } from './database'
 import { verifyMigrations } from './database/verify_migrations'
 import { app, BrowserWindow, dialog } from './electron-env'
 import { registerAllIpcHandlers } from './ipc/index'
 import { createApplicationMenu } from './menu/applicationMenu'
+import { BackupService } from './services/BackupService'
 import { registerServices } from './services/base/ServiceContainer'
 import { reportScheduler } from './services/reports/ReportScheduler'
+// Initialize logger FIRST — explicit log.xxx() calls work immediately;
+// console overrides are installed after app.whenReady() below.
+import { installConsoleOverrides, log } from './utils/logger'
 import { WindowStateManager } from './utils/windowState'
 
 import type { BrowserWindow as BrowserWindowType } from 'electron'
@@ -24,6 +22,12 @@ const __dirname = path.dirname(__filename)
 
 // Disable GPU acceleration for better compatibility
 app.disableHardwareAcceleration()
+
+// Prevent multiple instances — concurrent SQLite writes cause corruption
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
+    app.quit()
+}
 
 let mainWindow: BrowserWindowType | null = null
 
@@ -42,7 +46,7 @@ function createWindow() {
     const windowState = new WindowStateManager('main')
     const state = windowState.getState()
 
-    mainWindow = new BrowserWindow({
+    const win = new BrowserWindow({
         x: state.x,
         y: state.y,
         width: state.width,
@@ -59,57 +63,56 @@ function createWindow() {
         show: false,
         titleBarStyle: 'default',
     })
+    mainWindow = win
 
-    if (mainWindow) {
-        windowState.manage(mainWindow)
-        createApplicationMenu(mainWindow)
-        // Initialize Auto Updater (packaged only)
-        initializeAutoUpdater(mainWindow).catch((error) => {
-            log.error('Failed to initialize auto updater:', error)
-        })
+    windowState.manage(win)
+    createApplicationMenu(win)
+    // Initialize Auto Updater (packaged only)
+    initializeAutoUpdater(win).catch((error) => {
+        log.error('Failed to initialize auto updater:', error)
+    })
 
-        // Show window when ready
-        mainWindow.once('ready-to-show', () => {
-            mainWindow?.show()
-        })
+    // Show window when ready
+    win.once('ready-to-show', () => {
+        win.show()
+    })
 
-        // Pipe renderer logs to main process using the Event object API.
-        mainWindow.webContents.on('console-message', (event) => {
-            const message = event.message
-            if (message && message.length > 0) {
-                log.warn(`[Renderer] ${message}`)
-            }
-        })
-
-        // Security: Block external navigation attempts
-        mainWindow.webContents.on('will-navigate', (event, url) => {
-            // Allow navigation to local files and dev server only
-            const isLocalFile = url.startsWith('file://')
-            const isDevServer = VITE_DEV_SERVER_URL && url.startsWith(VITE_DEV_SERVER_URL)
-            if (!isLocalFile && !isDevServer) {
-                log.warn(`Blocked navigation to external URL: ${url}`)
-                event.preventDefault()
-            }
-        })
-
-        // Security: Block new window creation (popups)
-        mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-            log.warn(`Blocked popup window request for: ${url}`)
-            return { action: 'deny' }
-        })
-
-        // Load the app
-        if (VITE_DEV_SERVER_URL) {
-            mainWindow.loadURL(VITE_DEV_SERVER_URL).catch((err: Error) => log.error('Failed to load dev URL:', err.message))
-            mainWindow.webContents.openDevTools()
-        } else {
-            mainWindow.loadFile(path.join(__dirname, '../../dist/index.html')).catch((err: Error) => log.error('Failed to load file:', err.message))
+    // Pipe renderer logs to main process using the Event object API.
+    win.webContents.on('console-message', (event) => {
+        const message = event.message
+        if (message && message.length > 0) {
+            log.warn(`[Renderer] ${message}`)
         }
+    })
 
-        mainWindow.on('closed', () => {
-            mainWindow = null
-        })
+    // Security: Block external navigation attempts
+    win.webContents.on('will-navigate', (event, url) => {
+        // Allow navigation to local files and dev server only
+        const isLocalFile = url.startsWith('file://')
+        const isDevServer = VITE_DEV_SERVER_URL && url.startsWith(VITE_DEV_SERVER_URL)
+        if (!isLocalFile && !isDevServer) {
+            log.warn(`Blocked navigation to external URL: ${url}`)
+            event.preventDefault()
+        }
+    })
+
+    // Security: Block new window creation (popups)
+    win.webContents.setWindowOpenHandler(({ url }) => {
+        log.warn(`Blocked popup window request for: ${url}`)
+        return { action: 'deny' }
+    })
+
+    // Load the app
+    if (VITE_DEV_SERVER_URL) {
+        win.loadURL(VITE_DEV_SERVER_URL).catch((err: Error) => log.error('Failed to load dev URL:', err.message))
+        win.webContents.openDevTools()
+    } else {
+        win.loadFile(path.join(__dirname, '../../dist/index.html')).catch((err: Error) => log.error('Failed to load file:', err.message))
     }
+
+    win.on('closed', () => {
+        mainWindow = null
+    })
 }
 
 function sendDbError(message: string) {
@@ -171,11 +174,19 @@ async function bootstrap(): Promise<void> {
     }
 }
 
-// eslint-disable-next-line unicorn/prefer-top-level-await -- Top-level await deadlocks Electron in bundled ESM
-bootstrap().catch((error: unknown) => {
+// Top-level await deadlocks Electron in bundled ESM — must use .catch()
+void bootstrap().catch((error: unknown) => {
     log.error('Application startup failed:', error)
     dialog.showErrorBox('Startup Error', 'Failed to start application.')
     app.quit()
+})
+
+// Focus existing window when a second instance is launched
+app.on('second-instance', () => {
+    if (mainWindow) {
+        if (mainWindow.isMinimized()) {mainWindow.restore()}
+        mainWindow.focus()
+    }
 })
 
 app.on('window-all-closed', () => {

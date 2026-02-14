@@ -1,12 +1,29 @@
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
-import { ipcMain } from '../../electron-env'
-
-import type { IpcMainInvokeEvent } from 'electron'
+import { safeHandleRaw } from '../ipc-result'
 
 type ApprovalRecord = {
-  journal_entry_id: number
+  id: number
+  entity_id: number
   status: string
+}
+
+function tableExists(db: ReturnType<typeof getDatabase>, tableName: string): boolean {
+  const row = db.prepare(`
+    SELECT name
+    FROM sqlite_master
+    WHERE type = 'table' AND name = ?
+  `).get(tableName) as { name: string } | undefined
+  return Boolean(row?.name)
+}
+
+function columnExists(db: ReturnType<typeof getDatabase>, tableName: string, columnName: string): boolean {
+  if (!tableExists(db, tableName)) {
+    return false
+  }
+
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>
+  return columns.some((column) => column.name === columnName)
 }
 
 export function registerFinanceApprovalHandlers(): void {
@@ -18,68 +35,102 @@ export function registerFinanceApprovalHandlers(): void {
 }
 
 function registerApprovalQueueHandler(db: ReturnType<typeof getDatabase>): void {
-  ipcMain.handle('approvals:getQueue', async (_event: IpcMainInvokeEvent, filter: 'PENDING' | 'ALL' = 'PENDING') => {
+  safeHandleRaw('approvals:getQueue', (_event, filter: 'PENDING' | 'ALL' = 'PENDING') => {
     try {
-      const whereClause = filter === 'PENDING' ? "AND ta.status = 'PENDING'" : ''
+      const whereClause = filter === 'PENDING' ? "AND ar.status = 'PENDING'" : ''
+      const hasWorkflowTable = tableExists(db, 'approval_workflow')
+      const hasRuleColumn = columnExists(db, 'approval_request', 'approval_rule_id')
+      const hasRuleTable = tableExists(db, 'approval_rule')
+      const hasHistoryTable = tableExists(db, 'approval_history')
+      const workflowJoin = hasWorkflowTable ? 'LEFT JOIN approval_workflow aw ON ar.workflow_id = aw.id' : ''
+      const ruleJoin = hasRuleColumn && hasRuleTable ? 'LEFT JOIN approval_rule apr ON ar.approval_rule_id = apr.id' : ''
+      const historyJoin = hasHistoryTable ? `
+        LEFT JOIN approval_history latest ON latest.id = (
+          SELECT ah.id
+          FROM approval_history ah
+          WHERE ah.approval_request_id = ar.id
+            AND ah.action IN ('APPROVED', 'REJECTED')
+          ORDER BY ah.action_at DESC, ah.id DESC
+          LIMIT 1
+        )` : ''
+      const ruleExpr = hasRuleColumn && hasRuleTable
+        ? hasWorkflowTable
+          ? "COALESCE(apr.rule_name, aw.workflow_name, 'Workflow approval')"
+          : "COALESCE(apr.rule_name, 'Workflow approval')"
+        : hasWorkflowTable
+          ? "COALESCE(aw.workflow_name, 'Workflow approval')"
+          : "'Workflow approval'"
+      const reviewNotesExpr = hasHistoryTable ? 'latest.notes' : 'NULL'
+
       const approvals = db.prepare(`
         SELECT
-          ta.id,
-          ta.journal_entry_id,
+          ar.id,
+          ar.entity_id as journal_entry_id,
           je.entry_ref,
           je.entry_type,
           je.description,
-          ta.requested_at,
-          ta.status,
-          ta.review_notes,
-          ta.reviewed_at,
-          ar.rule_name,
+          ar.created_at as requested_at,
+          ar.status,
+          ${reviewNotesExpr} as review_notes,
+          ar.completed_at as reviewed_at,
+          ${ruleExpr} as rule_name,
           u_req.username as requested_by_name,
           u_rev.username as reviewed_by_name,
           s.first_name || ' ' || s.last_name as student_name,
           COALESCE(SUM(jel.debit_amount), 0) as amount
-        FROM transaction_approval ta
-        JOIN journal_entry je ON ta.journal_entry_id = je.id
-        JOIN approval_rule ar ON ta.approval_rule_id = ar.id
-        JOIN user u_req ON ta.requested_by_user_id = u_req.id
-        LEFT JOIN user u_rev ON ta.reviewed_by_user_id = u_rev.id
+        FROM approval_request ar
+        JOIN journal_entry je ON ar.entity_id = je.id AND ar.entity_type = 'JOURNAL_ENTRY'
+        ${workflowJoin}
+        ${ruleJoin}
+        LEFT JOIN user u_req ON ar.requested_by_user_id = u_req.id
+        LEFT JOIN user u_rev ON ar.final_approver_user_id = u_rev.id
         LEFT JOIN student s ON je.student_id = s.id
         LEFT JOIN journal_entry_line jel ON je.id = jel.journal_entry_id
-        WHERE 1=1 ${whereClause}
-        GROUP BY ta.id
-        ORDER BY ta.requested_at DESC
+        ${historyJoin}
+        WHERE ar.entity_type = 'JOURNAL_ENTRY' ${whereClause}
+        GROUP BY ar.id
+        ORDER BY ar.created_at DESC
       `).all()
 
       return { success: true, data: approvals }
     } catch (error) {
-      return { success: false, message: `Failed to get approval queue: ${(error as Error).message}` }
+      return { success: false, error: `Failed to get approval queue: ${(error as Error).message}` }
     }
   })
 }
 
 function registerApproveHandler(db: ReturnType<typeof getDatabase>): void {
-  ipcMain.handle('approvals:approve', async (_event: IpcMainInvokeEvent, approvalId: number, reviewNotes: string, reviewerUserId: number) => {
+  safeHandleRaw('approvals:approve', (_event, approvalId: number, reviewNotes: string, reviewerUserId: number) => {
     try {
       return db.transaction(() => {
         const approval = db.prepare(`
-          SELECT ta.*, je.id as journal_entry_id
-          FROM transaction_approval ta
-          JOIN journal_entry je ON ta.journal_entry_id = je.id
-          WHERE ta.id = ? AND ta.status = 'PENDING'
+          SELECT ar.id, ar.entity_id, ar.status
+          FROM approval_request ar
+          WHERE ar.id = ?
+            AND ar.entity_type = 'JOURNAL_ENTRY'
+            AND ar.status = 'PENDING'
         `).get(approvalId) as ApprovalRecord | undefined
 
         if (!approval) {
-          return { success: false, message: 'Approval request not found or already processed' }
+          return { success: false, error: 'Approval request not found or already processed' }
         }
 
         db.prepare(`
-          UPDATE transaction_approval
+          UPDATE approval_request
           SET
             status = 'APPROVED',
-            reviewed_by_user_id = ?,
-            reviewed_at = CURRENT_TIMESTAMP,
-            review_notes = ?
+            final_approver_user_id = ?,
+            completed_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).run(reviewerUserId, reviewNotes, approvalId)
+        `).run(reviewerUserId, approvalId)
+
+        if (tableExists(db, 'approval_history')) {
+          db.prepare(`
+            INSERT INTO approval_history (
+              approval_request_id, action, action_by, previous_status, new_status, notes
+            ) VALUES (?, 'APPROVED', ?, 'PENDING', 'APPROVED', ?)
+          `).run(approvalId, reviewerUserId, reviewNotes || null)
+        }
 
         db.prepare(`
           UPDATE journal_entry
@@ -91,49 +142,57 @@ function registerApproveHandler(db: ReturnType<typeof getDatabase>): void {
             posted_by_user_id = ?,
             posted_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).run(reviewerUserId, reviewerUserId, approval.journal_entry_id)
+        `).run(reviewerUserId, reviewerUserId, approval.entity_id)
 
-        logAudit(reviewerUserId, 'APPROVE', 'transaction_approval', approvalId, null, {
-          journal_entry_id: approval.journal_entry_id,
+        logAudit(reviewerUserId, 'APPROVE', 'approval_request', approvalId, null, {
+          journal_entry_id: approval.entity_id,
           review_notes: reviewNotes,
         })
 
         return { success: true, message: 'Transaction approved successfully' }
       })()
     } catch (error) {
-      return { success: false, message: `Failed to approve transaction: ${(error as Error).message}` }
+      return { success: false, error: `Failed to approve transaction: ${(error as Error).message}` }
     }
   })
 }
 
 function registerRejectHandler(db: ReturnType<typeof getDatabase>): void {
-  ipcMain.handle('approvals:reject', async (_event: IpcMainInvokeEvent, approvalId: number, reviewNotes: string, reviewerUserId: number) => {
+  safeHandleRaw('approvals:reject', (_event, approvalId: number, reviewNotes: string, reviewerUserId: number) => {
     try {
       if (!reviewNotes) {
-        return { success: false, message: 'Review notes are required for rejection' }
+        return { success: false, error: 'Review notes are required for rejection' }
       }
 
       return db.transaction(() => {
         const approval = db.prepare(`
-          SELECT ta.*, je.id as journal_entry_id
-          FROM transaction_approval ta
-          JOIN journal_entry je ON ta.journal_entry_id = je.id
-          WHERE ta.id = ? AND ta.status = 'PENDING'
+          SELECT ar.id, ar.entity_id, ar.status
+          FROM approval_request ar
+          WHERE ar.id = ?
+            AND ar.entity_type = 'JOURNAL_ENTRY'
+            AND ar.status = 'PENDING'
         `).get(approvalId) as ApprovalRecord | undefined
 
         if (!approval) {
-          return { success: false, message: 'Approval request not found or already processed' }
+          return { success: false, error: 'Approval request not found or already processed' }
         }
 
         db.prepare(`
-          UPDATE transaction_approval
+          UPDATE approval_request
           SET
             status = 'REJECTED',
-            reviewed_by_user_id = ?,
-            reviewed_at = CURRENT_TIMESTAMP,
-            review_notes = ?
+            final_approver_user_id = ?,
+            completed_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).run(reviewerUserId, reviewNotes, approvalId)
+        `).run(reviewerUserId, approvalId)
+
+        if (tableExists(db, 'approval_history')) {
+          db.prepare(`
+            INSERT INTO approval_history (
+              approval_request_id, action, action_by, previous_status, new_status, notes
+            ) VALUES (?, 'REJECTED', ?, 'PENDING', 'REJECTED', ?)
+          `).run(approvalId, reviewerUserId, reviewNotes)
+        }
 
         db.prepare(`
           UPDATE journal_entry
@@ -142,7 +201,7 @@ function registerRejectHandler(db: ReturnType<typeof getDatabase>): void {
             approved_by_user_id = ?,
             approved_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).run(reviewerUserId, approval.journal_entry_id)
+        `).run(reviewerUserId, approval.entity_id)
 
         db.prepare(`
           UPDATE journal_entry
@@ -152,23 +211,23 @@ function registerRejectHandler(db: ReturnType<typeof getDatabase>): void {
             voided_by_user_id = ?,
             voided_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).run(`Rejected: ${reviewNotes}`, reviewerUserId, approval.journal_entry_id)
+        `).run(`Rejected: ${reviewNotes}`, reviewerUserId, approval.entity_id)
 
-        logAudit(reviewerUserId, 'REJECT', 'transaction_approval', approvalId, null, {
-          journal_entry_id: approval.journal_entry_id,
+        logAudit(reviewerUserId, 'REJECT', 'approval_request', approvalId, null, {
+          journal_entry_id: approval.entity_id,
           review_notes: reviewNotes,
         })
 
         return { success: true, message: 'Transaction rejected successfully' }
       })()
     } catch (error) {
-      return { success: false, message: `Failed to reject transaction: ${(error as Error).message}` }
+      return { success: false, error: `Failed to reject transaction: ${(error as Error).message}` }
     }
   })
 }
 
 function registerApprovalStatsHandler(db: ReturnType<typeof getDatabase>): void {
-  ipcMain.handle('approvals:getStats', async () => {
+  safeHandleRaw('approvals:getStats', () => {
     try {
       const stats = db.prepare(`
         SELECT
@@ -176,12 +235,13 @@ function registerApprovalStatsHandler(db: ReturnType<typeof getDatabase>): void 
           SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END) as pending,
           SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) as approved,
           SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) as rejected
-        FROM transaction_approval
+        FROM approval_request
+        WHERE entity_type = 'JOURNAL_ENTRY'
       `).get()
 
       return { success: true, data: stats }
     } catch (error) {
-      return { success: false, message: `Failed to get approval statistics: ${(error as Error).message}` }
+      return { success: false, error: `Failed to get approval statistics: ${(error as Error).message}` }
     }
   })
 }

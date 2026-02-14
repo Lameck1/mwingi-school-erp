@@ -1,8 +1,6 @@
 import { getDatabase } from '../../database'
-import { ipcMain } from '../../electron-env'
 import { renderHtmlToPdfBuffer, resolveOutputPath, writePdfBuffer } from '../../utils/pdf'
-
-import type { IpcMainInvokeEvent } from 'electron'
+import { safeHandleRaw } from '../ipc-result'
 
 interface ExportPdfPayload {
     html?: string
@@ -64,15 +62,15 @@ const VENUE_TEMPLATE = [
 ]
 
 function registerAcademicYearAndTermHandlers(db: ReturnType<typeof getDatabase>): void {
-    ipcMain.handle('academicYear:getAll', async () => {
+    safeHandleRaw('academicYear:getAll', () => {
         return db.prepare('SELECT * FROM academic_year ORDER BY year_name DESC').all()
     })
 
-    ipcMain.handle('academicYear:getCurrent', async () => {
+    safeHandleRaw('academicYear:getCurrent', () => {
         return db.prepare('SELECT * FROM academic_year WHERE is_current = 1').get()
     })
 
-    ipcMain.handle('academicYear:create', async (_event: IpcMainInvokeEvent, data: AcademicYearCreateData) => {
+    safeHandleRaw('academicYear:create', (_event, data: AcademicYearCreateData) => {
         try {
             db.transaction(() => {
                 if (data.is_current) {
@@ -88,7 +86,7 @@ function registerAcademicYearAndTermHandlers(db: ReturnType<typeof getDatabase>)
         }
     })
 
-    ipcMain.handle('academicYear:activate', async (_event: IpcMainInvokeEvent, id: number) => {
+    safeHandleRaw('academicYear:activate', (_event, id: number) => {
         try {
             db.transaction(() => {
                 db.prepare('UPDATE academic_year SET is_current = 0').run()
@@ -101,21 +99,21 @@ function registerAcademicYearAndTermHandlers(db: ReturnType<typeof getDatabase>)
         }
     })
 
-    ipcMain.handle('term:getByYear', async (_event: IpcMainInvokeEvent, yearId: number) => {
+    safeHandleRaw('term:getByYear', (_event, yearId: number) => {
         return db.prepare('SELECT * FROM term WHERE academic_year_id = ? ORDER BY term_number').all(yearId)
     })
 
-    ipcMain.handle('term:getCurrent', async () => {
+    safeHandleRaw('term:getCurrent', () => {
         return db.prepare('SELECT * FROM term WHERE is_current = 1').get()
     })
 }
 
 function registerExamLookupHandlers(db: ReturnType<typeof getDatabase>): void {
-    ipcMain.handle('stream:getAll', async () => {
+    safeHandleRaw('stream:getAll', () => {
         return db.prepare('SELECT * FROM stream WHERE is_active = 1 ORDER BY level_order').all()
     })
 
-    ipcMain.handle('academic:getExamsList', async (_event: IpcMainInvokeEvent, filters: { academicYearId?: number; termId?: number }) => {
+    safeHandleRaw('academic:getExamsList', (_event, filters: { academicYearId?: number; termId?: number }) => {
         let query = 'SELECT id, name FROM academic_exam WHERE 1=1'
         const params: number[] = []
 
@@ -132,13 +130,13 @@ function registerExamLookupHandlers(db: ReturnType<typeof getDatabase>): void {
         return db.prepare(query).all(...params)
     })
 
-    ipcMain.handle('feeCategory:getAll', async () => {
+    safeHandleRaw('feeCategory:getAll', () => {
         return db.prepare('SELECT * FROM fee_category WHERE is_active = 1').all()
     })
 }
 
 function registerPdfExportHandler(): void {
-    ipcMain.handle('export:pdf', async (_event: IpcMainInvokeEvent, data: ExportPdfPayload) => {
+    safeHandleRaw('export:pdf', async (_event, data: ExportPdfPayload) => {
         try {
             const html = data.html || `
               <html>
@@ -216,17 +214,17 @@ function buildScheduleExportHtml(slots: Array<Record<string, unknown>>): string 
 }
 
 function registerSchedulerHandlers(db: ReturnType<typeof getDatabase>): void {
-    ipcMain.handle('schedule:generate', async (_event: IpcMainInvokeEvent, data: { examId?: number; startDate?: string; endDate?: string }) => {
+    safeHandleRaw('schedule:generate', (_event, data: { examId?: number; startDate?: string; endDate?: string }) => {
         return generateSchedule(db, data.examId, data.startDate, data.endDate)
     })
 
-    ipcMain.handle('schedule:detectClashes', async (_event: IpcMainInvokeEvent, data: { examId?: number }) => {
+    safeHandleRaw('schedule:detectClashes', async (_event, data: { examId?: number }) => {
         if (!data.examId) {return []}
         const generated = await generateSchedule(db, data.examId)
         return detectClashes(db, data.examId, generated.slots)
     })
 
-    ipcMain.handle('schedule:exportPDF', async (_event: IpcMainInvokeEvent, data: { examId?: number; slots?: Array<Record<string, unknown>> }) => {
+    safeHandleRaw('schedule:exportPDF', async (_event, data: { examId?: number; slots?: Array<Record<string, unknown>> }) => {
         try {
             const html = buildScheduleExportHtml(data.slots || [])
             const buffer = await renderHtmlToPdfBuffer(html)

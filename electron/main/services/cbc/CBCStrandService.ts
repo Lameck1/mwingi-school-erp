@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import { getDatabase } from '../../database';
 
 export interface CBCStrand {
   id: number;
@@ -73,11 +73,7 @@ export interface StudentActivityParticipation {
  * - Support budget allocation by strand
  */
 export class CBCStrandService {
-  private readonly db: Database.Database;
-
-  constructor(db: Database.Database) {
-    this.db = db;
-  }
+  private get db() { return getDatabase(); }
 
   /**
    * Get all CBC strands

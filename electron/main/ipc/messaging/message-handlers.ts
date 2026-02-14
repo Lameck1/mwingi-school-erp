@@ -1,93 +1,26 @@
-import { getDatabase } from '../../database';
-import { ipcMain } from '../../electron-env';
-import { NotificationService } from '../../services/notifications/NotificationService';
+import { container } from '../../services/base/ServiceContainer';
+import { MessageService } from '../../services/MessageService';
+import { safeHandleRaw } from '../ipc-result';
 
-import type { IpcMainInvokeEvent } from 'electron';
-
-interface MessageTemplateInput {
-    id?: number;
-    template_name: string;
-    template_type: 'SMS' | 'EMAIL';
-    subject?: string;
-    body: string;
-    placeholders?: string;
-}
+const svc = () => new MessageService();
 
 export function registerMessageHandlers(): void {
-    // ======== MESSAGE TEMPLATES ========
-    ipcMain.handle('message:getTemplates', async () => {
-        return getDatabase().prepare('SELECT * FROM message_template WHERE is_active = 1').all();
+    safeHandleRaw('message:getTemplates', () => {
+        return svc().getTemplates();
     });
 
-    ipcMain.handle('message:saveTemplate', async (_event: IpcMainInvokeEvent, template: MessageTemplateInput) => {
-        const db = getDatabase();
-        if (template.id) {
-            db.prepare(`UPDATE message_template SET 
-        template_name = ?, template_type = ?, subject = ?, body = ?, placeholders = ? 
-        WHERE id = ?`
-            ).run(
-                template.template_name, template.template_type, template.subject,
-                template.body, template.placeholders, template.id
-            );
-            return { success: true, id: template.id };
-        } else {
-            const result = db.prepare(`INSERT INTO message_template 
-        (template_name, template_type, subject, body, placeholders) 
-        VALUES (?, ?, ?, ?, ?)`
-            ).run(
-                template.template_name, template.template_type, template.subject,
-                template.body, template.placeholders
-            );
-            return { success: true, id: result.lastInsertRowid };
-        }
+    safeHandleRaw('message:saveTemplate', (_event, template: Parameters<MessageService['saveTemplate']>[0]) => {
+        return svc().saveTemplate(template);
     });
 
-    // ======== SENDING SMS ========
-    ipcMain.handle('message:sendSms', async (_event: IpcMainInvokeEvent, options: { to: string, message: string, recipientId?: number, recipientType?: string, userId: number }) => {
-        const db = getDatabase();
-        const settings = db.prepare('SELECT sms_api_key, sms_api_secret, sms_sender_id FROM school_settings WHERE id = 1').get() as { sms_api_key: string; sms_api_secret: string; sms_sender_id: string } | undefined;
-
-        // Create log entry as PENDING
-        const logStmt = db.prepare(`INSERT INTO message_log 
-      (recipient_type, recipient_id, recipient_contact, message_type, message_body, status, sent_by_user_id) 
-      VALUES (?, ?, ?, 'SMS', ?, 'PENDING', ?)`);
-
-        const result = logStmt.run(
-            options.recipientType || 'OTHER',
-            options.recipientId || null,
-            options.to,
-            options.message,
-            options.userId
-        );
-        const logId = result.lastInsertRowid;
-
-        try {
-            // IMPLEMENTATION NOTE: Africa's Talking / Twilio integration would go here
-            // For now, we simulate success if credentials exist, or return failure for missing config
-            if (!settings?.sms_api_key) {
-                throw new Error('SMS API Key not configured in settings');
-            }
-
-            // Simulation of async API call
-            // In production: const response = await africastalking.send(...)
-
-            db.prepare('UPDATE message_log SET status = ?, external_id = ? WHERE id = ?')
-                .run('SENT', `SIM-${Date.now()}`, logId);
-
-            return { success: true, messageId: `SIM-${Date.now()}` };
-        } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            db.prepare("UPDATE message_log SET status = 'FAILED', error_message = ? WHERE id = ?")
-                .run(errorMessage, logId);
-            return { success: false, error: errorMessage };
-        }
+    safeHandleRaw('message:sendSms', (_event, options: Parameters<MessageService['sendSms']>[0]) => {
+        return svc().sendSms(options);
     });
 
-    // ======== SENDING EMAIL ========
-    ipcMain.handle('message:sendEmail', async (_event: IpcMainInvokeEvent, options: { to: string; subject: string; body: string; recipientId?: number; recipientType?: string; userId: number }) => {
-        const service = new NotificationService();
+    safeHandleRaw('message:sendEmail', async (_event, options: { to: string; subject: string; body: string; recipientId?: number; recipientType?: string; userId: number }) => {
+        const service = container.resolve('NotificationService');
         const recipientType = (options.recipientType ?? 'GUARDIAN') as 'STUDENT' | 'STAFF' | 'GUARDIAN';
-        const result = await service.send({
+        return await service.send({
             recipientType,
             recipientId: options.recipientId || 0,
             channel: 'EMAIL',
@@ -95,11 +28,9 @@ export function registerMessageHandlers(): void {
             subject: options.subject,
             message: options.body
         }, options.userId);
-        return result;
     });
 
-    // ======== MESSAGE LOGS ========
-    ipcMain.handle('message:getLogs', async (_event: IpcMainInvokeEvent, limit = 50) => {
-        return getDatabase().prepare('SELECT * FROM message_log ORDER BY created_at DESC LIMIT ?').all(limit);
+    safeHandleRaw('message:getLogs', (_event, limit = 50) => {
+        return svc().getLogs(limit);
     });
 }

@@ -325,10 +325,10 @@ export class DataImportService {
      * Insert a record
      */
     private insertRecord(entityType: string, data: Record<string, unknown>, _userId: number): void {
-        if (entityType === 'STUDENT') {
-            this.insertStudent(data)
-            return
-        }
+        if (entityType === 'STUDENT') { this.insertStudent(data); return }
+        if (entityType === 'STAFF') { this.insertStaff(data); return }
+        if (entityType === 'FEE_STRUCTURE') { this.insertFeeStructure(data); return }
+        if (entityType === 'INVENTORY') { this.insertInventoryItem(data); return }
 
         throw new Error(`Unsupported entity type: ${entityType}`)
     }
@@ -353,6 +353,61 @@ export class DataImportService {
             data.guardian_phone,
             data.guardian_email || null,
             data.address || null
+        )
+    }
+
+    private insertStaff(data: Record<string, unknown>): void {
+        this.db.prepare(`
+      INSERT INTO staff (
+        staff_number, first_name, middle_name, last_name,
+        id_number, kra_pin, phone, email,
+        department, job_title, employment_date, basic_salary, is_active
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    `).run(
+            data.staff_number,
+            data.first_name,
+            data.middle_name || null,
+            data.last_name,
+            data.id_number || null,
+            data.kra_pin || null,
+            data.phone || null,
+            data.email || null,
+            data.department || null,
+            data.job_title || null,
+            data.employment_date || new Date().toISOString().slice(0, 10),
+            data.basic_salary || 0
+        )
+    }
+
+    private insertFeeStructure(data: Record<string, unknown>): void {
+        this.db.prepare(`
+      INSERT INTO fee_structure (
+        academic_year_id, term_id, stream_id, student_type, fee_category_id, amount, description
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+            data.academic_year_id,
+            data.term_id,
+            data.stream_id,
+            data.student_type || 'DAY_SCHOLAR',
+            data.fee_category_id,
+            data.amount,
+            data.description || null
+        )
+    }
+
+    private insertInventoryItem(data: Record<string, unknown>): void {
+        this.db.prepare(`
+      INSERT INTO inventory_item (
+        item_code, item_name, category_id, unit_of_measure, current_stock, reorder_level, unit_cost
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+            data.item_code,
+            data.item_name,
+            data.category_id,
+            data.unit_of_measure || 'Unit',
+            data.current_stock || 0,
+            data.reorder_level || 0,
+            data.unit_cost || 0
         )
     }
 
@@ -403,6 +458,49 @@ export class DataImportService {
                         'Address': 'Nairobi'
                     }
                 ]
+            }
+        }
+
+        if (entityType === 'STAFF') {
+            return {
+                columns: [
+                    { name: 'Staff Number', required: true, description: 'Unique staff number', example: 'ST-001' },
+                    { name: 'First Name', required: true, description: 'Staff first name', example: 'Joseph' },
+                    { name: 'Middle Name', required: false, description: 'Staff middle name', example: '' },
+                    { name: 'Last Name', required: true, description: 'Staff last name', example: 'Omondi' },
+                    { name: 'ID Number', required: false, description: 'National ID', example: '12345678' },
+                    { name: 'KRA PIN', required: false, description: 'KRA PIN', example: 'A012345678B' },
+                    { name: 'Phone', required: false, description: 'Phone number', example: '0712345678' },
+                    { name: 'Email', required: false, description: 'Email address', example: 'joseph@school.ac.ke' },
+                    { name: 'Department', required: false, description: 'Department', example: 'Teaching' },
+                    { name: 'Job Title', required: true, description: 'Job title', example: 'Senior Teacher' },
+                    { name: 'Employment Date', required: false, description: 'Date joined (YYYY-MM-DD)', example: '2024-01-15' },
+                    { name: 'Basic Salary', required: true, description: 'Monthly salary in cents', example: '6500000' }
+                ],
+                sampleData: [{
+                    'Staff Number': 'ST-001', 'First Name': 'Joseph', 'Middle Name': '', 'Last Name': 'Omondi',
+                    'ID Number': '12345678', 'KRA PIN': 'A012345678B', 'Phone': '0712345678',
+                    'Email': 'joseph@school.ac.ke', 'Department': 'Teaching', 'Job Title': 'Senior Teacher',
+                    'Employment Date': '2024-01-15', 'Basic Salary': '6500000'
+                }]
+            }
+        }
+
+        if (entityType === 'INVENTORY') {
+            return {
+                columns: [
+                    { name: 'Item Code', required: true, description: 'Unique item code', example: 'STA-001' },
+                    { name: 'Item Name', required: true, description: 'Item name', example: 'Chalks White (Box)' },
+                    { name: 'Category ID', required: true, description: 'Inventory category ID', example: '1' },
+                    { name: 'Unit of Measure', required: true, description: 'UoM', example: 'Box' },
+                    { name: 'Current Stock', required: false, description: 'Opening stock quantity', example: '100' },
+                    { name: 'Reorder Level', required: false, description: 'Reorder threshold', example: '20' },
+                    { name: 'Unit Cost', required: false, description: 'Cost per unit in cents', example: '25000' }
+                ],
+                sampleData: [{
+                    'Item Code': 'STA-001', 'Item Name': 'Chalks White (Box)', 'Category ID': '1',
+                    'Unit of Measure': 'Box', 'Current Stock': '100', 'Reorder Level': '20', 'Unit Cost': '25000'
+                }]
             }
         }
 
