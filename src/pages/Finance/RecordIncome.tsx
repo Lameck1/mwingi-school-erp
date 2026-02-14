@@ -2,12 +2,12 @@ import { Plus, Check, Loader2, ArrowRightCircle, Wallet, Tag, CreditCard, FileTe
 import React, { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 
+import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore } from '../../stores'
 import { type TransactionCategory } from '../../types/electron-api/FinanceAPI'
 import { shillingsToCents } from '../../utils/format'
 
-import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 
 export default function RecordIncome() {
     const { user } = useAuthStore()

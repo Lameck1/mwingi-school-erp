@@ -470,7 +470,7 @@ export function up(db: Database): void {
 }
 
 function migrateCBCGradingScale(db: Database): void {
-  if (!tableExists(db, 'grading_scale')) return
+  if (!tableExists(db, 'grading_scale')) {return}
 
   // Remove old 4-level CBC/ECDE grades
   db.exec(`DELETE FROM grading_scale WHERE curriculum IN ('CBC', 'ECDE') AND grade IN (

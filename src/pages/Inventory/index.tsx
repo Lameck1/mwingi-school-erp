@@ -2,7 +2,6 @@ import { Plus, Package, AlertTriangle, Search, ArrowUpRight, ArrowDownLeft, X, L
 import React, { useEffect, useState } from 'react'
 
 import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
-
 import { useAuthStore } from '../../stores'
 import { type InventoryItem, type InventoryCategory, type Supplier } from '../../types/electron-api/InventoryAPI'
 import { formatCurrencyFromCents, shillingsToCents, centsToShillings } from '../../utils/format'

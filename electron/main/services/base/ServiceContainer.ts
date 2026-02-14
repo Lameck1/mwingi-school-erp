@@ -39,8 +39,8 @@ import { GrantTrackingService } from '../operations/GrantTrackingService'
 import { StudentCostService } from '../operations/StudentCostService'
 import { TransportCostService } from '../operations/TransportCostService'
 import { NEMISExportService } from '../reports/NEMISExportService'
-import { ApprovalService } from '../workflow/ApprovalService'
 import { SystemMaintenanceService } from '../SystemMaintenanceService'
+import { ApprovalService } from '../workflow/ApprovalService'
 
 export interface ServiceMap {
     AcademicSystemService: AcademicSystemService

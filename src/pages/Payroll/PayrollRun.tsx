@@ -2,7 +2,6 @@ import { Calculator, Play, AlertCircle, ChevronLeft, Eye, Printer, MessageSquare
 import { useState, useEffect, useMemo, useCallback } from 'react'
 
 import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
-
 import { useAuthStore, useAppStore } from '../../stores'
 import { type PayrollPeriod, type PayrollEntry } from '../../types/electron-api/PayrollAPI'
 import { formatCurrencyFromCents } from '../../utils/format'
@@ -34,11 +33,7 @@ export default function PayrollRun() {
         }
     }, [payrollData])
 
-    useEffect(() => {
-        void loadHistory()
-    }, [])
-
-    const loadHistory = async () => {
+    const loadHistory = useCallback(async () => {
         setLoadingHistory(true)
         try {
             const api = globalThis.electronAPI
@@ -49,7 +44,11 @@ export default function PayrollRun() {
         } finally {
             setLoadingHistory(false)
         }
-    }
+    }, [])
+
+    useEffect(() => {
+        void loadHistory()
+    }, [loadHistory])
 
     const loadPeriodDetails = async (periodId: number) => {
         setRunning(true)
@@ -99,12 +98,12 @@ export default function PayrollRun() {
         }
     }
 
-    const handleBack = () => {
+    const handleBack = useCallback(() => {
         setSelectedPeriod(null)
         setPayrollData([])
         setError('')
         void loadHistory()
-    }
+    }, [loadHistory])
 
     const handleConfirm = useCallback(async () => {
         if (!selectedPeriod?.id || !user) { return }
@@ -120,7 +119,7 @@ export default function PayrollRun() {
             }
         } catch { setError('Failed to confirm payroll') }
         finally { setActionLoading('') }
-    }, [selectedPeriod?.id, user])
+    }, [loadHistory, selectedPeriod?.id, user])
 
     const handleMarkPaid = useCallback(async () => {
         if (!selectedPeriod?.id || !user) { return }
@@ -136,7 +135,7 @@ export default function PayrollRun() {
             }
         } catch { setError('Failed to mark payroll as paid') }
         finally { setActionLoading('') }
-    }, [selectedPeriod?.id, selectedPeriod?.period_name, user, payrollData.length])
+    }, [loadHistory, selectedPeriod?.id, selectedPeriod?.period_name, user, payrollData.length])
 
     const handleRevertToDraft = useCallback(async () => {
         if (!selectedPeriod?.id || !user) { return }
@@ -152,7 +151,7 @@ export default function PayrollRun() {
             }
         } catch { setError('Failed to revert payroll') }
         finally { setActionLoading('') }
-    }, [selectedPeriod?.id, user])
+    }, [loadHistory, selectedPeriod?.id, user])
 
     const handleDelete = useCallback(async () => {
         if (!selectedPeriod?.id || !user) { return }
@@ -167,7 +166,7 @@ export default function PayrollRun() {
             }
         } catch { setError('Failed to delete payroll') }
         finally { setActionLoading('') }
-    }, [selectedPeriod?.id, selectedPeriod?.period_name, user])
+    }, [handleBack, selectedPeriod?.id, selectedPeriod?.period_name, user])
 
     const handleRecalculate = useCallback(async () => {
         if (!selectedPeriod?.id || !user) { return }

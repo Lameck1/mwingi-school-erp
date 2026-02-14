@@ -1,6 +1,7 @@
 import { Save, Plus, Loader2 } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 
+import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore } from '../../stores'
 import { type AcademicYear, type Term, type Stream } from '../../types/electron-api/AcademicAPI'
@@ -8,7 +9,6 @@ import { type FeeCategory, type FeeStructureCreateData } from '../../types/elect
 import { STUDENT_TYPES_LIST } from '../../utils/constants'
 import { centsToShillings, formatCurrencyFromCents, shillingsToCents } from '../../utils/format'
 
-import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 
 interface FeeStructureItem {
     stream_id?: number

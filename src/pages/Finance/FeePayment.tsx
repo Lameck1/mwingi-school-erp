@@ -5,10 +5,10 @@ import { useAppStore } from '../../stores'
 import { LedgerHistory } from './components/LedgerHistory'
 import { PaymentEntryForm } from './components/PaymentEntryForm'
 import { StudentLedgerSearch } from './components/StudentLedgerSearch'
+import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 import { type Payment } from '../../types/electron-api/FinanceAPI'
 import { type Student } from '../../types/electron-api/StudentAPI'
 
-import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 
 export default function FeePayment() {
     const [searchParams] = useSearchParams()

@@ -1,11 +1,11 @@
 import { format } from 'date-fns';
 import { useState, useEffect } from 'react';
 
+import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
 import { formatCurrencyFromCents } from '../../../utils/format';
 
 import type { ProfitAndLossReport } from '../../../types/electron-api';
 
-import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
 
 const formatPercentage = (percentage: number): string => `${percentage.toFixed(1)}%`;
 

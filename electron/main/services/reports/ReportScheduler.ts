@@ -1,7 +1,7 @@
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
-import { NotificationService } from '../notifications/NotificationService'
 import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
+import { NotificationService } from '../notifications/NotificationService'
 
 
 export interface ScheduledReport {

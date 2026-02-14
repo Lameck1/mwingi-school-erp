@@ -8,11 +8,11 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
+import { useScrollableTabNav } from '../../hooks/useScrollableTabNav'
 import { useAuthStore } from '../../stores'
 import { exportToPDF, downloadCSV } from '../../utils/exporters'
 import { formatCurrencyFromCents } from '../../utils/format'
 import { printCurrentView } from '../../utils/print'
-import { useScrollableTabNav } from '../../hooks/useScrollableTabNav'
 
 const ScheduledReports = lazy(() => import('./ScheduledReports'))
 

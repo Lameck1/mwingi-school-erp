@@ -206,11 +206,11 @@ export class BackupService {
 
     private static loadSqliteDriver() {
         try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
+             
             const cipherModule = require('better-sqlite3-multiple-ciphers')
             return cipherModule.default || cipherModule
         } catch {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
+             
             return require('better-sqlite3')
         }
     }

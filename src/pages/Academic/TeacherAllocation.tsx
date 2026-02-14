@@ -126,7 +126,7 @@ export default function TeacherAllocation() {
     }
 
     const handleDeleteAllocation = async (allocationId: number) => {
-        if (!user) return
+        if (!user) {return}
         try {
             await globalThis.electronAPI.deleteTeacherAllocation(allocationId, user.id)
             await loadAllocations()

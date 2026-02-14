@@ -146,7 +146,7 @@ describe('Balance Sheet Integration', () => {
     async function createEntry(data: Parameters<typeof journalService.createJournalEntry>[0]) {
         const result = await journalService.createJournalEntry(data)
         expect(result.success, `createJournalEntry failed: ${result.message}`).toBe(true)
-        await new Promise((r) => setTimeout(r, 2))
+        await new Promise((resolve) => setTimeout(resolve, 2))
         return result
     }
 

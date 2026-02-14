@@ -422,13 +422,13 @@ export class CBCReportCardService {
    * Private helper methods — CBC/CBE grading scale
    */
   private getGrade(score: number): string {
-    if (score >= 90) return 'EE1'
-    if (score >= 75) return 'EE2'
-    if (score >= 58) return 'ME1'
-    if (score >= 41) return 'ME2'
-    if (score >= 31) return 'AE1'
-    if (score >= 21) return 'AE2'
-    if (score >= 11) return 'BE1'
+    if (score >= 90) {return 'EE1'}
+    if (score >= 75) {return 'EE2'}
+    if (score >= 58) {return 'ME1'}
+    if (score >= 41) {return 'ME2'}
+    if (score >= 31) {return 'AE1'}
+    if (score >= 21) {return 'AE2'}
+    if (score >= 11) {return 'BE1'}
     return 'BE2'
   }
 
@@ -443,9 +443,9 @@ export class CBCReportCardService {
   }
 
   private getPerformanceLevel(grade: string): string {
-    if (grade.startsWith('EE')) return 'Exceeding Expectation'
-    if (grade.startsWith('ME')) return 'Meeting Expectation'
-    if (grade.startsWith('AE')) return 'Approaching Expectation'
+    if (grade.startsWith('EE')) {return 'Exceeding Expectation'}
+    if (grade.startsWith('ME')) {return 'Meeting Expectation'}
+    if (grade.startsWith('AE')) {return 'Approaching Expectation'}
     return 'Below Expectation'
   }
 

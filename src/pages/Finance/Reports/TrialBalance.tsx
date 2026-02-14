@@ -1,11 +1,11 @@
 import { format } from 'date-fns';
 import { useState, useEffect } from 'react';
 
+import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
 import { formatCurrencyFromCents } from '../../../utils/format';
 
 import type { TrialBalanceReport } from '../../../types/electron-api';
 
-import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
 
 export default function TrialBalancePage() {
   const [startDate, setStartDate] = useState<string>(

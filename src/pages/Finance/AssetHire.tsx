@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react'
 
+import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 import { useAuthStore } from '../../stores'
 import { type HireBooking, type HireAsset, type HireClient, type HireStats } from '../../types/electron-api/HireAPI'
 import { formatCurrencyFromCents, shillingsToCents, centsToShillings } from '../../utils/format'
 import { printDocument } from '../../utils/print'
 
-import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 
 type TabType = 'bookings' | 'clients' | 'assets'
 

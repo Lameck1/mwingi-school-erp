@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
+import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
 import { formatCurrencyFromCents } from '../../../utils/format';
 
-import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
 
 interface CBCStrand {
   id: number;

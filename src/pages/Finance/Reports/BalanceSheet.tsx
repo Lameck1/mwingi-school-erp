@@ -1,11 +1,11 @@
 import { format } from 'date-fns';
 import { useState, useEffect } from 'react';
 
+import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
 import { formatCurrencyFromCents } from '../../../utils/format';
 
 import type { BalanceSheetReport } from '../../../types/electron-api';
 
-import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
 
 export default function BalanceSheetPage() {
   const [asOfDate, setAsOfDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));

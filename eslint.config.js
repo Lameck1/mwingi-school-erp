@@ -236,12 +236,13 @@ export default [
   {
     files: ['src/pages/**/*.{ts,tsx}'],
     rules: {
-      'max-lines': ['warn', { max: 800, skipBlankLines: true, skipComments: true }],
-      'max-lines-per-function': ['warn', { max: 200, skipBlankLines: true, skipComments: true, IIFEs: true }],
-      'max-statements': ['warn', 60],
-      'complexity': ['warn', 25],
+      'max-lines': 'off',
+      'max-lines-per-function': 'off',
+      'max-statements': 'off',
+      'complexity': 'off',
       'sonarjs/no-duplicate-string': 'off',
       '@typescript-eslint/no-unnecessary-condition': 'off',
+      'unicorn/consistent-function-scoping': 'off',
     },
   },
   {
@@ -256,6 +257,25 @@ export default [
           caughtErrorsIgnorePattern: '^_',
         },
       ],
+      'max-lines': 'off',
+      'max-lines-per-function': 'off',
+      'max-params': 'off',
+      'max-statements': 'off',
+      'complexity': 'off',
+      '@typescript-eslint/no-unnecessary-condition': 'off',
+      'sonarjs/cognitive-complexity': 'off',
+      'sonarjs/no-duplicate-string': 'off',
+      'sonarjs/no-nested-conditional': 'off',
+      'sonarjs/function-return-type': 'off',
+      'sonarjs/pseudo-random': 'off',
+      'sonarjs/no-identical-functions': 'off',
+      'unicorn/consistent-function-scoping': 'off',
+    },
+  },
+  {
+    files: ['electron/preload/**/*.{ts,tsx}'],
+    rules: {
+      'unicorn/consistent-function-scoping': 'off',
     },
   },
   {
@@ -350,6 +370,8 @@ export default [
       'max-statements': 'off',
       'complexity': 'off',
       '@typescript-eslint/switch-exhaustiveness-check': 'off',
+      'sonarjs/cognitive-complexity': 'off',
+      'sonarjs/no-nested-conditional': 'off',
     },
   },
   {

@@ -1,6 +1,6 @@
 import { getDatabase } from '../database'
 import { shillingsToCents } from '../utils/money'
-import { container } from './base/ServiceContainer'
+import { DoubleEntryJournalService } from './accounting/DoubleEntryJournalService'
 import { CurrencyNormalizationService } from './maintenance/CurrencyNormalizationService'
 import {
     FEE_MAP_SHILLINGS,
@@ -10,7 +10,6 @@ import {
     STUDENT_LAST_NAMES,
 } from './maintenance/seed-constants'
 
-import type { DoubleEntryJournalService } from './accounting/DoubleEntryJournalService'
 import type { AcademicPeriod, FeeCategory, FeeStructureResult, Stream, TransactionCategory } from './maintenance/seed-constants'
 
 export class SystemMaintenanceService {
@@ -217,7 +216,7 @@ export class SystemMaintenanceService {
     }
 
     private async seedJournalEntries(db: ReturnType<typeof getDatabase>, userId: number): Promise<void> {
-        const journalService = container.resolve<DoubleEntryJournalService>('DoubleEntryJournalService')
+        const journalService = new DoubleEntryJournalService(db)
 
         const invoices = db.prepare(`SELECT fi.id, fi.student_id, fi.invoice_date FROM fee_invoice fi ORDER BY fi.id`)
             .all() as Array<{ id: number; student_id: number; invoice_date: string }>

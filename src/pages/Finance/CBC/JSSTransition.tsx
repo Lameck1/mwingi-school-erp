@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
+import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
 import { useAuthStore } from '../../../stores';
 import { formatCurrencyFromCents } from '../../../utils/format';
 
 import type { EligibleStudent, JSSFeeStructure, TransitionResult } from '../../../types/electron-api/JSSAPI';
 
-import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
 
 const JSSTransition: React.FC = () => {
   const { user } = useAuthStore();

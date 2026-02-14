@@ -15,7 +15,7 @@ export function up(db: Database.Database): void {
 }
 ```
 
-3. Register it in `../index.ts`:
+1. Register it in `../index.ts`:
 
 ```typescript
 import { up as addReceiptUp } from './incremental/1001_short_description.js'

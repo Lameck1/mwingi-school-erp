@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 
+import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore } from '../../stores'
 import { type AcademicYear, type Term } from '../../types/electron-api/AcademicAPI'
@@ -7,7 +8,6 @@ import { type FeeExemption, type ExemptionStats } from '../../types/electron-api
 import { type FeeCategory } from '../../types/electron-api/FinanceAPI'
 import { type Student } from '../../types/electron-api/StudentAPI'
 
-import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 
 const getReasonBadgeColor = (reason: string): string => {
     const lowerReason = reason.toLowerCase()

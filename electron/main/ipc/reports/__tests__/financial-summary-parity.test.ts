@@ -47,8 +47,8 @@ vi.mock('../../../services/base/ServiceContainer', () => ({
   }
 }))
 
-import { registerReportsHandlers } from '../reports-handlers'
 import { registerTransactionsHandlers } from '../../transactions/transactions-handlers'
+import { registerReportsHandlers } from '../reports-handlers'
 
 describe('financial summary parity', () => {
   beforeEach(() => {

@@ -1,11 +1,11 @@
 import { ClipboardList, Filter, Download, Calendar, Tag } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 
+import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 import { useToast } from '../../contexts/ToastContext'
 import { type Transaction, type TransactionCategory } from '../../types/electron-api/FinanceAPI'
 import { formatCurrencyFromCents, formatDate } from '../../utils/format'
 
-import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 
 export default function Transactions() {
     const { showToast } = useToast()

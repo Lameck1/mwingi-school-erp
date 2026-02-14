@@ -1,7 +1,8 @@
 
+import { randomUUID } from 'node:crypto';
+
 import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
-import { randomUUID } from 'node:crypto';
 
 import type Database from 'better-sqlite3';
 

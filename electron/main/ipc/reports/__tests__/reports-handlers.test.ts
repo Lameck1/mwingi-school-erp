@@ -102,7 +102,7 @@ describe('reports IPC handlers', () => {
     const handler = handlerMap.get('report:defaulters')
     expect(handler).toBeDefined()
 
-    const result = await handler!({}, undefined) as Array<{ invoice_number: string }>
+    const result = await handler!({}) as Array<{ invoice_number: string }>
     expect(result).toHaveLength(1)
     expect(result[0].invoice_number).toBe('INV-OPEN')
   })

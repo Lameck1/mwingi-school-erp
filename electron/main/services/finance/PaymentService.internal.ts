@@ -3,8 +3,8 @@ import { randomUUID } from 'node:crypto'
 
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
-import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
 import { OUTSTANDING_INVOICE_STATUSES, asSqlInList } from '../../utils/financeTransactionTypes'
+import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
 
 import type {
   ApprovalQueueItem,

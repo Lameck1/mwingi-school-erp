@@ -1,12 +1,12 @@
 import { Plus, Check, Loader2, Receipt, Tag, CreditCard, FileText, Calendar } from 'lucide-react'
 import React, { useCallback, useEffect, useState } from 'react'
 
+import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore } from '../../stores'
 import { type TransactionCategory } from '../../types/electron-api/FinanceAPI'
 import { shillingsToCents } from '../../utils/format'
 
-import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 
 export default function RecordExpense() {
     const { user } = useAuthStore()
