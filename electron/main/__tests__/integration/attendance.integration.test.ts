@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { runMigrations } from '../../database/migrations'
-import { AttendanceService } from '../../services/academic/AttendanceService'
 
 // Mock audit
 vi.mock('../../database/utils/audit', () => ({
@@ -15,8 +15,6 @@ vi.mock('../../database', () => ({
 }))
 
 describe('Attendance Integration', () => {
-    let attendanceService: AttendanceService
-
     beforeEach(() => {
         testDb = new Database(':memory:')
         // Use full migrations for this test to ensure unique indices are present
@@ -28,7 +26,6 @@ describe('Attendance Integration', () => {
         testDb.prepare("INSERT OR IGNORE INTO academic_year (id, year_name, start_date, end_date) VALUES (2025, '2025', '2025-01-01', '2025-12-31')").run()
         testDb.prepare("INSERT OR IGNORE INTO term (id, academic_year_id, term_number, term_name, start_date, end_date) VALUES (1, 2025, 1, 'Term 1', '2025-01-01', '2025-04-01')").run()
 
-        attendanceService = new AttendanceService()
     })
 
     afterEach(() => {

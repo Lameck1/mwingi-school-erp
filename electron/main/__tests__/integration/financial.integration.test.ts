@@ -13,12 +13,11 @@
 import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { CreditAutoApplicationService } from '../../services/finance/CreditAutoApplicationService'
-import { PaymentIntegrationService } from '../../services/finance/PaymentIntegrationService'
 import { DoubleEntryJournalService } from '../../services/accounting/DoubleEntryJournalService'
-import { FeeProrationService } from '../../services/finance/FeeProrationService'
 import { SystemAccounts } from '../../services/accounting/SystemAccounts'
-import { PaymentService } from '../../services/finance/PaymentService'
+import { CreditAutoApplicationService } from '../../services/finance/CreditAutoApplicationService'
+import { FeeProrationService } from '../../services/finance/FeeProrationService'
+import { PaymentIntegrationService } from '../../services/finance/PaymentIntegrationService'
 import { VoidProcessor } from '../../services/finance/PaymentService.internal'
 
 // Mock audit — no DB writes needed for audit table during these tests
@@ -589,7 +588,9 @@ describe('Financial Integration', () => {
       }]
 
       const result = journalService.recordInvoiceSync(studentId, invoiceItems, '2025-01-01', userId)
-      if (!result.success) console.error('Invoice Error:', result.error)
+      if (!result.success) {
+        console.error('Invoice Error:', result.error)
+      }
       expect(result.success).toBe(true)
 
       // Verify Journal Entry created
@@ -644,7 +645,9 @@ describe('Financial Integration', () => {
 
       // 2. Void it (MUST AWAIT)
       const voidResult = await journalService.voidJournalEntry(originalId!, 'Mistake', 1)
-      if (!voidResult.success) console.error('Void Error:', voidResult.message)
+      if (!voidResult.success) {
+        console.error('Void Error:', voidResult.message)
+      }
       expect(voidResult.success).toBe(true)
 
       // 3. Verify Original is Voided
