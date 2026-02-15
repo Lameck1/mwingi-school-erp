@@ -370,9 +370,6 @@ export class PaymentProcessor {
     if (appliedAmount <= 0) {
       return
     }
-    if (appliedAmount <= 0) {
-      return
-    }
     // Hard check: Table MUST exist. If not, this will throw, which is correct (Data Safeguard).
     this.db.prepare(`
       INSERT INTO payment_invoice_allocation (transaction_id, invoice_id, applied_amount)
@@ -462,6 +459,15 @@ export class PaymentProcessor {
         SET credit_balance = COALESCE(credit_balance, 0) + ?
         WHERE id = ?
       `).run(remainingAmount, data.student_id)
+
+      this.db.prepare(`
+        INSERT INTO credit_transaction (student_id, amount, transaction_type, notes, created_at)
+        VALUES (?, ?, 'CREDIT_RECEIVED', ?, CURRENT_TIMESTAMP)
+      `).run(
+        data.student_id,
+        remainingAmount,
+        `Overpayment from transaction #${transactionId}`
+      )
     }
   }
 
@@ -591,7 +597,7 @@ export class VoidProcessor implements IPaymentVoidProcessor {
     return Math.max(0, transaction.amount - totalApplied)
   }
 
-  private reverseStudentCredit(studentId: number, creditAmount: number): void {
+  private reverseStudentCredit(studentId: number, creditAmount: number, transactionId: number): void {
     if (creditAmount <= 0) {
       return
     }
@@ -604,6 +610,15 @@ export class VoidProcessor implements IPaymentVoidProcessor {
     }
 
     this.db.prepare(`UPDATE student SET credit_balance = credit_balance - ? WHERE id = ?`).run(decrement, studentId)
+
+    this.db.prepare(`
+      INSERT INTO credit_transaction (student_id, amount, transaction_type, notes, created_at)
+      VALUES (?, ?, 'CREDIT_REFUNDED', ?, CURRENT_TIMESTAMP)
+    `).run(
+      studentId,
+      decrement,
+      `Void reversal of transaction #${transactionId}`
+    )
   }
 
   private voidLinkedJournalEntries(transactionId: number, data: VoidPaymentData): void {
@@ -670,7 +685,7 @@ export class VoidProcessor implements IPaymentVoidProcessor {
         this.markTransactionVoided(data)
         this.recordVoidAudit(transaction, data)
         const creditedAmount = this.reversePaymentAllocations(transaction)
-        this.reverseStudentCredit(transaction.student_id, creditedAmount)
+        this.reverseStudentCredit(transaction.student_id, creditedAmount, transaction.id)
         this.voidLinkedJournalEntries(transaction.id, data)
 
         logAudit(data.voided_by, 'VOID', 'ledger_transaction', reversalId, null,
@@ -699,11 +714,11 @@ export class VoidProcessor implements IPaymentVoidProcessor {
         is_voided, voided_reason
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      reversalRef, transaction.student_id, 'REFUND', -transaction.amount, 'DEBIT',
+      reversalRef, transaction.student_id, 'VOID_REVERSAL', transaction.amount, 'DEBIT',
       new Date().toISOString().split('T')[0],
       `Void of transaction #${data.transaction_id}: ${data.void_reason}`,
       'CASH', `VOID_REF_${transaction.student_id}_${Date.now()}`,
-      data.voided_by, categoryId, 1, data.void_reason
+      data.voided_by, categoryId, 0, data.void_reason
     )
     return result.lastInsertRowid as number
   }
@@ -719,16 +734,31 @@ export class VoidProcessor implements IPaymentVoidProcessor {
   }
 
   private recordVoidAudit(transaction: PaymentTransaction, data: VoidPaymentData): void {
-    this.db.prepare(`
-      INSERT INTO void_audit (
-        transaction_id, transaction_type, original_amount, student_id, description,
-        void_reason, voided_by, voided_at, recovered_method, recovered_by, recovered_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      data.transaction_id, 'PAYMENT', transaction.amount, transaction.student_id,
-      transaction.description, data.void_reason, data.voided_by,
-      new Date().toISOString(), data.recovery_method || null, null, null
-    )
+    const hasApprovalCol = (this.db.prepare(`PRAGMA table_info(void_audit)`).all() as Array<{ name: string }>).some(c => c.name === 'approval_request_id')
+    if (hasApprovalCol) {
+      this.db.prepare(`
+        INSERT INTO void_audit (
+          transaction_id, transaction_type, original_amount, student_id, description,
+          void_reason, voided_by, voided_at, recovered_method, recovered_by, recovered_at, approval_request_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        data.transaction_id, 'PAYMENT', transaction.amount, transaction.student_id,
+        transaction.description, data.void_reason, data.voided_by,
+        new Date().toISOString(), data.recovery_method || null, null, null,
+        (data as unknown as { approval_request_id?: number }).approval_request_id || null
+      )
+    } else {
+      this.db.prepare(`
+        INSERT INTO void_audit (
+          transaction_id, transaction_type, original_amount, student_id, description,
+          void_reason, voided_by, voided_at, recovered_method, recovered_by, recovered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        data.transaction_id, 'PAYMENT', transaction.amount, transaction.student_id,
+        transaction.description, data.void_reason, data.voided_by,
+        new Date().toISOString(), data.recovery_method || null, null, null
+      )
+    }
   }
 
   private reverseInvoiceApplication(transaction: PaymentTransaction): void {
@@ -779,17 +809,20 @@ export class PaymentQueryService implements IPaymentQueryService {
     return this.voidAuditRepo.getVoidReport(startDate, endDate)
   }
 
-  async getPaymentApprovalQueue(role: string): Promise<ApprovalQueueItem[]> {
+  async getPaymentApprovalQueue(_role: string): Promise<ApprovalQueueItem[]> {
     const db = this.db
     return db.prepare(`
-      SELECT ar.*, s.first_name as student_first_name, s.last_name as student_last_name
+      SELECT ar.*, 
+        lt.student_id,
+        s.first_name as student_first_name, 
+        s.last_name as student_last_name
       FROM approval_request ar
-      LEFT JOIN student s ON ar.reference_id LIKE ('PAYMENT_%_' || s.id)
-      WHERE ar.transaction_type = 'PAYMENT'
-        AND ar.status IN ('PENDING', 'APPROVED_LEVEL_1')
-        AND ar.current_approver_role = ?
-      ORDER BY ar.requested_at ASC
-    `).all(role) as ApprovalQueueItem[]
+      LEFT JOIN ledger_transaction lt ON ar.entity_id = lt.id AND ar.entity_type = 'PAYMENT'
+      LEFT JOIN student s ON lt.student_id = s.id
+      WHERE ar.entity_type = 'PAYMENT'
+        AND ar.status = 'PENDING'
+      ORDER BY ar.created_at ASC
+    `).all() as ApprovalQueueItem[]
   }
 }
 

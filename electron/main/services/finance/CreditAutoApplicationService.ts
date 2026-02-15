@@ -1,6 +1,6 @@
-
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
+import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
 
 import type Database from 'better-sqlite3'
 
@@ -294,6 +294,31 @@ class CreditAllocator implements ICreditAllocator {
       transaction()
 
       const totalApplied = creditBalance - remainingCredit
+
+      // GL journal entry: Debit Accounts Receivable, Credit Student Credit
+      if (totalApplied > 0) {
+        const journalService = new DoubleEntryJournalService(db)
+        journalService.createJournalEntrySync({
+          entry_date: new Date().toISOString().split('T')[0],
+          entry_type: 'CREDIT_APPLICATION',
+          description: `Credit auto-applied for student #${studentId}: ${totalApplied.toFixed(2)} KES to ${allocations.length} invoice(s)`,
+          created_by_user_id: userId,
+          lines: [
+            {
+              gl_account_code: '1300',
+              debit_amount: totalApplied,
+              credit_amount: 0,
+              description: 'Accounts receivable - credit applied'
+            },
+            {
+              gl_account_code: '2100',
+              debit_amount: 0,
+              credit_amount: totalApplied,
+              description: 'Student credit balance applied'
+            }
+          ]
+        })
+      }
 
       // Overall audit log
       logAudit(

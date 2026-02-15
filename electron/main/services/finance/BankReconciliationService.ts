@@ -467,6 +467,16 @@ export class BankReconciliationService {
         WHERE id = ? AND status != 'RECONCILED'
       `).run(userId, statementId)
 
+            // Update bank account current_balance to match closing balance
+            const bankAccountRow = this.db.prepare(`
+        SELECT bank_account_id FROM bank_statement WHERE id = ?
+      `).get(statementId) as { bank_account_id: number } | undefined
+            if (bankAccountRow) {
+                this.db.prepare(`
+          UPDATE bank_account SET current_balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+        `).run(statement.closing_balance, bankAccountRow.bank_account_id)
+            }
+
             return { success: true }
         } catch {
             return { success: false, error: 'Failed to reconcile statement' }

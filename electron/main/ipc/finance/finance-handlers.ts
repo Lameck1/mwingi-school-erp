@@ -6,7 +6,7 @@ import { logAudit } from '../../database/utils/audit'
 import { container } from '../../services/base/ServiceContainer'
 import { CashFlowService } from '../../services/finance/CashFlowService'
 import { validateAmount, validateDate, validateId, sanitizeString, validatePastOrTodayDate } from '../../utils/validation'
-import { safeHandleRaw } from '../ipc-result'
+import { safeHandleRaw, safeHandleRawWithRole, ROLES } from '../ipc-result'
 
 import type { PaymentData, PaymentResult, TransactionData, InvoiceData, InvoiceItem, FeeStructureItemData, FeeInvoiceDB, FeeInvoiceWithDetails, FeeStructureWithDetails } from './types'
 import type { ScholarshipData, AllocationData } from '../../services/finance/ScholarshipService'
@@ -319,36 +319,20 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
 
             db.prepare('UPDATE student SET credit_balance = credit_balance - ? WHERE id = ?').run(amountCents, data.studentId)
 
-            const hasAllocationTable = Boolean(db.prepare(`
-                SELECT name
-                FROM sqlite_master
-                WHERE type = 'table' AND name = 'payment_invoice_allocation'
-            `).get() as { name: string } | undefined)
+            db.prepare(`
+                INSERT INTO payment_invoice_allocation (transaction_id, invoice_id, applied_amount)
+                VALUES (?, ?, ?)
+            `).run(transactionId, data.invoiceId, amountCents)
 
-            if (hasAllocationTable) {
-                db.prepare(`
-                    INSERT INTO payment_invoice_allocation (transaction_id, invoice_id, applied_amount)
-                    VALUES (?, ?, ?)
-                `).run(transactionId, data.invoiceId, amountCents)
-            }
-
-            const hasCreditTable = Boolean(db.prepare(`
-                SELECT name
-                FROM sqlite_master
-                WHERE type = 'table' AND name = 'credit_transaction'
-            `).get() as { name: string } | undefined)
-
-            if (hasCreditTable) {
-                db.prepare(`
-                    INSERT INTO credit_transaction (student_id, amount, transaction_type, reference_invoice_id, notes)
-                    VALUES (?, ?, 'CREDIT_APPLIED', ?, ?)
-                `).run(
-                    data.studentId,
-                    amountCents,
-                    data.invoiceId,
-                    `Applied credit balance via payment ${transactionRef}`
-                )
-            }
+            db.prepare(`
+                INSERT INTO credit_transaction (student_id, amount, transaction_type, reference_invoice_id, notes)
+                VALUES (?, ?, 'CREDIT_APPLIED', ?, ?)
+            `).run(
+                data.studentId,
+                amountCents,
+                data.invoiceId,
+                `Applied credit balance via payment ${transactionRef}`
+            )
 
             const journalService = container.resolve('DoubleEntryJournalService')
             const journalResult = journalService.recordPaymentSync(
@@ -378,7 +362,7 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
 const registerPaymentVoidHandler = (context: FinanceContext): void => {
     const { paymentService } = context
 
-    safeHandleRaw('payment:void', async (
+    safeHandleRawWithRole('payment:void', ROLES.FINANCE, async (
         _event,
         transactionId: number,
         voidReason: string,
@@ -643,6 +627,15 @@ const registerFeeStructureHandlers = (context: FinanceContext): void => {
     })
 
     safeHandleRaw('fee:saveStructure', (_event, data: FeeStructureItemData[], academicYearId: number, termId: number, userId?: number) => {
+        if (!Array.isArray(data) || data.length === 0) {
+            return { success: false, error: 'At least one fee structure item is required' }
+        }
+        for (const item of data) {
+            if (!item.stream_id || !item.fee_category_id || !Number.isFinite(item.amount) || item.amount <= 0) {
+                return { success: false, error: 'All fee structure items must have a stream, category, and positive amount' }
+            }
+        }
+
         const deleteStatement = db.prepare('DELETE FROM fee_structure WHERE academic_year_id = ? AND term_id = ?')
         const insertStatement = db.prepare(`
             INSERT INTO fee_structure (academic_year_id, term_id, stream_id, student_type, fee_category_id, amount)
@@ -830,6 +823,19 @@ const registerScholarshipHandlers = (): void => {
     })
 }
 
+const registerReceiptHandlers = (db: ReturnType<typeof getDatabase>): void => {
+    safeHandleRaw('receipt:getByTransaction', (_event, transactionId: number) => {
+        return db.prepare('SELECT * FROM receipt WHERE transaction_id = ?').get(transactionId) || null
+    })
+
+    safeHandleRaw('receipt:markPrinted', (_event, receiptId: number) => {
+        const receipt = db.prepare('SELECT id FROM receipt WHERE id = ?').get(receiptId)
+        if (!receipt) { return { success: false, error: 'Receipt not found' } }
+        db.prepare('UPDATE receipt SET printed_count = COALESCE(printed_count, 0) + 1, last_printed_at = CURRENT_TIMESTAMP WHERE id = ?').run(receiptId)
+        return { success: true }
+    })
+}
+
 export function registerFinanceHandlers(): void {
     const db = getDatabase()
     const context: FinanceContext = {
@@ -846,4 +852,5 @@ export function registerFinanceHandlers(): void {
     registerCreditHandlers()
     registerProrationHandlers()
     registerScholarshipHandlers()
+    registerReceiptHandlers(db)
 }

@@ -1,4 +1,5 @@
 import { getDatabase } from '../../database'
+import { logAudit } from '../../database/utils/audit'
 import { container } from '../../services/base/ServiceContainer'
 import { toDbGender, fromDbGender, toDbActiveFlag } from '../../utils/transforms'
 import { sanitizeString, validateId } from '../../utils/validation'
@@ -217,7 +218,7 @@ function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
     let query = `SELECT s.*, st.stream_name, e.student_type as current_type,
         (SELECT COALESCE(SUM(total_amount - amount_paid), 0)
          FROM fee_invoice
-         WHERE student_id = s.id AND status != 'CANCELLED'
+         WHERE student_id = s.id AND status NOT IN ('CANCELLED', 'VOIDED') AND COALESCE(is_voided, 0) = 0
         ) - COALESCE(s.credit_balance, 0) as balance
       FROM student s
       LEFT JOIN enrollment e ON s.id = e.student_id AND e.id = (
@@ -273,7 +274,7 @@ function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
     const invoices = db.prepare(`
       SELECT COALESCE(SUM(total_amount - amount_paid), 0) as invoice_balance
       FROM fee_invoice
-      WHERE student_id = ? AND status != 'CANCELLED'
+      WHERE student_id = ? AND status NOT IN ('CANCELLED', 'VOIDED') AND COALESCE(is_voided, 0) = 0
     `).get(studentId) as { invoice_balance: number } | undefined
 
     const student = db.prepare('SELECT credit_balance FROM student WHERE id = ?').get(studentId) as { credit_balance: number } | undefined
@@ -288,6 +289,17 @@ function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
 function registerStudentWriteHandlers(db: ReturnType<typeof getDatabase>): void {
   registerCreateStudentHandler(db)
   registerUpdateStudentHandler(db)
+
+  safeHandleRaw('student:deactivate', (_event, id: number, userId: number) => {
+    const idVal = validateId(id, 'Student')
+    if (!idVal.success) { return { success: false, error: idVal.error } }
+    const student = db.prepare('SELECT id, is_active FROM student WHERE id = ?').get(idVal.data!) as { id: number; is_active: number } | undefined
+    if (!student) { return { success: false, error: 'Student not found' } }
+    if (student.is_active === 0) { return { success: false, error: 'Student is already deactivated' } }
+    db.prepare('UPDATE student SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(idVal.data!)
+    logAudit(userId || 0, 'DEACTIVATE', 'student', idVal.data!, { is_active: 1 }, { is_active: 0 })
+    return { success: true }
+  })
 }
 
 function registerCreateStudentHandler(db: ReturnType<typeof getDatabase>): void {
@@ -346,7 +358,10 @@ function registerCreateStudentHandler(db: ReturnType<typeof getDatabase>): void 
             useCurrentDate: false,
           })
 
-          autoInvoice = generateAutoInvoice(db, newStudentId, enrollmentContext, userId || 1)
+          if (!userId || userId <= 0) {
+            throw new Error('Valid user ID is required for invoice generation')
+          }
+          autoInvoice = generateAutoInvoice(db, newStudentId, enrollmentContext, userId)
         }
 
         return {
@@ -357,6 +372,7 @@ function registerCreateStudentHandler(db: ReturnType<typeof getDatabase>): void 
       })
 
       const created = createStudentTx()
+      logAudit(userId || 0, 'CREATE', 'student', created.id, null, { admission_number: admissionNumber, first_name: firstName, last_name: lastName })
       return { success: true, ...created }
     } catch (error) {
       return {
@@ -429,6 +445,7 @@ function registerUpdateStudentHandler(db: ReturnType<typeof getDatabase>): void 
       })
 
       updateStudentTx()
+      logAudit(0, 'UPDATE', 'student', idValidation.data!, { id: student.id }, data)
       return { success: true }
     } catch (error) {
       return {

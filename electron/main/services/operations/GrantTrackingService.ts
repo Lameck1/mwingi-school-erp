@@ -1,5 +1,6 @@
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
+import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
 
 export interface Grant {
     id: number
@@ -124,6 +125,29 @@ export class GrantTrackingService {
             const grantId = result.lastInsertRowid as number
             logAudit(userId, 'CREATE', GRANT_TABLE, grantId, null, data)
 
+            // Create Journal Entry for grant receipt
+            const journalService = new DoubleEntryJournalService(this.db)
+            journalService.createJournalEntrySync({
+                entry_date: data.date_received || new Date().toISOString().split('T')[0],
+                entry_type: 'RECEIPT',
+                description: `Grant receipt: ${data.grant_name} (Grant #${grantId})`,
+                created_by_user_id: userId,
+                lines: [
+                    {
+                        gl_account_code: '1010',
+                        debit_amount: 0,
+                        credit_amount: data.amount_received,
+                        description: 'Grant receipt'
+                    },
+                    {
+                        gl_account_code: '5010',
+                        debit_amount: data.amount_received,
+                        credit_amount: 0,
+                        description: 'Grant income'
+                    }
+                ]
+            })
+
             return { success: true, id: grantId }
         } catch (error) {
             console.error('Error creating grant:', error)
@@ -166,7 +190,27 @@ export class GrantTrackingService {
 
                 // 3. Create Journal Entry (if GL code provided)
                 if (data.glAccountCode) {
-                    // Journal posting is handled by finance reconciliation flow.
+                    const journalService = new DoubleEntryJournalService(this.db)
+                    journalService.createJournalEntrySync({
+                        entry_date: data.utilizationDate,
+                        entry_type: 'EXPENSE',
+                        description: `Grant utilization: ${data.description} (Grant #${data.grantId})`,
+                        created_by_user_id: data.userId,
+                        lines: [
+                            {
+                                gl_account_code: data.glAccountCode,
+                                debit_amount: data.amount,
+                                credit_amount: 0,
+                                description: data.description
+                            },
+                            {
+                                gl_account_code: '1010',
+                                debit_amount: 0,
+                                credit_amount: data.amount,
+                                description: 'Cash disbursement for grant utilization'
+                            }
+                        ]
+                    })
                 }
             })
 

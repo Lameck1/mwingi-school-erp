@@ -1,4 +1,5 @@
 import { logAudit } from '../../database/utils/audit'
+import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
 import { BaseService } from '../base/BaseService'
 
 export interface FixedAsset {
@@ -89,7 +90,7 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
         if (!data.asset_name) {errors.push('Asset name is required')}
         if (!data.category_id) {errors.push('Category is required')}
         if (!data.acquisition_date) {errors.push('Acquisition date is required')}
-        if (data.acquisition_cost < 0) {errors.push('Cost cannot be negative')}
+        if (data.acquisition_cost <= 0) {errors.push('Acquisition cost must be greater than zero')}
         return errors.length > 0 ? errors : null
     }
 
@@ -107,6 +108,30 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
             const result = this.executeCreateWithUser(data, userId)
             const id = result.lastInsertRowid as number
             logAudit(userId, 'CREATE', this.getTableName(), id, null, data)
+
+            // GL journal entry: Debit Fixed Asset, Credit Cash/AP
+            const journalService = new DoubleEntryJournalService(this.db)
+            journalService.createJournalEntrySync({
+                entry_date: new Date().toISOString().split('T')[0],
+                entry_type: 'ASSET_ACQUISITION',
+                description: `Acquisition: ${data.asset_name} (${data.asset_code})`,
+                created_by_user_id: userId,
+                lines: [
+                    {
+                        gl_account_code: '1200',
+                        debit_amount: data.acquisition_cost,
+                        credit_amount: 0,
+                        description: 'Fixed asset'
+                    },
+                    {
+                        gl_account_code: '1100',
+                        debit_amount: 0,
+                        credit_amount: data.acquisition_cost,
+                        description: 'Cash/AP'
+                    }
+                ]
+            })
+
             return { success: true, id }
         } catch (error) {
             return {
@@ -250,6 +275,29 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
                 SET current_value = ?, accumulated_depreciation = ?, last_depreciation_date = CURRENT_DATE 
                 WHERE id = ?
             `).run(newValue, newAccumulated, assetId)
+
+            // GL journal entry: Debit Depreciation Expense, Credit Accumulated Depreciation
+            const journalService = new DoubleEntryJournalService(this.db)
+            journalService.createJournalEntrySync({
+                entry_date: new Date().toISOString().split('T')[0],
+                entry_type: 'DEPRECIATION',
+                description: `Depreciation: ${asset.asset_name} (${asset.asset_code})`,
+                created_by_user_id: userId,
+                lines: [
+                    {
+                        gl_account_code: '5300',
+                        debit_amount: depreciationAmount,
+                        credit_amount: 0,
+                        description: 'Depreciation expense'
+                    },
+                    {
+                        gl_account_code: '1520',
+                        debit_amount: 0,
+                        credit_amount: depreciationAmount,
+                        description: 'Accumulated depreciation'
+                    }
+                ]
+            })
         })()
 
         logAudit(userId, 'DEPRECIATION', 'fixed_asset', assetId, { value: asset.current_value }, { value: newValue })
@@ -257,4 +305,3 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
         return { success: true }
     }
 }
-

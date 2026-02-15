@@ -119,7 +119,11 @@ export class DataImportService {
             row.eachCell((cell, colNumber) => {
                 const header = headers[colNumber]
                 if (header) {
-                    rowData[header] = cell.value === null ? undefined : cell.value
+                    let val = cell.value === null ? undefined : cell.value
+                    if (typeof val === 'string') {
+                        val = val.replace(/^[=+\-@]+/, '')
+                    }
+                    rowData[header] = val
                 }
             })
 

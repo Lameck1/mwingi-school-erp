@@ -1,4 +1,6 @@
 import { getDatabase } from '../../database';
+import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService';
+import { SystemAccounts } from '../accounting/SystemAccounts';
 
 interface TransportRoute {
   id: number;
@@ -237,11 +239,11 @@ export class TransportCostService {
     this.assertValidRecorder(params.recorded_by)
 
     const route = this.db.prepare(`
-      SELECT id
+      SELECT id, route_name
       FROM transport_route
       WHERE id = ? AND is_active = 1
       LIMIT 1
-    `).get(params.route_id) as { id: number } | undefined
+    `).get(params.route_id) as { id: number; route_name: string } | undefined
 
     if (!route) {
       throw new Error('Selected transport route is invalid or inactive')
@@ -265,6 +267,31 @@ export class TransportCostService {
       params.description?.trim() || null,
       params.recorded_by
     );
+
+    // GL journal entry: Debit Transport Expense, Credit Cash
+    if (params.gl_account_code) {
+      const journalService = new DoubleEntryJournalService(this.db);
+      journalService.createJournalEntrySync({
+        entry_date: new Date().toISOString().split('T')[0],
+        entry_type: 'TRANSPORT_EXPENSE',
+        description: `Transport Expense: ${params.description || params.expense_type} (Route: ${route.route_name})`,
+        created_by_user_id: params.recorded_by,
+        lines: [
+          {
+            gl_account_code: params.gl_account_code,
+            debit_amount: params.amount_cents,
+            credit_amount: 0,
+            description: `Transport expense - ${params.expense_type}`
+          },
+          {
+            gl_account_code: SystemAccounts.CASH,
+            debit_amount: 0,
+            credit_amount: params.amount_cents,
+            description: 'Cash payment for transport expense'
+          }
+        ]
+      });
+    }
 
     return result.lastInsertRowid as number;
   }
