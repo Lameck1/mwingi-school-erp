@@ -1,4 +1,5 @@
 import { getDatabase } from '../../database'
+import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
 
 export interface HireClient {
     id: number
@@ -378,6 +379,29 @@ export class HireService {
                     receiptNumber, amount, data.payment_method, data.payment_reference,
                     data.payment_date, catId?.id || 1, `Asset Hire: ${booking.asset_name}`, userId
                 )
+
+                // Create GL journal entry: Debit Cash/Bank, Credit Hire Income
+                const journalService = new DoubleEntryJournalService(this.db)
+                journalService.createJournalEntrySync({
+                    entry_date: data.payment_date || new Date().toISOString().split('T')[0],
+                    entry_type: 'INCOME',
+                    description: `Hire income: ${booking.asset_name} - ${receiptNumber}`,
+                    created_by_user_id: userId,
+                    lines: [
+                        {
+                            gl_account_code: '1010',
+                            debit_amount: amount,
+                            credit_amount: 0,
+                            description: 'Cash received for asset hire'
+                        },
+                        {
+                            gl_account_code: '4200',
+                            debit_amount: 0,
+                            credit_amount: amount,
+                            description: 'Hire income revenue'
+                        }
+                    ]
+                })
             })()
 
             return { success: true, receipt_number: receiptNumber }

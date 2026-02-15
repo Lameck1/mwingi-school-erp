@@ -8,6 +8,7 @@ const FINANCIAL_PERIOD_NOT_FOUND = 'Financial period not found'
 export interface FinancialPeriod {
   id: number
   name: string
+  period_name?: string
   start_date: string
   end_date: string
   status: 'OPEN' | 'LOCKED' | 'CLOSED'
@@ -15,6 +16,10 @@ export interface FinancialPeriod {
   locked_at: string | null
   closed_by: number | null
   closed_at: string | null
+}
+
+function periodName(period: FinancialPeriod): string {
+  return period.name || period.period_name || `Period #${period.id}`
 }
 
 export interface LockResult {
@@ -77,7 +82,7 @@ export class PeriodLockingService {
         JSON.stringify({ status: 'LOCKED' })
       )
 
-      return { success: true, message: `Period '${period.name}' locked successfully` }
+      return { success: true, message: `Period '${periodName(period)}' locked successfully` }
     } catch (error) {
       return this.failure(`Failed to lock period: ${(error as Error).message}`)
     }
@@ -121,7 +126,7 @@ export class PeriodLockingService {
         JSON.stringify({ status: 'OPEN' })
       )
 
-      return { success: true, message: `Period '${period.name}' unlocked successfully` }
+      return { success: true, message: `Period '${periodName(period)}' unlocked successfully` }
     } catch (error) {
       return this.failure(`Failed to unlock period: ${(error as Error).message}`)
     }
@@ -165,7 +170,7 @@ export class PeriodLockingService {
         JSON.stringify({ status: 'CLOSED' })
       )
 
-      return { success: true, message: `Period '${period.name}' closed successfully` }
+      return { success: true, message: `Period '${periodName(period)}' closed successfully` }
     } catch (error) {
       return this.failure(`Failed to close period: ${(error as Error).message}`)
     }

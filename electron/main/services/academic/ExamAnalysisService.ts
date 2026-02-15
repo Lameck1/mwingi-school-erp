@@ -62,6 +62,13 @@ interface StudentIdResult {
   student_id: number;
 }
 
+interface GradingScaleRow {
+  grade: string
+  remarks: string
+  min_score: number
+  max_score: number
+}
+
 export interface TeacherPerformance {
   teacher_id: number
   teacher_name: string
@@ -404,9 +411,9 @@ export class ExamAnalysisService {
     return (topMean - bottomMean) / 100
   }
 
-  private getGradingScale(): { grade: string; remarks: string; min_score: number; max_score: number }[] {
+  private getGradingScale(): GradingScaleRow[] {
     try {
-      return this.db.prepare('SELECT grade, remarks, min_score, max_score FROM grading_scale WHERE curriculum = ? ORDER BY min_score DESC').all('8-4-4') as any[]
+      return this.db.prepare('SELECT grade, remarks, min_score, max_score FROM grading_scale WHERE curriculum = ? ORDER BY min_score DESC').all('8-4-4') as GradingScaleRow[]
     } catch {
       // Fallback if table doesn't exist yet
       return [
@@ -418,7 +425,7 @@ export class ExamAnalysisService {
     }
   }
 
-  private resolveGrade(score: number, scale: { grade: string; remarks: string; min_score: number; max_score: number }[]): { grade: string; remarks: string } {
+  private resolveGrade(score: number, scale: GradingScaleRow[]): { grade: string; remarks: string } {
     const found = scale.find(s => score >= s.min_score && score <= s.max_score)
     return found ? { grade: found.grade, remarks: found.remarks } : { grade: 'E', remarks: 'Fail' }
   }

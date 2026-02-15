@@ -450,9 +450,6 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
       const termStartDate = term.start_date
       const termEndDate = term.end_date
       const termId = term.id
-      const enrollment = new Date(data.enrollmentDate)
-      const termStart = new Date(termStartDate)
-      const termEnd = new Date(termEndDate)
 
       // Calculate Proration using the centralized calculator
       const prorationResult = this.calculator.calculateProRatedFee(

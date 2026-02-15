@@ -62,6 +62,8 @@ export interface Scholarship {
   current_beneficiaries: number
   max_beneficiaries: number
   total_allocated: number
+  allocated_amount: number
+  available_amount: number
   status: 'ACTIVE' | 'SUSPENDED' | 'EXPIRED'
   valid_from: string
   valid_to: string
@@ -333,8 +335,55 @@ class ScholarshipAllocator implements IScholarshipAllocator {
         }
       }
 
+      // Guard: check available_amount
+      if (scholarship.available_amount < allocationData.amount_allocated) {
+        return {
+          success: false,
+          message: `Insufficient scholarship funds. Available: ${scholarship.available_amount}, Requested: ${allocationData.amount_allocated}`
+        }
+      }
+
       // Allocate scholarship
       const allocationId = await this.allocationRepo.allocateScholarship(allocationData)
+
+      // Create credit_transaction for the student
+      const db = getDatabase()
+      db.prepare(`
+        INSERT INTO credit_transaction (student_id, amount, transaction_type, notes, created_at)
+        VALUES (?, ?, 'CREDIT_RECEIVED', ?, CURRENT_TIMESTAMP)
+      `).run(
+        allocationData.student_id,
+        allocationData.amount_allocated,
+        `Scholarship: ${scholarship.name} (allocation #${allocationId})`
+      )
+
+      // Update student credit_balance
+      db.prepare(`
+        UPDATE student SET credit_balance = COALESCE(credit_balance, 0) + ? WHERE id = ?
+      `).run(allocationData.amount_allocated, allocationData.student_id)
+
+      // GL journal entry: Debit Scholarship Expense, Credit Student Receivable
+      const journalService = new DoubleEntryJournalService(db)
+      journalService.createJournalEntrySync({
+        entry_date: allocationData.effective_date || new Date().toISOString().split('T')[0],
+        entry_type: 'SCHOLARSHIP',
+        description: `Scholarship allocation: ${scholarship.name} to student #${allocationData.student_id}`,
+        created_by_user_id: userId,
+        lines: [
+          {
+            gl_account_code: '5400',
+            debit_amount: allocationData.amount_allocated,
+            credit_amount: 0,
+            description: 'Scholarship expense'
+          },
+          {
+            gl_account_code: '1300',
+            debit_amount: 0,
+            credit_amount: allocationData.amount_allocated,
+            description: 'Student accounts receivable reduction'
+          }
+        ]
+      })
 
       logAudit(
         userId,

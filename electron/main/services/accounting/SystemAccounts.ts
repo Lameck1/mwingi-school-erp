@@ -41,7 +41,5 @@ export function verifySystemAccounts(): void {
 
     if (missingAccounts.length > 0) {
         console.warn('WARNING: The following System Accounts are missing from the General Ledger. This may cause errors in financial transactions:', missingAccounts.join(', '));
-    } else {
-        console.log('System Accounts verification passed.');
     }
 }

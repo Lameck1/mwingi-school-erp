@@ -170,6 +170,10 @@ export class ApprovalService {
                 this.db.prepare(`
           UPDATE budget SET status = 'APPROVED', approved_by_user_id = ?, approved_at = CURRENT_TIMESTAMP WHERE id = ?
         `).run(approverId, request.entity_id)
+            } else if (request.entity_type === 'JOURNAL_ENTRY') {
+                this.db.prepare(`
+          UPDATE journal_entry SET is_posted = 1, posted_by_user_id = ?, posted_at = CURRENT_TIMESTAMP WHERE id = ? AND is_voided = 0
+        `).run(approverId, request.entity_id)
             }
 
             logAudit(approverId, 'APPROVE', 'approval_request', requestId, { status: 'PENDING' }, { status: 'APPROVED' })
