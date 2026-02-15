@@ -2,16 +2,19 @@ import { randomUUID } from 'node:crypto'
 
 import { getDatabase } from '../../../database'
 import { logAudit } from '../../../database/utils/audit'
+import { VoidAuditRepository } from './PaymentTransactionRepository'
 
 import type { PaymentResult, PaymentTransaction, VoidPaymentData } from '../PaymentService.types'
 import type Database from 'better-sqlite3'
 
 export class VoidProcessor {
   private readonly db: Database.Database
+  private readonly voidAuditRepo: VoidAuditRepository
   private sourceLedgerColumnAvailable: boolean | null = null
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
+    this.voidAuditRepo = new VoidAuditRepository(this.db)
   }
 
   private hasSourceLedgerColumn(): boolean {
@@ -162,7 +165,18 @@ export class VoidProcessor {
 
         const reversalId = this.createReversalTransaction(transaction, data, categoryId)
         this.markTransactionVoided(data)
-        this.recordVoidAudit(transaction, data)
+
+        // Use Repository to record audit
+        this.voidAuditRepo.recordVoid({
+          transactionId: data.transaction_id,
+          studentId: transaction.student_id,
+          amount: transaction.amount,
+          description: transaction.description,
+          voidReason: data.void_reason,
+          voidedBy: data.voided_by,
+          recoveryMethod: data.recovery_method
+        })
+
         const creditedAmount = this.reversePaymentAllocations(transaction)
         this.reverseStudentCredit(transaction.student_id, creditedAmount, transaction.id)
         this.voidLinkedJournalEntries(transaction.id, data)
@@ -209,34 +223,6 @@ export class VoidProcessor {
     `).run(data.void_reason, data.voided_by, data.transaction_id)
     if (result.changes === 0) {
       throw new Error('Transaction was already voided')
-    }
-  }
-
-  private recordVoidAudit(transaction: PaymentTransaction, data: VoidPaymentData): void {
-    const hasApprovalCol = (this.db.prepare(`PRAGMA table_info(void_audit)`).all() as Array<{ name: string }>).some(c => c.name === 'approval_request_id')
-    if (hasApprovalCol) {
-      this.db.prepare(`
-        INSERT INTO void_audit (
-          transaction_id, transaction_type, original_amount, student_id, description,
-          void_reason, voided_by, voided_at, recovered_method, recovered_by, recovered_at, approval_request_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        data.transaction_id, 'PAYMENT', transaction.amount, transaction.student_id,
-        transaction.description, data.void_reason, data.voided_by,
-        new Date().toISOString(), data.recovery_method || null, null, null,
-        (data as unknown as { approval_request_id?: number }).approval_request_id || null
-      )
-    } else {
-      this.db.prepare(`
-        INSERT INTO void_audit (
-          transaction_id, transaction_type, original_amount, student_id, description,
-          void_reason, voided_by, voided_at, recovered_method, recovered_by, recovered_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        data.transaction_id, 'PAYMENT', transaction.amount, transaction.student_id,
-        transaction.description, data.void_reason, data.voided_by,
-        new Date().toISOString(), data.recovery_method || null, null, null
-      )
     }
   }
 

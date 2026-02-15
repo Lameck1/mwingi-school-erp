@@ -1,9 +1,7 @@
-import { randomUUID } from 'node:crypto'
-
 import { getDatabase } from '../../../database'
 import { asSqlInList, OUTSTANDING_INVOICE_STATUSES } from '../../../utils/financeTransactionTypes'
 
-import type { PaymentData, PaymentTransaction, VoidedTransaction } from '../PaymentService.types'
+import type { PaymentTransaction, VoidedTransaction } from '../PaymentService.types'
 import type Database from 'better-sqlite3'
 
 export const PAYABLE_INVOICE_STATUSES_SQL = asSqlInList(OUTSTANDING_INVOICE_STATUSES)
@@ -23,60 +21,6 @@ export class PaymentTransactionRepository {
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
-  }
-
-  async createTransaction(data: PaymentData): Promise<number> {
-    const db = this.db
-    const transactionRef = `TXN-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8)}`
-    const result = db.prepare(`
-      INSERT INTO ledger_transaction (
-        transaction_ref, student_id, transaction_type, amount, debit_credit,
-        transaction_date, description,
-        payment_method, payment_reference, recorded_by_user_id, category_id, term_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      transactionRef,
-      data.student_id,
-      'FEE_PAYMENT',
-      data.amount,
-      'CREDIT',
-      data.transaction_date,
-      data.description || `Payment received: ${data.payment_reference}`,
-      data.payment_method,
-      data.payment_reference,
-      data.recorded_by_user_id,
-      1, // default category; callers should resolve properly
-      data.term_id
-    )
-    return result.lastInsertRowid as number
-  }
-
-  async createReversal(studentId: number, originalAmount: number, voidReason: string, voidedBy: number, categoryId: number): Promise<number> {
-    const db = this.db
-    const reversalRef = `VOID-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8)}`
-    const result = db.prepare(`
-      INSERT INTO ledger_transaction (
-        transaction_ref, student_id, transaction_type, amount, debit_credit,
-        transaction_date, description,
-        payment_method, payment_reference, recorded_by_user_id, category_id,
-        is_voided, voided_reason
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      reversalRef,
-      studentId,
-      'REFUND',
-      -originalAmount,
-      'DEBIT',
-      new Date().toISOString().split('T')[0],
-      `Void of transaction: ${voidReason}`,
-      'CASH',
-      `VOID_REF_${studentId}_${Date.now()}`,
-      voidedBy,
-      categoryId,
-      1,
-      voidReason
-    )
-    return result.lastInsertRowid as number
   }
 
   async getTransaction(id: number): Promise<PaymentTransaction | null> {
@@ -121,8 +65,33 @@ export class VoidAuditRepository {
   }
 
   async recordVoid(data: VoidAuditRecordData): Promise<number> {
-    const db = this.db
-    const result = db.prepare(`
+    // Check if table supports approval_request_id column
+    const hasApprovalCol = (this.db.prepare(`PRAGMA table_info(void_audit)`).all() as Array<{ name: string }>).some(c => c.name === 'approval_request_id')
+
+    if (hasApprovalCol) {
+      const result = this.db.prepare(`
+        INSERT INTO void_audit (
+          transaction_id, transaction_type, original_amount, student_id, description,
+          void_reason, voided_by, voided_at, recovered_method, recovered_by, recovered_at, approval_request_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        data.transactionId,
+        'PAYMENT',
+        data.amount,
+        data.studentId,
+        data.description,
+        data.voidReason,
+        data.voidedBy,
+        new Date().toISOString(),
+        data.recoveryMethod || null,
+        null,
+        null,
+        null // Default null for now
+      )
+      return result.lastInsertRowid as number
+    }
+
+    const result = this.db.prepare(`
       INSERT INTO void_audit (
         transaction_id, transaction_type, original_amount, student_id, description,
         void_reason, voided_by, voided_at, recovered_method, recovered_by, recovered_at
