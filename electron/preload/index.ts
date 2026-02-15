@@ -11,7 +11,7 @@
  * Domain modules live in ./api/ — add new IPC methods there, not here.
  */
 
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge } from 'electron'
 
 import { createAcademicAPI } from './api/academic'
 import { createAuthAPI } from './api/auth'
@@ -24,7 +24,7 @@ import { createSettingsAPI } from './api/settings'
 import { createStaffAPI } from './api/staff'
 import { createStudentAPI } from './api/students'
 import { createSystemAPI } from './api/system'
-import { setAPIFactories, createRoleAwareAPI, type UserRole } from './roleFilter'
+import { setAPIFactories, createRoleAwareAPI } from './roleFilter'
 
 // Set API factories for role filter
 setAPIFactories({
@@ -41,30 +41,13 @@ setAPIFactories({
   createMenuEventAPI
 })
 
-// Get user session to determine role
-async function getUserRole(): Promise<UserRole> {
-  try {
-    const session = await ipcRenderer.invoke('auth:getSession')
-    return (session?.user?.role as UserRole) || 'STAFF'
-  } catch {
-    return 'STAFF' // Default role on error
-  }
-}
-
-// Create role-aware API surface
-const roleAwareAPI = createRoleAwareAPI('STAFF') // Default, will be updated
-
-// Update API based on actual user role
-getUserRole().then(role => {
-  const updatedAPI = createRoleAwareAPI(role)
-  Object.assign(roleAwareAPI, updatedAPI)
-}).catch(() => {
-  // Keep default role if session fetch fails
-})
+// Expose the full API surface unconditionally.
+// Security enforcement happens server-side via safeHandleRawWithRole in the
+// main process IPC handlers (see ipc-result.ts). The preload layer is NOT a
+// security boundary — contextBridge freezes the object synchronously, making
+// any async role-based filtering unreliable (the previous Object.assign race).
+const fullAPI = createRoleAwareAPI('ADMIN')
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Role-filtered access
-  ...roleAwareAPI,
-  // Namespaced access (for future structured usage)
-  ...roleAwareAPI
+  ...fullAPI
 })

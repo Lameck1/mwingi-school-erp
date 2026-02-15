@@ -3,7 +3,7 @@ import { logAudit } from '../../database/utils/audit'
 import { container } from '../../services/base/ServiceContainer'
 import { REPORT_EXPENSE_TRANSACTION_TYPES, REPORT_INCOME_TRANSACTION_TYPES, asSqlInList } from '../../utils/financeTransactionTypes'
 import { validateAmount, sanitizeString, validatePastOrTodayDate } from '../../utils/validation'
-import { safeHandleRaw } from '../ipc-result'
+import { safeHandleRaw, safeHandleRawWithRole, ROLES } from '../ipc-result'
 
 interface TransactionData {
     transaction_date: string
@@ -148,13 +148,20 @@ export function registerTransactionsHandlers(): void {
         return db.prepare('SELECT * FROM transaction_category WHERE is_active = 1 ORDER BY category_name').all()
     })
 
-    safeHandleRaw('transaction:createCategory', (_event, name: string, type: string) => {
+    safeHandleRawWithRole('transaction:createCategory', ROLES.FINANCE, (_event, name: string, type: string) => {
+        const trimmedName = typeof name === 'string' ? name.trim() : ''
+        if (!trimmedName) {
+            return { success: false, error: 'Category name is required' }
+        }
+        if (type !== 'INCOME' && type !== 'EXPENSE') {
+            return { success: false, error: 'Category type must be INCOME or EXPENSE' }
+        }
         const stmt = db.prepare('INSERT INTO transaction_category (category_name, category_type) VALUES (?, ?)')
-        const result = stmt.run(name, type)
+        const result = stmt.run(trimmedName, type)
         return { success: true, id: result.lastInsertRowid }
     })
 
-    safeHandleRaw('transaction:create', (_event, data: TransactionData, userId: number) => {
+    safeHandleRawWithRole('transaction:create', ROLES.FINANCE, (_event, data: TransactionData, userId: number) => {
         return createTransaction(db, data, userId)
     })
 

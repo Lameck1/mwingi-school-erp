@@ -89,7 +89,7 @@ const registerPaymentRecordHandler = (context: FinanceContext): void => {
         `).get(idempotencyKey) as { id: number; transaction_ref: string; receipt_number: string | null } | undefined
     }
 
-    safeHandleRaw('payment:record', (_event, data: PaymentData, userId: number): PaymentResult | { success: false, error: string } => {
+    safeHandleRawWithRole('payment:record', ROLES.FINANCE, (_event, data: PaymentData, userId: number): PaymentResult | { success: false, error: string } => {
         const amountValidation = validateAmount(data.amount)
         if (!amountValidation.success) {
             return { success: false, error: amountValidation.error! }
@@ -206,7 +206,7 @@ const registerPaymentQueryHandlers = (context: FinanceContext): void => {
 const registerPayWithCreditHandler = (context: FinanceContext): void => {
     const { db, getOrCreateCategoryId } = context
 
-    safeHandleRaw('payment:payWithCredit', (_event, data: { studentId: number, invoiceId: number, amount: number }, userId: number) => {
+    safeHandleRawWithRole('payment:payWithCredit', ROLES.FINANCE, (_event, data: { studentId: number, invoiceId: number, amount: number }, userId: number) => {
         return db.transaction(() => {
             if (!data.studentId || !data.invoiceId || !Number.isFinite(data.amount) || data.amount <= 0) {
                 return { success: false, error: 'Invalid payment payload' }
@@ -534,7 +534,7 @@ const registerInvoiceHandlers = (context: FinanceContext): void => {
         }))
     })
 
-    safeHandleRaw('invoice:create', (_event, data: InvoiceData, items: InvoiceItem[], userId: number) => {
+    safeHandleRawWithRole('invoice:create', ROLES.FINANCE, (_event, data: InvoiceData, items: InvoiceItem[], userId: number) => {
         const studentValidation = validateId(data.student_id, 'Student')
         if (!studentValidation.success) {
             return { success: false, error: studentValidation.error! }
@@ -595,7 +595,7 @@ const registerFeeStructureHandlers = (context: FinanceContext): void => {
         return db.prepare('SELECT * FROM fee_category WHERE is_active = 1').all()
     })
 
-    safeHandleRaw('fee:createCategory', (_event, name: string, description: string, userId?: number) => {
+    safeHandleRawWithRole('fee:createCategory', ROLES.FINANCE, (_event, name: string, description: string, userId?: number) => {
         const trimmedName = name.trim()
         if (!trimmedName) {
             return { success: false, error: 'Category name is required' }
@@ -626,7 +626,7 @@ const registerFeeStructureHandlers = (context: FinanceContext): void => {
         `).all(academicYearId, termId) as FeeStructureWithDetails[]
     })
 
-    safeHandleRaw('fee:saveStructure', (_event, data: FeeStructureItemData[], academicYearId: number, termId: number, userId?: number) => {
+    safeHandleRawWithRole('fee:saveStructure', ROLES.FINANCE, (_event, data: FeeStructureItemData[], academicYearId: number, termId: number, userId?: number) => {
         if (!Array.isArray(data) || data.length === 0) {
             return { success: false, error: 'At least one fee structure item is required' }
         }
@@ -659,11 +659,11 @@ const registerFeeStructureHandlers = (context: FinanceContext): void => {
         return { success: true }
     })
 
-    safeHandleRaw('invoice:generateBatch', (_event, academicYearId: number, termId: number, userId: number) => {
+    safeHandleRawWithRole('invoice:generateBatch', ROLES.FINANCE, (_event, academicYearId: number, termId: number, userId: number) => {
         return generateBatchInvoices(context, academicYearId, termId, userId)
     })
 
-    safeHandleRaw('invoice:generateForStudent', (_event, studentId: number, academicYearId: number, termId: number, userId: number) => {
+    safeHandleRawWithRole('invoice:generateForStudent', ROLES.FINANCE, (_event, studentId: number, academicYearId: number, termId: number, userId: number) => {
         return generateSingleStudentInvoice(context, studentId, academicYearId, termId, userId)
     })
 }
@@ -671,7 +671,7 @@ const registerFeeStructureHandlers = (context: FinanceContext): void => {
 const registerCreditHandlers = (): void => {
     const creditService = container.resolve('CreditAutoApplicationService')
 
-    safeHandleRaw('finance:allocateCredits', async (_event, studentId: number, userId: number) => {
+    safeHandleRawWithRole('finance:allocateCredits', ROLES.FINANCE, async (_event, studentId: number, userId: number) => {
         try {
             return await creditService.allocateCreditsToInvoices(studentId, userId)
         } catch (error) {
@@ -695,7 +695,7 @@ const registerCreditHandlers = (): void => {
         }
     })
 
-    safeHandleRaw('finance:addCredit', async (_event, studentId: number, amount: number, notes: string, userId: number) => {
+    safeHandleRawWithRole('finance:addCredit', ROLES.FINANCE, async (_event, studentId: number, amount: number, notes: string, userId: number) => {
         try {
             return await creditService.addCreditToStudent(studentId, amount, notes, userId)
         } catch (error) {
@@ -734,7 +734,7 @@ const registerProrationHandlers = (): void => {
         }
     })
 
-    safeHandleRaw('finance:generateProRatedInvoice', async (
+    safeHandleRawWithRole('finance:generateProRatedInvoice', ROLES.FINANCE, async (
         _event,
         studentId: number,
         templateInvoiceId: number,
@@ -760,7 +760,7 @@ const registerProrationHandlers = (): void => {
 const registerScholarshipHandlers = (): void => {
     const scholarshipService = container.resolve('ScholarshipService')
 
-    safeHandleRaw('finance:createScholarship', async (_event, data: ScholarshipData, userId: number) => {
+    safeHandleRawWithRole('finance:createScholarship', ROLES.FINANCE, async (_event, data: ScholarshipData, userId: number) => {
         try {
             return await scholarshipService.createScholarship(data, userId)
         } catch (error) {
@@ -768,7 +768,7 @@ const registerScholarshipHandlers = (): void => {
         }
     })
 
-    safeHandleRaw('finance:allocateScholarship', async (_event, allocationData: AllocationData, userId: number) => {
+    safeHandleRawWithRole('finance:allocateScholarship', ROLES.FINANCE, async (_event, allocationData: AllocationData, userId: number) => {
         try {
             return await scholarshipService.allocateScholarshipToStudent(allocationData, userId)
         } catch (error) {
@@ -808,7 +808,7 @@ const registerScholarshipHandlers = (): void => {
         }
     })
 
-    safeHandleRaw('finance:applyScholarshipToInvoice', async (
+    safeHandleRawWithRole('finance:applyScholarshipToInvoice', ROLES.FINANCE, async (
         _event,
         studentScholarshipId: number,
         invoiceId: number,

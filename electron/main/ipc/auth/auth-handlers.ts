@@ -94,7 +94,24 @@ function registerSessionHandlers(db: ReturnType<typeof getDatabase>): void {
         return refreshed
     })
 
-    safeHandleRaw('auth:setSession', async (_event, session: AuthSession): Promise<{ success: boolean }> => {
+    safeHandleRaw('auth:setSession', async (_event, session: AuthSession): Promise<{ success: boolean; error?: string }> => {
+        if (!session?.user?.id || !session?.user?.role || !session?.user?.username) {
+            return { success: false, error: 'Invalid session payload' }
+        }
+
+        const dbUser = db.prepare('SELECT id, role, is_active FROM user WHERE id = ?').get(session.user.id) as
+            { id: number; role: string; is_active: number } | undefined
+
+        if (!dbUser) {
+            return { success: false, error: 'Session user does not exist' }
+        }
+        if (!dbUser.is_active) {
+            return { success: false, error: 'Session user is inactive' }
+        }
+        if (dbUser.role !== session.user.role) {
+            return { success: false, error: 'Session role does not match database' }
+        }
+
         await setSession(session)
         return { success: true }
     })

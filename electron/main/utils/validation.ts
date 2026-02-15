@@ -11,7 +11,7 @@ export interface ValidationResult<T> {
 
 export const validateAmount = (amount?: unknown): ValidationResult<number> => {
     const num = Number(amount)
-    if (Number.isNaN(num) || num < 0) {
+    if (Number.isNaN(num) || num <= 0) {
         return { success: false, error: 'Invalid amount. Must be a positive number.' }
     }
     // Amount is expected to be in cents already; normalize to an integer

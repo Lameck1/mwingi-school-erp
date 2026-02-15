@@ -1,5 +1,6 @@
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
+import { DoubleEntryJournalService } from '../../services/accounting/DoubleEntryJournalService'
 import { PayrollJournalService } from '../../services/finance/PayrollJournalService'
 import { safeHandleRaw, safeHandleRawWithRole, ROLES } from '../ipc-result'
 
@@ -237,6 +238,15 @@ const runPayrollForPeriod = (
     return { success: true, periodId, results }
 }
 
+function getOrCreateSalaryCategoryId(db: ReturnType<typeof getDatabase>): number {
+    const row = db.prepare("SELECT id FROM transaction_category WHERE category_name = 'Salary Payment' LIMIT 1").get() as { id: number } | undefined
+    if (row?.id) {
+        return row.id
+    }
+    const result = db.prepare("INSERT INTO transaction_category (category_name, category_type, is_system, is_active) VALUES ('Salary Payment', 'EXPENSE', 1, 1)").run()
+    return result.lastInsertRowid as number
+}
+
 const PERIOD_NOT_FOUND = 'Period not found'
 const SELECT_PERIOD = 'SELECT * FROM payroll_period WHERE id = ?'
 
@@ -244,8 +254,8 @@ function getPeriodOrFail(db: ReturnType<typeof getDatabase>, periodId: number): 
     return (db.prepare(SELECT_PERIOD).get(periodId) as { id: number; status: string; period_name?: string } | undefined) ?? null
 }
 
-function registerPayrollStatusHandlers(db: ReturnType<typeof getDatabase>): void {
-    safeHandleRaw('payroll:confirm', (_event, periodId: number, userId: number) => {
+function registerPayrollStatusHandlers(db: ReturnType<typeof getDatabase>, journalService: DoubleEntryJournalService): void {
+    safeHandleRawWithRole('payroll:confirm', ROLES.FINANCE, (_event, periodId: number, userId: number) => {
         return db.transaction(() => {
             const period = getPeriodOrFail(db, periodId)
             if (!period) { return { success: false, error: PERIOD_NOT_FOUND } }
@@ -269,19 +279,46 @@ function registerPayrollStatusHandlers(db: ReturnType<typeof getDatabase>): void
 
             const totalNet = (db.prepare('SELECT COALESCE(SUM(net_salary), 0) as total FROM payroll WHERE period_id = ?').get(periodId) as { total: number }).total
             if (totalNet > 0) {
+                const salaryCategoryId = getOrCreateSalaryCategoryId(db)
+
                 db.prepare(`
                     INSERT INTO ledger_transaction (
                         transaction_ref, amount, transaction_date, transaction_type,
                         category_id, debit_credit, description, payment_method,
                         recorded_by_user_id
-                    ) VALUES (?, ?, ?, 'EXPENSE', 1, 'DEBIT', ?, 'BANK_TRANSFER', ?)
+                    ) VALUES (?, ?, ?, 'EXPENSE', ?, 'DEBIT', ?, 'BANK_TRANSFER', ?)
                 `).run(
                     `PAY-${periodId}-${Date.now()}`,
                     totalNet,
                     paymentDate,
+                    salaryCategoryId,
                     `Salary payment for period #${periodId}`,
                     userId
                 )
+
+                const journalResult = journalService.createJournalEntrySync({
+                    entry_date: paymentDate,
+                    entry_type: 'SALARY_PAYMENT',
+                    description: `Salary payment for period #${periodId}`,
+                    created_by_user_id: userId,
+                    lines: [
+                        {
+                            gl_account_code: '2100',
+                            debit_amount: totalNet,
+                            credit_amount: 0,
+                            description: 'Salary payment - reduce payable'
+                        },
+                        {
+                            gl_account_code: '1020',
+                            debit_amount: 0,
+                            credit_amount: totalNet,
+                            description: 'Bank transfer for salaries'
+                        }
+                    ]
+                })
+                if (!journalResult.success) {
+                    throw new Error(journalResult.error || 'Failed to create journal entry for salary payment')
+                }
             }
 
             logAudit(userId, 'UPDATE', 'payroll_period', periodId, { status: 'CONFIRMED' }, { status: 'PAID' })
@@ -289,7 +326,7 @@ function registerPayrollStatusHandlers(db: ReturnType<typeof getDatabase>): void
         })()
     })
 
-    safeHandleRaw('payroll:revertToDraft', (_event, periodId: number, userId: number) => {
+    safeHandleRawWithRole('payroll:revertToDraft', ROLES.FINANCE, (_event, periodId: number, userId: number) => {
         return db.transaction(() => {
             const period = getPeriodOrFail(db, periodId)
             if (!period) { return { success: false, error: PERIOD_NOT_FOUND } }
@@ -301,7 +338,7 @@ function registerPayrollStatusHandlers(db: ReturnType<typeof getDatabase>): void
         })()
     })
 
-    safeHandleRaw('payroll:delete', (_event, periodId: number, userId: number) => {
+    safeHandleRawWithRole('payroll:delete', ROLES.FINANCE, (_event, periodId: number, userId: number) => {
         return db.transaction(() => {
             const period = getPeriodOrFail(db, periodId)
             if (!period) { return { success: false, error: PERIOD_NOT_FOUND } }
@@ -315,7 +352,7 @@ function registerPayrollStatusHandlers(db: ReturnType<typeof getDatabase>): void
         })()
     })
 
-    safeHandleRaw('payroll:recalculate', (_event, periodId: number, userId: number) => {
+    safeHandleRawWithRole('payroll:recalculate', ROLES.FINANCE, (_event, periodId: number, userId: number) => {
         return db.transaction(() => recalculatePayroll(db, periodId, userId))()
     })
 }
@@ -359,14 +396,14 @@ function registerStaffAllowanceHandlers(db: ReturnType<typeof getDatabase>): voi
         return db.prepare('SELECT * FROM staff_allowance WHERE staff_id = ? AND is_active = 1 ORDER BY allowance_name').all(staffId)
     })
 
-    safeHandleRaw('staff:addAllowance', (_event, staffId: number, allowanceName: string, amount: number) => {
+    safeHandleRawWithRole('staff:addAllowance', ROLES.FINANCE, (_event, staffId: number, allowanceName: string, amount: number) => {
         const result = db.prepare(
             'INSERT INTO staff_allowance (staff_id, allowance_name, amount) VALUES (?, ?, ?)'
         ).run(staffId, allowanceName, amount)
         return { success: true, id: result.lastInsertRowid }
     })
 
-    safeHandleRaw('staff:deleteAllowance', (_event, allowanceId: number) => {
+    safeHandleRawWithRole('staff:deleteAllowance', ROLES.FINANCE, (_event, allowanceId: number) => {
         db.prepare('UPDATE staff_allowance SET is_active = 0 WHERE id = ?').run(allowanceId)
         return { success: true }
     })
@@ -409,7 +446,8 @@ export function registerPayrollHandlers(): void {
         return payrollJournalService.postPayrollToGL(periodId, userId)
     })
 
-    registerPayrollStatusHandlers(db)
+    const journalService = new DoubleEntryJournalService(db)
+    registerPayrollStatusHandlers(db, journalService)
     registerStaffAllowanceHandlers(db)
 }
 

@@ -15,7 +15,7 @@ import { reportScheduler } from './services/reports/ReportScheduler'
 import { installConsoleOverrides, log } from './utils/logger'
 import { WindowStateManager } from './utils/windowState'
 
-import type { BrowserWindow as BrowserWindowType } from 'electron'
+import type { BrowserWindow as BrowserWindowType, Event as ElectronEvent, HandlerDetails } from 'electron'
 
 // ESM __dirname polyfill
 const __filename = fileURLToPath(import.meta.url)
@@ -83,7 +83,7 @@ function createWindow() {
     })
 
     // Pipe renderer logs to main process using the Event object API.
-    win.webContents.on('console-message', (event) => {
+    win.webContents.on('console-message', (event: ElectronEvent & { message: string }) => {
         const message = event.message
         if (message && message.length > 0) {
             log.warn(`[Renderer] ${message}`)
@@ -91,7 +91,7 @@ function createWindow() {
     })
 
     // Security: Block external navigation attempts
-    win.webContents.on('will-navigate', (event, url) => {
+    win.webContents.on('will-navigate', (event: ElectronEvent, url: string) => {
         // Allow navigation to local files and dev server only
         const isLocalFile = url.startsWith('file://')
         const isDevServer = VITE_DEV_SERVER_URL && url.startsWith(VITE_DEV_SERVER_URL)
@@ -102,7 +102,7 @@ function createWindow() {
     })
 
     // Security: Block new window creation (popups)
-    win.webContents.setWindowOpenHandler(({ url }) => {
+    win.webContents.setWindowOpenHandler(({ url }: HandlerDetails) => {
         log.warn(`Blocked popup window request for: ${url}`)
         return { action: 'deny' }
     })
@@ -135,6 +135,21 @@ async function bootstrap(): Promise<void> {
 
     // Now that Electron is ready, redirect console.error/warn to log file
     installConsoleOverrides()
+
+    // Set Content Security Policy
+    const { session } = await import('electron')
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+        callback({
+            responseHeaders: {
+                ...details.responseHeaders,
+                'Content-Security-Policy': [
+                    VITE_DEV_SERVER_URL
+                        ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws:; object-src 'none'; frame-src 'none'"
+                        : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; frame-src 'none'"
+                ]
+            }
+        })
+    })
 
     // Initialize database
     let dbReady = false
@@ -184,7 +199,7 @@ async function bootstrap(): Promise<void> {
 }
 
 // Top-level await deadlocks Electron in bundled ESM — must use .catch()
-void bootstrap().catch((error: unknown) => {
+void bootstrap().catch((error: unknown) => { // NOSONAR — top-level await deadlocks Electron ESM
     log.error('Application startup failed:', error)
     dialog.showErrorBox('Startup Error', 'Failed to start application.')
     app.quit()

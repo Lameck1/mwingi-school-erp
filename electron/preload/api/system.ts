@@ -32,6 +32,10 @@ export function createSystemAPI() {
     getImportTemplate: (entityType: string) => ipcRenderer.invoke('data:getTemplate', entityType),
     downloadImportTemplate: (entityType: string) => ipcRenderer.invoke('data:downloadTemplate', entityType),
 
+    // Error Logging
+    logError: (data: { error: string; stack?: string; componentStack?: string | null; timestamp: string }) =>
+      ipcRenderer.invoke('system:logError', data),
+
     // Updates
     checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
     downloadUpdate: () => ipcRenderer.invoke('download-update'),
