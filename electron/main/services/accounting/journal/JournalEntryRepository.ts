@@ -2,43 +2,30 @@ import { randomUUID } from 'node:crypto';
 
 import { getDatabase } from '../../../database';
 import { logAudit } from '../../../database/utils/audit';
+import { SchemaHelper } from '../../../database/utils/schema';
 
 import type { JournalEntryData, JournalEntryLineData } from '../JournalService.types';
 import type Database from 'better-sqlite3';
 
 export class JournalEntryRepository {
   private readonly db: Database.Database;
-  private sourceLedgerColumnAvailable: boolean | null = null;
+  private readonly schemaHelper: SchemaHelper;
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase();
+    this.schemaHelper = new SchemaHelper(this.db);
   }
 
   private hasSourceLedgerTxnColumn(): boolean {
-    if (this.sourceLedgerColumnAvailable !== null) {
-      return this.sourceLedgerColumnAvailable;
-    }
-    const columns = this.db.prepare('PRAGMA table_info(journal_entry)').all() as Array<{ name: string }>;
-    this.sourceLedgerColumnAvailable = columns.some((column) => column.name === 'source_ledger_txn_id');
-    return this.sourceLedgerColumnAvailable;
+    return this.schemaHelper.columnExists('journal_entry', 'source_ledger_txn_id');
   }
 
   tableExists(tableName: string): boolean {
-    const row = this.db.prepare(`
-      SELECT name
-      FROM sqlite_master
-      WHERE type = 'table' AND name = ?
-    `).get(tableName) as { name: string } | undefined;
-    return Boolean(row?.name);
+    return this.schemaHelper.tableExists(tableName);
   }
 
   tableHasColumn(tableName: string, columnName: string): boolean {
-    if (!this.tableExists(tableName)) {
-      return false;
-    }
-
-    const columns = this.db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
-    return columns.some((column) => column.name === columnName);
+    return this.schemaHelper.columnExists(tableName, columnName);
   }
 
   getOrCreateWorkflowId(entityType: string, workflowName: string): number | null {

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { getDatabase } from '../../../database'
 import { logAudit } from '../../../database/utils/audit'
+import { SchemaHelper } from '../../../database/utils/schema'
 import { OUTSTANDING_INVOICE_STATUSES, asSqlInList } from '../../../utils/financeTransactionTypes'
 import { DoubleEntryJournalService } from '../../accounting/DoubleEntryJournalService'
 
@@ -12,19 +13,15 @@ const PAYABLE_INVOICE_STATUSES_SQL = asSqlInList(OUTSTANDING_INVOICE_STATUSES)
 
 export class PaymentProcessor {
   private readonly db: Database.Database
-  private idempotencyColumnAvailable: boolean | null = null
+  private readonly schemaHelper: SchemaHelper
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
+    this.schemaHelper = new SchemaHelper(this.db)
   }
 
   private hasIdempotencyColumn(): boolean {
-    if (this.idempotencyColumnAvailable !== null) {
-      return this.idempotencyColumnAvailable
-    }
-    const columns = this.db.prepare('PRAGMA table_info(ledger_transaction)').all() as Array<{ name: string }>
-    this.idempotencyColumnAvailable = columns.some(column => column.name === 'idempotency_key')
-    return this.idempotencyColumnAvailable
+    return this.schemaHelper.columnExists('ledger_transaction', 'idempotency_key')
   }
 
   private getOrCreateSchoolFeesCategory(): number {

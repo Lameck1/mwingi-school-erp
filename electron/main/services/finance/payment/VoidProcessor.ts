@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { getDatabase } from '../../../database'
 import { logAudit } from '../../../database/utils/audit'
+import { SchemaHelper } from '../../../database/utils/schema'
 import { VoidAuditRepository } from './PaymentTransactionRepository'
 
 import type { PaymentResult, PaymentTransaction, VoidPaymentData } from '../PaymentService.types'
@@ -10,20 +11,16 @@ import type Database from 'better-sqlite3'
 export class VoidProcessor {
   private readonly db: Database.Database
   private readonly voidAuditRepo: VoidAuditRepository
-  private sourceLedgerColumnAvailable: boolean | null = null
+  private readonly schemaHelper: SchemaHelper
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
     this.voidAuditRepo = new VoidAuditRepository(this.db)
+    this.schemaHelper = new SchemaHelper(this.db)
   }
 
   private hasSourceLedgerColumn(): boolean {
-    if (this.sourceLedgerColumnAvailable !== null) {
-      return this.sourceLedgerColumnAvailable
-    }
-    const columns = this.db.prepare('PRAGMA table_info(journal_entry)').all() as Array<{ name: string }>
-    this.sourceLedgerColumnAvailable = columns.some(column => column.name === 'source_ledger_txn_id')
-    return this.sourceLedgerColumnAvailable
+    return this.schemaHelper.columnExists('journal_entry', 'source_ledger_txn_id')
   }
 
   private getPaymentAllocations(transactionId: number): Array<{ invoice_id: number; applied_amount: number }> {
@@ -167,7 +164,7 @@ export class VoidProcessor {
         this.markTransactionVoided(data)
 
         // Use Repository to record audit
-        this.voidAuditRepo.recordVoid({
+        void this.voidAuditRepo.recordVoid({
           transactionId: data.transaction_id,
           studentId: transaction.student_id,
           amount: transaction.amount,
