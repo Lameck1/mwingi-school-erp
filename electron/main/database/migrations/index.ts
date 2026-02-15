@@ -16,6 +16,7 @@ import { up as approvalCanonicalizationUp } from './incremental/1011_approval_ca
 import { up as addVoidReversalTypeUp } from './incremental/1012_add_void_reversal_type.js'
 import { up as financialPeriodStatusUp } from './incremental/1013_financial_period_status.js'
 import { up as remediationSchemaFixesUp } from './incremental/1014_remediation_schema_fixes.js'
+import { up as seedMissingSystemAccountsUp } from './incremental/1015_seed_missing_system_accounts.js'
 
 import type * as Database from 'better-sqlite3'
 
@@ -60,6 +61,7 @@ const migrations: Migration[] = [
     { name: '1012_add_void_reversal_type', fn: addVoidReversalTypeUp },
     { name: '1013_financial_period_status', fn: financialPeriodStatusUp },
     { name: '1014_remediation_schema_fixes', fn: remediationSchemaFixesUp },
+    { name: '1015_seed_missing_system_accounts', fn: seedMissingSystemAccountsUp },
 ]
 
 /**

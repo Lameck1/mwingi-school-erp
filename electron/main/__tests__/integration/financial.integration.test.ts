@@ -276,8 +276,8 @@ function createSchema(db: Database.Database) {
       ('1020', 'Bank Account - KCB',        'ASSET', 'DEBIT'),
       ('1030', 'Mobile Money - M-Pesa',     'ASSET', 'DEBIT'),
       ('1100', 'Accounts Receivable - Students', 'ASSET', 'DEBIT'),
-      ('4000', 'Tuition Revenue',           'REVENUE', 'CREDIT'),
-      ('2000', 'Accounts Payable',          'LIABILITY', 'CREDIT');
+      ('2010', 'Accounts Payable',          'LIABILITY', 'CREDIT'),
+      ('4010', 'Tuition Fees',              'REVENUE', 'CREDIT');
 
     INSERT INTO fee_invoice
       (student_id, invoice_number, term_id, invoice_date, due_date, total_amount, amount, amount_paid, status, created_by_user_id)

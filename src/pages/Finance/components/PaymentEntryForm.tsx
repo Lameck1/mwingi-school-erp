@@ -116,7 +116,8 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                     payment_reference: formData.payment_reference,
                     transaction_date: formData.transaction_date,
                     description: formData.description,
-                    term_id: currentTerm?.id || 0
+                    term_id: currentTerm?.id || 0,
+                    idempotency_key: crypto.randomUUID()
                 }, user.id)
 
                 if (!result.success) {throw new Error(result.errors?.[0] || result.error || 'Payment failed')}

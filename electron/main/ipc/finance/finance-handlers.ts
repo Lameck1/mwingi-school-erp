@@ -12,11 +12,11 @@ import type { PaymentData, PaymentResult, TransactionData, InvoiceData, InvoiceI
 import type { ScholarshipData, AllocationData } from '../../services/finance/ScholarshipService'
 
 const registerCashFlowHandlers = (): void => {
-    safeHandleRaw('finance:getCashFlow', (_event, startDate: string, endDate: string) => {
+    safeHandleRawWithRole('finance:getCashFlow', ROLES.STAFF, (_event, startDate: string, endDate: string) => {
         return CashFlowService.getCashFlowStatement(startDate, endDate)
     })
 
-    safeHandleRaw('finance:getForecast', (_event, months: number) => {
+    safeHandleRawWithRole('finance:getForecast', ROLES.STAFF, (_event, months: number) => {
         return CashFlowService.getForecast(months)
     })
 }
@@ -190,7 +190,7 @@ const registerPaymentRecordHandler = (context: FinanceContext): void => {
 const registerPaymentQueryHandlers = (context: FinanceContext): void => {
     const { db } = context
 
-    safeHandleRaw('payment:getByStudent', (_event, studentId: number) => {
+    safeHandleRawWithRole('payment:getByStudent', ROLES.STAFF, (_event, studentId: number) => {
         const payments = db.prepare(`SELECT lt.*, r.receipt_number FROM ledger_transaction lt
       LEFT JOIN receipt r ON lt.id = r.transaction_id
       WHERE lt.student_id = ? AND lt.transaction_type = 'FEE_PAYMENT' AND lt.is_voided = 0
@@ -520,7 +520,7 @@ function createInvoice(
 const registerInvoiceHandlers = (context: FinanceContext): void => {
     const { db } = context
 
-    safeHandleRaw('invoice:getItems', (_event, invoiceId: number) => {
+    safeHandleRawWithRole('invoice:getItems', ROLES.STAFF, (_event, invoiceId: number) => {
         const items = db.prepare(`
             SELECT ii.*, fc.category_name
             FROM invoice_item ii
@@ -564,11 +564,11 @@ const registerInvoiceHandlers = (context: FinanceContext): void => {
         return createInvoice(db, data, items, userId)
     })
 
-    safeHandleRaw('invoice:getByStudent', (_event, studentId: number) => {
+    safeHandleRawWithRole('invoice:getByStudent', ROLES.STAFF, (_event, studentId: number) => {
         return db.prepare('SELECT * FROM fee_invoice WHERE student_id = ? ORDER BY invoice_date DESC').all(studentId) as FeeInvoiceDB[]
     })
 
-    safeHandleRaw('invoice:getAll', () => {
+    safeHandleRawWithRole('invoice:getAll', ROLES.STAFF, (_event) => {
         const invoices = db.prepare(`
             SELECT fi.*,
                    s.first_name || ' ' || s.last_name as student_name,
@@ -591,7 +591,7 @@ const registerInvoiceHandlers = (context: FinanceContext): void => {
 const registerFeeStructureHandlers = (context: FinanceContext): void => {
     const { db } = context
 
-    safeHandleRaw('fee:getCategories', () => {
+    safeHandleRawWithRole('fee:getCategories', ROLES.STAFF, (_event) => {
         return db.prepare('SELECT * FROM fee_category WHERE is_active = 1').all()
     })
 
@@ -616,7 +616,7 @@ const registerFeeStructureHandlers = (context: FinanceContext): void => {
         return { success: true, id: result.lastInsertRowid }
     })
 
-    safeHandleRaw('fee:getStructure', (_event, academicYearId: number, termId: number) => {
+    safeHandleRawWithRole('fee:getStructure', ROLES.STAFF, (_event, academicYearId: number, termId: number) => {
         return db.prepare(`
             SELECT fs.*, fc.category_name, s.stream_name
             FROM fee_structure fs
@@ -824,11 +824,11 @@ const registerScholarshipHandlers = (): void => {
 }
 
 const registerReceiptHandlers = (db: ReturnType<typeof getDatabase>): void => {
-    safeHandleRaw('receipt:getByTransaction', (_event, transactionId: number) => {
+    safeHandleRawWithRole('receipt:getByTransaction', ROLES.STAFF, (_event, transactionId: number) => {
         return db.prepare('SELECT * FROM receipt WHERE transaction_id = ?').get(transactionId) || null
     })
 
-    safeHandleRaw('receipt:markPrinted', (_event, receiptId: number) => {
+    safeHandleRawWithRole('receipt:markPrinted', ROLES.STAFF, (_event, receiptId: number) => {
         const receipt = db.prepare('SELECT id FROM receipt WHERE id = ?').get(receiptId)
         if (!receipt) { return { success: false, error: 'Receipt not found' } }
         db.prepare('UPDATE receipt SET printed_count = COALESCE(printed_count, 0) + 1, last_printed_at = CURRENT_TIMESTAMP WHERE id = ?').run(receiptId)

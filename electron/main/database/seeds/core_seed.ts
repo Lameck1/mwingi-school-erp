@@ -59,13 +59,16 @@ const STANDARD_ACCOUNTS: readonly StandardAccount[] = [
   { code: '5600', name: 'Depreciation Expense', type: 'EXPENSE', balance: 'DEBIT', system: 1 },
   { code: '5700', name: 'Bank Charges', type: 'EXPENSE', balance: 'DEBIT', system: 1 },
   { code: '5800', name: 'Professional Fees', type: 'EXPENSE', balance: 'DEBIT', system: 1 },
-  { code: '5900', name: 'Miscellaneous Expenses', type: 'EXPENSE', balance: 'DEBIT', system: 1 }
+  { code: '5900', name: 'Miscellaneous Expenses', type: 'EXPENSE', balance: 'DEBIT', system: 1 },
+  { code: '5250', name: 'Scholarship Expense', type: 'EXPENSE', balance: 'DEBIT', system: 1 },
+  { code: '6000', name: 'Boarding Expense', type: 'EXPENSE', balance: 'DEBIT', system: 1 },
+  { code: '6100', name: 'Inventory Consumption', type: 'EXPENSE', balance: 'DEBIT', system: 1 }
 ]
 
 const FEE_CATEGORY_SEEDS: readonly FeeCategorySeed[] = [
   { name: 'Tuition', description: 'Tuition Fees', glAccountCode: '4010' },
   { name: 'Feeding', description: 'Meals/Feeding Fees', glAccountCode: '4020' },
-  { name: 'Maintenance', description: 'Maintenance Fees', glAccountCode: '5500' },
+  { name: 'Maintenance', description: 'Maintenance Fees', glAccountCode: '4300' },
   { name: 'Boarding', description: 'Boarding Fees', glAccountCode: '4020' },
   { name: 'Activity', description: 'Activity Fees', glAccountCode: '4040' },
   { name: 'Exams', description: 'Exam Fees', glAccountCode: '4050' },
@@ -94,10 +97,10 @@ function seedAdminUser(db: Database): void {
     throw new Error('SEED_DEFAULT_ADMIN_PASSWORD_HASH must be set when seeding the default admin account.')
   }
 
-  db.exec(`
+  db.prepare(`
       INSERT OR IGNORE INTO user (username, password_hash, full_name, email, role) VALUES 
-      ('admin', '${passwordHash}', 'System Administrator', 'admin@mwingiadventist.ac.ke', 'ADMIN');
-    `)
+      (?, ?, 'System Administrator', 'admin@mwingiadventist.ac.ke', 'ADMIN')
+    `).run('admin', passwordHash)
 }
 
 function seedAcademicStructure(db: Database): void {
@@ -107,12 +110,13 @@ function seedAcademicStructure(db: Database): void {
 
   const year2026 = db.prepare(`SELECT id FROM academic_year WHERE year_name = '2026'`).get() as { id: number } | undefined
   if (year2026) {
-    db.exec(`
-        INSERT OR IGNORE INTO term (academic_year_id, term_number, term_name, start_date, end_date, is_current, status) VALUES
-        (${year2026.id}, 1, 'Term 1', '2026-01-06', '2026-04-11', 1, 'OPEN'),
-        (${year2026.id}, 2, 'Term 2', '2026-04-28', '2026-08-08', 0, 'OPEN'),
-        (${year2026.id}, 3, 'Term 3', '2026-08-25', '2026-11-28', 0, 'OPEN');
-      `)
+    const insertTerm = db.prepare(`
+        INSERT OR IGNORE INTO term (academic_year_id, term_number, term_name, start_date, end_date, is_current, status)
+        VALUES (?, ?, ?, ?, ?, ?, 'OPEN')
+    `)
+    insertTerm.run(year2026.id, 1, 'Term 1', '2026-01-06', '2026-04-11', 1)
+    insertTerm.run(year2026.id, 2, 'Term 2', '2026-04-28', '2026-08-08', 0)
+    insertTerm.run(year2026.id, 3, 'Term 3', '2026-08-25', '2026-11-28', 0)
   }
 
   db.exec(`

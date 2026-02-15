@@ -1,6 +1,7 @@
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 import { DoubleEntryJournalService } from '../../services/accounting/DoubleEntryJournalService'
+import { SystemAccounts } from '../../services/accounting/SystemAccounts'
 import { PayrollJournalService } from '../../services/finance/PayrollJournalService'
 import { safeHandleRaw, safeHandleRawWithRole, ROLES } from '../ipc-result'
 
@@ -298,18 +299,18 @@ function registerPayrollStatusHandlers(db: ReturnType<typeof getDatabase>, journ
 
                 const journalResult = journalService.createJournalEntrySync({
                     entry_date: paymentDate,
-                    entry_type: 'SALARY_PAYMENT',
+                    entry_type: 'SALARY',
                     description: `Salary payment for period #${periodId}`,
                     created_by_user_id: userId,
                     lines: [
                         {
-                            gl_account_code: '2100',
+                            gl_account_code: SystemAccounts.SALARY_PAYABLE,
                             debit_amount: totalNet,
                             credit_amount: 0,
                             description: 'Salary payment - reduce payable'
                         },
                         {
-                            gl_account_code: '1020',
+                            gl_account_code: SystemAccounts.BANK,
                             debit_amount: 0,
                             credit_amount: totalNet,
                             description: 'Bank transfer for salaries'

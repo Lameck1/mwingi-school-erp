@@ -10,16 +10,17 @@ export const SystemAccounts = {
     INVENTORY_ASSET: '1200',
 
     // Liabilities
-    ACCOUNTS_PAYABLE: '2000',
+    ACCOUNTS_PAYABLE: '2010',
+    SALARY_PAYABLE: '2100',
 
     // Equity
-    RETAINED_EARNINGS: '3000',
+    RETAINED_EARNINGS: '3020',
 
     // Revenue
-    TUITION_REVENUE: '4000',
+    TUITION_REVENUE: '4010',
 
     // Expenses
-    SCHOLARSHIP_EXPENSE: '5200', // Or Contra-Revenue
+    SCHOLARSHIP_EXPENSE: '5250',
     BOARDING_EXPENSE: '6000',
     INVENTORY_EXPENSE: '6100', // General Inventory Consumption
 } as const;
