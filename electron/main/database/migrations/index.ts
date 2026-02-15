@@ -13,6 +13,7 @@ import { up as attendanceAndReconciliationUniqUp } from './incremental/1008_atte
 import { up as grantExpiryDateUp } from './incremental/1009_grant_expiry_date.js'
 import { up as bankReconciliationConstraintsUp } from './incremental/1010_bank_reconciliation_constraints.js'
 import { up as approvalCanonicalizationUp } from './incremental/1011_approval_canonicalization.js'
+import { up as addVoidReversalTypeUp } from './incremental/1012_add_void_reversal_type.js'
 
 import type * as Database from 'better-sqlite3'
 
@@ -54,6 +55,7 @@ const migrations: Migration[] = [
     { name: '1009_grant_expiry_date', fn: grantExpiryDateUp },
     { name: '1010_bank_reconciliation_constraints', fn: bankReconciliationConstraintsUp },
     { name: '1011_approval_canonicalization', fn: approvalCanonicalizationUp },
+    { name: '1012_add_void_reversal_type', fn: addVoidReversalTypeUp },
 ]
 
 /**

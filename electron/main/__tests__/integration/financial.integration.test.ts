@@ -15,10 +15,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { CreditAutoApplicationService } from '../../services/finance/CreditAutoApplicationService'
 import { PaymentIntegrationService } from '../../services/finance/PaymentIntegrationService'
+import { DoubleEntryJournalService } from '../../services/accounting/DoubleEntryJournalService'
+import { FeeProrationService } from '../../services/finance/FeeProrationService'
+import { SystemAccounts } from '../../services/accounting/SystemAccounts'
+import { PaymentService } from '../../services/finance/PaymentService'
+import { VoidProcessor } from '../../services/finance/PaymentService.internal'
 
 // Mock audit — no DB writes needed for audit table during these tests
 vi.mock('../../database/utils/audit', () => ({
   logAudit: vi.fn(),
+}))
+
+// Mock ipc handler
+vi.mock('../../ipc-result', () => ({
+  safeHandleRaw: vi.fn(),
 }))
 
 // Mock getDatabase so services that call it internally get our test DB
@@ -39,14 +49,37 @@ function createSchema(db: Database.Database) {
       first_name TEXT NOT NULL,
       last_name TEXT NOT NULL,
       admission_number TEXT UNIQUE NOT NULL,
-      credit_balance INTEGER DEFAULT 0
+      credit_balance INTEGER DEFAULT 0,
+      student_type TEXT DEFAULT 'DAY_SCHOLAR',
+      admission_date DATE
     );
 
     CREATE TABLE user (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE,
       email TEXT,
-      role TEXT
+      role TEXT,
+      password_hash TEXT,
+      full_name TEXT
+    );
+
+    CREATE TABLE academic_year (
+        id INTEGER PRIMARY KEY, -- Manual ID for seeding
+        year_name TEXT NOT NULL,
+        start_date DATE NOT NULL,
+        end_date DATE NOT NULL,
+        is_active BOOLEAN DEFAULT 1
+    );
+
+    CREATE TABLE term (
+        id INTEGER PRIMARY KEY, -- Manual ID
+        academic_year_id INTEGER NOT NULL,
+        term_number INTEGER NOT NULL,
+        term_name TEXT NOT NULL,
+        start_date DATE NOT NULL,
+        end_date DATE NOT NULL,
+        is_active BOOLEAN DEFAULT 1,
+        FOREIGN KEY (academic_year_id) REFERENCES academic_year(id)
     );
 
     CREATE TABLE transaction_category (
@@ -76,7 +109,8 @@ function createSchema(db: Database.Database) {
       created_by_user_id INTEGER NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (student_id) REFERENCES student(id),
-      FOREIGN KEY (created_by_user_id) REFERENCES user(id)
+      FOREIGN KEY (created_by_user_id) REFERENCES user(id),
+      FOREIGN KEY (term_id) REFERENCES term(id)
     );
 
     -- Legacy ledger
@@ -133,6 +167,7 @@ function createSchema(db: Database.Database) {
       account_type TEXT NOT NULL,
       parent_account_id INTEGER,
       is_active BOOLEAN DEFAULT 1,
+      normal_balance TEXT DEFAULT 'DEBIT',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -146,13 +181,17 @@ function createSchema(db: Database.Database) {
       staff_id INTEGER,
       term_id INTEGER,
       is_posted BOOLEAN DEFAULT 0,
+      posted_by_user_id INTEGER, -- Added
+      posted_at DATETIME, -- Added
       is_voided BOOLEAN DEFAULT 0,
       requires_approval BOOLEAN DEFAULT 0,
       approval_status TEXT DEFAULT 'APPROVED',
       voided_reason TEXT,
       voided_by_user_id INTEGER,
+      voided_at DATETIME, -- Added
       created_by_user_id INTEGER NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      source_ledger_txn_id INTEGER, -- Added
       FOREIGN KEY (student_id) REFERENCES student(id),
       FOREIGN KEY (created_by_user_id) REFERENCES user(id)
     );
@@ -168,6 +207,16 @@ function createSchema(db: Database.Database) {
       FOREIGN KEY (journal_entry_id) REFERENCES journal_entry(id),
       FOREIGN KEY (gl_account_id) REFERENCES gl_account(id)
     );
+    
+    CREATE TABLE approval_rule (
+       id INTEGER PRIMARY KEY,
+       transaction_type TEXT,
+       is_active BOOLEAN DEFAULT 1,
+       min_amount INTEGER,
+       days_since_transaction INTEGER,
+       rule_name TEXT
+    );
+    -- We assume approval_rule is empty or basic, tests clear it anyway.
 
     -- Credit system
     CREATE TABLE credit_transaction (
@@ -182,7 +231,6 @@ function createSchema(db: Database.Database) {
       FOREIGN KEY (student_id) REFERENCES student(id)
     );
 
-    -- Audit log (used by mock)
     CREATE TABLE audit_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
@@ -193,6 +241,15 @@ function createSchema(db: Database.Database) {
       new_values TEXT,
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+    
+    -- Payment Allocation (needed for safe voiding tests)
+    CREATE TABLE payment_invoice_allocation (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        transaction_id INTEGER NOT NULL, 
+        invoice_id INTEGER NOT NULL,
+        applied_amount INTEGER NOT NULL
+    );
+
 
     -- Seed data -----------------------------------------------------------
 
@@ -203,17 +260,25 @@ function createSchema(db: Database.Database) {
     INSERT INTO student (first_name, last_name, admission_number) VALUES
       ('Alice', 'Mwangi', 'STU-001'),
       ('Bob', 'Odhiambo', 'STU-002');
+      
+    INSERT INTO academic_year (id, year_name, start_date, end_date) VALUES 
+      (2025, '2025', '2025-01-01', '2025-12-31');
+      
+    INSERT INTO term (id, academic_year_id, term_number, term_name, start_date, end_date) VALUES 
+      (1, 2025, 1, 'Term 1', '2025-01-01', '2025-04-01');
 
     INSERT INTO transaction_category (category_name, category_type, is_system, is_active) VALUES
       ('School Fees', 'INCOME', 1, 1),
-      ('Miscellaneous', 'INCOME', 0, 1);
+      ('Miscellaneous', 'INCOME', 0, 1),
+      ('Fees', 'INCOME', 1, 1); -- Ensure 'Fees' category exists for tests
 
-    INSERT INTO gl_account (account_code, account_name, account_type) VALUES
-      ('1010', 'Cash on Hand',              'ASSET'),
-      ('1020', 'Bank Account - KCB',        'ASSET'),
-      ('1030', 'Mobile Money - M-Pesa',     'ASSET'),
-      ('1100', 'Accounts Receivable - Students', 'ASSET'),
-      ('4000', 'Tuition Revenue',           'REVENUE');
+    INSERT INTO gl_account (account_code, account_name, account_type, normal_balance) VALUES
+      ('1010', 'Cash on Hand',              'ASSET', 'DEBIT'),
+      ('1020', 'Bank Account - KCB',        'ASSET', 'DEBIT'),
+      ('1030', 'Mobile Money - M-Pesa',     'ASSET', 'DEBIT'),
+      ('1100', 'Accounts Receivable - Students', 'ASSET', 'DEBIT'),
+      ('4000', 'Tuition Revenue',           'REVENUE', 'CREDIT'),
+      ('2000', 'Accounts Payable',          'LIABILITY', 'CREDIT');
 
     INSERT INTO fee_invoice
       (student_id, invoice_number, term_id, invoice_date, due_date, total_amount, amount, amount_paid, status, created_by_user_id)
@@ -283,7 +348,7 @@ describe('Financial Integration', () => {
         const lines = testDb
           .prepare('SELECT * FROM journal_entry_line WHERE journal_entry_id = ?')
           .all(result.journalEntryId) as Array<{ debit_amount: number; credit_amount: number }>
-        
+
         const totalDebit = lines.reduce((s, l) => s + l.debit_amount, 0)
         const totalCredit = lines.reduce((s, l) => s + l.credit_amount, 0)
         expect(totalDebit).toBe(totalCredit)
@@ -500,6 +565,174 @@ describe('Financial Integration', () => {
 
       const newBalance = await creditService.getStudentCreditBalance(1)
       expect(newBalance).toBe(20000)
+    })
+  })
+
+  // ── 5. Financial Integrity & GL Integration ───────────────────
+
+  describe('Financial Integrity (GL)', () => {
+    let journalService: DoubleEntryJournalService
+
+    beforeEach(() => {
+      journalService = new DoubleEntryJournalService(testDb)
+    })
+
+    it('creates GL entries when generating an invoice', async () => {
+      const studentId = 1
+      const userId = 1
+
+      // Manually invoke recordInvoiceSync
+      const invoiceItems = [{
+        gl_account_code: SystemAccounts.TUITION_REVENUE,
+        amount: 5000,
+        description: 'Tuition Fee'
+      }]
+
+      const result = journalService.recordInvoiceSync(studentId, invoiceItems, '2025-01-01', userId)
+      if (!result.success) console.error('Invoice Error:', result.error)
+      expect(result.success).toBe(true)
+
+      // Verify Journal Entry created
+      const entry = testDb.prepare('SELECT * FROM journal_entry WHERE id = ?').get(result.entry_id) as any
+      expect(entry).toBeDefined()
+
+      // Verify Lines with join to get code
+      const lines = testDb.prepare(`
+             SELECT jel.*, ga.account_code as gl_account_code 
+             FROM journal_entry_line jel
+             JOIN gl_account ga ON jel.gl_account_id = ga.id
+             WHERE jel.journal_entry_id = ?
+         `).all(result.entry_id) as any[]
+      expect(lines.length).toBe(2)
+
+      const dr = lines.find((l: any) => l.debit_amount > 0)
+      const cr = lines.find((l: any) => l.credit_amount > 0)
+
+      expect(dr.gl_account_code).toBe(SystemAccounts.ACCOUNTS_RECEIVABLE)
+      expect(dr.debit_amount).toBe(5000)
+      expect(cr.gl_account_code).toBe(SystemAccounts.TUITION_REVENUE)
+      expect(cr.credit_amount).toBe(5000)
+    })
+  })
+
+  // ── 6. Double Entry Voiding ───────────────────────────────────
+
+  describe('Double Entry Voiding', () => {
+    let journalService: DoubleEntryJournalService
+
+    beforeEach(() => {
+      journalService = new DoubleEntryJournalService(testDb)
+      // Ensure no approval rules block immediate voiding
+      testDb.prepare("DELETE FROM approval_rule").run()
+    })
+
+    it('creates a reversal entry instead of soft delete', async () => {
+      // 1. Create original entry
+      const result = journalService.createJournalEntrySync({
+        entry_date: '2025-01-01',
+        entry_type: 'FEE_PAYMENT',
+        description: 'Original Payment',
+        created_by_user_id: 1,
+        lines: [
+          { gl_account_code: SystemAccounts.CASH, debit_amount: 1000, credit_amount: 0, description: 'Cash' },
+          { gl_account_code: SystemAccounts.ACCOUNTS_RECEIVABLE, debit_amount: 0, credit_amount: 1000, description: 'AR' }
+        ]
+      })
+
+      expect(result.success).toBe(true)
+      const originalId = result.entry_id
+
+      // 2. Void it (MUST AWAIT)
+      const voidResult = await journalService.voidJournalEntry(originalId!, 'Mistake', 1)
+      if (!voidResult.success) console.error('Void Error:', voidResult.message)
+      expect(voidResult.success).toBe(true)
+
+      // 3. Verify Original is Voided
+      const original = testDb.prepare('SELECT * FROM journal_entry WHERE id = ?').get(originalId) as any
+      expect(original.is_voided).toBe(1)
+
+      // 4. Verify Reversal Entry
+      const reversal = testDb.prepare('SELECT * FROM journal_entry WHERE description LIKE ?').get(`Void Reversal for Ref: ${original.entry_ref}%`) as any
+      expect(reversal).toBeDefined()
+
+      // Verify Reversal Lines with join
+      const lines = testDb.prepare(`
+            SELECT jel.*, ga.account_code as gl_account_code
+            FROM journal_entry_line jel
+            JOIN gl_account ga ON jel.gl_account_id = ga.id
+            WHERE jel.journal_entry_id = ?
+        `).all(reversal.id) as any[]
+
+      // Should be swapped
+      const cashLine = lines.find((l: any) => l.gl_account_code === SystemAccounts.CASH)
+      expect(cashLine.credit_amount).toBe(1000)
+      expect(cashLine.debit_amount).toBe(0)
+
+      const arLine = lines.find((l: any) => l.gl_account_code === SystemAccounts.ACCOUNTS_RECEIVABLE)
+      expect(arLine.debit_amount).toBe(1000)
+      expect(arLine.credit_amount).toBe(0)
+    })
+  })
+
+  // ── 7. Payment Voiding Safeguards ─────────────────────────────
+
+  describe('Payment Voiding Safeguards', () => {
+    let voidProcessor: VoidProcessor
+
+    beforeEach(() => {
+      voidProcessor = new VoidProcessor(testDb)
+    })
+
+    it('returns full amount for On Account payments', () => {
+      // 1. Insert Legacy Payment (On Account / No Allocation)
+      const txnId = testDb.prepare(`
+            INSERT INTO ledger_transaction (transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit, recorded_by_user_id, student_id, term_id)
+            VALUES ('PAY-TEST-1', '2025-01-01', 'FEE_PAYMENT', 1, 5000, 'CREDIT', 1, 1, 1)
+        `).run().lastInsertRowid
+
+      const tx = testDb.prepare('SELECT * FROM ledger_transaction WHERE id = ?').get(txnId) as any
+
+      // 2. Call internal method to reverse allocations 
+      const result = (voidProcessor as any).reversePaymentAllocations(tx)
+
+      // Expect full amount back because there are no allocations in `payment_allocation` table
+      expect(result).toBe(5000)
+    })
+  })
+
+  // ── 8. Fee Proration ──────────────────────────────────────────
+
+  describe('Fee Proration', () => {
+    let prorationService: FeeProrationService
+
+    beforeEach(() => {
+      prorationService = new FeeProrationService(testDb)
+    })
+
+    it('calculates proration inclusively', () => {
+      // Jan 1 to Jan 31 = 31 days.
+      // Enroll Jan 31 = 1 day (inclusive).
+      const result = prorationService.calculateProRatedFee(
+        31000,
+        '2025-01-01',
+        '2025-01-31',
+        '2025-01-31'
+      )
+
+      expect(result.days_in_term).toBe(31)
+      expect(result.days_enrolled).toBe(1)
+      expect(result.pro_rated_amount).toBe(1000)
+    })
+
+    it('handles full term correctly', () => {
+      const result = prorationService.calculateProRatedFee(
+        31000,
+        '2025-01-01',
+        '2025-01-31',
+        '2025-01-01'
+      )
+      expect(result.days_enrolled).toBe(31)
+      expect(result.pro_rated_amount).toBe(31000)
     })
   })
 })

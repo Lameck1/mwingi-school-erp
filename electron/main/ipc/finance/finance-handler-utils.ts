@@ -1,5 +1,6 @@
 import { type ExemptionService } from '../../services/finance/ExemptionService'
 import { type PaymentService } from '../../services/finance/PaymentService'
+import { DoubleEntryJournalService } from '../../services/accounting/DoubleEntryJournalService'
 
 import type { InvoiceItemCreation } from './types'
 import type { getDatabase } from '../../database'
@@ -19,6 +20,8 @@ interface FeeStructureRecord {
     fee_items: string
     total_amount: number
     created_at: string
+    gl_account_code?: string
+    gl_account_name?: string
 }
 
 interface EnrollmentRecord {
@@ -85,8 +88,11 @@ export const createGetOrCreateCategoryId = (db: FinanceDb): ((name: string, type
 
 const fetchFeeStructure = (db: FinanceDb, academicYearId: number, termId: number): FeeStructureRecord[] => {
     return db.prepare(`
-        SELECT * FROM fee_structure
-        WHERE academic_year_id = ? AND term_id = ?
+        SELECT fs.*, ga.account_code as gl_account_code, ga.account_name as gl_account_name
+        FROM fee_structure fs
+        LEFT JOIN fee_category fc ON fs.fee_category_id = fc.id
+        LEFT JOIN gl_account ga ON fc.gl_account_id = ga.id
+        WHERE fs.academic_year_id = ? AND fs.term_id = ?
     `).all(academicYearId, termId) as FeeStructureRecord[]
 }
 
@@ -133,7 +139,8 @@ const computeInvoiceItems = (fees: FeeStructureRecord[], exemptions: StudentExem
             amount: finalAmount,
             exemption_id: exemptionId,
             original_amount: originalAmount,
-            exemption_amount: exemptionAmount
+            exemption_amount: exemptionAmount,
+            gl_account_code: fee.gl_account_code
         })
     }
 
@@ -156,13 +163,16 @@ export const generateBatchInvoices = (context: FinanceContext, academicYearId: n
         return { success: false, error: NO_ENROLLMENTS_MESSAGE }
     }
 
+    // Initialize Journal Service
+    const journalService = new DoubleEntryJournalService(db)
+
     let count = 0
     const checkInvoiceStmt = db.prepare(`
         SELECT id
         FROM fee_invoice
         WHERE student_id = ?
-          AND term_id = ?
-          AND (status IS NULL OR status != 'CANCELLED')
+        AND term_id = ?
+        AND (status IS NULL OR status != 'CANCELLED')
         LIMIT 1
     `)
     const insertInvoiceStmt = db.prepare(`
@@ -207,7 +217,7 @@ export const generateBatchInvoices = (context: FinanceContext, academicYearId: n
                 userId
             )
 
-            const invoiceId = insertResult.lastInsertRowid
+            const invoiceId = insertResult.lastInsertRowid as number
             for (const item of invoiceItems) {
                 insertItemStmt.run(
                     invoiceId,
@@ -218,6 +228,30 @@ export const generateBatchInvoices = (context: FinanceContext, academicYearId: n
                     item.original_amount,
                     item.exemption_amount
                 )
+            }
+
+            // Post to Journal
+            // Filter items that have GLAccount codes
+            const journalItems = invoiceItems
+                .filter(item => item.gl_account_code)
+                .map(item => ({
+                    gl_account_code: item.gl_account_code!,
+                    amount: item.amount,
+                    description: item.description
+                }))
+
+            if (journalItems.length > 0) {
+                const journalResult = journalService.recordInvoiceSync(
+                    enrollment.student_id,
+                    journalItems,
+                    invoiceDate,
+                    userId
+                )
+                if (!journalResult.success) {
+                    console.error(`Failed to post journal entry for student ${enrollment.student_id}: ${journalResult.error}`)
+                    // Decide whether to rollback or just log. Strict accounting says rollback.
+                    throw new Error(`Accounting Error: ${journalResult.error}`)
+                }
             }
 
             count += 1
@@ -252,8 +286,8 @@ export const generateSingleStudentInvoice = (
         SELECT id, invoice_number
         FROM fee_invoice
         WHERE student_id = ?
-          AND term_id = ?
-          AND (status IS NULL OR status != 'CANCELLED')
+        AND term_id = ?
+        AND (status IS NULL OR status != 'CANCELLED')
         LIMIT 1
     `).get(studentId, termId) as { id: number; invoice_number: string } | undefined
     if (existing) {
@@ -282,6 +316,9 @@ export const generateSingleStudentInvoice = (
     const invoiceDate = getTodayDate()
     const invoiceNumber = createBatchInvoiceNumber(academicYearId, termId, studentId)
 
+    // Initialize Journal Service
+    const journalService = new DoubleEntryJournalService(db)
+
     try {
         db.transaction(() => {
             const insertResult = db.prepare(`
@@ -295,13 +332,34 @@ export const generateSingleStudentInvoice = (
                 invoiceDate, invoiceDate, invoiceTotal, invoiceTotal, invoiceTotal, originalTotal, userId || null
             )
 
-            const invoiceId = insertResult.lastInsertRowid
+            const invoiceId = insertResult.lastInsertRowid as number
             const insertItemStmt = db.prepare(`
                 INSERT INTO invoice_item (invoice_id, fee_category_id, description, amount, exemption_id, original_amount, exemption_amount)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             `)
             for (const item of invoiceItems) {
                 insertItemStmt.run(invoiceId, item.fee_category_id, item.description, item.amount, item.exemption_id, item.original_amount, item.exemption_amount)
+            }
+
+            // Post to Journal
+            const journalItems = invoiceItems
+                .filter(item => item.gl_account_code)
+                .map(item => ({
+                    gl_account_code: item.gl_account_code!,
+                    amount: item.amount,
+                    description: item.description
+                }))
+
+            if (journalItems.length > 0) {
+                const journalResult = journalService.recordInvoiceSync(
+                    studentId,
+                    journalItems,
+                    invoiceDate,
+                    userId || 1 // Fallback to ID 1 if null (System/Admin)
+                )
+                if (!journalResult.success) {
+                    throw new Error(`Accounting Error: ${journalResult.error}`)
+                }
             }
         })()
 
@@ -313,8 +371,8 @@ export const generateSingleStudentInvoice = (
                 SELECT invoice_number
                 FROM fee_invoice
                 WHERE student_id = ?
-                  AND term_id = ?
-                  AND (status IS NULL OR status != 'CANCELLED')
+                AND term_id = ?
+                AND (status IS NULL OR status != 'CANCELLED')
                 ORDER BY id DESC
                 LIMIT 1
             `).get(studentId, termId) as { invoice_number: string } | undefined

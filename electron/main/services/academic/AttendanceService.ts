@@ -202,49 +202,32 @@ export class AttendanceService {
         let marked = 0
 
         try {
-            const updateStmt = this.db.prepare(`
-                UPDATE attendance
-                SET status = ?, notes = ?, marked_by_user_id = ?, stream_id = ?
-                WHERE student_id = ?
-                  AND attendance_date = ?
-                  AND academic_year_id = ?
-                  AND term_id = ?
-            `)
-            const insertStmt = this.db.prepare(`
+            const upsertStmt = this.db.prepare(`
                 INSERT INTO attendance (
                     student_id, stream_id, academic_year_id, term_id,
                     attendance_date, status, notes, marked_by_user_id
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(student_id, academic_year_id, term_id, attendance_date) DO UPDATE SET
+                    status = excluded.status,
+                    notes = excluded.notes,
+                    marked_by_user_id = excluded.marked_by_user_id,
+                    stream_id = excluded.stream_id
             `)
 
             const transaction = this.db.transaction(() => {
                 for (const entry of entries) {
                     const normalizedNotes = entry.notes?.trim() ? entry.notes.trim() : null
-                    const updateResult = updateStmt.run(
+                    upsertStmt.run(
+                        entry.student_id,
+                        streamId,
+                        academicYearId,
+                        termId,
+                        date,
                         entry.status,
                         normalizedNotes,
-                        userId,
-                        streamId,
-                        entry.student_id,
-                        date,
-                        academicYearId,
-                        termId
+                        userId
                     )
-
-                    if (updateResult.changes === 0) {
-                        insertStmt.run(
-                            entry.student_id,
-                            streamId,
-                            academicYearId,
-                            termId,
-                            date,
-                            entry.status,
-                            normalizedNotes,
-                            userId
-                        )
-                    }
-
                     marked += 1
                 }
             })

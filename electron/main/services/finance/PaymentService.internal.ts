@@ -572,6 +572,13 @@ export class VoidProcessor implements IPaymentVoidProcessor {
     const allocations = this.getPaymentAllocations(transaction.id)
     if (allocations.length === 0) {
       this.reverseInvoiceApplication(transaction)
+
+      // If no invoice specific linkage, assume it was an On Account payment
+      // and return the full amount to be deducted from credit balance.
+      const invoiceId = (transaction as unknown as { invoice_id: number | null }).invoice_id
+      if (!invoiceId) {
+        return transaction.amount
+      }
       return 0
     }
 

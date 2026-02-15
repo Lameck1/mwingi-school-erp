@@ -7,6 +7,7 @@ import { app, BrowserWindow, dialog } from './electron-env'
 import { registerAllIpcHandlers } from './ipc/index'
 import { createApplicationMenu } from './menu/applicationMenu'
 import { BackupService } from './services/BackupService'
+import { verifySystemAccounts } from './services/accounting/SystemAccounts'
 import { registerServices } from './services/base/ServiceContainer'
 import { reportScheduler } from './services/reports/ReportScheduler'
 // Initialize logger FIRST — explicit log.xxx() calls work immediately;
@@ -138,6 +139,10 @@ async function bootstrap(): Promise<void> {
 
         // Verify migrations
         verifyMigrations()
+
+        // Verify System Accounts
+        verifySystemAccounts()
+
         dbReady = true
     } catch (error) {
         log.error('Failed to initialize database:', error)
@@ -184,7 +189,7 @@ void bootstrap().catch((error: unknown) => {
 // Focus existing window when a second instance is launched
 app.on('second-instance', () => {
     if (mainWindow) {
-        if (mainWindow.isMinimized()) {mainWindow.restore()}
+        if (mainWindow.isMinimized()) { mainWindow.restore() }
         mainWindow.focus()
     }
 })
@@ -200,19 +205,19 @@ app.on('before-quit', () => {
     closeDatabase()
 })
 
-// Handle uncaught exceptions
-// NOTE: Semicolons are critical here — without them, ASI does NOT
-// insert a semicolon before `(process…)`, causing the previous
-// expression to chain incorrectly.
-;(process as unknown as NodeJS.EventEmitter).on('uncaughtException', (error: Error) => {
-    log.error('Uncaught Exception:', error)
-    sendDbError(error.message || 'Unexpected error')
-})
+    // Handle uncaught exceptions
+    // NOTE: Semicolons are critical here — without them, ASI does NOT
+    // insert a semicolon before `(process…)`, causing the previous
+    // expression to chain incorrectly.
+    ; (process as unknown as NodeJS.EventEmitter).on('uncaughtException', (error: Error) => {
+        log.error('Uncaught Exception:', error)
+        sendDbError(error.message || 'Unexpected error')
+    })
 
-;(process as unknown as NodeJS.EventEmitter).on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
-    log.error('Unhandled Rejection at:', promise, 'reason:', reason)
-    sendDbError(reason instanceof Error ? reason.message : 'Unhandled promise rejection')
-})
+    ; (process as unknown as NodeJS.EventEmitter).on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
+        log.error('Unhandled Rejection at:', promise, 'reason:', reason)
+        sendDbError(reason instanceof Error ? reason.message : 'Unhandled promise rejection')
+    })
 
 
 

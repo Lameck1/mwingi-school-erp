@@ -218,7 +218,7 @@ function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
         (SELECT COALESCE(SUM(total_amount - amount_paid), 0)
          FROM fee_invoice
          WHERE student_id = s.id AND status != 'CANCELLED'
-        ) as balance
+        ) - COALESCE(s.credit_balance, 0) as balance
       FROM student s
       LEFT JOIN enrollment e ON s.id = e.student_id AND e.id = (
         SELECT MAX(id) FROM enrollment WHERE student_id = s.id
@@ -271,11 +271,17 @@ function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
 
   safeHandleRaw('student:getBalance', (_event, studentId: number) => {
     const invoices = db.prepare(`
-      SELECT COALESCE(SUM(total_amount - amount_paid), 0) as balance
+      SELECT COALESCE(SUM(total_amount - amount_paid), 0) as invoice_balance
       FROM fee_invoice
       WHERE student_id = ? AND status != 'CANCELLED'
-    `).get(studentId) as { balance: number } | undefined
-    return invoices?.balance || 0
+    `).get(studentId) as { invoice_balance: number } | undefined
+
+    const student = db.prepare('SELECT credit_balance FROM student WHERE id = ?').get(studentId) as { credit_balance: number } | undefined
+
+    const invoiceBalance = invoices?.invoice_balance || 0
+    const creditBalance = student?.credit_balance || 0
+
+    return invoiceBalance - creditBalance
   })
 }
 

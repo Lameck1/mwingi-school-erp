@@ -30,13 +30,3 @@
 5. [Troubleshooting](./troubleshooting.md)
 
 6. [Changelog](./CHANGELOG.md)
-
-7. [Codebase Audit (Session)](./CODEBASE_AUDIT.md)
-
-8. [Business Logic Remediation Plan](./remediation-plan.md)
-
-9. [Business Logic Remediation Checklist](./remediation-checklist.md)
-
-10. [Quality Gates](./QUALITY_GATES.md)
-
-11. [Remediation Closeout](./remediation-closeout.md)

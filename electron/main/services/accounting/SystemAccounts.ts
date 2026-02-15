@@ -25,3 +25,23 @@ export const SystemAccounts = {
 } as const;
 
 export type SystemAccountCode = typeof SystemAccounts[keyof typeof SystemAccounts];
+
+import { getDatabase } from '../../database';
+
+export function verifySystemAccounts(): void {
+    const db = getDatabase();
+    const missingAccounts: string[] = [];
+
+    for (const [key, code] of Object.entries(SystemAccounts)) {
+        const row = db.prepare('SELECT id FROM gl_account WHERE account_code = ?').get(code);
+        if (!row) {
+            missingAccounts.push(`${key} (${code})`);
+        }
+    }
+
+    if (missingAccounts.length > 0) {
+        console.warn('WARNING: The following System Accounts are missing from the General Ledger. This may cause errors in financial transactions:', missingAccounts.join(', '));
+    } else {
+        console.log('System Accounts verification passed.');
+    }
+}

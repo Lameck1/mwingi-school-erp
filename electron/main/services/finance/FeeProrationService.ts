@@ -55,7 +55,7 @@ class InvoiceTemplateRepository {
       SELECT start_date, end_date FROM academic_term WHERE id = ?
     `).get(termId) as { start_date: string; end_date: string } | undefined
 
-    if (!result) {return null}
+    if (!result) { return null }
 
     return {
       term_start: result.start_date,
@@ -164,9 +164,9 @@ class ProRateCalculator implements IProRateCalculator {
     const termEnd = new Date(termEndDate)
     const enrollment = new Date(enrollmentDate)
 
-    // Calculate days
-    const daysInTerm = Math.ceil((termEnd.getTime() - termStart.getTime()) / (1000 * 60 * 60 * 24))
-    const daysEnrolled = Math.ceil((termEnd.getTime() - enrollment.getTime()) / (1000 * 60 * 60 * 24))
+    // Calculate days (Inclusive of start and end dates)
+    const daysInTerm = Math.ceil((termEnd.getTime() - termStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
+    const daysEnrolled = Math.ceil((termEnd.getTime() - enrollment.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
     // Calculate pro-rated amount
     const discountPercentage = ((daysInTerm - daysEnrolled) / daysInTerm) * 100
@@ -421,7 +421,7 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
   // Synchronous wrapper for test compatibility
   generateProRatedInvoiceSync(data: GenerateProRatedInvoiceInput): InvoiceGenerationResult {
     const db = this.db
-    
+
     try {
       // Find invoice template for the grade
       const template = db.prepare(`
@@ -454,15 +454,23 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
       const termStart = new Date(termStartDate)
       const termEnd = new Date(termEndDate)
 
-      // Calculate days
-      const daysInTerm = Math.ceil((termEnd.getTime() - termStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
-      const daysEnrolled = Math.ceil((termEnd.getTime() - enrollment.getTime()) / (1000 * 60 * 60 * 24)) + 1
-      const prorationType = (daysEnrolled / daysInTerm) * 100
-      const discountPercentage = ((daysInTerm - daysEnrolled) / daysInTerm) * 100
-      const proratedAmount = template.amount * (daysEnrolled / daysInTerm)
+      // Calculate Proration using the centralized calculator
+      const prorationResult = this.calculator.calculateProRatedFee(
+        template.amount,
+        termStartDate,
+        termEndDate,
+        data.enrollmentDate
+      )
+
+      const daysInTerm = prorationResult.days_in_term
+      const daysEnrolled = prorationResult.days_enrolled
+      const discountPercentage = prorationResult.discount_percentage
+      const proratedAmount = prorationResult.pro_rated_amount
+      const prorationType = (daysEnrolled / daysInTerm) * 100 // Kept for legacy schema column 'proration_percentage' if needed, though 'discount_percentage' is usually preferred. Keeping specific logic to match original intent of 'amount_paid' field usage if any.
+
 
       // Create invoice with unique invoice number
-      const invoiceToken = randomUUID().replaceAll('-', '').slice(0, 9).toUpperCase()
+      const invoiceToken = randomUUID().replace(/-/g, '').slice(0, 9).toUpperCase()
       const invoiceNumber = `INV-${Date.now()}-${invoiceToken}`
       const invoiceResult = db.prepare(`
         INSERT INTO fee_invoice (
@@ -562,7 +570,7 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
       WHERE fi.student_id = ? AND fi.is_prorated = 1
       ORDER BY fi.created_at DESC
     `).all(studentId) as ProrationDetail[]
-    
+
     return result
   }
 
@@ -579,16 +587,16 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
       LEFT JOIN fee_invoice fi ON pl.invoice_id = fi.id
       WHERE pl.student_id = ?
     `
-    
+
     const params: (string | number)[] = [studentId]
-    
+
     if (startDate && endDate) {
       query += ` AND pl.created_at BETWEEN ? AND ?`
       params.push(startDate, endDate)
     }
-    
+
     query += ` ORDER BY pl.created_at DESC`
-    
+
     return db.prepare(query).all(...params) as ProRationLogEntry[]
   }
 

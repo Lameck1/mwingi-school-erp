@@ -66,12 +66,12 @@ describe('Workflows Integration Tests', () => {
         FOREIGN KEY (student_id) REFERENCES student(id)
       );
 
-      CREATE TABLE payment_allocation (
+      CREATE TABLE payment_invoice_allocation (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        payment_id INTEGER NOT NULL,
+        transaction_id INTEGER NOT NULL,
         invoice_id INTEGER NOT NULL,
-        amount_allocated INTEGER NOT NULL,
-        FOREIGN KEY (payment_id) REFERENCES payment(id),
+        applied_amount INTEGER NOT NULL,
+        FOREIGN KEY (transaction_id) REFERENCES ledger_transaction(id),
         FOREIGN KEY (invoice_id) REFERENCES fee_invoice(id)
       );
 
@@ -81,6 +81,63 @@ describe('Workflows Integration Tests', () => {
         category_type TEXT NOT NULL,
         parent_category_id INTEGER,
         is_system BOOLEAN DEFAULT 0,
+        is_active BOOLEAN DEFAULT 1
+      );
+
+      CREATE TABLE gl_account (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_code TEXT NOT NULL UNIQUE,
+        account_name TEXT NOT NULL,
+        account_type TEXT NOT NULL,
+        normal_balance TEXT NOT NULL,
+        is_system_account BOOLEAN DEFAULT 0,
+        is_active BOOLEAN DEFAULT 1
+      );
+
+      CREATE TABLE journal_entry (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entry_ref TEXT NOT NULL UNIQUE,
+        entry_date DATE NOT NULL,
+        entry_type TEXT NOT NULL,
+        description TEXT NOT NULL,
+        student_id INTEGER,
+        staff_id INTEGER,
+        term_id INTEGER,
+        is_posted BOOLEAN DEFAULT 0,
+        posted_by_user_id INTEGER,
+        posted_at DATETIME,
+        is_voided BOOLEAN DEFAULT 0,
+        voided_reason TEXT,
+        voided_by_user_id INTEGER,
+        voided_at DATETIME,
+        requires_approval BOOLEAN DEFAULT 0,
+        approval_status TEXT DEFAULT 'PENDING',
+        approved_by_user_id INTEGER,
+        approved_at DATETIME,
+        created_by_user_id INTEGER NOT NULL,
+        source_ledger_txn_id INTEGER
+      );
+
+      CREATE TABLE journal_entry_line (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        journal_entry_id INTEGER NOT NULL,
+        line_number INTEGER NOT NULL,
+        gl_account_id INTEGER NOT NULL,
+        debit_amount INTEGER DEFAULT 0,
+        credit_amount INTEGER DEFAULT 0,
+        description TEXT,
+        FOREIGN KEY (journal_entry_id) REFERENCES journal_entry(id),
+        FOREIGN KEY (gl_account_id) REFERENCES gl_account(id)
+      );
+
+      CREATE TABLE approval_rule (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rule_name TEXT NOT NULL,
+        transaction_type TEXT NOT NULL,
+        min_amount INTEGER,
+        max_amount INTEGER,
+        days_since_transaction INTEGER,
+        required_approver_role TEXT NOT NULL,
         is_active BOOLEAN DEFAULT 1
       );
 
@@ -234,6 +291,12 @@ describe('Workflows Integration Tests', () => {
         ('School Fees', 'INCOME', 1, 1),
         ('INCOME', 'INCOME', 1, 1),
         ('EXPENSE', 'EXPENSE', 1, 1);
+
+      INSERT INTO gl_account (account_code, account_name, account_type, normal_balance, is_system_account, is_active) VALUES
+        ('1010', 'Cash on Hand', 'ASSET', 'DEBIT', 1, 1),
+        ('1020', 'School Bank Account', 'ASSET', 'DEBIT', 1, 1),
+        ('1100', 'Accounts Receivable', 'ASSET', 'DEBIT', 1, 1),
+        ('4000', 'Tuition Revenue', 'REVENUE', 'CREDIT', 1, 1);
 
       INSERT INTO fee_invoice (student_id, invoice_number, term_id, invoice_date, due_date, total_amount, amount_paid, status, created_by_user_id, created_at) VALUES
         (1, 'INV-2026-001', 1, '2026-01-05', '2026-02-05', 50000, 0, 'OUTSTANDING', 1, '2026-01-05 10:00:00'),

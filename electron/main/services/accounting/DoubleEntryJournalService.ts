@@ -455,6 +455,9 @@ export class DoubleEntryJournalService {
   /**
    * Voids a journal entry (creates reversing entry)
    */
+  /**
+   * Voids a journal entry (creates reversing entry)
+   */
   async voidJournalEntry(
     entryId: number,
     voidReason: string,
@@ -463,11 +466,20 @@ export class DoubleEntryJournalService {
     try {
       // Get original entry
       const originalEntry = this.db.prepare(`
-        SELECT je.*, jel.gl_account_id, jel.debit_amount, jel.credit_amount, jel.description as line_desc
+        SELECT je.*, jel.gl_account_id, jel.debit_amount, jel.credit_amount, jel.description as line_desc, ga.account_code
         FROM journal_entry je
         JOIN journal_entry_line jel ON je.id = jel.journal_entry_id
+        JOIN gl_account ga ON jel.gl_account_id = ga.id
         WHERE je.id = ? AND je.is_voided = 0
-      `).all(entryId) as Array<{ entry_date: string; debit_amount: number }>;
+      `).all(entryId) as Array<{
+        entry_ref: string;
+        entry_date: string;
+        entry_type: string;
+        debit_amount: number;
+        credit_amount: number;
+        account_code: string;
+        line_desc: string;
+      }>;
 
       if (originalEntry.length === 0) {
         return {
@@ -556,19 +568,47 @@ export class DoubleEntryJournalService {
         };
       }
 
-      // Mark original as voided
-      this.db.prepare(`
-        UPDATE journal_entry
-        SET is_voided = 1, voided_reason = ?, voided_by_user_id = ?, voided_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(voidReason, userId, entryId);
+      // Prepare Reversal Lines (Swap Debit/Credit)
+      const reversalLines: JournalEntryLineData[] = originalEntry.map((line) => ({
+        gl_account_code: line.account_code,
+        debit_amount: line.credit_amount, // Swap
+        credit_amount: line.debit_amount, // Swap
+        description: `Reversal: ${line.line_desc || ''}`
+      }));
 
-      // Audit log
-      logAudit(userId, 'VOID', 'journal_entry', entryId, null, { void_reason: voidReason });
+      const reversalData: JournalEntryData = {
+        entry_date: new Date().toISOString().slice(0, 10), // Today
+        entry_type: 'VOID_REVERSAL',
+        description: `Void Reversal for Ref: ${originalEntry[0].entry_ref}. Reason: ${voidReason}`,
+        created_by_user_id: userId,
+        lines: reversalLines,
+        requires_approval: false // Reversals usually don't need double approval if void itself was approved/checked
+      };
+
+      // Transaction: Mark Original Void + Create Reversal
+      const executeVoid = this.db.transaction(() => {
+        // 1. Mark original as voided (for UI/Audit trail)
+        this.db.prepare(`
+          UPDATE journal_entry
+          SET is_voided = 1, voided_reason = ?, voided_by_user_id = ?, voided_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(voidReason, userId, entryId);
+
+        // 2. Create Reversal Entry
+        const reversalResult = this.createJournalEntrySync(reversalData);
+        if (!reversalResult.success) {
+          throw new Error(`Failed to create reversal entry: ${reversalResult.error}`);
+        }
+
+        // 3. Audit log
+        logAudit(userId, 'VOID', 'journal_entry', entryId, null, { void_reason: voidReason, type: 'REVERSAL_CREATED' });
+      });
+
+      executeVoid();
 
       return {
         success: true,
-        message: 'Journal entry voided successfully',
+        message: 'Journal entry voided and reversal entry created successfully',
         requires_approval: false
       };
     } catch (error) {

@@ -244,7 +244,7 @@ export class AcademicSystemService {
         const canAccess = await this.verifyAccess(subjectId, streamId, userId)
         if (!canAccess) {
             console.warn(`Unauthorized access attempt by user ${userId} for subject ${subjectId}, stream ${streamId}`)
-            // In a strict mode we would throw here, but for now we log and proceed for usability during dev
+            throw new Error('Unauthorized: You are not assigned to view results for this subject/stream.')
         }
 
         return this.db.prepare(`
@@ -272,10 +272,23 @@ export class AcademicSystemService {
 
     private async verifyAccess(subjectId: number, streamId: number, userId: number): Promise<boolean> {
         const user = this.db.prepare('SELECT role FROM user WHERE id = ?').get(userId) as { role: string } | undefined
-        if (!user) {return false}
-        if (user.role === 'ADMIN') {return true}
+        if (!user) { return false }
+
+        // Admins and Principals can access all
+        if (['ADMIN', 'PRINCIPAL', 'DEPUTY_PRINCIPAL'].includes(user.role)) { return true }
 
         // Check allocation
+        // If streamId is 0, check if teacher is allocated to ANY stream for this subject
+        if (streamId === 0) {
+            const allocation = this.db.prepare(`
+                SELECT sa.id FROM subject_allocation sa
+                JOIN staff s ON sa.teacher_id = s.id
+                JOIN user u ON s.email = u.email
+                WHERE sa.subject_id = ? AND u.id = ?
+            `).get(subjectId, userId)
+            return !!allocation
+        }
+
         const allocation = this.db.prepare(`
             SELECT sa.id FROM subject_allocation sa
             JOIN staff s ON sa.teacher_id = s.id
@@ -297,8 +310,10 @@ export class AcademicSystemService {
 
         // SECURITY: Verify access for the first entry (assuming batch is for same class/subject)
         if (results.length > 0) {
-            const _canAccess = await this.verifyAccess(results[0].subject_id, 0, userId) // streamId check needs refinement
-            // ... strict check here
+            const hasAccess = await this.verifyAccess(results[0].subject_id, 0, userId)
+            if (!hasAccess) {
+                throw new Error('Unauthorized: You are not assigned to teach this subject.')
+            }
         }
 
         const insert = this.db.prepare(`
@@ -344,7 +359,7 @@ export class AcademicSystemService {
                 WHERE er.exam_id = ? AND er.student_id = ?
             `).all(examId, student_id) as ExamResultWithCurriculum[]
 
-            if (results.length === 0) {continue}
+            if (results.length === 0) { continue }
 
             // Strategy: For 8-4-4 use score. For CBC/ECDE use (competency_level / 4) * 100 to normalize to a percentage
             let totalWeightedScore = 0
