@@ -1,6 +1,7 @@
 
 import { randomUUID } from 'node:crypto';
 
+import { SystemAccounts } from './SystemAccounts';
 import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
 
@@ -364,7 +365,7 @@ export class DoubleEntryJournalService {
     ...[studentId, amount, paymentMethod, paymentReference, paymentDate, userId, sourceLedgerTxnId]: RecordPaymentArgs
   ): JournalWriteResult {
     // Determine cash/bank account
-    const cashAccountCode = paymentMethod === 'CASH' ? '1010' : '1020';
+    const cashAccountCode = paymentMethod === 'CASH' ? SystemAccounts.CASH : SystemAccounts.BANK;
 
     const journalData: JournalEntryData = {
       entry_date: paymentDate,
@@ -381,7 +382,7 @@ export class DoubleEntryJournalService {
           description: 'Payment received'
         },
         {
-          gl_account_code: '1100', // Accounts Receivable - Students
+          gl_account_code: SystemAccounts.ACCOUNTS_RECEIVABLE, // Accounts Receivable - Students
           debit_amount: 0,
           credit_amount: amount,
           description: 'Payment applied to student account'
@@ -413,7 +414,7 @@ export class DoubleEntryJournalService {
 
     const lines: JournalEntryLineData[] = [
       {
-        gl_account_code: '1100', // Accounts Receivable - Students
+        gl_account_code: SystemAccounts.ACCOUNTS_RECEIVABLE, // Accounts Receivable - Students
         debit_amount: totalAmount,
         credit_amount: 0,
         description: 'Fee invoice charged'
@@ -740,7 +741,7 @@ export class DoubleEntryJournalService {
   private generateEntryRef(entryType: string): string {
     const prefix = entryType.substring(0, 3).toUpperCase();
     const timestamp = Date.now();
-    const nonce = randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase();
+    const nonce = randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
     return `${prefix}-${timestamp}-${nonce}`;
   }
 

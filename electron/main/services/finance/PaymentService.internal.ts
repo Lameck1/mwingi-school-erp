@@ -47,7 +47,7 @@ export class PaymentTransactionRepository {
 
   async createTransaction(data: PaymentData): Promise<number> {
     const db = this.db
-    const transactionRef = `TXN-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${randomUUID().slice(0, 8)}`
+    const transactionRef = `TXN-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8)}`
     const result = db.prepare(`
       INSERT INTO ledger_transaction (
         transaction_ref, student_id, transaction_type, amount, debit_credit,
@@ -73,7 +73,7 @@ export class PaymentTransactionRepository {
 
   async createReversal(studentId: number, originalAmount: number, voidReason: string, voidedBy: number, categoryId: number): Promise<number> {
     const db = this.db
-    const reversalRef = `VOID-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${randomUUID().slice(0, 8)}`
+    const reversalRef = `VOID-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8)}`
     const result = db.prepare(`
       INSERT INTO ledger_transaction (
         transaction_ref, student_id, transaction_type, amount, debit_credit,
@@ -209,11 +209,11 @@ export class InvoiceValidator implements IPaymentValidator {
         }
       }
 
-        const totalOutstanding = invoices.reduce((sum, inv) => {
-          const total = typeof inv.total_amount === 'number' ? inv.total_amount : (inv.amount ?? 0)
-          const paid = typeof inv.amount_paid === 'number' ? inv.amount_paid : 0
-          return sum + Math.max(total - paid, 0)
-        }, 0)
+      const totalOutstanding = invoices.reduce((sum, inv) => {
+        const total = typeof inv.total_amount === 'number' ? inv.total_amount : (inv.amount ?? 0)
+        const paid = typeof inv.amount_paid === 'number' ? inv.amount_paid : 0
+        return sum + Math.max(total - paid, 0)
+      }, 0)
 
       if (amount > totalOutstanding) {
         return {
@@ -240,7 +240,6 @@ export class InvoiceValidator implements IPaymentValidator {
 
 export class PaymentProcessor {
   private readonly db: Database.Database
-  private allocationTableAvailable: boolean | null = null
   private idempotencyColumnAvailable: boolean | null = null
 
   constructor(db?: Database.Database) {
@@ -256,19 +255,7 @@ export class PaymentProcessor {
     return this.idempotencyColumnAvailable
   }
 
-  private hasAllocationTable(): boolean {
-    if (this.allocationTableAvailable !== null) {
-      return this.allocationTableAvailable
-    }
-    const table = this.db.prepare(`
-      SELECT name
-      FROM sqlite_master
-      WHERE type = 'table' AND name = 'payment_invoice_allocation'
-      LIMIT 1
-    `).get() as { name: string } | undefined
-    this.allocationTableAvailable = !!table
-    return this.allocationTableAvailable
-  }
+
 
   private getOrCreateSchoolFeesCategory(): number {
     const categoryRow = this.db.prepare(`
@@ -292,8 +279,8 @@ export class PaymentProcessor {
   }
 
   private createTransactionRefs(): { transactionRef: string; receiptNumber: string } {
-    const timestamp = new Date().toISOString().slice(0, 10).replaceAll('-', '')
-    const nonce = randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase()
+    const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const nonce = randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()
     const uniqueSegment = String(Date.now())
     return {
       transactionRef: `TXN-${timestamp}-${uniqueSegment}-${nonce}`,
@@ -327,32 +314,32 @@ export class PaymentProcessor {
 
     const result = hasIdempotency
       ? statement.run(
-          transactionRef,
-          data.transaction_date,
-          categoryId,
-          data.amount,
-          data.student_id,
-          data.payment_method,
-          data.payment_reference,
-          description,
-          data.term_id,
-          data.recorded_by_user_id,
-          data.invoice_id || null,
-          data.idempotency_key || null
-        )
+        transactionRef,
+        data.transaction_date,
+        categoryId,
+        data.amount,
+        data.student_id,
+        data.payment_method,
+        data.payment_reference,
+        description,
+        data.term_id,
+        data.recorded_by_user_id,
+        data.invoice_id || null,
+        data.idempotency_key || null
+      )
       : statement.run(
-          transactionRef,
-          data.transaction_date,
-          categoryId,
-          data.amount,
-          data.student_id,
-          data.payment_method,
-          data.payment_reference,
-          description,
-          data.term_id,
-          data.recorded_by_user_id,
-          data.invoice_id || null
-        )
+        transactionRef,
+        data.transaction_date,
+        categoryId,
+        data.amount,
+        data.student_id,
+        data.payment_method,
+        data.payment_reference,
+        description,
+        data.term_id,
+        data.recorded_by_user_id,
+        data.invoice_id || null
+      )
 
     return result.lastInsertRowid as number
   }
@@ -383,9 +370,10 @@ export class PaymentProcessor {
     if (appliedAmount <= 0) {
       return
     }
-    if (!this.hasAllocationTable()) {
+    if (appliedAmount <= 0) {
       return
     }
+    // Hard check: Table MUST exist. If not, this will throw, which is correct (Data Safeguard).
     this.db.prepare(`
       INSERT INTO payment_invoice_allocation (transaction_id, invoice_id, applied_amount)
       VALUES (?, ?, ?)
@@ -531,7 +519,6 @@ export class VoidProcessor implements IPaymentVoidProcessor {
   private readonly db: Database.Database
   private readonly transactionRepo: PaymentTransactionRepository
   private readonly voidAuditRepo: VoidAuditRepository
-  private allocationTableAvailable: boolean | null = null
   private sourceLedgerColumnAvailable: boolean | null = null
 
   constructor(db?: Database.Database) {
@@ -540,19 +527,7 @@ export class VoidProcessor implements IPaymentVoidProcessor {
     this.voidAuditRepo = new VoidAuditRepository(this.db)
   }
 
-  private hasAllocationTable(): boolean {
-    if (this.allocationTableAvailable !== null) {
-      return this.allocationTableAvailable
-    }
-    const table = this.db.prepare(`
-      SELECT name
-      FROM sqlite_master
-      WHERE type = 'table' AND name = 'payment_invoice_allocation'
-      LIMIT 1
-    `).get() as { name: string } | undefined
-    this.allocationTableAvailable = !!table
-    return this.allocationTableAvailable
-  }
+
 
   private hasSourceLedgerColumn(): boolean {
     if (this.sourceLedgerColumnAvailable !== null) {
@@ -564,9 +539,6 @@ export class VoidProcessor implements IPaymentVoidProcessor {
   }
 
   private getPaymentAllocations(transactionId: number): Array<{ invoice_id: number; applied_amount: number }> {
-    if (!this.hasAllocationTable()) {
-      return []
-    }
     return this.db.prepare(`
       SELECT invoice_id, applied_amount
       FROM payment_invoice_allocation
@@ -711,7 +683,7 @@ export class VoidProcessor implements IPaymentVoidProcessor {
   }
 
   private createReversalTransaction(transaction: PaymentTransaction, data: VoidPaymentData, categoryId: number): number {
-    const reversalRef = `VOID-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${randomUUID().slice(0, 8)}`
+    const reversalRef = `VOID-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8)}`
     const result = this.db.prepare(`
       INSERT INTO ledger_transaction (
         transaction_ref, student_id, transaction_type, amount, debit_credit,

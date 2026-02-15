@@ -2,6 +2,8 @@
 import { extractLegacyUserId, normalizeAllocationData, normalizeScholarshipData } from './scholarship-normalization'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
+import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
+import { SystemAccounts } from '../accounting/SystemAccounts'
 
 import type { LegacyAllocationData, LegacyScholarshipData } from './scholarship-normalization'
 import type Database from 'better-sqlite3'
@@ -165,7 +167,7 @@ class ScholarshipAllocationRepository {
 
   async allocateScholarship(data: AllocationData): Promise<number> {
     const db = this.db
-    
+
     // Get scholarship details for expiry date
     const scholarship = db.prepare(`
       SELECT valid_to FROM scholarship WHERE id = ?
@@ -246,7 +248,7 @@ class ScholarshipAllocationRepository {
 // ============================================================================
 
 class ScholarshipCreator implements IScholarshipCreator {
-  constructor(private readonly scholarshipRepo: ScholarshipRepository) {}
+  constructor(private readonly scholarshipRepo: ScholarshipRepository) { }
 
   async createScholarship(data: ScholarshipData, userId: number): Promise<ScholarshipResult> {
     try {
@@ -289,7 +291,7 @@ class ScholarshipAllocator implements IScholarshipAllocator {
   constructor(
     private readonly allocationRepo: ScholarshipAllocationRepository,
     private readonly scholarshipRepo: ScholarshipRepository
-  ) {}
+  ) { }
 
   async allocateScholarshipToStudent(allocationData: AllocationData, userId: number): Promise<AllocationResult> {
     try {
@@ -360,7 +362,7 @@ class ScholarshipAllocator implements IScholarshipAllocator {
 }
 
 class ScholarshipValidator implements IScholarshipValidator {
-  constructor(private readonly allocationRepo: ScholarshipAllocationRepository) {}
+  constructor(private readonly allocationRepo: ScholarshipAllocationRepository) { }
 
   async validateScholarshipEligibility(studentId: number, scholarshipId: number): Promise<EligibilityResult> {
     // Check existing allocations
@@ -387,7 +389,7 @@ class ScholarshipQueryService implements IScholarshipQueryService {
   constructor(
     private readonly scholarshipRepo: ScholarshipRepository,
     private readonly allocationRepo: ScholarshipAllocationRepository
-  ) {}
+  ) { }
 
   async getActiveScholarships(): Promise<Scholarship[]> {
     return this.scholarshipRepo.getActiveScholarships()
@@ -406,14 +408,16 @@ class ScholarshipQueryService implements IScholarshipQueryService {
 // FACADE SERVICE (Composition, DIP)
 // ============================================================================
 
-export class ScholarshipService 
+export class ScholarshipService
   implements IScholarshipCreator, IScholarshipAllocator, IScholarshipValidator, IScholarshipQueryService {
-  
+
+
   private readonly db: Database.Database
   private readonly creator: ScholarshipCreator
   private readonly allocator: ScholarshipAllocator
   private readonly validator: ScholarshipValidator
   private readonly queryService: ScholarshipQueryService
+  private readonly journalService: DoubleEntryJournalService
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -424,6 +428,7 @@ export class ScholarshipService
     this.allocator = new ScholarshipAllocator(allocationRepo, scholarshipRepo)
     this.validator = new ScholarshipValidator(allocationRepo)
     this.queryService = new ScholarshipQueryService(scholarshipRepo, allocationRepo)
+    this.journalService = new DoubleEntryJournalService(this.db)
   }
 
   /**
@@ -617,6 +622,7 @@ export class ScholarshipService
           WHERE id = ?
         `).run(amountToApply, new Date().toISOString(), invoiceId)
 
+
         logAudit(
           userId,
           'APPLY_SCHOLARSHIP',
@@ -625,6 +631,31 @@ export class ScholarshipService
           null,
           { scholarship_id: studentScholarshipId, amount_applied: amountToApply }
         )
+
+        // Create Journal Entry for Scholarship Application
+        // Debit: Scholarship Expense (Contra-Revenue)
+        // Credit: Accounts Receivable (Reducing what student owes)
+        this.journalService.createJournalEntrySync({
+          entry_date: new Date().toISOString(),
+          entry_type: 'SCHOLARSHIP_APPLICATION',
+          description: `Scholarship applied to invoice #${invoiceId}`,
+          student_id: allocation.student_id,
+          created_by_user_id: userId,
+          lines: [
+            {
+              gl_account_code: SystemAccounts.SCHOLARSHIP_EXPENSE,
+              debit_amount: amountToApply,
+              credit_amount: 0,
+              description: `Scholarship Expense - Allocation #${studentScholarshipId}`
+            },
+            {
+              gl_account_code: SystemAccounts.ACCOUNTS_RECEIVABLE,
+              debit_amount: 0,
+              credit_amount: amountToApply,
+              description: `Scholarship Credit Applied to Invoice #${invoiceId}`
+            }
+          ]
+        })
       })
 
       transaction()

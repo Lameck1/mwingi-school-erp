@@ -1,4 +1,6 @@
 import { logAudit } from '../../database/utils/audit'
+import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
+import { SystemAccounts } from '../accounting/SystemAccounts'
 import { BaseService } from '../base/BaseService'
 
 export interface InventoryItem {
@@ -140,10 +142,10 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
 
     protected validateCreate(data: CreateInventoryItemData): string[] | null {
         const errors: string[] = []
-        if (!data.item_name) {errors.push('Item name is required')}
-        if (!data.item_code) {errors.push('Item code is required')}
-        if (!data.category_id) {errors.push('Category is required')}
-        if (!data.unit_of_measure) {errors.push('Unit of measure is required')}
+        if (!data.item_name) { errors.push('Item name is required') }
+        if (!data.item_code) { errors.push('Item code is required') }
+        if (!data.category_id) { errors.push('Category is required') }
+        if (!data.unit_of_measure) { errors.push('Unit of measure is required') }
         return errors.length > 0 ? errors : null
     }
 
@@ -239,11 +241,11 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
 
     async adjustStock(...[itemId, quantity, type, userId, notes, unitCost]: AdjustStockArgs): Promise<{ success: boolean; error?: string }> {
         const item = await this.findById(itemId)
-        if (!item) {return { success: false, error: 'Item not found' }}
+        if (!item) { return { success: false, error: 'Item not found' } }
 
         const { currentStock, finalQty, change } = this.computeStockLevels(item, quantity, type)
 
-        if (finalQty < 0) {return { success: false, error: 'Insufficient stock' }}
+        if (finalQty < 0) { return { success: false, error: 'Insufficient stock' } }
 
         // Use provided unit cost for IN/ADJUSTMENT, otherwise fallback to item's current cost
         // For OUT, we typically use the item's current cost (FIFO/LIFO/Avg not strictly implemented here, assuming standard cost)
@@ -253,11 +255,11 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
             // Update stock level
             this.db.prepare('UPDATE inventory_item SET current_stock = ? WHERE id = ?')
                 .run(finalQty, itemId)
-            
+
             // If it's an IN movement with a new cost, update the item's unit cost (Last Price)
             if (type === 'IN' && unitCost !== undefined && unitCost > 0) {
-                 this.db.prepare('UPDATE inventory_item SET unit_cost = ? WHERE id = ?')
-                .run(unitCost, itemId)
+                this.db.prepare('UPDATE inventory_item SET unit_cost = ? WHERE id = ?')
+                    .run(unitCost, itemId)
             }
 
             this.db.prepare(`
@@ -266,6 +268,58 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
                     description, movement_date, recorded_by_user_id
                 ) VALUES (?, ?, ?, ?, ?, CURRENT_DATE, ?)
             `).run(itemId, type, Math.abs(change), movementCost, notes || null, userId)
+
+            // Create Journal Entry
+            // Determine accounting impact
+            const value = Math.abs(change) * movementCost;
+            if (value > 0) {
+                const journalService = new DoubleEntryJournalService(this.db);
+                let debitCode: string;
+                let creditCode: string;
+                let jeType: string;
+
+                if (change > 0) {
+                    // Asset Increase (Debit Inventory)
+                    debitCode = SystemAccounts.INVENTORY_ASSET;
+
+                    if (type === 'IN') {
+                        // Purchase (Credit AP)
+                        creditCode = SystemAccounts.ACCOUNTS_PAYABLE;
+                        jeType = 'STOCK_PURCHASE';
+                    } else {
+                        // Adjustment Gain (Credit Expense/Gain)
+                        creditCode = SystemAccounts.INVENTORY_EXPENSE;
+                        jeType = 'STOCK_ADJUSTMENT_GAIN';
+                    }
+                } else {
+                    // Asset Decrease (Credit Inventory)
+                    creditCode = SystemAccounts.INVENTORY_ASSET;
+                    // Debit Expense (Usage/Loss)
+                    debitCode = SystemAccounts.INVENTORY_EXPENSE;
+                    jeType = type === 'OUT' ? 'STOCK_USAGE' : 'STOCK_ADJUSTMENT_LOSS';
+                }
+
+                journalService.createJournalEntrySync({
+                    entry_date: new Date().toISOString(),
+                    entry_type: jeType,
+                    description: `Stock ${type}: ${item.item_name} (Qty: ${Math.abs(change)})`,
+                    created_by_user_id: userId,
+                    lines: [
+                        {
+                            gl_account_code: debitCode,
+                            debit_amount: value,
+                            credit_amount: 0,
+                            description: type === 'IN' ? 'Inventory Addition' : 'Expense/Usage'
+                        },
+                        {
+                            gl_account_code: creditCode,
+                            debit_amount: 0,
+                            credit_amount: value,
+                            description: type === 'IN' ? 'Accounts Payable' : 'Inventory Reduction'
+                        }
+                    ]
+                });
+            }
         })()
 
         logAudit(userId, 'STOCK_UPDATE', 'inventory_item', itemId, { quantity: currentStock }, { quantity: finalQty })

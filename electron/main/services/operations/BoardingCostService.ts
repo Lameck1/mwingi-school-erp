@@ -1,4 +1,6 @@
 import { getDatabase } from '../../database';
+import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService';
+import { SystemAccounts } from '../accounting/SystemAccounts';
 
 interface BoardingFacility {
   id: number;
@@ -161,6 +163,7 @@ export class BoardingCostService {
     expense_type: 'FOOD' | 'UTILITIES' | 'BEDDING' | 'STAFF' | 'MAINTENANCE' | 'OTHER';
     description: string;
     recorded_by: number;
+    payment_method?: 'CASH' | 'BANK';
   }): number {
     if (!Number.isFinite(params.facility_id) || params.facility_id <= 0) {
       throw new Error('Valid boarding facility is required')
@@ -210,6 +213,36 @@ export class BoardingCostService {
       params.description?.trim() || null,
       params.recorded_by
     );
+
+    // Create Journal Entry
+    try {
+      const journalService = new DoubleEntryJournalService(this.db);
+      const creditAccount = params.payment_method === 'BANK' ? SystemAccounts.BANK : SystemAccounts.CASH;
+
+      journalService.createJournalEntrySync({
+        entry_date: new Date().toISOString(),
+        entry_type: 'BOARDING_EXPENSE',
+        description: `Boarding Expense: ${params.description || params.expense_type}`,
+        created_by_user_id: params.recorded_by,
+        lines: [
+          {
+            gl_account_code: params.gl_account_code,
+            debit_amount: params.amount_cents / 100,
+            credit_amount: 0,
+            description: params.expense_type
+          },
+          {
+            gl_account_code: creditAccount,
+            debit_amount: 0,
+            credit_amount: params.amount_cents / 100,
+            description: 'Paid via ' + (params.payment_method || 'CASH')
+          }
+        ]
+      });
+    } catch (error) {
+      console.error('Failed to create journal entry for boarding expense:', error);
+      throw error;
+    }
 
     return result.lastInsertRowid as number;
   }
@@ -313,7 +346,7 @@ export class BoardingCostService {
     const totalOccupancyRow = this.db.prepare(`SELECT COALESCE(SUM(current_occupancy), 0) as total FROM boarding_facility WHERE is_active = 1`).get() as { total: number };
     const totalOccupancy = totalOccupancyRow.total || 0;
 
-    if (!facility || totalOccupancy <= 0) {return 0;}
+    if (!facility || totalOccupancy <= 0) { return 0; }
     return Math.round((totalRevenue * facility.current_occupancy) / totalOccupancy);
   }
 
@@ -343,10 +376,10 @@ export class BoardingCostService {
 
     // Calculate metrics
     const netProfitCents = totalRevenueCents - totalExpensesCents;
-    const profitMargin = totalRevenueCents > 0 
-      ? (netProfitCents / totalRevenueCents) * 100 
+    const profitMargin = totalRevenueCents > 0
+      ? (netProfitCents / totalRevenueCents) * 100
       : 0;
-    
+
     const occupancyRate = facility.capacity > 0
       ? (facility.current_occupancy / facility.capacity) * 100
       : 0;
@@ -361,7 +394,7 @@ export class BoardingCostService {
     const revenuePerBoarder = facility.current_occupancy > 0
       ? totalRevenueCents / facility.current_occupancy
       : 0;
-    
+
     const breakEvenOccupancy = revenuePerBoarder > 0
       ? Math.ceil(totalExpensesCents / revenuePerBoarder)
       : 0;
@@ -389,8 +422,8 @@ export class BoardingCostService {
     term?: number
   ): BoardingProfitability[] {
     const facilities = this.getActiveFacilities();
-    
-    return facilities.map(facility => 
+
+    return facilities.map(facility =>
       this.calculateFacilityProfitability(facility.id, fiscalYear, term)
     );
   }

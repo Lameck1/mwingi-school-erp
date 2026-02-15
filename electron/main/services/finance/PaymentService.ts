@@ -81,12 +81,15 @@ export class PaymentService implements IPaymentRecorder, IPaymentVoidProcessor, 
     }
 
     if (data.invoice_id) {
-      const invoice = this.db.prepare('SELECT id, student_id, status FROM fee_invoice WHERE id = ?').get(data.invoice_id) as { id: number; student_id: number; status: string } | undefined
+      const invoice = this.db.prepare('SELECT id, student_id, status, term_id FROM fee_invoice WHERE id = ?').get(data.invoice_id) as { id: number; student_id: number; status: string; term_id: number } | undefined
       if (!invoice) {
         return { success: false, error: 'Invoice not found.' }
       }
       if (invoice.student_id !== data.student_id) {
         return { success: false, error: 'Invoice does not belong to the selected student.' }
+      }
+      if (invoice.term_id !== data.term_id) {
+        return { success: false, error: 'Payment term must match the invoice term.' }
       }
       if (!OUTSTANDING_INVOICE_STATUSES.includes(invoice.status as (typeof OUTSTANDING_INVOICE_STATUSES)[number])) {
         return { success: false, error: `Invoice cannot accept payment while in ${invoice.status} status.` }

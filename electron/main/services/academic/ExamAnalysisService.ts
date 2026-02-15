@@ -124,7 +124,7 @@ export class ExamAnalysisService {
 
       const result = this.db.prepare(query).get(...params) as SubjectStatisticsResult | undefined
 
-      if (!result) {throw new Error('No data found for this subject')}
+      if (!result) { throw new Error('No data found for this subject') }
 
       // Get all scores for calculations
       const scores = (this.db.prepare(`
@@ -139,7 +139,7 @@ export class ExamAnalysisService {
           JOIN student st ON er.student_id = st.id
           WHERE er.exam_id = ? AND er.subject_id = ? AND st.stream_id = ? AND er.score IS NOT NULL
         `).all(examId, subjectId, streamId) as ScoreResult[]).map(r => r.score)
-        
+
         return {
           subject_id: result.subject_id,
           subject_name: result.subject_name,
@@ -235,16 +235,22 @@ export class ExamAnalysisService {
         GROUP BY sa.subject_id
       `).all(teacherId, academicYearId, termId) as TeacherSubjectPerformanceResult[]
 
-      const performances = subjects.map(subject => ({
-        teacher_id: teacherId,
-        teacher_name: '', // Would need to fetch
-        subject_id: subject.subject_id,
-        subject_name: subject.subject_name,
-        avg_class_score: subject.avg_score || 0,
-        pass_rate: subject.student_count > 0 ? ((subject.avg_score / 100) * 100) : 0,
-        improvement_from_last_term: 0, // Would calculate from previous term
-        overall_rating: this.getRating(subject.avg_score)
-      }))
+      const gradingScale = this.getGradingScale()
+      const performances = subjects.map(subject => {
+        const avgScore = subject.avg_score || 0
+        const gradeInfo = this.resolveGrade(avgScore, gradingScale)
+
+        return {
+          teacher_id: teacherId,
+          teacher_name: '', // Would need to fetch
+          subject_id: subject.subject_id,
+          subject_name: subject.subject_name,
+          avg_class_score: avgScore,
+          pass_rate: subject.student_count > 0 ? ((subject.avg_score / 100) * 100) : 0,
+          improvement_from_last_term: 0, // Would calculate from previous term
+          overall_rating: gradeInfo.remarks
+        }
+      })
 
       return performances
     } catch (error) {
@@ -261,7 +267,7 @@ export class ExamAnalysisService {
     try {
       const student = this.db.prepare('SELECT * FROM student WHERE id = ?').get(studentId) as StudentResult | undefined
 
-      if (!student) {throw new Error('Student not found')}
+      if (!student) { throw new Error('Student not found') }
 
       // Get all subject scores
       const results = this.db.prepare(`
@@ -275,7 +281,7 @@ export class ExamAnalysisService {
         ORDER BY er.score DESC
       `).all(examId, studentId) as StudentSubjectScoreResult[]
 
-      if (results.length === 0) {throw new Error('No exam results found')}
+      if (results.length === 0) { throw new Error('No exam results found') }
 
       const averageScore = results.reduce((sum, r) => sum + r.score, 0) / results.length
       const bestSubjects = results.slice(0, 3).map(r => r.subject_name)
@@ -294,11 +300,13 @@ export class ExamAnalysisService {
 
       let trend: 'improving' | 'declining' | 'stable' = 'stable'
       if (previousExam?.avg_score) {
-        if (averageScore > previousExam.avg_score + 5) {trend = 'improving'}
-        else if (averageScore < previousExam.avg_score - 5) {trend = 'declining'}
+        if (averageScore > previousExam.avg_score + 5) { trend = 'improving' }
+        else if (averageScore < previousExam.avg_score - 5) { trend = 'declining' }
       }
 
-      const predictedGrade = this.predictKCPEGrade(averageScore)
+      const gradingScale = this.getGradingScale()
+      const gradeInfo = this.resolveGrade(averageScore, gradingScale)
+      const predictedGrade = `${gradeInfo.grade} (${gradeInfo.remarks})`
 
       return {
         student_id: studentId,
@@ -396,21 +404,23 @@ export class ExamAnalysisService {
     return (topMean - bottomMean) / 100
   }
 
-  private getRating(score: number): string {
-    if (score >= 80) {return 'Excellent'}
-    if (score >= 70) {return 'Good'}
-    if (score >= 60) {return 'Satisfactory'}
-    if (score >= 50) {return 'Fair'}
-    return 'Poor'
+  private getGradingScale(): { grade: string; remarks: string; min_score: number; max_score: number }[] {
+    try {
+      return this.db.prepare('SELECT grade, remarks, min_score, max_score FROM grading_scale WHERE curriculum = ? ORDER BY min_score DESC').all('8-4-4') as any[]
+    } catch {
+      // Fallback if table doesn't exist yet
+      return [
+        { grade: 'A', remarks: 'Excellent', min_score: 80, max_score: 100 },
+        { grade: 'B', remarks: 'Good', min_score: 60, max_score: 79 },
+        { grade: 'C', remarks: 'Fair', min_score: 40, max_score: 59 },
+        { grade: 'D', remarks: 'Poor', min_score: 0, max_score: 39 }
+      ]
+    }
   }
 
-  private predictKCPEGrade(averageScore: number): string {
-    if (averageScore >= 85) {return 'A (Excellent)'}
-    if (averageScore >= 75) {return 'B+ (Very Good)'}
-    if (averageScore >= 65) {return 'B (Good)'}
-    if (averageScore >= 55) {return 'C+ (Satisfactory)'}
-    if (averageScore >= 45) {return 'C (Fair)'}
-    return 'D (Poor)'
+  private resolveGrade(score: number, scale: { grade: string; remarks: string; min_score: number; max_score: number }[]): { grade: string; remarks: string } {
+    const found = scale.find(s => score >= s.min_score && score <= s.max_score)
+    return found ? { grade: found.grade, remarks: found.remarks } : { grade: 'E', remarks: 'Fail' }
   }
 }
 

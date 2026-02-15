@@ -96,6 +96,16 @@ export class PromotionService {
     ): Promise<{ success: boolean; errors?: string[] }> {
         try {
             return this.db.transaction(() => {
+                // Check if already promoted/active in target year
+                const existing = this.db.prepare(`
+                    SELECT id FROM enrollment
+                    WHERE student_id = ? AND academic_year_id = ? AND status = 'ACTIVE'
+                `).get(data.student_id, data.to_academic_year_id)
+
+                if (existing) {
+                    return { success: true } // Already promoted (Idempotent)
+                }
+
                 // Mark old enrollment as PROMOTED
                 this.db.prepare(`
           UPDATE enrollment 
@@ -124,10 +134,12 @@ export class PromotionService {
                     data.from_stream_id
                 )
 
-                logAudit(userId, 'PROMOTE', 'enrollment', result.lastInsertRowid as number,
-                    { from_stream_id: data.from_stream_id, from_academic_year_id: data.from_academic_year_id },
-                    { to_stream_id: data.to_stream_id, to_academic_year_id: data.to_academic_year_id }
-                )
+                if (result.changes > 0) {
+                    logAudit(userId, 'PROMOTE', 'enrollment', result.lastInsertRowid as number,
+                        { from_stream_id: data.from_stream_id, from_academic_year_id: data.from_academic_year_id },
+                        { to_stream_id: data.to_stream_id, to_academic_year_id: data.to_academic_year_id }
+                    )
+                }
 
                 return { success: true }
             })()
@@ -192,7 +204,7 @@ export class PromotionService {
      */
     async getNextStream(currentStreamId: number): Promise<Stream | null> {
         const current = this.db.prepare(`SELECT level_order FROM stream WHERE id = ?`).get(currentStreamId) as { level_order: number } | null
-        if (!current) {return null}
+        if (!current) { return null }
 
         return this.db.prepare(`
       SELECT id, stream_name, level_order 
