@@ -25,16 +25,41 @@ import { createStaffAPI } from './api/staff'
 import { createStudentAPI } from './api/students'
 import { createSystemAPI } from './api/system'
 
+const auth = createAuthAPI()
+const settings = createSettingsAPI()
+const academic = createAcademicAPI()
+const finance = createFinanceAPI()
+const students = createStudentAPI()
+const staff = createStaffAPI()
+const operations = createOperationsAPI()
+const reports = createReportsAPI()
+const communications = createCommunicationsAPI()
+const system = createSystemAPI()
+const menuEvents = createMenuEventAPI()
+
 contextBridge.exposeInMainWorld('electronAPI', {
-  auth: createAuthAPI(),
-  settings: createSettingsAPI(),
-  academic: createAcademicAPI(),
-  finance: createFinanceAPI(),
-  students: createStudentAPI(),
-  staff: createStaffAPI(),
-  operations: createOperationsAPI(),
-  reports: createReportsAPI(),
-  communications: createCommunicationsAPI(),
-  system: createSystemAPI(),
-  menuEvents: createMenuEventAPI(),
+  // Flat access (used by all existing pages)
+  ...auth,
+  ...settings,
+  ...academic,
+  ...finance,
+  ...students,
+  ...staff,
+  ...operations,
+  ...reports,
+  ...communications,
+  ...system,
+  ...menuEvents,
+  // Namespaced access (for future structured usage)
+  auth,
+  settings,
+  academic,
+  finance,
+  students,
+  staff,
+  operations,
+  reports,
+  communications,
+  system,
+  menuEvents,
 })

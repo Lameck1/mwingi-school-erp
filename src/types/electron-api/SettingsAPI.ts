@@ -23,6 +23,6 @@ export interface SettingsAPI {
   getSecureConfig(key: string): Promise<string | null>
   saveSecureConfig(key: string, value: string): Promise<boolean>
   getAllConfigs(): Promise<Record<string, string>>
-  resetAndSeedDatabase(userId: number): Promise<{ success: boolean; error?: string }>
-  normalizeCurrencyScale(userId: number): Promise<{ success: boolean; error?: string }>
+  resetAndSeedDatabase(userId: number): Promise<{ success: boolean; error?: string; message?: string }>
+  normalizeCurrencyScale(userId: number): Promise<{ success: boolean; error?: string; message?: string }>
 }

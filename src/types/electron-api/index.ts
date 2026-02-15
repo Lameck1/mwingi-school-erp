@@ -65,17 +65,42 @@ export * from './DataImportAPI'
 export * from './OperationsAPI'
 export * from './JSSAPI'
 
-// Namespaced API interface — all access via domain sub-objects
-export interface ElectronAPI {
+// Flat API — all methods available directly on electronAPI.*
+// Also provides namespaced sub-objects for structured access
+export interface ElectronAPI extends
+  AuthAPI,
+  SettingsAPI,
+  AcademicAPI,
+  JSSAPI,
+  FinanceAPI,
+  BudgetAPI,
+  BankReconciliationAPI,
+  GLAccountAPI,
+  OpeningBalanceAPI,
+  FixedAssetAPI,
+  ExemptionAPI,
+  StudentAPI,
+  StaffAPI,
+  PayrollAPI,
+  OperationsAPI,
+  InventoryAPI,
+  HireAPI,
+  ReportsAPI,
+  AuditAPI,
+  MessagingAPI,
+  NotificationAPI,
+  BackupAPI,
+  UserAPI,
+  UpdateAPI,
+  ApprovalAPI,
+  DataImportAPI,
+  MenuEventAPI
+{
+  // Namespaced sub-objects
   auth: AuthAPI
   settings: SettingsAPI
-  academic: AcademicAPI & JSSAPI
-    & Pick<StudentAPI, 'getStudentsForAttendance' | 'getAttendanceByDate' | 'markAttendance' | 'getStudentsForReportCards'>
-    & Pick<OperationsAPI, 'getCBCStrands' | 'getActiveCBCStrands' | 'linkFeeCategoryToStrand'>
-    & Pick<ReportsAPI, 'generateReportCard'>
+  academic: AcademicAPI & JSSAPI & Pick<OperationsAPI, 'getCBCStrands' | 'getActiveCBCStrands' | 'linkFeeCategoryToStrand'>
   finance: FinanceAPI & BudgetAPI & BankReconciliationAPI & GLAccountAPI & OpeningBalanceAPI & FixedAssetAPI & ExemptionAPI
-    & Pick<ReportsAPI, 'getBalanceSheet' | 'getProfitAndLoss' | 'getTrialBalance' | 'getComparativeProfitAndLoss'>
-    & Pick<AcademicAPI, 'exportToPDF'>
   students: StudentAPI
   staff: StaffAPI & PayrollAPI
   operations: OperationsAPI & InventoryAPI & HireAPI

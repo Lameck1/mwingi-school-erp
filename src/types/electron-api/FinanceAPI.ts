@@ -149,8 +149,8 @@ export interface FinanceAPI {
   // Payments
   recordPayment: (_data: PaymentRecordData, _userId: number) => Promise<{ success: boolean; transactionRef?: string; receipt_number?: string; errors?: string[]; error?: string }>
   getPaymentsByStudent: (_studentId: number) => Promise<Payment[]>
-  payWithCredit: (_data: { studentId: number; invoiceId: number; amount: number }, _userId: number) => Promise<{ success: boolean; error?: string }>
-  voidPayment: (_transactionId: number, _voidReason: string, _userId: number, _recoveryMethod?: string) => Promise<{ success: boolean; error?: string; transaction_id?: number }>
+  payWithCredit: (_data: { studentId: number; invoiceId: number; amount: number }, _userId: number) => Promise<{ success: boolean; error?: string; message?: string }>
+  voidPayment: (_transactionId: number, _voidReason: string, _userId: number, _recoveryMethod?: string) => Promise<{ success: boolean; error?: string; message?: string; transaction_id?: number }>
 
   // Transactions (General)
   getTransactionCategories: () => Promise<TransactionCategory[]>
@@ -169,9 +169,9 @@ export interface FinanceAPI {
   getForecast: (months: number) => Promise<FinancialForecast>
 
   // Approvals
-  getApprovalQueue: (filter: 'PENDING' | 'ALL') => Promise<{ success: boolean; data: FinanceApprovalRequest[]; error?: string }>
-  approveTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) => Promise<{ success: boolean; error?: string }>
-  rejectTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) => Promise<{ success: boolean; error?: string }>
+  getApprovalQueue: (filter: 'PENDING' | 'ALL') => Promise<{ success: boolean; data: FinanceApprovalRequest[]; error?: string; message?: string }>
+  approveTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) => Promise<{ success: boolean; error?: string; message?: string }>
+  rejectTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) => Promise<{ success: boolean; error?: string; message?: string }>
 
   // Manual Fixes
 }
