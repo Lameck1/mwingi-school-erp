@@ -122,6 +122,16 @@ export default function ReconcileAccount() {
                 title="Bank Reconciliation"
                 subtitle="Match bank statement lines with ledger entries"
                 breadcrumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Reconciliation' }]}
+                actions={
+                    selectedStatement && selectedStatement.status !== 'RECONCILED' ? (
+                        <button
+                            onClick={() => { void handleReconcile() }}
+                            className="btn btn-primary"
+                        >
+                            Mark as Reconciled
+                        </button>
+                    ) : undefined
+                }
             />
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

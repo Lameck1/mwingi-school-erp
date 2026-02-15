@@ -1,6 +1,5 @@
 import { getDatabase } from '../../../database'
-import { asSqlInList } from '../../../utils/financeTransactionTypes'
-import { OUTSTANDING_INVOICE_STATUSES } from '../../../utils/financeTransactionTypes'
+import { asSqlInList, OUTSTANDING_INVOICE_STATUSES } from '../../../utils/financeTransactionTypes'
 
 import type { Invoice, IPaymentValidator, ValidationResult } from '../PaymentService.types'
 import type Database from 'better-sqlite3'

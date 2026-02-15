@@ -1,5 +1,4 @@
 import { getDatabase } from '../../../database'
-
 import { PaymentTransactionRepository, VoidAuditRepository } from './PaymentTransactionRepository'
 
 import type { ApprovalQueueItem, IPaymentQueryService, PaymentTransaction, VoidedTransaction } from '../PaymentService.types'
