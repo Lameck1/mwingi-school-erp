@@ -20,6 +20,8 @@ export interface StudentData {
   guardian_name?: string
   guardian_phone?: string
   guardian_email?: string
+  guardian_relationship?: string
+  notes?: string
   stream_id?: number
   student_type?: 'BOARDER' | 'DAY_SCHOLAR'
   admission_date?: string

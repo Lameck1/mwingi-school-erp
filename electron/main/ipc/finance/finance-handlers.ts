@@ -45,37 +45,6 @@ const registerPaymentRecordHandler = (context: FinanceContext): void => {
         return trimmed.slice(0, 128)
     }
 
-    const findDuplicatePayment = (data: PaymentData, userId: number) => {
-        return db.prepare(`
-            SELECT lt.id, lt.transaction_ref, r.receipt_number
-            FROM ledger_transaction lt
-            LEFT JOIN receipt r ON r.transaction_id = lt.id
-            WHERE lt.transaction_type = 'FEE_PAYMENT'
-              AND lt.is_voided = 0
-              AND lt.student_id = ?
-              AND lt.amount = ?
-              AND lt.transaction_date = ?
-              AND lt.payment_method = ?
-              AND COALESCE(lt.payment_reference, '') = COALESCE(?, '')
-              AND lt.recorded_by_user_id = ?
-              AND (
-                (lt.invoice_id IS NULL AND ? IS NULL)
-                OR lt.invoice_id = ?
-              )
-            ORDER BY lt.id DESC
-            LIMIT 1
-        `).get(
-            data.student_id,
-            data.amount,
-            data.transaction_date,
-            data.payment_method,
-            data.payment_reference ?? '',
-            userId,
-            data.invoice_id ?? null,
-            data.invoice_id ?? null
-        ) as { id: number; transaction_ref: string; receipt_number: string | null } | undefined
-    }
-
     const findByIdempotencyKey = (idempotencyKey: string) => {
         if (!supportsIdempotency()) {
             return null
@@ -119,22 +88,6 @@ const registerPaymentRecordHandler = (context: FinanceContext): void => {
                             transactionRef: existingForKey.transaction_ref,
                             receiptNumber: existingForKey.receipt_number || undefined
                         }
-                    }
-                }
-
-                const duplicate = findDuplicatePayment({
-                    ...data,
-                    amount: amountValidation.data!,
-                    transaction_date: dateValidation.data!,
-                    payment_reference: sanitizeString(data.payment_reference),
-                    description: sanitizeString(data.description) || 'Tuition Fee Payment'
-                }, userId)
-                if (duplicate) {
-                    return {
-                        success: true,
-                        message: 'Duplicate payment request detected; returning existing transaction',
-                        transactionRef: duplicate.transaction_ref,
-                        receiptNumber: duplicate.receipt_number || undefined
                     }
                 }
 

@@ -801,7 +801,4 @@ export class DoubleEntryJournalService {
     return !!rule;
   }
 
-  private async checkApprovalRequired(data: JournalEntryData): Promise<boolean> {
-    return this.checkApprovalRequiredSync(data);
-  }
 }

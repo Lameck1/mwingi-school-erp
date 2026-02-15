@@ -3,6 +3,8 @@ import { useState, useEffect, useCallback } from 'react'
 
 import { useToast } from '../../contexts/ToastContext'
 
+const MASKED_SECRET_VALUE = '******'
+
 export default function IntegrationsSettings() {
     const { showToast } = useToast()
     const [loading, setLoading] = useState(false)
@@ -52,15 +54,26 @@ export default function IntegrationsSettings() {
         loadConfigs().catch((err: unknown) => console.error('Failed to load integration configs', err))
     }, [loadConfigs])
 
+    const shouldPersistConfigValue = (value: string): boolean => value.trim() !== MASKED_SECRET_VALUE
+
     const handleSaveSMS = async () => {
         setLoading(true)
         try {
-            await Promise.all([
-                globalThis.electronAPI.saveSecureConfig('sms.provider', smsConfig.provider),
-                globalThis.electronAPI.saveSecureConfig('sms.api_key', smsConfig.api_key),
-                globalThis.electronAPI.saveSecureConfig('sms.username', smsConfig.username),
-                globalThis.electronAPI.saveSecureConfig('sms.sender_id', smsConfig.sender_id)
-            ])
+            const saveOperations: Promise<boolean>[] = [
+                globalThis.electronAPI.saveSecureConfig('sms.provider', smsConfig.provider)
+            ]
+
+            if (shouldPersistConfigValue(smsConfig.api_key)) {
+                saveOperations.push(globalThis.electronAPI.saveSecureConfig('sms.api_key', smsConfig.api_key))
+            }
+            if (shouldPersistConfigValue(smsConfig.username)) {
+                saveOperations.push(globalThis.electronAPI.saveSecureConfig('sms.username', smsConfig.username))
+            }
+            if (shouldPersistConfigValue(smsConfig.sender_id)) {
+                saveOperations.push(globalThis.electronAPI.saveSecureConfig('sms.sender_id', smsConfig.sender_id))
+            }
+
+            await Promise.all(saveOperations)
             showToast('SMS Gateway settings saved securely', 'success')
         } catch {
             showToast('Failed to save SMS settings', 'error')
@@ -72,12 +85,22 @@ export default function IntegrationsSettings() {
     const handleSaveSMTP = async () => {
         setLoading(true)
         try {
-            await Promise.all([
-                globalThis.electronAPI.saveSecureConfig('smtp.host', smtpConfig.host),
-                globalThis.electronAPI.saveSecureConfig('smtp.port', smtpConfig.port),
-                globalThis.electronAPI.saveSecureConfig('smtp.user', smtpConfig.user),
-                globalThis.electronAPI.saveSecureConfig('smtp.pass', smtpConfig.pass)
-            ])
+            const saveOperations: Promise<boolean>[] = []
+
+            if (shouldPersistConfigValue(smtpConfig.host)) {
+                saveOperations.push(globalThis.electronAPI.saveSecureConfig('smtp.host', smtpConfig.host))
+            }
+            if (shouldPersistConfigValue(smtpConfig.port)) {
+                saveOperations.push(globalThis.electronAPI.saveSecureConfig('smtp.port', smtpConfig.port))
+            }
+            if (shouldPersistConfigValue(smtpConfig.user)) {
+                saveOperations.push(globalThis.electronAPI.saveSecureConfig('smtp.user', smtpConfig.user))
+            }
+            if (shouldPersistConfigValue(smtpConfig.pass)) {
+                saveOperations.push(globalThis.electronAPI.saveSecureConfig('smtp.pass', smtpConfig.pass))
+            }
+
+            await Promise.all(saveOperations)
             showToast('SMTP settings saved securely', 'success')
         } catch {
             showToast('Failed to save SMTP settings', 'error')

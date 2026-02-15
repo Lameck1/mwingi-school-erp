@@ -6,8 +6,8 @@ type IpcHandler = (event: unknown, ...args: unknown[]) => Promise<unknown>
 let db: Database.Database
 const handlerMap = new Map<string, IpcHandler>()
 const journalServiceMock = {
-  recordInvoiceSync: vi.fn(() => ({ success: true })),
-  recordPaymentSync: vi.fn(() => ({ success: true })),
+  recordInvoiceSync: vi.fn((): { success: boolean; error?: string } => ({ success: true })),
+  recordPaymentSync: vi.fn((): { success: boolean; error?: string } => ({ success: true })),
 }
 const paymentServiceMock = {
   recordPayment: vi.fn(() => ({ success: true, transactionRef: 'TXN-MOCK-1', receiptNumber: 'RCP-MOCK-1' })),
@@ -248,7 +248,7 @@ describe('finance IPC handlers', () => {
     expect(ledgerCount.count).toBe(1)
   })
 
-  it('payment:record short-circuits duplicate payload and returns existing receipt', async () => {
+  it('payment:record does not short-circuit on historical payload match without idempotency key', async () => {
     const today = new Date().toISOString().slice(0, 10)
     db.prepare(`
       INSERT INTO ledger_transaction (
@@ -280,8 +280,52 @@ describe('finance IPC handlers', () => {
     ) as { success: boolean; transactionRef?: string; receiptNumber?: string }
 
     expect(result.success).toBe(true)
-    expect(result.transactionRef).toBe('TXN-EXIST-1')
-    expect(result.receiptNumber).toBe('RCP-EXIST-1')
+    expect(result.transactionRef).toBe('TXN-MOCK-1')
+    expect(result.receiptNumber).toBe('RCP-MOCK-1')
+    expect(paymentServiceMock.recordPayment).toHaveBeenCalledTimes(1)
+  })
+
+  it('payment:record short-circuits idempotent replay and returns existing receipt', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    db.exec(`
+      ALTER TABLE ledger_transaction ADD COLUMN idempotency_key TEXT;
+      CREATE UNIQUE INDEX idx_ledger_transaction_idempotency_test
+      ON ledger_transaction(idempotency_key);
+    `)
+
+    db.prepare(`
+      INSERT INTO ledger_transaction (
+        transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit,
+        student_id, payment_method, payment_reference, description, recorded_by_user_id, invoice_id, idempotency_key
+      ) VALUES ('TXN-IDEMP-1', ?, 'FEE_PAYMENT', 1, 10000, 'CREDIT', 1, 'MPESA', 'MPESA-456', 'Tuition Fee Payment', 9, NULL, 'idem-key-1')
+    `).run(today)
+    db.prepare(`
+      INSERT INTO receipt (
+        receipt_number, transaction_id, receipt_date, student_id, amount, payment_method, payment_reference, created_by_user_id
+      ) VALUES ('RCP-IDEMP-1', 1, ?, 1, 10000, 'MPESA', 'MPESA-456', 9)
+    `).run(today)
+
+    const handler = handlerMap.get('payment:record')
+    expect(handler).toBeDefined()
+
+    const result = await handler!(
+      {},
+      {
+        student_id: 1,
+        amount: 10000,
+        payment_method: 'MPESA',
+        payment_reference: 'MPESA-NEW',
+        transaction_date: today,
+        description: 'Tuition Fee Payment',
+        term_id: 1,
+        idempotency_key: 'idem-key-1'
+      },
+      9
+    ) as { success: boolean; transactionRef?: string; receiptNumber?: string }
+
+    expect(result.success).toBe(true)
+    expect(result.transactionRef).toBe('TXN-IDEMP-1')
+    expect(result.receiptNumber).toBe('RCP-IDEMP-1')
     expect(paymentServiceMock.recordPayment).not.toHaveBeenCalled()
   })
 

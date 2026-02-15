@@ -6,7 +6,7 @@ type IpcHandler = (event: unknown, ...args: unknown[]) => Promise<unknown>
 let db: Database.Database
 const handlerMap = new Map<string, IpcHandler>()
 const journalServiceMock = {
-  createJournalEntrySync: vi.fn(() => ({ success: true })),
+  createJournalEntrySync: vi.fn((): { success: boolean; error?: string } => ({ success: true })),
 }
 
 vi.mock('../../../electron-env', () => ({

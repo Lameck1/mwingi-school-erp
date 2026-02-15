@@ -225,17 +225,12 @@ class TermDateValidator implements ITermDateValidator {
 }
 
 class ProRatedInvoiceGenerator implements IProRatedInvoiceGenerator {
-  private readonly db: Database.Database
-
   constructor(
     private readonly templateRepo: InvoiceTemplateRepository,
     private readonly invoiceRepo: ProRatedInvoiceRepository,
     private readonly calculator: ProRateCalculator,
-    private readonly validator: TermDateValidator,
-    db?: Database.Database
-  ) {
-    this.db = db || getDatabase()
-  }
+    private readonly validator: TermDateValidator
+  ) {}
 
   private async loadTemplateAndTermDates(
     templateInvoiceId: number
@@ -387,8 +382,7 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
       templateRepo,
       invoiceRepo,
       this.calculator,
-      this.validator,
-      this.db
+      this.validator
     )
   }
 

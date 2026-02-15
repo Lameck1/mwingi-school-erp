@@ -4,12 +4,14 @@ import { useNavigate, useParams } from 'react-router-dom'
 
 import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 import { Select } from '../../components/ui/Select'
+import { useAuthStore } from '../../stores'
 import { type Stream } from '../../types/electron-api/AcademicAPI'
 
 export default function StudentForm() {
     const navigate = useNavigate()
     const { id } = useParams()
     const isEdit = Boolean(id)
+    const { user } = useAuthStore()
 
     const [streams, setStreams] = useState<Stream[]>([])
     const [loading, setLoading] = useState(false)
@@ -44,6 +46,10 @@ export default function StudentForm() {
                 if (id) {
                     const student = await globalThis.electronAPI.getStudentById(Number.parseInt(id, 10))
                     if (student) {
+                        const studentWithExtendedFields = student as typeof student & {
+                            guardian_relationship?: string | null
+                            notes?: string | null
+                        }
                         setFormData({
                             admission_number: student.admission_number || '',
                             first_name: student.first_name || '',
@@ -58,8 +64,8 @@ export default function StudentForm() {
                             guardian_email: student.guardian_email || '',
                             address: student.address || '',
                             stream_id: student.stream_id?.toString() || '',
-                            guardian_relationship: '',
-                            notes: ''
+                            guardian_relationship: studentWithExtendedFields.guardian_relationship || '',
+                            notes: studentWithExtendedFields.notes || ''
                         })
                     }
                 }
@@ -84,17 +90,34 @@ export default function StudentForm() {
         setSaving(true)
 
         try {
-            if (isEdit && id) {
-                await globalThis.electronAPI.updateStudent(Number.parseInt(id, 10), {
-                    ...formData,
-                    stream_id: Number.parseInt(formData.stream_id, 10)
-                })
-            } else {
-                await globalThis.electronAPI.createStudent({
-                    ...formData,
-                    stream_id: Number.parseInt(formData.stream_id, 10)
-                })
+            const parsedStreamId = Number.parseInt(formData.stream_id, 10)
+            const studentPayload = {
+                ...formData,
+                stream_id: Number.isFinite(parsedStreamId) ? parsedStreamId : undefined
             }
+            type StudentMutationResult = { success: boolean; error?: string }
+            let mutationResult: StudentMutationResult
+
+            if (isEdit && id) {
+                mutationResult = await globalThis.electronAPI.updateStudent(
+                    Number.parseInt(id, 10),
+                    studentPayload
+                ) as StudentMutationResult
+            } else {
+                if (!user?.id) {
+                    throw new Error('User session not found. Please log in again.')
+                }
+
+                mutationResult = await globalThis.electronAPI.createStudent(
+                    studentPayload,
+                    user.id
+                ) as StudentMutationResult
+            }
+
+            if (!mutationResult.success) {
+                throw new Error(mutationResult.error || 'Failed to save student record')
+            }
+
             navigate('/students')
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Registry synchronization failed')

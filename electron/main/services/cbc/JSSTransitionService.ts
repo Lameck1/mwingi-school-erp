@@ -280,7 +280,7 @@ export class JSSTransitionService {
 
     for (const studentId of data.student_ids) {
       try {
-        const _transitionId = this.processStudentTransition({
+        this.processStudentTransition({
           student_id: studentId,
           from_grade: data.from_grade,
           to_grade: data.to_grade,

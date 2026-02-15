@@ -55,10 +55,6 @@ interface ExpenseSummary {
   percentage: number;
 }
 
-interface StudentCountResult {
-  student_count: number;
-}
-
 interface CountResult {
   count: number;
 }
@@ -414,23 +410,6 @@ export class TransportCostService {
     fiscalYear: number,
     term?: number
   ): number {
-    // Get student count for this route
-    let countQuery = `
-      SELECT COUNT(*) as student_count
-      FROM student_route_assignment
-      WHERE route_id = ? AND academic_year = ?
-    `;
-
-    const countParams: unknown[] = [routeId, fiscalYear];
-
-    if (term) {
-      countQuery += ` AND term = ?`;
-      countParams.push(term);
-    }
-
-    const countResult = this.db.prepare(countQuery).get(...countParams) as StudentCountResult | undefined;
-    const _studentCount = countResult?.student_count || 0;
-
     // Get transport fee revenue from invoice items tagged as transport
     let revenueQuery = `
       SELECT COALESCE(SUM(ii.amount), 0) as total_revenue

@@ -523,14 +523,10 @@ export class PaymentProcessor {
 
 export class VoidProcessor implements IPaymentVoidProcessor {
   private readonly db: Database.Database
-  private readonly transactionRepo: PaymentTransactionRepository
-  private readonly voidAuditRepo: VoidAuditRepository
   private sourceLedgerColumnAvailable: boolean | null = null
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
-    this.transactionRepo = new PaymentTransactionRepository(this.db)
-    this.voidAuditRepo = new VoidAuditRepository(this.db)
   }
 
 
@@ -714,7 +710,7 @@ export class VoidProcessor implements IPaymentVoidProcessor {
         is_voided, voided_reason
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      reversalRef, transaction.student_id, 'VOID_REVERSAL', transaction.amount, 'DEBIT',
+      reversalRef, transaction.student_id, 'REFUND', transaction.amount, 'DEBIT',
       new Date().toISOString().split('T')[0],
       `Void of transaction #${data.transaction_id}: ${data.void_reason}`,
       'CASH', `VOID_REF_${transaction.student_id}_${Date.now()}`,

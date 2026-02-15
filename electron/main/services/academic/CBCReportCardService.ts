@@ -442,13 +442,6 @@ export class CBCReportCardService {
     return pointsMap[grade] ?? 0
   }
 
-  private getPerformanceLevel(grade: string): string {
-    if (grade.startsWith('EE')) {return 'Exceeding Expectation'}
-    if (grade.startsWith('ME')) {return 'Meeting Expectation'}
-    if (grade.startsWith('AE')) {return 'Approaching Expectation'}
-    return 'Below Expectation'
-  }
-
   private generateQRToken(studentId: number, examId: number): string {
     // Generate a token for QR code verification
     const timestamp = Date.now()

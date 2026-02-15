@@ -4,6 +4,8 @@ import { expect, test } from '@playwright/test'
  * E2E tests verify complete user workflows from UI to database
  * These tests run against the actual Electron application
  */
+const isE2E = process.env.E2E === 'true'
+test.skip(!isE2E, 'Set E2E=true to run main workflow E2E tests')
 
 test.describe('Payment Recording Flow', () => {
   test.beforeEach(async ({ page }) => {

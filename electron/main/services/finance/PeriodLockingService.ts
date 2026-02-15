@@ -106,7 +106,6 @@ export class PeriodLockingService {
         return this.failure('Period is closed and cannot be unlocked')
       }
 
-      const _now = new Date().toISOString()
       this.db.prepare(`
         UPDATE financial_period
         SET status = 'OPEN', locked_by = NULL, locked_at = NULL

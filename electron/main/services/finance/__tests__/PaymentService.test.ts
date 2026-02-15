@@ -118,7 +118,10 @@ describe('PaymentService', () => {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             transaction_ref TEXT NOT NULL UNIQUE,
             transaction_date DATE NOT NULL,
-            transaction_type TEXT NOT NULL,
+            transaction_type TEXT NOT NULL CHECK(transaction_type IN (
+              'FEE_PAYMENT', 'DONATION', 'GRANT', 'EXPENSE', 'SALARY_PAYMENT',
+              'REFUND', 'OPENING_BALANCE', 'ADJUSTMENT', 'INCOME'
+            )),
             category_id INTEGER NOT NULL,
             amount INTEGER NOT NULL,
             debit_credit TEXT NOT NULL,
@@ -394,6 +397,35 @@ describe('PaymentService', () => {
 
             const student = db.prepare(`SELECT credit_balance FROM student WHERE id = 1`).get() as { credit_balance: number }
             expect(student.credit_balance).toBe(0)
+        })
+
+        it('should record void reversal using a ledger-supported transaction type', async () => {
+            const payment = service.recordPayment({
+                student_id: 1,
+                amount: 12000,
+                transaction_date: '2024-01-17',
+                payment_method: 'CASH',
+                payment_reference: 'VOID-TYPE-1',
+                recorded_by_user_id: 1,
+                term_id: 1
+            })
+            expect(payment.success).toBe(true)
+
+            const voidResult = await service.voidPayment({
+                transaction_id: payment.transaction_id!,
+                void_reason: 'Type compatibility regression test',
+                voided_by: 1
+            })
+            expect(voidResult.success).toBe(true)
+            expect(voidResult.transaction_id).toBeDefined()
+
+            const reversal = db.prepare(`
+              SELECT transaction_type
+              FROM ledger_transaction
+              WHERE id = ?
+            `).get(voidResult.transaction_id) as { transaction_type: string }
+
+            expect(reversal.transaction_type).toBe('REFUND')
         })
     })
 })
