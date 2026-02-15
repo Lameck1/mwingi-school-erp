@@ -75,12 +75,23 @@ const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
 /**
  * Filters API methods based on user role
  */
-export function filterAPIByRole<T extends Record<string, any>>(
+export function filterAPIByRole<T extends Record<string, unknown>>(
   api: T,
   userRole: UserRole,
   domain: keyof RolePermissions
 ): Partial<T> {
-  const permissions = ROLE_PERMISSIONS[userRole]?.[domain] || []
+  const roleConfig = ROLE_PERMISSIONS[userRole]
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (!roleConfig) {
+    console.warn(`Unknown role encountered: ${userRole}`)
+    return {}
+  }
+
+  const permissions = roleConfig[domain]
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (!permissions) {
+    return {}
+  }
   
   if (permissions.includes('*')) {
     return api // Full access
@@ -89,6 +100,7 @@ export function filterAPIByRole<T extends Record<string, any>>(
   const filtered: Partial<T> = {}
   for (const [key, value] of Object.entries(api)) {
     if (permissions.includes(key)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (filtered as any)[key] = value
     }
   }
@@ -116,23 +128,24 @@ export function createRoleAwareAPI(userRole: UserRole) {
 }
 
 // Import dependencies (avoid circular dependency)
-let createAuthAPI: any, createSettingsAPI: any, createAcademicAPI: any
-let createFinanceAPI: any, createStudentAPI: any, createStaffAPI: any
-let createOperationsAPI: any, createReportsAPI: any, createCommunicationsAPI: any
-let createSystemAPI: any, createMenuEventAPI: any
+type ApiFactory = () => Record<string, unknown>
+let createAuthAPI: ApiFactory, createSettingsAPI: ApiFactory, createAcademicAPI: ApiFactory
+let createFinanceAPI: ApiFactory, createStudentAPI: ApiFactory, createStaffAPI: ApiFactory
+let createOperationsAPI: ApiFactory, createReportsAPI: ApiFactory, createCommunicationsAPI: ApiFactory
+let createSystemAPI: ApiFactory, createMenuEventAPI: ApiFactory
 
 export function setAPIFactories(factories: {
-  createAuthAPI: any
-  createSettingsAPI: any
-  createAcademicAPI: any
-  createFinanceAPI: any
-  createStudentAPI: any
-  createStaffAPI: any
-  createOperationsAPI: any
-  createReportsAPI: any
-  createCommunicationsAPI: any
-  createSystemAPI: any
-  createMenuEventAPI: any
+  createAuthAPI: ApiFactory
+  createSettingsAPI: ApiFactory
+  createAcademicAPI: ApiFactory
+  createFinanceAPI: ApiFactory
+  createStudentAPI: ApiFactory
+  createStaffAPI: ApiFactory
+  createOperationsAPI: ApiFactory
+  createReportsAPI: ApiFactory
+  createCommunicationsAPI: ApiFactory
+  createSystemAPI: ApiFactory
+  createMenuEventAPI: ApiFactory
 }) {
   ({
     createAuthAPI,

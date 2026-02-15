@@ -81,7 +81,7 @@ export default function RecordIncome() {
                 payment_method: formData.payment_method,
                 payment_reference: formData.payment_reference,
                 description: formData.description
-            }, user.id)
+            })
 
             showToast('Income recorded successfully', 'success')
             setFormData({

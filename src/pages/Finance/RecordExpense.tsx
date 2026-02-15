@@ -80,7 +80,7 @@ export default function RecordExpense() {
                 payment_method: formData.payment_method,
                 payment_reference: formData.payment_reference,
                 description: formData.description
-            }, user.id)
+            })
 
             showToast('Expense recorded successfully', 'success')
             setFormData({

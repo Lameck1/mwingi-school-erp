@@ -18,11 +18,11 @@ export interface ApprovalCounts {
 }
 
 export interface ApprovalAPI {
-    getPendingApprovals: (userId?: number) => Promise<ApprovalRequest[]>;
+    getPendingApprovals: () => Promise<ApprovalRequest[]>;
     getAllApprovals: (filters?: { status?: string; entity_type?: string }) => Promise<ApprovalRequest[]>;
     getApprovalCounts: () => Promise<ApprovalCounts>;
-    createApprovalRequest: (entityType: string, entityId: number, userId: number) => Promise<{ success: boolean; id?: number; errors?: string[] }>;
-    approveRequest: (requestId: number, approverId: number) => Promise<{ success: boolean; errors?: string[] }>;
-    rejectRequest: (requestId: number, approverId: number, reason: string) => Promise<{ success: boolean; errors?: string[] }>;
-    cancelApprovalRequest: (requestId: number, userId: number) => Promise<{ success: boolean; errors?: string[] }>;
+    createApprovalRequest: (entityType: string, entityId: number) => Promise<{ success: boolean; id?: number; errors?: string[] }>;
+    approveRequest: (requestId: number) => Promise<{ success: boolean; errors?: string[] }>;
+    rejectRequest: (requestId: number, reason: string) => Promise<{ success: boolean; errors?: string[] }>;
+    cancelApprovalRequest: (requestId: number) => Promise<{ success: boolean; errors?: string[] }>;
 }

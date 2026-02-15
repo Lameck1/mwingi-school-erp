@@ -35,6 +35,22 @@ vi.mock('../../../services/base/ServiceContainer', () => ({
   }
 }))
 
+vi.mock('../../../security/session', () => ({
+  getSession: vi.fn().mockResolvedValue({
+    user: {
+      id: 1,
+      role: 'ADMIN',
+      username: 'admin',
+      full_name: 'Admin User',
+      email: 'admin@school.com',
+      is_active: 1,
+      created_at: new Date().toISOString(),
+      last_login: new Date().toISOString()
+    },
+    lastActivity: Date.now()
+  })
+}))
+
 import { registerHireHandlers } from '../hire-handlers'
 
 describe('hire handlers', () => {

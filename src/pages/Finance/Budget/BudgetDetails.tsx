@@ -61,7 +61,7 @@ export default function BudgetDetails() {
         if (!budget || !user) {return}
         setActionLoading(true)
         try {
-            const result = await globalThis.electronAPI.submitBudgetForApproval(budget.id, user.id)
+            const result = await globalThis.electronAPI.submitBudgetForApproval(budget.id)
             if (result.success) {
                 loadBudget().catch((err: unknown) => console.error('Failed to reload budget:', err))
             }
@@ -76,7 +76,7 @@ export default function BudgetDetails() {
         if (!budget || !user) {return}
         setActionLoading(true)
         try {
-            const result = await globalThis.electronAPI.approveBudget(budget.id, user.id)
+            const result = await globalThis.electronAPI.approveBudget(budget.id)
             if (result.success) {
                 loadBudget().catch((err: unknown) => console.error('Failed to reload budget:', err))
             }

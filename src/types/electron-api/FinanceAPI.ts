@@ -142,25 +142,25 @@ export interface FinanceAPI {
   // Fee Structure
   getFeeStructure: (_academicYearId: number, _termId: number) => Promise<FeeStructure[]>
   saveFeeStructure: (_data: FeeStructureCreateData[], _academicYearId: number, _termId: number) => Promise<FeeStructure[]>
-  generateBatchInvoices: (_academicYearId: number, _termId: number, _userId: number) => Promise<{ success: boolean; count: number }>
-  generateStudentInvoice: (_studentId: number, _yearId: number, _termId: number, _userId: number) => Promise<{ success: boolean; invoiceNumber?: string; error?: string }>
+  generateBatchInvoices: (_academicYearId: number, _termId: number) => Promise<{ success: boolean; count: number }>
+  generateStudentInvoice: (_studentId: number, _yearId: number, _termId: number) => Promise<{ success: boolean; invoiceNumber?: string; error?: string }>
   getInvoices: (_filters?: Partial<Invoice>) => Promise<Invoice[]>
 
   // Payments
-  recordPayment: (_data: PaymentRecordData, _userId: number) => Promise<{ success: boolean; transactionRef?: string; receipt_number?: string; errors?: string[]; error?: string }>
+  recordPayment: (_data: PaymentRecordData) => Promise<{ success: boolean; transactionRef?: string; receipt_number?: string; errors?: string[]; error?: string }>
   getPaymentsByStudent: (_studentId: number) => Promise<Payment[]>
-  payWithCredit: (_data: { studentId: number; invoiceId: number; amount: number }, _userId: number) => Promise<{ success: boolean; error?: string; message?: string }>
-  voidPayment: (_transactionId: number, _voidReason: string, _userId: number, _recoveryMethod?: string) => Promise<{ success: boolean; error?: string; message?: string; transaction_id?: number }>
+  payWithCredit: (_data: { studentId: number; invoiceId: number; amount: number }) => Promise<{ success: boolean; error?: string; message?: string }>
+  voidPayment: (_transactionId: number, _voidReason: string, _recoveryMethod?: string) => Promise<{ success: boolean; error?: string; message?: string; transaction_id?: number }>
 
   // Transactions (General)
   getTransactionCategories: () => Promise<TransactionCategory[]>
   createTransactionCategory: (_name: string, _type: string) => Promise<TransactionCategory>
-  createTransaction: (_data: Partial<Transaction>, _userId: number) => Promise<Transaction>
+  createTransaction: (_data: Partial<Transaction>) => Promise<Transaction>
   getTransactions: (_filters?: Partial<Transaction>) => Promise<Transaction[]>
   getTransactionSummary: (_startDate: string, _endDate: string) => Promise<{ totalIncome: number; totalExpense: number; netBalance: number }>
 
   // Invoices
-  createInvoice: (_data: Partial<Invoice>, _items: InvoiceItem[], _userId: number) => Promise<{ success: boolean; invoiceNumber: string; id: number }>
+  createInvoice: (_data: Partial<Invoice>, _items: InvoiceItem[]) => Promise<{ success: boolean; invoiceNumber: string; id: number }>
   getInvoicesByStudent: (_studentId: number) => Promise<Invoice[]>
   getInvoiceItems: (_invoiceId: number) => Promise<InvoiceItem[]>
 
@@ -170,8 +170,8 @@ export interface FinanceAPI {
 
   // Approvals
   getApprovalQueue: (filter: 'PENDING' | 'ALL') => Promise<{ success: boolean; data: FinanceApprovalRequest[]; error?: string; message?: string }>
-  approveTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) => Promise<{ success: boolean; error?: string; message?: string }>
-  rejectTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) => Promise<{ success: boolean; error?: string; message?: string }>
+  approveTransaction: (approvalId: number, reviewNotes: string) => Promise<{ success: boolean; error?: string; message?: string }>
+  rejectTransaction: (approvalId: number, reviewNotes: string) => Promise<{ success: boolean; error?: string; message?: string }>
 
   // Manual Fixes
 }

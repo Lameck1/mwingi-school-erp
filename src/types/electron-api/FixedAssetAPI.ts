@@ -54,7 +54,7 @@ export interface FixedAssetAPI {
     getFinancialPeriods: () => Promise<FinancialPeriod[]>
     getAssets: (filters?: AssetFilters) => Promise<FixedAsset[]>
     getAsset: (id: number) => Promise<FixedAsset | null>
-    createAsset: (data: CreateAssetData, userId: number) => Promise<{ success: boolean; id: number; errors?: string[] }>
-    updateAsset: (id: number, data: Partial<CreateAssetData> & { status?: string }, userId: number) => Promise<{ success: boolean; errors?: string[] }>
-    runDepreciation: (assetId: number, periodId: number, userId: number) => Promise<{ success: boolean; error?: string }>
+    createAsset: (data: CreateAssetData) => Promise<{ success: boolean; id: number; errors?: string[] }>
+    updateAsset: (id: number, data: Partial<CreateAssetData> & { status?: string }) => Promise<{ success: boolean; errors?: string[] }>
+    runDepreciation: (assetId: number, periodId: number) => Promise<{ success: boolean; error?: string }>
 }

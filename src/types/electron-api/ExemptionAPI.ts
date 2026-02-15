@@ -52,7 +52,7 @@ export interface ExemptionAPI {
     getExemptionById: (id: number) => Promise<FeeExemption | undefined>
     getStudentExemptions: (studentId: number, academicYearId: number, termId: number) => Promise<FeeExemption[]>
     calculateExemption: (studentId: number, academicYearId: number, termId: number, categoryId: number, originalAmount: number) => Promise<ExemptionCalculation>
-    createExemption: (data: ExemptionCreateData, userId: number) => Promise<{ success: boolean; id?: number; errors?: string[] }>
-    revokeExemption: (id: number, reason: string, userId: number) => Promise<{ success: boolean; errors?: string[] }>
+    createExemption: (data: ExemptionCreateData) => Promise<{ success: boolean; id?: number; errors?: string[] }>
+    revokeExemption: (id: number, reason: string) => Promise<{ success: boolean; errors?: string[] }>
     getExemptionStats: (academicYearId?: number) => Promise<ExemptionStats>
 }

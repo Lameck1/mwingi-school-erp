@@ -69,8 +69,7 @@ export default function ApprovalQueuePage() {
     try {
       const result = await globalThis.electronAPI.approveTransaction(
         approvalId,
-        reviewNotes || 'Approved',
-        user.id
+        reviewNotes || 'Approved'
       );
 
       if (result.success) {
@@ -98,8 +97,7 @@ export default function ApprovalQueuePage() {
     try {
       const result = await globalThis.electronAPI.rejectTransaction(
         approvalId,
-        reviewNotes,
-        user.id
+        reviewNotes
       );
 
       if (result.success) {

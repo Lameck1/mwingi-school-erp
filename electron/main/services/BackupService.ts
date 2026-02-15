@@ -16,6 +16,7 @@ export class BackupService {
     private static get BACKUP_DIR() { return path.join(app.getPath('userData'), 'backups') }
     // Keep last 7 days + 1 monthly (not implemented strictly yet, just count based rotation)
     private static readonly MAX_BACKUPS = 7
+    private static readonly RETENTION_DAYS = 30
     private static schedulerInterval: ReturnType<typeof setInterval> | null = null
 
     private static createTempPath(targetPath: string): string {
@@ -191,15 +192,36 @@ export class BackupService {
 
     private static async cleanupOldBackups() {
         const backups = this.listBackups()
-        if (backups.length > this.MAX_BACKUPS) {
-            const toDelete = backups.slice(this.MAX_BACKUPS)
-            for (const backup of toDelete) {
-                try {
-                    fs.unlinkSync(path.join(this.BACKUP_DIR, backup.filename))
-                    log.info(`Deleted old backup: ${backup.filename}`)
-                } catch (e) {
-                    log.error(`Failed to delete old backup ${backup.filename}`, e)
-                }
+        const now = new Date()
+
+        // Strict retention policy: delete files older than RETENTION_DAYS
+        // UNLESS it's the only backup left.
+        const toDelete = backups.filter(backup => {
+            const daysOld = (now.getTime() - backup.created_at.getTime()) / (1000 * 60 * 60 * 24)
+            return daysOld > this.RETENTION_DAYS
+        })
+
+        // Also enforce count limit if we have too many recent ones
+        if (backups.length - toDelete.length > this.MAX_BACKUPS) {
+            const excess = backups
+                .filter(b => !toDelete.includes(b))
+                .slice(this.MAX_BACKUPS)
+            toDelete.push(...excess)
+        }
+
+        // Safety check: never delete ALL backups if we have some.
+        // listBackups returns sorted by creation time descending (newest first).
+        // If we are about to delete everything, keep the newest one.
+        if (toDelete.length === backups.length && backups.length > 0) {
+            toDelete.shift() // Keep the newest one
+        }
+
+        for (const backup of toDelete) {
+            try {
+                fs.unlinkSync(path.join(this.BACKUP_DIR, backup.filename))
+                log.info(`Deleted old backup (retention policy): ${backup.filename}`)
+            } catch (e) {
+                log.error(`Failed to delete old backup ${backup.filename}`, e)
             }
         }
     }

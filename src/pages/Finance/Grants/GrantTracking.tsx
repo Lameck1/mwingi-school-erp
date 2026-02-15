@@ -103,7 +103,7 @@ export default function GrantTracking() {
                 ...createForm,
                 amount_allocated: shillingsToCents(createForm.amount_allocated),
                 amount_received: shillingsToCents(createForm.amount_received)
-            }, user.id)
+            })
             showToast('Grant created successfully', 'success')
             setIsCreateModalOpen(false)
             loadData().catch((err: unknown) => console.error('Failed to reload grants', err))
@@ -126,8 +126,7 @@ export default function GrantTracking() {
                 amount: shillingsToCents(utilizationForm.amount),
                 description: utilizationForm.description,
                 glAccountCode: null,
-                utilizationDate: utilizationForm.utilizationDate,
-                userId: user.id
+                utilizationDate: utilizationForm.utilizationDate
             })
             
             if (result.success) {

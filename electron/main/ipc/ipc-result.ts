@@ -73,7 +73,8 @@ export function safeHandleRawWithRole(
             if (!allowedRoles.includes(session.user.role)) {
                 return { success: false, error: `Unauthorized: role '${session.user.role}' cannot access '${channel}'` }
             }
-            return await handler(event, ...args)
+            // Inject userId as the last argument
+            return await handler(event, ...args, session.user.id)
         } catch (error) {
             return { success: false, error: getErrorMessage(error, `${channel} failed`) }
         }
@@ -94,7 +95,8 @@ export function safeHandleWithRole<T>(
             if (!allowedRoles.includes(session.user.role)) {
                 return { success: false, error: `Unauthorized: role '${session.user.role}' cannot access '${channel}'` }
             }
-            const result = await handler(event, ...args)
+            // Inject userId as the last argument
+            const result = await handler(event, ...args, session.user.id)
             return { success: true, data: result as T }
         } catch (error) {
             return { success: false, error: getErrorMessage(error, `${channel} failed`) }

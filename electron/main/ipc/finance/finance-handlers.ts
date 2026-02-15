@@ -632,7 +632,7 @@ const registerCreditHandlers = (): void => {
         }
     })
 
-    safeHandleRaw('finance:getCreditBalance', async (_event, studentId: number) => {
+    safeHandleRawWithRole('finance:getCreditBalance', ROLES.STAFF, async (_event, studentId: number) => {
         try {
             return await creditService.getStudentCreditBalance(studentId)
         } catch (error) {
@@ -640,7 +640,7 @@ const registerCreditHandlers = (): void => {
         }
     })
 
-    safeHandleRaw('finance:getCreditTransactions', async (_event, studentId: number, limit?: number) => {
+    safeHandleRawWithRole('finance:getCreditTransactions', ROLES.STAFF, async (_event, studentId: number, limit?: number) => {
         try {
             return await creditService.getCreditTransactions(studentId, limit)
         } catch (error) {
@@ -701,7 +701,7 @@ const registerProrationHandlers = (): void => {
         }
     })
 
-    safeHandleRaw('finance:getProRationHistory', async (_event, studentId: number) => {
+    safeHandleRawWithRole('finance:getProRationHistory', ROLES.STAFF, async (_event, studentId: number) => {
         try {
             return await prorationService.getStudentProRationHistory(studentId)
         } catch (error) {
@@ -729,7 +729,7 @@ const registerScholarshipHandlers = (): void => {
         }
     })
 
-    safeHandleRaw('finance:validateScholarshipEligibility', async (_event, studentId: number, scholarshipId: number) => {
+    safeHandleRawWithRole('finance:validateScholarshipEligibility', ROLES.STAFF, async (_event, studentId: number, scholarshipId: number) => {
         try {
             return await scholarshipService.validateScholarshipEligibility(studentId, scholarshipId)
         } catch (error) {
@@ -737,7 +737,7 @@ const registerScholarshipHandlers = (): void => {
         }
     })
 
-    safeHandleRaw('finance:getActiveScholarships', async () => {
+    safeHandleRawWithRole('finance:getActiveScholarships', ROLES.STAFF, async () => {
         try {
             return await scholarshipService.getActiveScholarships()
         } catch (error) {
@@ -745,7 +745,7 @@ const registerScholarshipHandlers = (): void => {
         }
     })
 
-    safeHandleRaw('finance:getStudentScholarships', async (_event, studentId: number) => {
+    safeHandleRawWithRole('finance:getStudentScholarships', ROLES.STAFF, async (_event, studentId: number) => {
         try {
             return await scholarshipService.getStudentScholarships(studentId)
         } catch (error) {
@@ -753,7 +753,7 @@ const registerScholarshipHandlers = (): void => {
         }
     })
 
-    safeHandleRaw('finance:getScholarshipAllocations', async (_event, scholarshipId: number) => {
+    safeHandleRawWithRole('finance:getScholarshipAllocations', ROLES.STAFF, async (_event, scholarshipId: number) => {
         try {
             return await scholarshipService.getScholarshipAllocations(scholarshipId)
         } catch (error) {

@@ -42,8 +42,8 @@ export interface CreateBudgetData {
 export interface BudgetAPI {
     getBudgets: (filters?: BudgetFilters) => Promise<Budget[]>
     getBudgetById: (id: number) => Promise<Budget | null>
-    createBudget: (data: CreateBudgetData, userId: number) => Promise<{ success: boolean; id: number; errors?: string[] }>
-    updateBudget: (id: number, data: Partial<CreateBudgetData>, userId: number) => Promise<{ success: boolean; errors?: string[] }>
-    submitBudgetForApproval: (budgetId: number, userId: number) => Promise<{ success: boolean; errors?: string[] }>
-    approveBudget: (budgetId: number, userId: number) => Promise<{ success: boolean; errors?: string[] }>
+    createBudget: (data: CreateBudgetData) => Promise<{ success: boolean; id: number; errors?: string[] }>
+    updateBudget: (id: number, data: Partial<CreateBudgetData>) => Promise<{ success: boolean; errors?: string[] }>
+    submitBudgetForApproval: (budgetId: number) => Promise<{ success: boolean; errors?: string[] }>
+    approveBudget: (budgetId: number) => Promise<{ success: boolean; errors?: string[] }>
 }

@@ -35,13 +35,15 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         console.error('ErrorBoundary caught:', error, errorInfo)
         
         // Report to main process for logging
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (globalThis.electronAPI?.system?.logError) {
-            globalThis.electronAPI.system.logError({
+            // eslint-disable-next-line promise/no-promise-in-callback
+            void globalThis.electronAPI.system.logError({
                 error: error.message,
                 stack: error.stack,
                 componentStack: errorInfo.componentStack,
                 timestamp: new Date().toISOString()
-            })
+            }).catch(console.error)
         }
         
         // Call custom error handler if provided

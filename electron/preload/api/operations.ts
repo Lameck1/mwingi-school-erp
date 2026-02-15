@@ -25,7 +25,7 @@ export function createOperationsAPI() {
     getLowStockItems: () => ipcRenderer.invoke('inventory:getLowStock'),
     getInventoryCategories: () => ipcRenderer.invoke('inventory:getCategories'),
     createInventoryItem: (data: InventoryItemData) => ipcRenderer.invoke('inventory:createItem', data),
-    recordStockMovement: (data: StockMovementData, userId: number) => ipcRenderer.invoke('inventory:recordMovement', data, userId),
+    recordStockMovement: (data: StockMovementData) => ipcRenderer.invoke('inventory:recordMovement', data),
     getSuppliers: () => ipcRenderer.invoke('inventory:getSuppliers'),
 
     // Asset Hire
@@ -40,9 +40,9 @@ export function createOperationsAPI() {
     checkHireAvailability: (assetId: number, hireDate: string, returnDate?: string) => ipcRenderer.invoke('hire:checkAvailability', assetId, hireDate, returnDate),
     getHireBookings: (filters?: { status?: string; assetId?: number; clientId?: number }) => ipcRenderer.invoke('hire:getBookings', filters),
     getHireBookingById: (id: number) => ipcRenderer.invoke('hire:getBookingById', id),
-    createHireBooking: (data: Partial<HireBookingData>, userId: number) => ipcRenderer.invoke('hire:createBooking', data, userId),
+    createHireBooking: (data: Partial<HireBookingData>) => ipcRenderer.invoke('hire:createBooking', data),
     updateHireBookingStatus: (id: number, status: string) => ipcRenderer.invoke('hire:updateBookingStatus', id, status),
-    recordHirePayment: (bookingId: number, data: Partial<HirePaymentData>, userId: number) => ipcRenderer.invoke('hire:recordPayment', bookingId, data, userId),
+    recordHirePayment: (bookingId: number, data: Partial<HirePaymentData>) => ipcRenderer.invoke('hire:recordPayment', bookingId, data),
     getHirePaymentsByBooking: (bookingId: number) => ipcRenderer.invoke('hire:getPaymentsByBooking', bookingId),
     getHireStats: () => ipcRenderer.invoke('hire:getStats'),
 
@@ -59,10 +59,10 @@ export function createOperationsAPI() {
 
     // Grants
     getGrantsByStatus: (status: string) => ipcRenderer.invoke('operations:grants:getByStatus', status),
-    createGrant: (data: GrantCreateData, userId: number) => ipcRenderer.invoke('operations:grants:create', data, userId),
+    createGrant: (data: GrantCreateData) => ipcRenderer.invoke('operations:grants:create', data),
     recordGrantUtilization: (payload: {
       grantId: number; amount: number; description: string;
-      glAccountCode: string | null; utilizationDate: string; userId: number
+      glAccountCode: string | null; utilizationDate: string
     }) => ipcRenderer.invoke('operations:grants:recordUtilization', payload),
     generateNEMISExport: (fiscalYear: number) => ipcRenderer.invoke('operations:grants:generateNEMISExport', fiscalYear),
 

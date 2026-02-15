@@ -70,6 +70,6 @@ export interface InventoryAPI {
   getInventoryCategories: () => Promise<InventoryCategory[]>
   createInventoryItem: (data: InventoryItemCreateData) => Promise<{ success: boolean; id: number }>
   updateInventoryItem: (id: number, data: Partial<InventoryItem>) => Promise<{ success: boolean }>
-  recordStockMovement: (data: StockMovementData, userId: number) => Promise<{ success: boolean }>
+  recordStockMovement: (data: StockMovementData) => Promise<{ success: boolean }>
   getSuppliers: () => Promise<Supplier[]>
 }

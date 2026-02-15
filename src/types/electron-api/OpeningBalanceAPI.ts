@@ -21,12 +21,10 @@ export interface OpeningBalanceAPI {
   importStudentOpeningBalances: (
     balances: StudentOpeningBalance[],
     academicYearId: number,
-    importSource: string,
-    userId: number
+    importSource: string
   ) => Promise<{ success: boolean; message: string; imported_count: number }>;
 
   importGLOpeningBalances: (
-    balances: OpeningBalanceImport[],
-    userId: number
+    balances: OpeningBalanceImport[]
   ) => Promise<{ success: boolean; message: string; imported_count: number }>;
 }

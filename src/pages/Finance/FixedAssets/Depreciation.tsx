@@ -36,9 +36,12 @@ export default function Depreciation() {
 
         setProcessing(asset.id)
         try {
-            // Using a dummy period ID = 1 for now if no period management exists in UI
-            // Ideally should select a financial period
-            const result = await globalThis.electronAPI.runDepreciation(asset.id, 1, user.id)
+            // Determine active period or default to current year
+            const periods = await globalThis.electronAPI.getFinancialPeriods()
+            const activePeriod = periods.find(p => !p.is_locked && new Date(p.end_date) > new Date())
+            const periodId = activePeriod?.id ?? 1
+
+            const result = await globalThis.electronAPI.runDepreciation(asset.id, periodId)
 
             if (result.success) {
                 alert('Depreciation posted successfully')

@@ -109,7 +109,7 @@ export default function CreateBudget() {
                     ...item,
                     budgeted_amount: shillingsToCents(item.budgeted_amount) // Whole currency units
                 }))
-            }, user.id)
+            })
 
             if (result.success) {
                 navigate('/budget')

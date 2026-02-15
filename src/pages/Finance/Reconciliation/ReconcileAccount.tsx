@@ -89,8 +89,30 @@ export default function ReconcileAccount() {
                 loadStatementDetails(selectedStatement.id).catch((err: unknown) => console.error('Failed to reload statement details', err))
                 loadUnmatchedTransactions().catch((err: unknown) => console.error('Failed to reload unmatched transactions', err))
             }
-        } catch {
-            alert('Failed to match')
+        } catch (error) {
+            console.error('Failed to match transactions:', error)
+            alert('Failed to match transactions')
+        }
+    }
+
+    const handleReconcile = async () => {
+        if (!selectedStatement) {return}
+        if (!confirm('Are you sure you want to mark this statement as reconciled? This action cannot be undone.')) {return}
+
+        try {
+            const result = await globalThis.electronAPI.markStatementReconciled(selectedStatement.id)
+            if (result.success) {
+                alert('Statement reconciled successfully')
+                if (selectedAccount) {
+                    loadStatements(selectedAccount).catch(console.error)
+                }
+                setSelectedStatement(null)
+            } else {
+                alert('Failed: ' + result.error)
+            }
+        } catch (error) {
+            console.error('Reconciliation error:', error)
+            alert('Failed to reconcile statement')
         }
     }
 

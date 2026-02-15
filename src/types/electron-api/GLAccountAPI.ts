@@ -20,7 +20,7 @@ export interface GLAccount extends GLAccountData {
 export interface GLAccountAPI {
   getGLAccounts: (filters?: { type?: string; isActive?: boolean }) => Promise<{ success: boolean; data: GLAccount[]; message?: string }>;
   getGLAccount: (id: number) => Promise<{ success: boolean; data?: GLAccount; message?: string }>;
-  createGLAccount: (data: GLAccountData, userId: number) => Promise<{ success: boolean; data?: GLAccount; message?: string }>;
-  updateGLAccount: (id: number, data: Partial<GLAccountData>, userId: number) => Promise<{ success: boolean; data?: GLAccount; message?: string }>;
-  deleteGLAccount: (id: number, userId: number) => Promise<{ success: boolean; message: string }>;
+  createGLAccount: (data: GLAccountData) => Promise<{ success: boolean; data?: GLAccount; message?: string }>;
+  updateGLAccount: (id: number, data: Partial<GLAccountData>) => Promise<{ success: boolean; data?: GLAccount; message?: string }>;
+  deleteGLAccount: (id: number) => Promise<{ success: boolean; message: string }>;
 }

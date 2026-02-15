@@ -95,7 +95,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                     studentId: selectedStudent.id,
                     invoiceId: pending.id,
                     amount  // Send cents, not shillings
-                }, user.id)
+                })
 
                 if (!result.success) {throw new Error(result.error || result.message || 'Credit payment failed')}
 
@@ -118,7 +118,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                     description: formData.description,
                     term_id: currentTerm?.id || 0,
                     idempotency_key: crypto.randomUUID()
-                }, user.id)
+                })
 
                 if (!result.success) {throw new Error(result.errors?.[0] || result.error || 'Payment failed')}
 

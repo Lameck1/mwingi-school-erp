@@ -86,11 +86,11 @@ export interface HireAPI {
     // Bookings
     getHireBookings: (filters?: { status?: string; assetId?: number; clientId?: number; fromDate?: string; toDate?: string }) => Promise<HireBooking[]>
     getHireBookingById: (id: number) => Promise<HireBooking | undefined>
-    createHireBooking: (data: Partial<HireBooking>, userId: number) => Promise<{ success: boolean; id?: number; booking_number?: string; errors?: string[] }>
+    createHireBooking: (data: Partial<HireBooking>) => Promise<{ success: boolean; id?: number; booking_number?: string; errors?: string[] }>
     updateHireBookingStatus: (id: number, status: HireBookingStatus) => Promise<{ success: boolean; errors?: string[] }>
 
     // Payments
-    recordHirePayment: (bookingId: number, data: Partial<HirePayment>, userId: number) => Promise<{ success: boolean; receipt_number?: string; errors?: string[] }>
+    recordHirePayment: (bookingId: number, data: Partial<HirePayment>) => Promise<{ success: boolean; receipt_number?: string; errors?: string[] }>
     getHirePaymentsByBooking: (bookingId: number) => Promise<HirePayment[]>
 
     // Stats

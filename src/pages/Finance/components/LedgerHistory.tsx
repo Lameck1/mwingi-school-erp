@@ -37,8 +37,7 @@ export const LedgerHistory: React.FC<LedgerHistoryProps> = ({ payments, student,
         try {
             const result = await globalThis.electronAPI.voidPayment(
                 voidModalPayment.id,
-                voidReason.trim(),
-                user.id
+                voidReason.trim()
             )
             if (result.success) {
                 showToast('Payment voided successfully', 'success')
