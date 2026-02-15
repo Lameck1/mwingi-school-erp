@@ -1,6 +1,6 @@
 import { getDatabase } from '../../database'
 import { sanitizeString, validateAmount, validateId } from '../../utils/validation'
-import { safeHandleRaw } from '../ipc-result'
+import { safeHandleRaw, safeHandleRawWithRole, ROLES } from '../ipc-result'
 
 interface StaffMember {
   id: number
@@ -159,7 +159,7 @@ function registerStaffQueryHandlers(db: ReturnType<typeof getDatabase>): void {
 }
 
 function registerStaffMutationHandlers(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRaw('staff:create', (_event, data: StaffCreateData) => {
+  safeHandleRawWithRole('staff:create', ROLES.MANAGEMENT, (_event, data: StaffCreateData) => {
     const validated = validateCreateData(data)
     const stmt = db.prepare(`INSERT INTO staff (
       staff_number, first_name, middle_name, last_name, id_number, kra_pin,
@@ -188,7 +188,7 @@ function registerStaffMutationHandlers(db: ReturnType<typeof getDatabase>): void
     return { success: true, id: result.lastInsertRowid }
   })
 
-  safeHandleRaw('staff:update', (_event, id: number, data: Partial<StaffCreateData>) => {
+  safeHandleRawWithRole('staff:update', ROLES.MANAGEMENT, (_event, id: number, data: Partial<StaffCreateData>) => {
     // Validate staff ID
     const idValidation = validateId(id, 'Staff')
     if (!idValidation.success) {
@@ -219,7 +219,7 @@ function registerStaffMutationHandlers(db: ReturnType<typeof getDatabase>): void
     return { success: true }
   })
 
-  safeHandleRaw('staff:setActive', (_event, id: number, isActive: boolean) => {
+  safeHandleRawWithRole('staff:setActive', ROLES.MANAGEMENT, (_event, id: number, isActive: boolean) => {
     db.prepare('UPDATE staff SET is_active = ? WHERE id = ?').run(isActive ? 1 : 0, id)
     return { success: true }
   })

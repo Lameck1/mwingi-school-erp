@@ -61,7 +61,7 @@ export class PaymentService implements IPaymentRecorder, IPaymentVoidProcessor, 
       return { success: false, error: 'Payment amount must be greater than zero.' }
     }
 
-    if (!data.transaction_date || !data.payment_method || !data.payment_reference) {
+    if (!data.transaction_date || !data.payment_method) {
       return { success: false, error: 'Missing required payment fields.' }
     }
     const dateValidation = validatePastOrTodayDate(data.transaction_date)

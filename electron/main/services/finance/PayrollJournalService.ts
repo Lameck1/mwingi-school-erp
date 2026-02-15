@@ -237,7 +237,7 @@ export class PayrollJournalService {
 
       return {
         success: result.success,
-        message: result.message,
+        message: result.message || 'Statutory deductions posted successfully',
         journal_entry_ids: result.success && result.entry_id ? [result.entry_id] : []
       };
     } catch (error) {
@@ -320,7 +320,7 @@ export class PayrollJournalService {
 
       return {
         success: result.success,
-        message: result.message,
+        message: result.message || 'Salary payment posted successfully',
         journal_entry_ids: result.success && result.entry_id ? [result.entry_id] : []
       };
     } catch (error) {
@@ -367,7 +367,7 @@ export class PayrollJournalService {
 
       return {
         success: result.success,
-        message: result.message,
+        message: result.message || `${deductionType} payment posted successfully`,
         journal_entry_ids: result.success && result.entry_id ? [result.entry_id] : []
       };
     } catch (error) {

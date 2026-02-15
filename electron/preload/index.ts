@@ -46,8 +46,25 @@ setAPIFactories({
 // main process IPC handlers (see ipc-result.ts). The preload layer is NOT a
 // security boundary — contextBridge freezes the object synchronously, making
 // any async role-based filtering unreliable (the previous Object.assign race).
-const fullAPI = createRoleAwareAPI('ADMIN')
+const namespacedAPI = createRoleAwareAPI('ADMIN')
+
+// Compatibility bridge:
+// renderer code relies on both flat and namespaced API shapes.
+const flatAPI = {
+  ...namespacedAPI.auth,
+  ...namespacedAPI.settings,
+  ...namespacedAPI.academic,
+  ...namespacedAPI.finance,
+  ...namespacedAPI.students,
+  ...namespacedAPI.staff,
+  ...namespacedAPI.operations,
+  ...namespacedAPI.reports,
+  ...namespacedAPI.communications,
+  ...namespacedAPI.system,
+  ...namespacedAPI.menuEvents
+}
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  ...fullAPI
+  ...flatAPI,
+  ...namespacedAPI
 })

@@ -85,7 +85,7 @@ function registerSessionHandlers(db: ReturnType<typeof getDatabase>): void {
             return null
         }
 
-        const { password_hash, ...userData } = existing
+        const { password_hash: _passwordHash, ...userData } = existing
         const refreshed: AuthSession = {
             user: { ...userData, id: Number(userData.id) },
             lastActivity: session.lastActivity,
@@ -95,24 +95,46 @@ function registerSessionHandlers(db: ReturnType<typeof getDatabase>): void {
     })
 
     safeHandleRaw('auth:setSession', async (_event, session: AuthSession): Promise<{ success: boolean; error?: string }> => {
-        if (!session?.user?.id || !session?.user?.role || !session?.user?.username) {
+        if (!Number.isFinite(session?.lastActivity) || session.lastActivity <= 0) {
             return { success: false, error: 'Invalid session payload' }
         }
 
-        const dbUser = db.prepare('SELECT id, role, is_active FROM user WHERE id = ?').get(session.user.id) as
-            { id: number; role: string; is_active: number } | undefined
+        const existingSession = await getSession()
+        if (!existingSession?.user?.id) {
+            return { success: false, error: 'No active authenticated session' }
+        }
 
-        if (!dbUser) {
+        const dbUser = db.prepare('SELECT id, username, full_name, email, role, is_active, last_login, created_at, updated_at FROM user WHERE id = ?').get(existingSession.user.id) as
+            User | undefined
+
+        if (!dbUser || dbUser.is_active !== 1) {
+            await clearSession()
+            return { success: false, error: 'Session user is inactive or missing' }
+        }
+
+        // Prevent renderer-side user swapping by pinning to the already-authenticated identity.
+        if (session?.user?.id && session.user.id !== dbUser.id) {
+            return { success: false, error: 'Session user mismatch' }
+        }
+
+        if (session?.user?.role && session.user.role !== dbUser.role) {
+            return { success: false, error: 'Session role mismatch' }
+        }
+
+        const { password_hash: _passwordHash, ...userData } = dbUser
+        const refreshed: AuthSession = {
+            user: {
+                ...userData,
+                id: Number(userData.id),
+            },
+            lastActivity: session.lastActivity
+        }
+
+        if (!refreshed.user.id || !refreshed.user.role || !refreshed.user.username) {
             return { success: false, error: 'Session user does not exist' }
         }
-        if (!dbUser.is_active) {
-            return { success: false, error: 'Session user is inactive' }
-        }
-        if (dbUser.role !== session.user.role) {
-            return { success: false, error: 'Session role does not match database' }
-        }
 
-        await setSession(session)
+        await setSession(refreshed)
         return { success: true }
     })
 
@@ -232,7 +254,12 @@ export function registerAuthHandlers(): void {
             logAudit(user.id, 'LOGIN', 'user', user.id, null, { action: 'Login' })
 
             const { password_hash, ...userData } = user
-            return { success: true, user: { ...userData, id: Number(userData.id) } }
+            const normalizedUser = { ...userData, id: Number(userData.id) }
+            await setSession({
+                user: normalizedUser,
+                lastActivity: Date.now()
+            })
+            return { success: true, user: normalizedUser }
         } catch (err) {
             console.error('Bcrypt comparison error:', err)
             throw err

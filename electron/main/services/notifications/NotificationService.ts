@@ -263,7 +263,7 @@ export class NotificationService {
                 }
             )
 
-            const data = await response.json()
+            const data = await response.json() as { sid?: string; message?: string }
 
             if (data.sid) {
                 return { success: true, messageId: data.sid, provider: 'TWILIO' }
@@ -321,7 +321,7 @@ export class NotificationService {
                 return { success: true, provider: 'SENDGRID' }
             }
 
-            const data = await response.json()
+            const data = await response.json() as { errors?: Array<{ message?: string }> }
             return { success: false, error: data.errors?.[0]?.message || UNKNOWN_ERROR, provider: 'SENDGRID' }
         } catch (error) {
             return {
@@ -369,7 +369,7 @@ export class NotificationService {
      * Process template with variables
      */
     private processTemplate(template: string, variables: Partial<Record<string, string>>): string {
-        return template.replaceAll(/\{\{(\w+)\}\}/g, (match, key) => {
+        return template.replaceAll(/\{\{(\w+)\}\}/g, (match: string, key: string) => {
             return variables[key] ?? match
         })
     }

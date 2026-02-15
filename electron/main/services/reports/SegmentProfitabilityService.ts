@@ -450,7 +450,9 @@ export class SegmentProfitabilityService
       this.analyzeBoardingProfitability(startDate, endDate),
       this.analyzeActivityFees(startDate, endDate)
     ]
-    const sorted = segments.toSorted((a, b) => b.profit_margin_percentage - a.profit_margin_percentage)
+    const sorted = segments.toSorted(
+      (a: SegmentProfitability, b: SegmentProfitability) => b.profit_margin_percentage - a.profit_margin_percentage
+    )
     return {
       segments: sorted,
       comparison_summary: {
