@@ -14,6 +14,17 @@ const paymentServiceMock = {
   voidPayment: vi.fn(async () => ({ success: true })),
 }
 
+vi.mock('keytar', () => ({
+  default: {
+    getPassword: vi.fn().mockResolvedValue(JSON.stringify({
+      user: { id: 1, username: 'test', role: 'ACCOUNTANT', full_name: 'Test', email: 'test@test.com', is_active: 1, last_login: null, created_at: '2026-01-01' },
+      lastActivity: Date.now()
+    })),
+    setPassword: vi.fn().mockResolvedValue(null),
+    deletePassword: vi.fn().mockResolvedValue(true)
+  }
+}))
+
 vi.mock('../../../electron-env', () => ({
   ipcMain: {
     handle: vi.fn((channel: string, handler: IpcHandler) => {
@@ -170,6 +181,22 @@ describe('finance IPC handlers', () => {
         payment_reference TEXT,
         created_by_user_id INTEGER NOT NULL
       );
+
+      CREATE TABLE payment_invoice_allocation (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        transaction_id INTEGER NOT NULL,
+        invoice_id INTEGER NOT NULL,
+        applied_amount INTEGER NOT NULL
+      );
+
+      CREATE TABLE credit_transaction (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+        transaction_type TEXT NOT NULL,
+        reference_invoice_id INTEGER,
+        notes TEXT
+      );
     `)
 
     db.prepare(`INSERT INTO gl_account (id, account_code) VALUES (1, '4300')`).run()
@@ -278,7 +305,7 @@ describe('finance IPC handlers', () => {
     ) as { success: boolean; error?: string }
 
     expect(result.success).toBe(false)
-    expect(result.error).toContain('greater than zero')
+    expect(result.error).toContain('positive number')
     expect(paymentServiceMock.recordPayment).not.toHaveBeenCalled()
   })
 

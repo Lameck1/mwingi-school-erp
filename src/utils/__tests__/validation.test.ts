@@ -8,10 +8,10 @@ describe('Validation Utilities', () => {
       expect(result.data).toBe(1000) // Already in cents
     })
 
-    it('should validate zero amount', () => {
+    it('should reject zero amount', () => {
       const result = validateAmount(0)
-      expect(result.success).toBe(true)
-      expect(result.data).toBe(0)
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('positive number')
     })
 
     it('should reject negative amounts', () => {
@@ -33,9 +33,9 @@ describe('Validation Utilities', () => {
 
     it('should reject null values', () => {
       const result = validateAmount(null)
-      // Number(null) = 0, which is valid (not < 0), so success is true
-      expect(result.success).toBe(true)
-      expect(result.data).toBe(0)
+      // Number(null) = 0, which is now rejected (must be > 0)
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('positive number')
     })
 
     it('should round decimal cents correctly', () => {
