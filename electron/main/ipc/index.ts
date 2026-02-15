@@ -23,6 +23,7 @@ import { registerFinanceHandlers } from './finance/finance-handlers'
 import { registerFixedAssetHandlers } from './finance/fixed-asset-handlers'
 import { registerGLAccountHandlers } from './finance/gl-account-handlers'
 import { registerOpeningBalanceHandlers } from './finance/opening-balance-handlers'
+import { registerPeriodLockingHandlers } from './finance/period-handlers'
 import { registerReconciliationAndBudgetHandlers } from './finance/reconciliation-budget-handlers'
 import { registerHireHandlers } from './hire/hire-handlers'
 import { registerInventoryHandlers } from './inventory/inventory-handlers'
@@ -80,7 +81,8 @@ const IPC_HANDLER_REGISTRARS: ReadonlyArray<() => void> = [
     registerOperationsHandlers,
     registerCbcOperationsHandlers,
     registerFinanceApprovalHandlers,
-    registerFinancialReportsHandlers
+    registerFinancialReportsHandlers,
+    registerPeriodLockingHandlers
 ]
 
 export function registerAllIpcHandlers(): void {
