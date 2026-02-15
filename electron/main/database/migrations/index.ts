@@ -14,6 +14,8 @@ import { up as grantExpiryDateUp } from './incremental/1009_grant_expiry_date.js
 import { up as bankReconciliationConstraintsUp } from './incremental/1010_bank_reconciliation_constraints.js'
 import { up as approvalCanonicalizationUp } from './incremental/1011_approval_canonicalization.js'
 import { up as addVoidReversalTypeUp } from './incremental/1012_add_void_reversal_type.js'
+import { up as financialPeriodStatusUp } from './incremental/1013_financial_period_status.js'
+import { up as remediationSchemaFixesUp } from './incremental/1014_remediation_schema_fixes.js'
 
 import type * as Database from 'better-sqlite3'
 
@@ -56,6 +58,8 @@ const migrations: Migration[] = [
     { name: '1010_bank_reconciliation_constraints', fn: bankReconciliationConstraintsUp },
     { name: '1011_approval_canonicalization', fn: approvalCanonicalizationUp },
     { name: '1012_add_void_reversal_type', fn: addVoidReversalTypeUp },
+    { name: '1013_financial_period_status', fn: financialPeriodStatusUp },
+    { name: '1014_remediation_schema_fixes', fn: remediationSchemaFixesUp },
 ]
 
 /**
