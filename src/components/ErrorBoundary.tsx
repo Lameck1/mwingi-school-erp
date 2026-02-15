@@ -3,33 +3,63 @@ import React from 'react'
 interface ErrorBoundaryState {
     hasError: boolean
     error: Error | null
+    errorInfo: React.ErrorInfo | null
 }
 
 interface ErrorBoundaryProps {
     children: React.ReactNode
     fallback?: React.ReactNode
+    onError?: (error: Error, errorInfo: React.ErrorInfo) => void
 }
 
 /**
- * ErrorBoundary catches render-time exceptions in the React tree and
- * shows a recovery UI instead of white-screening the entire app.
+ * Enhanced ErrorBoundary with error reporting and recovery mechanisms
  */
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+    private retryCount = 0
+    private maxRetries = 3
+
     constructor(props: ErrorBoundaryProps) {
         super(props)
-        this.state = { hasError: false, error: null }
+        this.state = { hasError: false, error: null, errorInfo: null }
     }
 
-    static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
         return { hasError: true, error }
     }
 
     componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+        this.setState({ errorInfo })
+        
+        // Log to console in development
         console.error('ErrorBoundary caught:', error, errorInfo)
+        
+        // Report to main process for logging
+        if (globalThis.electronAPI?.system?.logError) {
+            globalThis.electronAPI.system.logError({
+                error: error.message,
+                stack: error.stack,
+                componentStack: errorInfo.componentStack,
+                timestamp: new Date().toISOString()
+            })
+        }
+        
+        // Call custom error handler if provided
+        this.props.onError?.(error, errorInfo)
     }
 
     handleReset = (): void => {
-        this.setState({ hasError: false, error: null })
+        if (this.retryCount < this.maxRetries) {
+            this.retryCount++
+            this.setState({ hasError: false, error: null, errorInfo: null })
+        } else {
+            // Max retries reached, offer full page reload
+            window.location.reload()
+        }
+    }
+
+    handleReload = (): void => {
+        window.location.reload()
     }
 
     render(): JSX.Element {
@@ -37,6 +67,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             if (this.props.fallback) {
                 return <>{this.props.fallback}</>
             }
+            
             return (
                 <div className="flex flex-col items-center justify-center min-h-[400px] p-8 text-center">
                     <div className="text-red-600 mb-4">
@@ -51,12 +82,34 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                     <p className="text-muted-foreground dark:text-muted-foreground mb-4 max-w-md">
                         {this.state.error?.message || 'An unexpected error occurred'}
                     </p>
-                    <button
-                        onClick={this.handleReset}
-                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/80 transition-colors"
-                    >
-                        Try Again
-                    </button>
+                    
+                    <div className="flex gap-3 justify-center">
+                        <button
+                            onClick={this.handleReset}
+                            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/80 transition-colors"
+                            disabled={this.retryCount >= this.maxRetries}
+                        >
+                            {this.retryCount >= this.maxRetries ? 'Max Retries Reached' : `Try Again (${this.retryCount}/${this.maxRetries})`}
+                        </button>
+                        
+                        {this.retryCount >= this.maxRetries && (
+                            <button
+                                onClick={this.handleReload}
+                                className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
+                            >
+                                Reload Application
+                            </button>
+                        )}
+                    </div>
+                    
+                    {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+                        <details className="mt-4 text-left text-xs text-gray-500 max-w-2xl">
+                            <summary className="cursor-pointer hover:text-gray-700">Error Details (Development)</summary>
+                            <pre className="mt-2 p-2 bg-gray-100 rounded overflow-auto">
+                                {this.state.error?.stack}\n\n{this.state.errorInfo.componentStack}
+                            </pre>
+                        </details>
+                    )}
                 </div>
             )
         }

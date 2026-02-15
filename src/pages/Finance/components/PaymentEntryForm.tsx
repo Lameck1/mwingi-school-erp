@@ -43,10 +43,12 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
     const [saving, setSaving] = useState(false)
     const [sendingSms, setSendingSms] = useState(false)
     const [success, setSuccess] = useState<PaymentSuccess | null>(null)
+    const [previousBalance, setPreviousBalance] = useState<number | null>(null)
 
     // Reset success and form when student changes
     useEffect(() => {
         setSuccess(null)
+        setPreviousBalance(null)
         setFormData({
             amount: '', payment_method: 'CASH', payment_reference: '',
             transaction_date: new Date().toISOString().slice(0, 10), description: ''
@@ -64,6 +66,9 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
 
         setSaving(true)
         setSuccess(null)
+        
+        // Store previous balance for rollback
+        setPreviousBalance(selectedStudent.balance || 0)
 
         try {
             const amount = shillingsToCents(formData.amount)
@@ -132,6 +137,9 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
             // Calculate new balance for parent update
             const newBalance = (selectedStudent.balance || 0) - amount
             onPaymentComplete(newBalance)
+            
+            // Clear previous balance after successful update
+            setPreviousBalance(null)
 
             // Clear form
             setFormData({
@@ -142,6 +150,12 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Payment failed'
             showToast(errorMessage, 'error')
+            
+            // Rollback optimistic update on error
+            if (previousBalance !== null && selectedStudent) {
+                onPaymentComplete(previousBalance)
+                setPreviousBalance(null)
+            }
         } finally {
             setSaving(false)
         }

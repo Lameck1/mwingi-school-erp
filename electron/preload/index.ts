@@ -11,7 +11,7 @@
  * Domain modules live in ./api/ — add new IPC methods there, not here.
  */
 
-import { contextBridge } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 
 import { createAcademicAPI } from './api/academic'
 import { createAuthAPI } from './api/auth'
@@ -24,42 +24,47 @@ import { createSettingsAPI } from './api/settings'
 import { createStaffAPI } from './api/staff'
 import { createStudentAPI } from './api/students'
 import { createSystemAPI } from './api/system'
+import { setAPIFactories, createRoleAwareAPI, type UserRole } from './roleFilter'
 
-const auth = createAuthAPI()
-const settings = createSettingsAPI()
-const academic = createAcademicAPI()
-const finance = createFinanceAPI()
-const students = createStudentAPI()
-const staff = createStaffAPI()
-const operations = createOperationsAPI()
-const reports = createReportsAPI()
-const communications = createCommunicationsAPI()
-const system = createSystemAPI()
-const menuEvents = createMenuEventAPI()
+// Set API factories for role filter
+setAPIFactories({
+  createAuthAPI,
+  createSettingsAPI,
+  createAcademicAPI,
+  createFinanceAPI,
+  createStudentAPI,
+  createStaffAPI,
+  createOperationsAPI,
+  createReportsAPI,
+  createCommunicationsAPI,
+  createSystemAPI,
+  createMenuEventAPI
+})
+
+// Get user session to determine role
+async function getUserRole(): Promise<UserRole> {
+  try {
+    const session = await ipcRenderer.invoke('auth:getSession')
+    return (session?.user?.role as UserRole) || 'STAFF'
+  } catch {
+    return 'STAFF' // Default role on error
+  }
+}
+
+// Create role-aware API surface
+const roleAwareAPI = createRoleAwareAPI('STAFF') // Default, will be updated
+
+// Update API based on actual user role
+getUserRole().then(role => {
+  const updatedAPI = createRoleAwareAPI(role)
+  Object.assign(roleAwareAPI, updatedAPI)
+}).catch(() => {
+  // Keep default role if session fetch fails
+})
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  // Flat access (used by all existing pages)
-  ...auth,
-  ...settings,
-  ...academic,
-  ...finance,
-  ...students,
-  ...staff,
-  ...operations,
-  ...reports,
-  ...communications,
-  ...system,
-  ...menuEvents,
+  // Role-filtered access
+  ...roleAwareAPI,
   // Namespaced access (for future structured usage)
-  auth,
-  settings,
-  academic,
-  finance,
-  students,
-  staff,
-  operations,
-  reports,
-  communications,
-  system,
-  menuEvents,
+  ...roleAwareAPI
 })

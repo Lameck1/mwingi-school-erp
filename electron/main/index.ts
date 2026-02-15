@@ -60,6 +60,10 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
             sandbox: true,
+            // Content Security Policy for renderer security
+            webSecurity: true,
+            allowRunningInsecureContent: false,
+            experimentalFeatures: false,
         },
         show: false,
         titleBarStyle: 'default',
