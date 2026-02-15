@@ -51,6 +51,7 @@ describe('Operations expense services', () => {
       );
       CREATE TABLE transport_route (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        route_name TEXT,
         is_active BOOLEAN DEFAULT 1
       );
       CREATE TABLE transport_route_expense (

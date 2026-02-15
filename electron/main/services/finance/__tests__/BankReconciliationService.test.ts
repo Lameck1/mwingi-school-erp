@@ -22,7 +22,9 @@ describe('BankReconciliationService', () => {
       CREATE TABLE bank_account (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         account_name TEXT NOT NULL,
-        account_number TEXT NOT NULL
+        account_number TEXT NOT NULL,
+        current_balance INTEGER DEFAULT 0,
+        updated_at DATETIME
       );
       INSERT INTO bank_account (id, account_name, account_number) VALUES (1, 'Main Account', '1234567890');
 

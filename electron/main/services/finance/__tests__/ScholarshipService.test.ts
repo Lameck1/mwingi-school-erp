@@ -10,12 +10,19 @@ vi.mock('../../../database/utils/audit', () => ({
   logAudit: vi.fn()
 }))
 
+// Mock getDatabase so the allocator's internal getDatabase() call returns our test db
+let testDb: Database.Database
+vi.mock('../../../database', () => ({
+  getDatabase: () => testDb,
+}))
+
 describe('ScholarshipService', () => {
   let db: Database.Database
   let service: ScholarshipService
 
   beforeEach(() => {
     db = new Database(':memory:')
+    testDb = db
     
     db.exec(`
       CREATE TABLE student (
@@ -23,7 +30,8 @@ describe('ScholarshipService', () => {
         first_name TEXT NOT NULL,
         last_name TEXT NOT NULL,
         full_name TEXT,
-        admission_number TEXT UNIQUE NOT NULL
+        admission_number TEXT UNIQUE NOT NULL,
+        credit_balance REAL DEFAULT 0
       );
 
       CREATE TABLE scholarship (
@@ -50,6 +58,61 @@ describe('ScholarshipService', () => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE credit_transaction (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        transaction_type TEXT NOT NULL,
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (student_id) REFERENCES student(id)
+      );
+
+      CREATE TABLE gl_account (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_code TEXT NOT NULL UNIQUE,
+        account_name TEXT NOT NULL,
+        account_type TEXT NOT NULL,
+        normal_balance TEXT DEFAULT 'DEBIT',
+        is_active BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE journal_entry (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entry_ref TEXT NOT NULL UNIQUE,
+        entry_date DATE NOT NULL,
+        entry_type TEXT NOT NULL,
+        description TEXT,
+        student_id INTEGER,
+        staff_id INTEGER,
+        term_id INTEGER,
+        is_posted BOOLEAN DEFAULT 0,
+        posted_by_user_id INTEGER,
+        posted_at DATETIME,
+        is_voided BOOLEAN DEFAULT 0,
+        requires_approval BOOLEAN DEFAULT 0,
+        approval_status TEXT DEFAULT 'APPROVED',
+        voided_reason TEXT,
+        voided_by_user_id INTEGER,
+        voided_at DATETIME,
+        created_by_user_id INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        source_ledger_txn_id INTEGER
+      );
+
+      CREATE TABLE journal_entry_line (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        journal_entry_id INTEGER NOT NULL,
+        line_number INTEGER NOT NULL,
+        gl_account_id INTEGER NOT NULL,
+        debit_amount INTEGER DEFAULT 0,
+        credit_amount INTEGER DEFAULT 0,
+        description TEXT,
+        FOREIGN KEY (journal_entry_id) REFERENCES journal_entry(id),
+        FOREIGN KEY (gl_account_id) REFERENCES gl_account(id)
+      );
+
       CREATE TABLE student_scholarship (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id INTEGER NOT NULL,
@@ -65,6 +128,11 @@ describe('ScholarshipService', () => {
         FOREIGN KEY (student_id) REFERENCES student(id),
         FOREIGN KEY (scholarship_id) REFERENCES scholarship(id)
       );
+
+      -- Insert GL accounts needed by journal service
+      INSERT INTO gl_account (account_code, account_name, account_type, normal_balance) VALUES
+        ('5400', 'Scholarship Expense', 'EXPENSE', 'DEBIT'),
+        ('1300', 'Accounts Receivable', 'ASSET', 'DEBIT');
 
       -- Insert test students
       INSERT INTO student (first_name, last_name, admission_number)
