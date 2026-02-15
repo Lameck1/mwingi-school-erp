@@ -136,7 +136,7 @@ export default function GrantTracking() {
                 setUtilizationForm({ amount: '', description: '', utilizationDate: new Date().toISOString().slice(0, 10) })
                 loadData().catch((err: unknown) => console.error('Failed to reload grants', err))
             } else {
-                showToast(result.message || 'Failed to record utilization', 'error')
+                showToast(result.error || 'Failed to record utilization', 'error')
             }
         } catch (error) {
             console.error(error)

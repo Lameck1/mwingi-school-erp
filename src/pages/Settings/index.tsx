@@ -371,7 +371,7 @@ export default function Settings() {
                                                     showToast('Currency values normalized successfully.', 'success')
                                                     globalThis.location.reload()
                                                 } else {
-                                                    showToast(result.message, 'error')
+                                                    showToast(result.error || result.message || 'Normalization failed', 'error')
                                                 }
                                             } catch {
                                                 showToast('Currency normalization failed', 'error')
@@ -412,11 +412,11 @@ export default function Settings() {
                                                 try {
                                                     const result = await globalThis.electronAPI.resetAndSeedDatabase(user.id)
                                                     if (result.success) {
-                                                        showToast(result.message || 'Environment reset and seeded for 2026 successfully!', 'success')
+                                                        showToast(result.message || result.error || 'Environment reset and seeded for 2026 successfully!', 'success')
                                                         // Refresh global state after toast fires
                                                         setTimeout(() => globalThis.location.reload(), 600)
                                                     } else {
-                                                        showToast(result.message, 'error')
+                                                        showToast(result.error || result.message || 'Reset failed', 'error')
                                                     }
                                                 } catch {
                                                     showToast('Critical reset failure', 'error')

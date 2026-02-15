@@ -92,7 +92,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                     amount  // Send cents, not shillings
                 }, user.id)
 
-                if (!result.success) {throw new Error(result.message || 'Credit payment failed')}
+                if (!result.success) {throw new Error(result.error || result.message || 'Credit payment failed')}
 
                 resultData = {
                     success: true,
@@ -114,7 +114,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                     term_id: currentTerm?.id || 0
                 }, user.id)
 
-                if (!result.success) {throw new Error(result.errors?.[0] || result.message || 'Payment failed')}
+                if (!result.success) {throw new Error(result.errors?.[0] || result.error || 'Payment failed')}
 
                 resultData = {
                     ...result,

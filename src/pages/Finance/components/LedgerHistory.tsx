@@ -45,7 +45,7 @@ export const LedgerHistory: React.FC<LedgerHistoryProps> = ({ payments, student,
                 setVoidModalPayment(null)
                 onPaymentVoided?.()
             } else {
-                showToast(result.message || 'Failed to void payment', 'error')
+                showToast(result.error || result.message || 'Failed to void payment', 'error')
             }
         } catch (error) {
             console.error('Payment void error:', error)

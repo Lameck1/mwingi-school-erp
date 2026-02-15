@@ -166,7 +166,7 @@ export default function AssetHire() {
         }
     }
 
-    const handleUpdateStatus = async (bookingId: number, status: string) => {
+    const handleUpdateStatus = async (bookingId: number, status: 'CONFIRMED' | 'PENDING' | 'CANCELLED' | 'IN_PROGRESS' | 'COMPLETED') => {
         const result = await globalThis.electronAPI.updateHireBookingStatus(bookingId, status)
         if (result.success) {
             void loadData()

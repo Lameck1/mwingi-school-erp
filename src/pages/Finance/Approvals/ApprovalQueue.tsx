@@ -48,7 +48,7 @@ export default function ApprovalQueuePage() {
       if (result.success) {
         setApprovals(result.data);
       } else {
-        setError(result.message || 'Failed to load approvals');
+        setError(result.error || result.message || 'Failed to load approvals');
       }
     } catch (err) {
       setError((err as Error).message);
@@ -78,7 +78,7 @@ export default function ApprovalQueuePage() {
         setSelectedApproval(null);
         setReviewNotes('');
       } else {
-        setError(result.message || 'Approval failed');
+        setError(result.error || result.message || 'Approval failed');
       }
     } catch (err) {
       setError((err as Error).message);
@@ -107,7 +107,7 @@ export default function ApprovalQueuePage() {
         setSelectedApproval(null);
         setReviewNotes('');
       } else {
-        setError(result.message || 'Rejection failed');
+        setError(result.error || result.message || 'Rejection failed');
       }
     } catch (err) {
       setError((err as Error).message);

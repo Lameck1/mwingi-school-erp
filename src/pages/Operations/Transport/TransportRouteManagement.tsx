@@ -112,6 +112,7 @@ export default function TransportRouteManagement() {
                 ...expenseForm,
                 route_id: Number.parseInt(expenseForm.route_id, 10),
                 amount_cents: shillingsToCents(expenseForm.amount),
+                gl_account_code: '5400',
                 fiscal_year: new Date().getFullYear(),
                 term: 1, // Default to Term 1
                 recorded_by: user.id

@@ -25,7 +25,7 @@ const JSSTransition: React.FC = () => {
   const loadEligibleStudents = useCallback(async () => {
     try {
       setLoading(true);
-      const result = await globalThis.electronAPI.getEligibleStudents(filters.from_grade, filters.academic_year);
+      const result = await globalThis.electronAPI.getJSSEligibleStudents(filters.from_grade, filters.academic_year);
       const students: EligibleStudent[] = result?.data ?? [];
       setEligibleStudents(students);
     } catch (error) {
@@ -90,7 +90,7 @@ const JSSTransition: React.FC = () => {
 
     try {
       setProcessing(true);
-      const result = await globalThis.electronAPI.bulkTransition({
+      const result = await globalThis.electronAPI.bulkJSSTransition({
         student_ids: Array.from(selectedStudents),
         from_grade: filters.from_grade,
         to_grade: filters.to_grade,
