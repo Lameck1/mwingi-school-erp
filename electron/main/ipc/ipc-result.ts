@@ -1,4 +1,5 @@
 import { ipcMain } from '../electron-env'
+import { getSession } from '../security/session'
 
 import type { IpcMainInvokeEvent } from 'electron'
 
@@ -52,6 +53,63 @@ export function safeHandleRaw(
         }
     })
 }
+
+/**
+ * Wraps an IPC handler with role-based access control.
+ * Checks the current session role before executing the handler.
+ * Returns { success: false, error: 'Unauthorized' } if the role is not allowed.
+ */
+export function safeHandleRawWithRole(
+    channel: string,
+    allowedRoles: readonly string[],
+    handler: AnyHandler,
+): void {
+    ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
+        try {
+            const session = await getSession()
+            if (!session?.user?.role) {
+                return { success: false, error: 'Unauthorized: no active session' }
+            }
+            if (!allowedRoles.includes(session.user.role)) {
+                return { success: false, error: `Unauthorized: role '${session.user.role}' cannot access '${channel}'` }
+            }
+            return await handler(event, ...args)
+        } catch (error) {
+            return { success: false, error: getErrorMessage(error, `${channel} failed`) }
+        }
+    })
+}
+
+export function safeHandleWithRole<T>(
+    channel: string,
+    allowedRoles: readonly string[],
+    handler: AnyHandler,
+): void {
+    ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]): Promise<IPCResult<T>> => {
+        try {
+            const session = await getSession()
+            if (!session?.user?.role) {
+                return { success: false, error: 'Unauthorized: no active session' }
+            }
+            if (!allowedRoles.includes(session.user.role)) {
+                return { success: false, error: `Unauthorized: role '${session.user.role}' cannot access '${channel}'` }
+            }
+            const result = await handler(event, ...args)
+            return { success: true, data: result as T }
+        } catch (error) {
+            return { success: false, error: getErrorMessage(error, `${channel} failed`) }
+        }
+    })
+}
+
+/** Standard role groups for convenience */
+export const ROLES = {
+    ADMIN_ONLY: ['ADMIN'] as const,
+    FINANCE: ['ADMIN', 'ACCOUNTANT', 'ACCOUNTS_CLERK'] as const,
+    MANAGEMENT: ['ADMIN', 'PRINCIPAL', 'DEPUTY_PRINCIPAL'] as const,
+    STAFF: ['ADMIN', 'PRINCIPAL', 'DEPUTY_PRINCIPAL', 'ACCOUNTANT', 'ACCOUNTS_CLERK', 'TEACHER', 'SECRETARY'] as const,
+    ALL_AUTHENTICATED: [] as const, // empty = skip role check (handled by safeHandleRaw)
+} as const
 
 /**
  * Extracts a human-readable error message from an unknown thrown value.

@@ -1,6 +1,6 @@
+import { DoubleEntryJournalService } from '../../services/accounting/DoubleEntryJournalService'
 import { type ExemptionService } from '../../services/finance/ExemptionService'
 import { type PaymentService } from '../../services/finance/PaymentService'
-import { DoubleEntryJournalService } from '../../services/accounting/DoubleEntryJournalService'
 
 import type { InvoiceItemCreation } from './types'
 import type { getDatabase } from '../../database'

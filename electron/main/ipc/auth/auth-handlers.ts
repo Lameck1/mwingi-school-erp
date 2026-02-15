@@ -5,7 +5,7 @@ import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 import { getSession, setSession, clearSession, type AuthSession } from '../../security/session'
 import { validatePassword } from '../../utils/validation'
-import { safeHandleRaw } from '../ipc-result'
+import { safeHandleRaw, safeHandleRawWithRole, ROLES } from '../ipc-result'
 
 const bcrypt = require('bcryptjs')
 
@@ -106,7 +106,7 @@ function registerSessionHandlers(db: ReturnType<typeof getDatabase>): void {
 }
 
 function registerUserManagementHandlers(db: ReturnType<typeof getDatabase>): void {
-    safeHandleRaw('user:update', (_event, id: number, data: UserUpdateData): { success: boolean; error?: string } => {
+    safeHandleRawWithRole('user:update', ROLES.ADMIN_ONLY, (_event, id: number, data: UserUpdateData): { success: boolean; error?: string } => {
         const stmt = db.prepare(`
             UPDATE user 
             SET full_name = COALESCE(?, full_name),
@@ -120,14 +120,19 @@ function registerUserManagementHandlers(db: ReturnType<typeof getDatabase>): voi
         return { success: true }
     })
 
-    safeHandleRaw('user:getAll', (): Omit<User, 'password_hash'>[] => {
+    safeHandleRawWithRole('user:getAll', ROLES.MANAGEMENT, (): Omit<User, 'password_hash'>[] => {
         return db.prepare('SELECT id, username, full_name, email, role, is_active, last_login, created_at FROM user').all() as Omit<User, 'password_hash'>[]
     })
 
-    safeHandleRaw('user:create', async (_event, data: NewUser): Promise<{ success: boolean; id?: number; error?: string }> => {
+    safeHandleRawWithRole('user:create', ROLES.ADMIN_ONLY, async (_event, data: NewUser): Promise<{ success: boolean; id?: number; error?: string }> => {
         const pwCheck = validatePassword(data.password)
         if (!pwCheck.success) {
             return { success: false, error: pwCheck.error }
+        }
+
+        const existing = db.prepare('SELECT id FROM user WHERE username = ?').get(data.username) as { id: number } | undefined
+        if (existing) {
+            return { success: false, error: 'Username already exists' }
         }
 
         const hash = await bcrypt.hash(data.password, 10)
@@ -136,12 +141,12 @@ function registerUserManagementHandlers(db: ReturnType<typeof getDatabase>): voi
         return { success: true, id: result.lastInsertRowid as number }
     })
 
-    safeHandleRaw('user:toggleStatus', (_event, id: number, isActive: boolean): { success: boolean } => {
+    safeHandleRawWithRole('user:toggleStatus', ROLES.ADMIN_ONLY, (_event, id: number, isActive: boolean): { success: boolean } => {
         db.prepare('UPDATE user SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(isActive ? 1 : 0, id)
         return { success: true }
     })
 
-    safeHandleRaw('user:resetPassword', async (_event, id: number, newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    safeHandleRawWithRole('user:resetPassword', ROLES.ADMIN_ONLY, async (_event, id: number, newPassword: string): Promise<{ success: boolean; error?: string }> => {
         const pwCheck = validatePassword(newPassword)
         if (!pwCheck.success) {
             return { success: false, error: pwCheck.error }
@@ -165,6 +170,11 @@ export function registerAuthHandlers(): void {
         const existing = db.prepare('SELECT id FROM user WHERE is_active = 1 LIMIT 1').get() as { id: number } | undefined
         if (existing) {
             return { success: false, error: 'Admin setup is only available on first run' }
+        }
+
+        const duplicateUser = db.prepare('SELECT id FROM user WHERE username = ?').get(data.username) as { id: number } | undefined
+        if (duplicateUser) {
+            return { success: false, error: 'Username already exists' }
         }
 
         const pwCheck = validatePassword(data.password)
@@ -226,6 +236,7 @@ export function registerAuthHandlers(): void {
 
         const hash = await bcrypt.hash(newPassword, 10)
         db.prepare('UPDATE user SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(hash, userId)
+        await clearSession()
         return { success: true }
     })
 
