@@ -73,7 +73,12 @@ Executed baseline commands and captured status before final remediation pass:
 1. Student statement and balance drift due inconsistent invoice/status normalization
 
 - Root cause: mixed-case invoice statuses and mixed amount columns (`total_amount` vs `amount_due`/`amount`) were handled inconsistently across payment service, credit payment IPC, integration payment path, and collections reporting.
-- Fix: standardized invoice outstanding SQL and case-insensitive status handling across payment/reporting modules; corrected overpayment credit behavior to credit only unapplied remainder.
+- Fix: standardized invoice outstanding SQL and case-insensitive status handling across payment/reporting modules; corrected overpayment credit behavior to credit only unapplied remainder; hardened statement extraction to include receipt-linked payments when legacy ledger rows have missing or mismatched `student_id`.
+
+1. Payroll workflow renderer crash and non-deterministic feedback
+
+- Root cause: payroll status rendering assumed configuration lookup was always populated and used native `confirm/alert` patterns that bypassed dependable in-app feedback.
+- Fix: added safe status fallback rendering, replaced native dialogs with `ConfirmDialog`, and standardized runtime error/toast handling in `src/pages/Payroll/PayrollRun.tsx`.
 
 1. Academic analytics schema drift and invalid stream filtering
 
@@ -171,6 +176,9 @@ Executed baseline commands and captured status before final remediation pass:
 
 - Reconciliation import and matching completion: `src/pages/Finance/Reconciliation/ReconcileAccount.tsx`, `src/pages/Finance/Reconciliation/reconcile.logic.ts`.
 - Depreciation period logic completion: `src/pages/Finance/FixedAssets/Depreciation.tsx`.
+- Removed duplicated CBC renderer implementations by consolidating finance paths to academic canonical modules:
+  - `src/pages/Finance/CBC/JSSTransition.tsx`
+  - `src/pages/Finance/CBC/CBCStrandManagement.tsx`
 - Backup retention strict policy: `electron/main/services/BackupService.ts`.
 - Grant compliance logic replacement: `electron/main/services/operations/GrantTrackingService.ts`.
 - System maintenance non-fatal journal seed path: `electron/main/services/SystemMaintenanceService.ts`.
@@ -189,6 +197,10 @@ Executed baseline commands and captured status before final remediation pass:
   - `electron/main/services/reports/AgedReceivablesService.ts`
   - `electron/main/services/reports/SegmentProfitabilityService.ts`
   - `electron/main/services/reports/StudentLedgerService.ts`
+- Hardened student statement extraction against legacy payment-link drift:
+  - `electron/main/services/accounting/OpeningBalanceService.ts`
+- Stabilized payroll run UX and crash safety:
+  - `src/pages/Payroll/PayrollRun.tsx`
 - Fixed academic analytics and ranking logic:
   - `electron/main/services/academic/ExamAnalysisService.ts`
   - `electron/main/services/academic/PerformanceAnalysisService.ts`
@@ -236,15 +248,17 @@ Updated:
 - `electron/main/services/finance/__tests__/PaymentService.test.ts`
 - `electron/main/services/reports/__tests__/SegmentProfitabilityService.test.ts`
 - `electron/main/services/reports/__tests__/StudentLedgerService.test.ts`
+- `electron/main/services/accounting/__tests__/OpeningBalanceService.test.ts`
 - `electron/main/__tests__/integration/financial.integration.test.ts`
 - `electron/main/services/academic/__tests__/ReportCardService.test.ts`
+- `src/pages/Students/__tests__/promotion-feedback.logic.test.ts`
 
 ## Final Gate Verification
 
 - `npx tsc --noEmit`: passed
 - `npm run lint:eslint`: passed (0 errors, 0 warnings)
 - `npm run lint:architecture`: passed (`no dependency violations found`)
-- `npm test -- --run`: passed (`69 files`, `707 passed` tests)
+- `npm test -- --run`: passed (`72 files`, `720 passed` tests)
 - `npm audit --audit-level=high`: passed (`found 0 vulnerabilities`)
 
 ## Residual Risk

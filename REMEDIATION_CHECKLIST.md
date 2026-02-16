@@ -93,6 +93,11 @@ Evidence:
   - `src/pages/Settings/index.tsx`
 - [x] Replaced blocking prompt-based reconciliation flow with explicit selection and modal workflows:
   - `src/pages/Finance/Reconciliation/ReconcileAccount.tsx`
+- [x] Replaced remaining blocking native confirmation/alert flows in launch-critical renderer paths:
+  - `src/pages/Payroll/PayrollRun.tsx`
+  - `src/pages/Students/Promotions.tsx`
+  - `src/pages/Academic/CBC/JSSTransition.tsx`
+  - `src/components/ui/ImportDialog.tsx`
 
 ## 5. Incomplete / Orphaned Implementations
 
@@ -107,6 +112,9 @@ Evidence:
 - [x] Reconciliation CSV import path completed:
   - `src/pages/Finance/Reconciliation/ReconcileAccount.tsx`
   - `src/pages/Finance/Reconciliation/reconcile.logic.ts`
+- [x] Consolidated duplicate CBC implementations under finance routes to canonical academic modules:
+  - `src/pages/Finance/CBC/JSSTransition.tsx`
+  - `src/pages/Finance/CBC/CBCStrandManagement.tsx`
 
 ## 6. API / IPC Contract Consistency
 
@@ -135,6 +143,7 @@ Automation:
   - `electron/main/services/reports/AgedReceivablesService.ts`
   - `electron/main/services/reports/StudentLedgerService.ts`
   - `electron/main/services/reports/SegmentProfitabilityService.ts`
+  - `electron/main/services/accounting/OpeningBalanceService.ts`
 - [x] `electron/main/services/SystemMaintenanceService.ts` debug throw removal and coverage.
 - [x] `electron/main/services/BackupService.ts` retention strictness.
 - [x] `electron/main/services/operations/GrantTrackingService.ts` compliance logic completion.
@@ -151,6 +160,8 @@ Automation:
   - `electron/main/services/academic/PromotionService.ts`
 - [x] Payroll local date and access-control hardening:
   - `electron/main/ipc/payroll/payroll-handlers.ts`
+- [x] Payroll renderer crash and feedback hardening:
+  - `src/pages/Payroll/PayrollRun.tsx`
 
 ## 8. Regression Tests Added/Updated
 
@@ -186,13 +197,16 @@ Automation:
 - [x] Updated `electron/main/services/finance/__tests__/PaymentService.test.ts`
 - [x] Updated `electron/main/services/reports/__tests__/SegmentProfitabilityService.test.ts`
 - [x] Updated `electron/main/services/reports/__tests__/StudentLedgerService.test.ts`
+- [x] Updated `electron/main/services/accounting/__tests__/OpeningBalanceService.test.ts`
 - [x] Updated `electron/main/__tests__/integration/financial.integration.test.ts`
 - [x] Updated `electron/main/services/academic/__tests__/ReportCardService.test.ts`
+- [x] Updated `src/pages/Students/__tests__/promotion-feedback.logic.test.ts`
+- [x] Added `src/components/layout/__tests__/nav-utils.test.ts`
 
 ## 9. Final Hard Gates
 
 - [x] `npx tsc --noEmit` (pass)
 - [x] `npm run lint:eslint` (pass; 0 errors, 0 warnings)
 - [x] `npm run lint:architecture` (pass)
-- [x] `npm test -- --run` (pass; 69 files / 707 tests)
+- [x] `npm test -- --run` (pass; 72 files / 720 tests)
 - [x] `npm audit --audit-level=high` (pass; 0 vulnerabilities)
