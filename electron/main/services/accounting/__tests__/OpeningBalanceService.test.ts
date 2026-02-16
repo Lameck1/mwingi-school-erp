@@ -59,6 +59,16 @@ describe('OpeningBalanceService.getStudentLedger', () => {
         created_at TEXT
       );
 
+      CREATE TABLE receipt (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        receipt_number TEXT,
+        transaction_id INTEGER,
+        receipt_date TEXT,
+        student_id INTEGER,
+        amount INTEGER,
+        created_at TEXT
+      );
+
       CREATE TABLE credit_transaction (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id INTEGER NOT NULL,
@@ -138,6 +148,46 @@ describe('OpeningBalanceService.getStudentLedger', () => {
     expect(ledger.closing_balance).toBe(-150000)
   })
 
+  it('includes payment transactions resolved from receipt student linkage when ledger student_id is missing', async () => {
+    db.prepare(`
+      INSERT INTO student (id, admission_number, first_name, last_name, credit_balance)
+      VALUES (4, '2026/004', 'Grace', 'ReceiptFix', 150000)
+    `).run()
+
+    db.prepare(`
+      INSERT INTO fee_invoice (
+        invoice_number, student_id, invoice_date, due_date,
+        total_amount, amount, amount_due, amount_paid, status, description, created_at
+      ) VALUES (
+        'INV-GRACE-R', 4, '2026-01-05', '2026-02-05',
+        700000, 700000, 700000, 700000, 'PAID', 'Fee invoice for student', '2026-01-05T08:00:00.000Z'
+      )
+    `).run()
+
+    const paymentInsert = db.prepare(`
+      INSERT INTO ledger_transaction (
+        transaction_ref, transaction_date, transaction_type, amount, debit_credit, student_id,
+        payment_reference, description, is_voided, created_at
+      ) VALUES (
+        'PAY-GRACE-RECEIPT', '2026-01-10', 'FEE_PAYMENT', 850000, 'CREDIT', NULL,
+        '', 'Term fee payment', 0, '2026-01-10T08:00:00.000Z'
+      )
+    `)
+    const paymentResult = paymentInsert.run()
+
+    db.prepare(`
+      INSERT INTO receipt (receipt_number, transaction_id, receipt_date, student_id, amount, created_at)
+      VALUES ('RCP-GRACE-1', ?, '2026-01-10', 4, 850000, '2026-01-10T08:01:00.000Z')
+    `).run(paymentResult.lastInsertRowid)
+
+    const ledger = await service.getStudentLedger(4, 2026, '1900-01-01', '2999-12-31')
+
+    expect(ledger.transactions).toHaveLength(2)
+    expect(ledger.transactions[0]).toMatchObject({ debit: 700000, credit: 0 })
+    expect(ledger.transactions[1]).toMatchObject({ debit: 0, credit: 850000, ref: 'RCP-GRACE-1' })
+    expect(ledger.closing_balance).toBe(-150000)
+  })
+
   it('includes manual credit adjustments and excludes internal overpayment/void-generated credit rows', async () => {
     db.prepare(`
       INSERT INTO student (id, admission_number, first_name, last_name, credit_balance)
@@ -175,4 +225,3 @@ describe('OpeningBalanceService.getStudentLedger', () => {
     expect(ledger.closing_balance).toBe(600000)
   })
 })
-

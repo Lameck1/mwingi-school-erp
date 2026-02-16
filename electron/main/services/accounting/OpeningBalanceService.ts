@@ -140,6 +140,36 @@ export class OpeningBalanceService {
     return `COALESCE(${candidates.join(', ')}, DATE('now'))`;
   }
 
+  private getLedgerCreatedAtExpression(alias: string, ledgerDateExpression: string): string {
+    if (this.columnExists('ledger_transaction', 'created_at')) {
+      return `${alias}.created_at`;
+    }
+    return `${ledgerDateExpression} || 'T00:00:00.000Z'`;
+  }
+
+  private getReceiptDateExpression(alias: string): string {
+    const candidates: string[] = [];
+    if (this.columnExists('receipt', 'receipt_date')) {
+      candidates.push(`${alias}.receipt_date`);
+    }
+    if (this.columnExists('receipt', 'created_at')) {
+      candidates.push(`substr(${alias}.created_at, 1, 10)`);
+    }
+
+    if (candidates.length === 0) {
+      return `DATE('now')`;
+    }
+
+    return `COALESCE(${candidates.join(', ')}, DATE('now'))`;
+  }
+
+  private getReceiptCreatedAtExpression(alias: string, receiptDateExpression: string): string {
+    if (this.columnExists('receipt', 'created_at')) {
+      return `${alias}.created_at`;
+    }
+    return `${receiptDateExpression} || 'T00:00:00.000Z'`;
+  }
+
   private getCreditDateExpression(alias: string): string {
     const candidates: string[] = [];
     if (this.columnExists('credit_transaction', 'created_at')) {
@@ -394,9 +424,36 @@ export class OpeningBalanceService {
     const invoiceAmountExpr = this.getInvoiceAmountExpression('fi');
     const invoiceDateExpr = this.getInvoiceDateExpression('fi');
     const ledgerDateExpr = this.getLedgerDateExpression('lt');
+    const hasReceiptTable = this.tableExists('receipt');
+    const hasReceiptTransactionId = hasReceiptTable && this.columnExists('receipt', 'transaction_id');
+    const hasReceiptStudentId = hasReceiptTable && this.columnExists('receipt', 'student_id');
+    const hasReceiptNumber = hasReceiptTable && this.columnExists('receipt', 'receipt_number');
+    const canResolveStudentFromReceipt = hasReceiptTable && hasReceiptTransactionId && hasReceiptStudentId;
+    const receiptDateExpr = hasReceiptTable ? this.getReceiptDateExpression('r') : `DATE('now')`;
+    const receiptCreatedAtExpr = hasReceiptTable ? this.getReceiptCreatedAtExpression('r', receiptDateExpr) : `${ledgerDateExpr} || 'T00:00:00.000Z'`;
+    const ledgerBaseCreatedAtExpr = this.getLedgerCreatedAtExpression('lt', ledgerDateExpr);
+    const ledgerCreatedAtExpr = hasReceiptTransactionId
+      ? `COALESCE(${ledgerBaseCreatedAtExpr}, ${receiptCreatedAtExpr})`
+      : ledgerBaseCreatedAtExpr;
     const hasCreditTransactions = this.tableExists('credit_transaction');
     const creditDateExpr = hasCreditTransactions ? this.getCreditDateExpression('ct') : `DATE('now')`;
     const externalCreditFilter = hasCreditTransactions ? this.getExternalCreditFilter('ct') : '0';
+    const ledgerStudentPredicate = canResolveStudentFromReceipt
+      ? `
+          (
+            lt.student_id = ?
+            OR (
+              UPPER(COALESCE(lt.transaction_type, '')) = 'FEE_PAYMENT'
+              AND EXISTS (
+                SELECT 1
+                FROM receipt r_link
+                WHERE r_link.transaction_id = lt.id
+                  AND r_link.student_id = ?
+              )
+            )
+          )
+        `
+      : 'lt.student_id = ?';
 
     // Get opening balance
     const openingBalanceRecord = this.db.prepare(`
@@ -415,6 +472,10 @@ export class OpeningBalanceService {
         AND UPPER(COALESCE(fi.status, 'PENDING')) NOT IN ('CANCELLED', 'VOIDED')
     `).get(studentId, startDate) as { total_debit: number };
 
+    const historicalLedgerParams: Array<number | string> = canResolveStudentFromReceipt
+      ? [studentId, studentId, startDate]
+      : [studentId, startDate];
+
     const historicalLedgerNetMovement = this.db.prepare(`
       SELECT COALESCE(
         SUM(
@@ -427,11 +488,11 @@ export class OpeningBalanceService {
         0
       ) as net_movement
       FROM ledger_transaction lt
-      WHERE lt.student_id = ?
+      WHERE ${ledgerStudentPredicate}
         AND ${ledgerDateExpr} < ?
         AND COALESCE(lt.is_voided, 0) = 0
         AND UPPER(COALESCE(lt.transaction_type, '')) != 'OPENING_BALANCE'
-    `).get(studentId, startDate) as { net_movement: number };
+    `).get(...historicalLedgerParams) as { net_movement: number };
 
     const historicalCreditAdjustments = hasCreditTransactions
       ? this.db.prepare(`
@@ -457,6 +518,11 @@ export class OpeningBalanceService {
       historicalInvoiceDebits.total_debit +
       historicalLedgerNetMovement.net_movement +
       historicalCreditAdjustments.net_movement;
+
+    const ledgerJoinClause = hasReceiptTransactionId ? 'LEFT JOIN receipt r ON r.transaction_id = lt.id' : '';
+    const ledgerReferenceExpr = hasReceiptNumber
+      ? `COALESCE(NULLIF(lt.payment_reference, ''), r.receipt_number, lt.transaction_ref, '-')`
+      : `COALESCE(NULLIF(lt.payment_reference, ''), lt.transaction_ref, '-')`;
 
     const transactionSqlParts = [`
       SELECT
@@ -484,21 +550,27 @@ export class OpeningBalanceService {
 
         SELECT
           ${ledgerDateExpr} as date,
-          COALESCE(lt.created_at, ${ledgerDateExpr} || 'T00:00:00.000Z') as created_at,
+          ${ledgerCreatedAtExpr} as created_at,
           20 as sort_priority,
           lt.id as sort_id,
-          COALESCE(NULLIF(lt.payment_reference, ''), lt.transaction_ref, '-') as ref,
+          ${ledgerReferenceExpr} as ref,
           COALESCE(NULLIF(lt.description, ''), lt.transaction_type, 'Ledger transaction') as description,
           CASE WHEN UPPER(COALESCE(lt.debit_credit, '')) = 'DEBIT' THEN ABS(COALESCE(lt.amount, 0)) ELSE 0 END as debit,
           CASE WHEN UPPER(COALESCE(lt.debit_credit, '')) = 'CREDIT' THEN ABS(COALESCE(lt.amount, 0)) ELSE 0 END as credit
         FROM ledger_transaction lt
-        WHERE lt.student_id = ?
+        ${ledgerJoinClause}
+        WHERE ${ledgerStudentPredicate}
           AND ${ledgerDateExpr} BETWEEN ? AND ?
           AND COALESCE(lt.is_voided, 0) = 0
           AND UPPER(COALESCE(lt.transaction_type, '')) != 'OPENING_BALANCE'
     `];
 
-    const transactionParams: Array<number | string> = [studentId, startDate, endDate, studentId, startDate, endDate];
+    const transactionParams: Array<number | string> = [studentId, startDate, endDate];
+    if (canResolveStudentFromReceipt) {
+      transactionParams.push(studentId, studentId, startDate, endDate);
+    } else {
+      transactionParams.push(studentId, startDate, endDate);
+    }
 
     if (hasCreditTransactions) {
       transactionSqlParts.push(`
