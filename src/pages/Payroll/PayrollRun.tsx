@@ -1,6 +1,7 @@
 import { Calculator, Play, AlertCircle, ChevronLeft, Eye, Printer, MessageSquare, Loader2, Calendar, CheckCircle2, CreditCard, RotateCcw, Trash2, RefreshCw, Users, TrendingDown, Wallet, FileSpreadsheet, ShieldCheck, Lock } from 'lucide-react'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 
+import { normalizePayrollStatus, type PayrollUiStatus } from './payrollStatus'
 import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 import { useAuthStore, useAppStore } from '../../stores'
 import { type PayrollPeriod, type PayrollEntry } from '../../types/electron-api/PayrollAPI'
@@ -203,19 +204,20 @@ export default function PayrollRun() {
         URL.revokeObjectURL(url)
     }, [payrollData, selectedPeriod?.period_name])
 
-    const getHistoryStatusColor = (s: string) => {
-        if (s === 'PAID') { return 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' }
-        if (s === 'CONFIRMED') { return 'bg-blue-500/10 border-blue-500/20 text-blue-400' }
+    const getHistoryStatusColor = (s: unknown) => {
+        const normalizedStatus = normalizePayrollStatus(s)
+        if (normalizedStatus === 'PAID') { return 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' }
+        if (normalizedStatus === 'CONFIRMED') { return 'bg-blue-500/10 border-blue-500/20 text-blue-400' }
         return 'bg-amber-500/10 border-amber-500/20 text-amber-400'
     }
 
-    const statusConfig = {
+    const statusConfig: Record<PayrollUiStatus, { color: string; icon: typeof AlertCircle; label: string }> = {
         DRAFT: { color: 'bg-amber-500/10 border-amber-500/20 text-amber-400', icon: AlertCircle, label: 'Draft' },
         CONFIRMED: { color: 'bg-blue-500/10 border-blue-500/20 text-blue-400', icon: ShieldCheck, label: 'Confirmed' },
         PAID: { color: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400', icon: CheckCircle2, label: 'Paid' },
     }
 
-    const renderStatusActions = (status: string, periodId: number | undefined) => (
+    const renderStatusActions = (status: PayrollUiStatus, periodId: number | undefined) => (
         <div className="flex flex-wrap gap-2">
             {status === 'DRAFT' && periodId && (
                 <>
@@ -280,7 +282,7 @@ export default function PayrollRun() {
     )
 
     if (selectedPeriod || payrollData.length > 0) {
-        const status = selectedPeriod?.status || 'DRAFT'
+        const status = normalizePayrollStatus(selectedPeriod?.status)
         const cfg = statusConfig[status]
         const StatusIcon = cfg.icon
         const periodId = selectedPeriod?.id
@@ -546,7 +548,7 @@ export default function PayrollRun() {
                                     </div>
                                     <div className="flex items-center gap-6">
                                         <span className={`text-[9px] font-bold tracking-widest uppercase px-3 py-1 rounded-full border ${getHistoryStatusColor(h.status)}`}>
-                                            {h.status}
+                                            {normalizePayrollStatus(h.status)}
                                         </span>
                                         <button
                                             onClick={() => loadPeriodDetails(h.id)}
