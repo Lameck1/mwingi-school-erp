@@ -4,7 +4,7 @@ import { container } from '../../services/base/ServiceContainer'
 import { toDbGender, fromDbGender, toDbActiveFlag } from '../../utils/transforms'
 import { sanitizeString, validateId } from '../../utils/validation'
 import { createGetOrCreateCategoryId, generateSingleStudentInvoice, type FinanceContext } from '../finance/finance-handler-utils'
-import { safeHandleRaw } from '../ipc-result'
+import { safeHandleRaw, safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
 
 interface Student {
   id: number
@@ -214,11 +214,25 @@ export function registerStudentHandlers(): void {
 }
 
 function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
+  const normalizedInvoiceAmountSql = `
+      COALESCE(
+        NULLIF(total_amount, 0),
+        NULLIF(amount_due, 0),
+        NULLIF(amount, 0),
+        total_amount,
+        amount_due,
+        amount,
+        0
+      )
+    `
+
   safeHandleRaw('student:getAll', (_event, filters?: StudentFilters) => {
     let query = `SELECT s.*, st.stream_name, e.student_type as current_type,
-        (SELECT COALESCE(SUM(total_amount - amount_paid), 0)
+        (SELECT COALESCE(SUM((${normalizedInvoiceAmountSql}) - COALESCE(amount_paid, 0)), 0)
          FROM fee_invoice
-         WHERE student_id = s.id AND status NOT IN ('CANCELLED', 'VOIDED') AND COALESCE(is_voided, 0) = 0
+         WHERE student_id = s.id
+           AND UPPER(COALESCE(status, 'PENDING')) NOT IN ('CANCELLED', 'VOIDED')
+           AND COALESCE(is_voided, 0) = 0
         ) - COALESCE(s.credit_balance, 0) as balance
       FROM student s
       LEFT JOIN enrollment e ON s.id = e.student_id AND e.id = (
@@ -272,9 +286,11 @@ function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
 
   safeHandleRaw('student:getBalance', (_event, studentId: number) => {
     const invoices = db.prepare(`
-      SELECT COALESCE(SUM(total_amount - amount_paid), 0) as invoice_balance
+      SELECT COALESCE(SUM((${normalizedInvoiceAmountSql}) - COALESCE(amount_paid, 0)), 0) as invoice_balance
       FROM fee_invoice
-      WHERE student_id = ? AND status NOT IN ('CANCELLED', 'VOIDED') AND COALESCE(is_voided, 0) = 0
+      WHERE student_id = ?
+        AND UPPER(COALESCE(status, 'PENDING')) NOT IN ('CANCELLED', 'VOIDED')
+        AND COALESCE(is_voided, 0) = 0
     `).get(studentId) as { invoice_balance: number } | undefined
 
     const student = db.prepare('SELECT credit_balance FROM student WHERE id = ?').get(studentId) as { credit_balance: number } | undefined
@@ -290,20 +306,25 @@ function registerStudentWriteHandlers(db: ReturnType<typeof getDatabase>): void 
   registerCreateStudentHandler(db)
   registerUpdateStudentHandler(db)
 
-  safeHandleRaw('student:deactivate', (_event, id: number, userId: number) => {
+  safeHandleRawWithRole('student:deactivate', ROLES.STAFF, (event, id: number, legacyUserId?: number) => {
+    const actor = resolveActorId(event, legacyUserId)
+    if (!actor.success) { return { success: false, error: actor.error } }
     const idVal = validateId(id, 'Student')
     if (!idVal.success) { return { success: false, error: idVal.error } }
     const student = db.prepare('SELECT id, is_active FROM student WHERE id = ?').get(idVal.data!) as { id: number; is_active: number } | undefined
     if (!student) { return { success: false, error: 'Student not found' } }
     if (student.is_active === 0) { return { success: false, error: 'Student is already deactivated' } }
     db.prepare('UPDATE student SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(idVal.data!)
-    logAudit(userId || 0, 'DEACTIVATE', 'student', idVal.data!, { is_active: 1 }, { is_active: 0 })
+    logAudit(actor.actorId, 'DEACTIVATE', 'student', idVal.data!, { is_active: 1 }, { is_active: 0 })
     return { success: true }
   })
 }
 
 function registerCreateStudentHandler(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRaw('student:create', (_event, data: StudentCreateData, userId?: number) => {
+  safeHandleRawWithRole('student:create', ROLES.STAFF, (event, data: StudentCreateData, legacyUserId?: number) => {
+    const actor = resolveActorId(event, legacyUserId)
+    if (!actor.success) { return { success: false, error: actor.error } }
+    const actorId = actor.actorId
     // Validate and sanitize input
     const admissionNumber = sanitizeString(data.admission_number, 50)
     const firstName = sanitizeString(data.first_name, 100)
@@ -358,10 +379,7 @@ function registerCreateStudentHandler(db: ReturnType<typeof getDatabase>): void 
             useCurrentDate: false,
           })
 
-          if (!userId || userId <= 0) {
-            throw new Error('Valid user ID is required for invoice generation')
-          }
-          autoInvoice = generateAutoInvoice(db, newStudentId, enrollmentContext, userId)
+          autoInvoice = generateAutoInvoice(db, newStudentId, enrollmentContext, actorId)
         }
 
         return {
@@ -372,7 +390,7 @@ function registerCreateStudentHandler(db: ReturnType<typeof getDatabase>): void 
       })
 
       const created = createStudentTx()
-      logAudit(userId || 0, 'CREATE', 'student', created.id, null, { admission_number: admissionNumber, first_name: firstName, last_name: lastName })
+      logAudit(actorId, 'CREATE', 'student', created.id, null, { admission_number: admissionNumber, first_name: firstName, last_name: lastName })
       return { success: true, ...created }
     } catch (error) {
       return {
@@ -384,7 +402,12 @@ function registerCreateStudentHandler(db: ReturnType<typeof getDatabase>): void 
 }
 
 function registerUpdateStudentHandler(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRaw('student:update', (_event, id: number, data: Partial<StudentCreateData>) => {
+  safeHandleRawWithRole('student:update', ROLES.STAFF, (event, id: number, data: Partial<StudentCreateData>, legacyUserId?: number) => {
+    const actor = resolveActorId(event, legacyUserId)
+    if (!actor.success) {
+      return { success: false, error: actor.error }
+    }
+
     // Validate student ID
     const idValidation = validateId(id, 'Student')
     if (!idValidation.success) {
@@ -445,7 +468,7 @@ function registerUpdateStudentHandler(db: ReturnType<typeof getDatabase>): void 
       })
 
       updateStudentTx()
-      logAudit(0, 'UPDATE', 'student', idValidation.data!, { id: student.id }, data)
+      logAudit(actor.actorId, 'UPDATE', 'student', idValidation.data!, { id: student.id }, data)
       return { success: true }
     } catch (error) {
       return {

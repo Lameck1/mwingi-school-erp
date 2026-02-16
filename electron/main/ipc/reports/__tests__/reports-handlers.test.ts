@@ -5,6 +5,37 @@ type IpcHandler = (event: unknown, ...args: unknown[]) => Promise<unknown>
 
 let db: Database.Database
 const handlerMap = new Map<string, IpcHandler>()
+let sessionUserId = 9
+let sessionRole = 'TEACHER'
+
+const nemisServiceMock = {
+  extractStudentData: vi.fn(async () => []),
+  extractStaffData: vi.fn(async () => []),
+  extractEnrollmentData: vi.fn(async () => []),
+  createExport: vi.fn(async () => ({ success: true })),
+  getExportHistory: vi.fn(async () => []),
+  validateStudentData: vi.fn(() => ({ valid: true })),
+}
+
+vi.mock('keytar', () => ({
+  default: {
+    getPassword: vi.fn(async () => JSON.stringify({
+      user: {
+        id: sessionUserId,
+        username: 'session-user',
+        role: sessionRole,
+        full_name: 'Session User',
+        email: null,
+        is_active: 1,
+        last_login: null,
+        created_at: '2026-01-01'
+      },
+      lastActivity: Date.now()
+    })),
+    setPassword: vi.fn().mockResolvedValue(null),
+    deletePassword: vi.fn().mockResolvedValue(true),
+  }
+}))
 
 vi.mock('../../../electron-env', () => ({
   ipcMain: {
@@ -23,14 +54,7 @@ vi.mock('../../../services/base/ServiceContainer', () => ({
   container: {
     resolve: vi.fn((name: string) => {
       if (name === 'NEMISExportService') {
-        return {
-          extractStudentData: vi.fn(async () => []),
-          extractStaffData: vi.fn(async () => []),
-          extractEnrollmentData: vi.fn(async () => []),
-          createExport: vi.fn(async () => ({ success: true })),
-          getExportHistory: vi.fn(async () => []),
-          validateStudentData: vi.fn(() => ({ valid: true })),
-        }
+        return nemisServiceMock
       }
       return {}
     })
@@ -42,6 +66,9 @@ import { registerReportsHandlers } from '../reports-handlers'
 describe('reports IPC handlers', () => {
   beforeEach(() => {
     handlerMap.clear()
+    sessionUserId = 9
+    sessionRole = 'TEACHER'
+    nemisServiceMock.createExport.mockClear()
     db = new Database(':memory:')
     db.exec(`
       CREATE TABLE student (
@@ -66,6 +93,8 @@ describe('reports IPC handlers', () => {
         term_id INTEGER NOT NULL,
         invoice_number TEXT,
         total_amount INTEGER NOT NULL,
+        amount INTEGER,
+        amount_due INTEGER,
         amount_paid INTEGER NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'PENDING',
         due_date TEXT
@@ -126,5 +155,41 @@ describe('reports IPC handlers', () => {
     const term1Result = await handler({}, 1) as Array<{ invoice_number: string }>
     expect(term1Result).toHaveLength(1)
     expect(term1Result[0].invoice_number).toBe('INV-T1')
+  })
+
+  it('report:defaulters normalizes invoice amount and status casing', async () => {
+    db.prepare(`
+      INSERT INTO student (id, first_name, last_name, admission_number, guardian_phone)
+      VALUES (2, 'Sarah', 'Ochieng', 'MAS-2026', '+254700000002')
+    `).run()
+    db.prepare(`INSERT INTO enrollment (id, student_id) VALUES (2, 2)`).run()
+
+    db.prepare(`
+      INSERT INTO fee_invoice (student_id, term_id, invoice_number, total_amount, amount, amount_due, amount_paid, status, due_date)
+      VALUES (2, 1, 'INV-LEGACY', 0, 1700000, 1700000, 0, 'pending', '2026-02-20')
+    `).run()
+    db.prepare(`
+      INSERT INTO fee_invoice (student_id, term_id, invoice_number, total_amount, amount, amount_due, amount_paid, status, due_date)
+      VALUES (2, 1, 'INV-CAN', 100000, 100000, 100000, 0, 'cancelled', '2026-02-20')
+    `).run()
+
+    const handler = handlerMap.get('report:defaulters')!
+    const result = await handler({}, 1) as Array<{ invoice_number: string; total_amount: number; balance: number }>
+
+    expect(result).toHaveLength(1)
+    expect(result[0].invoice_number).toBe('INV-LEGACY')
+    expect(result[0].total_amount).toBe(1700000)
+    expect(result[0].balance).toBe(1700000)
+  })
+
+  it('reports:createNEMISExport rejects renderer actor mismatch', async () => {
+    sessionRole = 'PRINCIPAL'
+    const handler = handlerMap.get('reports:createNEMISExport')
+    expect(handler).toBeDefined()
+
+    const result = await handler!({}, { exportType: 'students' }, 3) as { success: boolean; error?: string }
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('renderer user mismatch')
+    expect(nemisServiceMock.createExport).not.toHaveBeenCalled()
   })
 })

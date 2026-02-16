@@ -1,10 +1,10 @@
 import { container } from '../../services/base/ServiceContainer';
-import { safeHandleRaw } from '../ipc-result';
+import { ROLES, safeHandleRawWithRole } from '../ipc-result';
 
 const getService = () => container.resolve('PerformanceAnalysisService');
 
 export function registerPerformanceAnalysisHandlers() {
-  safeHandleRaw('performance:getMostImproved', (_event, params: {
+  safeHandleRawWithRole('performance:getMostImproved', ROLES.STAFF, (_event, params: {
     academicYearId: number;
     currentTermId: number;
     comparisonTermId: number;
@@ -14,17 +14,18 @@ export function registerPerformanceAnalysisHandlers() {
     return getService().getMostImprovedStudents(params);
   });
 
-  safeHandleRaw(
+  safeHandleRawWithRole(
     'performance:getComparison',
+    ROLES.STAFF,
     (_event, studentId: number, academicYearId: number, currentTermId: number, comparisonTermId: number) => {
     return getService().getStudentPerformanceComparison(studentId, academicYearId, currentTermId, comparisonTermId);
   });
 
-  safeHandleRaw('performance:getStruggling', (_event, academicYearId: number, termId: number, threshold?: number, streamId?: number) => {
+  safeHandleRawWithRole('performance:getStruggling', ROLES.STAFF, (_event, academicYearId: number, termId: number, threshold?: number, streamId?: number) => {
     return getService().getStrugglingStudents(academicYearId, termId, threshold ?? 50, streamId);
   });
 
-  safeHandleRaw('performance:getTrends', (_event, studentId: number, academicYearId: number, numTerms?: number) => {
+  safeHandleRawWithRole('performance:getTrends', ROLES.STAFF, (_event, studentId: number, academicYearId: number, numTerms?: number) => {
     return getService().getPerformanceTrends(studentId, academicYearId, numTerms ?? 3);
   });
 }

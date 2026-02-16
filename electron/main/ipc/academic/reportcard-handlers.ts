@@ -9,7 +9,7 @@ import { getSession } from '../../security/session'
 import { container } from '../../services/base/ServiceContainer'
 import { ConfigService } from '../../services/ConfigService'
 import { renderHtmlToPdfBuffer, resolveOutputPath, writePdfBuffer } from '../../utils/pdf'
-import { safeHandleRaw } from '../ipc-result'
+import { ROLES, safeHandleRawWithRole } from '../ipc-result'
 
 import type { StudentReportCard } from '../../services/academic/CBCReportCardService'
 
@@ -110,7 +110,7 @@ function registerCbcReportCardHandlers(): void {
 }
 
 function registerCbcBaseHandlers(): void {
-    safeHandleRaw('report-card:getSubjects', (_event, examId?: number) => {
+    safeHandleRawWithRole('report-card:getSubjects', ROLES.STAFF, (_event, examId?: number) => {
         try {
             const db = getDatabase()
             // Return subjects that have results for the given exam, or all active subjects
@@ -132,16 +132,16 @@ function registerCbcBaseHandlers(): void {
         }
     })
 
-    safeHandleRaw('report-card:get', (_event, examId: number, studentId: number) => {
+    safeHandleRawWithRole('report-card:get', ROLES.STAFF, (_event, examId: number, studentId: number) => {
         return getCbcService().getReportCard(examId, studentId)
     })
 
-    safeHandleRaw('report-card:generate', async (_event, studentId: number, examId: number) => {
+    safeHandleRawWithRole('report-card:generate', ROLES.STAFF, async (_event, studentId: number, examId: number) => {
         const userId = await getSessionUserId()
         return getCbcService().generateReportCard(studentId, examId, userId)
     })
 
-    safeHandleRaw('report-card:generateBatch', async (_event, data: { exam_id: number; stream_id: number }) => {
+    safeHandleRawWithRole('report-card:generateBatch', ROLES.STAFF, async (_event, data: { exam_id: number; stream_id: number }) => {
         const userId = await getSessionUserId()
         const result = await getCbcService().generateBatchReportCards(data.exam_id, data.stream_id, userId)
         return {
@@ -155,7 +155,7 @@ function registerCbcBaseHandlers(): void {
 }
 
 function registerCbcEmailHandlers(): void {
-    safeHandleRaw('report-card:emailReports', async (
+    safeHandleRawWithRole('report-card:emailReports', ROLES.STAFF, async (
         _event,
         data: { exam_id: number; stream_id: number; template_id: string; include_sms: boolean }
     ) => {
@@ -176,7 +176,7 @@ function registerCbcEmailHandlers(): void {
 }
 
 function registerCbcMergeHandlers(): void {
-    safeHandleRaw('report-card:mergePDFs', async (_event, data: { exam_id: number; stream_id: number; output_path: string }) => {
+    safeHandleRawWithRole('report-card:mergePDFs', ROLES.STAFF, async (_event, data: { exam_id: number; stream_id: number; output_path: string }) => {
         try {
             const { files, failed } = await generateBatchReportCardFiles(data.exam_id, data.stream_id)
             const merged = await PDFDocument.create()
@@ -202,7 +202,7 @@ function registerCbcMergeHandlers(): void {
 }
 
 function registerCbcDownloadHandlers(): void {
-    safeHandleRaw('report-card:downloadReports', async (_event, data: { exam_id: number; stream_id: number; merge: boolean }) => {
+    safeHandleRawWithRole('report-card:downloadReports', ROLES.STAFF, async (_event, data: { exam_id: number; stream_id: number; merge: boolean }) => {
         try {
             const { files, failed } = await generateBatchReportCardFiles(data.exam_id, data.stream_id)
             if (!data.merge) {
@@ -232,7 +232,7 @@ function registerCbcDownloadHandlers(): void {
         }
     })
 
-    safeHandleRaw('report-card:openFile', async (_event, filePath: string) => {
+    safeHandleRawWithRole('report-card:openFile', ROLES.STAFF, async (_event, filePath: string) => {
         if (!filePath || typeof filePath !== 'string') {
             return { success: false, error: 'Invalid report card file path' }
         }
@@ -246,11 +246,11 @@ function registerCbcDownloadHandlers(): void {
 
 function registerLegacyReportCardHandlers(): void {
     // Legacy report card handlers for term/year-based report cards (used in Reports > Report Cards)
-    safeHandleRaw('reportcard:getSubjects', () => {
+    safeHandleRawWithRole('reportcard:getSubjects', ROLES.STAFF, () => {
         return getLegacyService().getSubjects()
     })
 
-    safeHandleRaw('reportcard:getStudentGrades', (
+    safeHandleRawWithRole('reportcard:getStudentGrades', ROLES.STAFF, (
         _event,
         studentId: number,
         academicYearId: number,
@@ -259,7 +259,7 @@ function registerLegacyReportCardHandlers(): void {
         return getLegacyService().getStudentGrades(studentId, academicYearId, termId)
     })
 
-    safeHandleRaw('reportcard:generate', (
+    safeHandleRawWithRole('reportcard:generate', ROLES.STAFF, (
         _event,
         studentId: number,
         academicYearId: number,
@@ -268,7 +268,7 @@ function registerLegacyReportCardHandlers(): void {
         return getLegacyService().generateReportCard(studentId, academicYearId, termId)
     })
 
-    safeHandleRaw('reportcard:getStudentsForGeneration', (
+    safeHandleRawWithRole('reportcard:getStudentsForGeneration', ROLES.STAFF, (
         _event,
         streamId: number,
         academicYearId: number,

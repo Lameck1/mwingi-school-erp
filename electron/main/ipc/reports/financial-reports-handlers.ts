@@ -1,5 +1,5 @@
 import { container } from '../../services/base/ServiceContainer';
-import { safeHandleRaw } from '../ipc-result';
+import { ROLES, safeHandleRawWithRole } from '../ipc-result';
 
 import type { DoubleEntryJournalService } from '../../services/accounting/DoubleEntryJournalService';
 import type { OpeningBalanceService } from '../../services/accounting/OpeningBalanceService';
@@ -16,7 +16,7 @@ function failure(error: string): ReportResponse<never> {
 }
 
 function registerBalanceSheetHandlers(journalService: DoubleEntryJournalService): void {
-  safeHandleRaw('reports:getBalanceSheet', async (_event, asOfDate: string) => {
+  safeHandleRawWithRole('reports:getBalanceSheet', ROLES.FINANCE, async (_event, asOfDate: string) => {
     try {
       return success(await journalService.getBalanceSheet(asOfDate));
     } catch (error) {
@@ -26,7 +26,7 @@ function registerBalanceSheetHandlers(journalService: DoubleEntryJournalService)
 }
 
 function registerProfitAndLossHandlers(plService: ProfitAndLossService): void {
-  safeHandleRaw('reports:getProfitAndLoss', async (_event, startDate: string, endDate: string) => {
+  safeHandleRawWithRole('reports:getProfitAndLoss', ROLES.FINANCE, async (_event, startDate: string, endDate: string) => {
     try {
       return success(await plService.generateProfitAndLoss(startDate, endDate));
     } catch (error) {
@@ -34,8 +34,9 @@ function registerProfitAndLossHandlers(plService: ProfitAndLossService): void {
     }
   });
 
-  safeHandleRaw(
+  safeHandleRawWithRole(
     'reports:getComparativeProfitAndLoss',
+    ROLES.FINANCE,
     async (
       _event,
       currentStart: string,
@@ -51,7 +52,7 @@ function registerProfitAndLossHandlers(plService: ProfitAndLossService): void {
     }
   );
 
-  safeHandleRaw('reports:getRevenueBreakdown', async (_event, startDate: string, endDate: string) => {
+  safeHandleRawWithRole('reports:getRevenueBreakdown', ROLES.FINANCE, async (_event, startDate: string, endDate: string) => {
     try {
       return success(await plService.getRevenueBreakdown(startDate, endDate));
     } catch (error) {
@@ -59,7 +60,7 @@ function registerProfitAndLossHandlers(plService: ProfitAndLossService): void {
     }
   });
 
-  safeHandleRaw('reports:getExpenseBreakdown', async (_event, startDate: string, endDate: string) => {
+  safeHandleRawWithRole('reports:getExpenseBreakdown', ROLES.FINANCE, async (_event, startDate: string, endDate: string) => {
     try {
       return success(await plService.getExpenseBreakdown(startDate, endDate));
     } catch (error) {
@@ -69,7 +70,7 @@ function registerProfitAndLossHandlers(plService: ProfitAndLossService): void {
 }
 
 function registerTrialBalanceAndLedgerHandlers(journalService: DoubleEntryJournalService, obService: OpeningBalanceService): void {
-  safeHandleRaw('reports:getTrialBalance', async (_event, startDate: string, endDate: string) => {
+  safeHandleRawWithRole('reports:getTrialBalance', ROLES.FINANCE, async (_event, startDate: string, endDate: string) => {
     try {
       return success(await journalService.getTrialBalance(startDate, endDate));
     } catch (error) {
@@ -77,8 +78,9 @@ function registerTrialBalanceAndLedgerHandlers(journalService: DoubleEntryJourna
     }
   });
 
-  safeHandleRaw(
+  safeHandleRawWithRole(
     'reports:getStudentLedger',
+    ROLES.FINANCE,
     async (
       _event,
       studentId: number,

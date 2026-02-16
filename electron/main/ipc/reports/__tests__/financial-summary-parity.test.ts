@@ -71,6 +71,8 @@ describe('financial summary parity', () => {
       CREATE TABLE fee_invoice (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         total_amount INTEGER NOT NULL,
+        amount INTEGER,
+        amount_due INTEGER,
         amount_paid INTEGER NOT NULL DEFAULT 0,
         status TEXT NOT NULL
       );

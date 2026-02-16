@@ -1,59 +1,69 @@
 import { container } from '../../services/base/ServiceContainer'
-import { safeHandleRaw } from '../ipc-result'
+import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
 
 const getService = () => container.resolve('ApprovalService')
 
 export function registerApprovalHandlers(): void {
     // Get pending approvals
-    safeHandleRaw('approval:getPending', (_event, userId?: number) => {
-        return getService().getPendingApprovals(userId)
+    safeHandleRawWithRole('approval:getPending', ROLES.STAFF, (event, userId?: number) => {
+        const actor = resolveActorId(event, userId)
+        if (!actor.success) { return actor }
+        return getService().getPendingApprovals(actor.actorId)
     })
 
     // Get all approvals with filters
-    safeHandleRaw('approval:getAll', (_event, filters?: { status?: string; entity_type?: string }) => {
+    safeHandleRawWithRole('approval:getAll', ROLES.STAFF, (_event, filters?: { status?: string; entity_type?: string }) => {
         return getService().getAllApprovals(filters)
     })
 
     // Get approval counts for dashboard
-    safeHandleRaw('approval:getCounts', () => {
+    safeHandleRawWithRole('approval:getCounts', ROLES.STAFF, () => {
         return getService().getApprovalCounts()
     })
 
     // Create approval request
-    safeHandleRaw('approval:create', (
-        _event,
+    safeHandleRawWithRole('approval:create', ROLES.STAFF, (
+        event,
         entityType: string,
         entityId: number,
-        requestedByUserId: number
+        legacyRequestedByUserId?: number
     ) => {
-        return getService().createApprovalRequest(entityType, entityId, requestedByUserId)
+        const actor = resolveActorId(event, legacyRequestedByUserId)
+        if (!actor.success) { return actor }
+        return getService().createApprovalRequest(entityType, entityId, actor.actorId)
     })
 
     // Approve request
-    safeHandleRaw('approval:approve', (
-        _event,
+    safeHandleRawWithRole('approval:approve', ROLES.MANAGEMENT, (
+        event,
         requestId: number,
-        approverId: number
+        legacyApproverId?: number
     ) => {
-        return getService().approve(requestId, approverId)
+        const actor = resolveActorId(event, legacyApproverId)
+        if (!actor.success) { return actor }
+        return getService().approve(requestId, actor.actorId)
     })
 
     // Reject request
-    safeHandleRaw('approval:reject', (
-        _event,
+    safeHandleRawWithRole('approval:reject', ROLES.MANAGEMENT, (
+        event,
         requestId: number,
-        approverId: number,
+        legacyApproverId: number | undefined,
         reason: string
     ) => {
-        return getService().reject(requestId, approverId, reason)
+        const actor = resolveActorId(event, legacyApproverId)
+        if (!actor.success) { return actor }
+        return getService().reject(requestId, actor.actorId, reason)
     })
 
     // Cancel request
-    safeHandleRaw('approval:cancel', (
-        _event,
+    safeHandleRawWithRole('approval:cancel', ROLES.STAFF, (
+        event,
         requestId: number,
-        userId: number
+        legacyUserId?: number
     ) => {
-        return getService().cancel(requestId, userId)
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
+        return getService().cancel(requestId, actor.actorId)
     })
 }

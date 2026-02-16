@@ -1,23 +1,27 @@
 import { container } from '../../services/base/ServiceContainer';
 import { MessageService } from '../../services/MessageService';
-import { safeHandleRaw } from '../ipc-result';
+import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result';
 
 const svc = () => new MessageService();
 
 export function registerMessageHandlers(): void {
-    safeHandleRaw('message:getTemplates', () => {
+    safeHandleRawWithRole('message:getTemplates', ROLES.STAFF, () => {
         return svc().getTemplates();
     });
 
-    safeHandleRaw('message:saveTemplate', (_event, template: Parameters<MessageService['saveTemplate']>[0]) => {
+    safeHandleRawWithRole('message:saveTemplate', ROLES.STAFF, (_event, template: Parameters<MessageService['saveTemplate']>[0]) => {
         return svc().saveTemplate(template);
     });
 
-    safeHandleRaw('message:sendSms', (_event, options: Parameters<MessageService['sendSms']>[0]) => {
+    safeHandleRawWithRole('message:sendSms', ROLES.STAFF, (_event, options: Parameters<MessageService['sendSms']>[0]) => {
         return svc().sendSms(options);
     });
 
-    safeHandleRaw('message:sendEmail', async (_event, options: { to: string; subject: string; body: string; recipientId?: number; recipientType?: string; userId: number }) => {
+    safeHandleRawWithRole('message:sendEmail', ROLES.STAFF, async (event, options: { to: string; subject: string; body: string; recipientId?: number; recipientType?: string; userId?: number }) => {
+        const actor = resolveActorId(event, options.userId);
+        if (!actor.success) {
+            return actor;
+        }
         const service = container.resolve('NotificationService');
         const recipientType = (options.recipientType ?? 'GUARDIAN') as 'STUDENT' | 'STAFF' | 'GUARDIAN';
         return await service.send({
@@ -27,10 +31,10 @@ export function registerMessageHandlers(): void {
             to: options.to,
             subject: options.subject,
             message: options.body
-        }, options.userId);
+        }, actor.actorId);
     });
 
-    safeHandleRaw('message:getLogs', (_event, limit = 50) => {
+    safeHandleRawWithRole('message:getLogs', ROLES.STAFF, (_event, limit = 50) => {
         return svc().getLogs(limit);
     });
 }

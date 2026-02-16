@@ -1,6 +1,6 @@
 import { getDatabase } from '../../database'
 import { PeriodLockingService } from '../../services/finance/PeriodLockingService'
-import { safeHandleRaw, safeHandleRawWithRole, ROLES } from '../ipc-result'
+import { safeHandleRaw, safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
 
 export function registerPeriodLockingHandlers(): void {
     const service = new PeriodLockingService(getDatabase())
@@ -17,15 +17,27 @@ export function registerPeriodLockingHandlers(): void {
         return service.isTransactionAllowed(transactionDate)
     })
 
-    safeHandleRawWithRole('period:lock', ROLES.FINANCE, (_event, periodId: number, userId: number) => {
-        return service.lockPeriod(periodId, userId)
+    safeHandleRawWithRole('period:lock', ROLES.FINANCE, (event, periodId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+        return service.lockPeriod(periodId, actor.actorId)
     })
 
-    safeHandleRawWithRole('period:unlock', ROLES.MANAGEMENT, (_event, periodId: number, userId: number) => {
-        return service.unlockPeriod(periodId, userId)
+    safeHandleRawWithRole('period:unlock', ROLES.MANAGEMENT, (event, periodId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+        return service.unlockPeriod(periodId, actor.actorId)
     })
 
-    safeHandleRawWithRole('period:close', ROLES.MANAGEMENT, (_event, periodId: number, userId: number) => {
-        return service.closePeriod(periodId, userId)
+    safeHandleRawWithRole('period:close', ROLES.MANAGEMENT, (event, periodId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+        return service.closePeriod(periodId, actor.actorId)
     })
 }

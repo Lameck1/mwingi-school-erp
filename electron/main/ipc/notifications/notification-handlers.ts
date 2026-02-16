@@ -1,5 +1,5 @@
 import { container } from '../../services/base/ServiceContainer'
-import { safeHandleRaw } from '../ipc-result'
+import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
 
 import type { NotificationRequest, MessageTemplate } from '../../services/notifications/NotificationService'
 
@@ -7,22 +7,24 @@ const getService = () => container.resolve('NotificationService')
 
 export function registerNotificationHandlers(): void {
     // Config
-    safeHandleRaw('notifications:reloadConfig', () => {
+    safeHandleRawWithRole('notifications:reloadConfig', ROLES.ADMIN_ONLY, () => {
         getService().reloadConfig()
         return true
     })
 
     // Sending
-    safeHandleRaw('notifications:send', (
-        _event,
+    safeHandleRawWithRole('notifications:send', ROLES.STAFF, (
+        event,
         request: NotificationRequest,
-        userId: number
+        legacyUserId?: number
     ) => {
-        return getService().send(request, userId)
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
+        return getService().send(request, actor.actorId)
     })
 
-    safeHandleRaw('notifications:sendBulkFeeReminders', (
-        _event,
+    safeHandleRawWithRole('notifications:sendBulkFeeReminders', ROLES.STAFF, (
+        event,
         templateId: number,
         defaulters: Array<{
             student_id: number;
@@ -33,41 +35,45 @@ export function registerNotificationHandlers(): void {
             class_name: string;
             balance: number;
         }>,
-        userId: number
+        legacyUserId?: number
     ) => {
-        return getService().sendBulkFeeReminders(templateId, defaulters, userId)
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
+        return getService().sendBulkFeeReminders(templateId, defaulters, actor.actorId)
     })
 
     // Templates
-    safeHandleRaw('notifications:getTemplates', () => {
+    safeHandleRawWithRole('notifications:getTemplates', ROLES.STAFF, () => {
         return getService().getTemplates()
     })
 
-    safeHandleRaw('notifications:getTemplate', (_event, id: number) => {
+    safeHandleRawWithRole('notifications:getTemplate', ROLES.STAFF, (_event, id: number) => {
         return getService().getTemplate(id)
     })
 
-    safeHandleRaw('notifications:createTemplate', (
-        _event,
+    safeHandleRawWithRole('notifications:createTemplate', ROLES.STAFF, (
+        event,
         template: Omit<MessageTemplate, 'id' | 'is_active' | 'variables'>,
-        userId: number
+        legacyUserId?: number
     ) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
         return getService().createTemplate({
             name: template.template_name,
             type: template.template_type,
             category: template.category,
             subject: template.subject,
             body: template.body,
-            userId
+            userId: actor.actorId
         })
     })
 
-    safeHandleRaw('notifications:getDefaultTemplates', () => {
+    safeHandleRawWithRole('notifications:getDefaultTemplates', ROLES.STAFF, () => {
         return getService().getDefaultTemplates()
     })
 
     // History
-    safeHandleRaw('notifications:getHistory', (_event, filters?: {
+    safeHandleRawWithRole('notifications:getHistory', ROLES.STAFF, (_event, filters?: {
         recipientType?: string;
         recipientId?: number;
         channel?: string;

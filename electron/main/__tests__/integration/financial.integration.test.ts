@@ -525,7 +525,7 @@ describe('Financial Integration', () => {
   // ── 4. Student credit balance tracking ────────────────────────
 
   describe('Credit balance tracking', () => {
-    it('payment updates student credit_balance column', async () => {
+    it('payment only updates student credit_balance with unapplied overpayment', async () => {
       await paymentService.recordPaymentDualSystem(
         {
           student_id: 1,
@@ -539,7 +539,13 @@ describe('Financial Integration', () => {
       const student = testDb
         .prepare('SELECT credit_balance FROM student WHERE id = 1')
         .get() as { credit_balance: number }
-      expect(student.credit_balance).toBe(25000)
+      expect(student.credit_balance).toBe(0)
+
+      const invoice = testDb
+        .prepare('SELECT amount_paid, status FROM fee_invoice WHERE id = 1')
+        .get() as { amount_paid: number; status: string }
+      expect(invoice.amount_paid).toBe(25000)
+      expect(invoice.status).toBe('PARTIAL')
     })
 
     it('credit service reports correct balance from transactions', async () => {

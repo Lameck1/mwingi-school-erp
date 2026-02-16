@@ -1,6 +1,6 @@
 import { reportScheduler, type ScheduledReport } from '../../services/reports/ReportScheduler'
 import { validateId } from '../../utils/validation'
-import { safeHandleRaw } from '../ipc-result'
+import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
 
 // Initialize scheduler
 reportScheduler.initialize()
@@ -59,49 +59,53 @@ export function registerReportSchedulerHandlers(): void {
         return errors
     }
 
-    safeHandleRaw('scheduler:getAll', () => {
+    safeHandleRawWithRole('scheduler:getAll', ROLES.STAFF, () => {
         return reportScheduler.getScheduledReports()
     })
 
-    safeHandleRaw('scheduler:create', (
-        _event,
+    safeHandleRawWithRole('scheduler:create', ROLES.STAFF, (
+        event,
         data: Omit<ScheduledReport, 'id' | 'last_run_at' | 'next_run_at' | 'created_at'>,
-        userId: number
+        legacyUserId?: number
     ) => {
-        const userValidation = validateId(userId, 'User ID')
-        if (!userValidation.success) {
-            return { success: false, errors: [userValidation.error || 'Invalid user ID'] }
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, errors: [actor.error] }
         }
         const shapeErrors = validateScheduleShape(data, true)
         if (shapeErrors.length > 0) {
             return { success: false, errors: shapeErrors }
         }
 
-        return reportScheduler.createSchedule(data, userId)
+        return reportScheduler.createSchedule(data, actor.actorId)
     })
 
-    safeHandleRaw('scheduler:update', (
-        _event,
+    safeHandleRawWithRole('scheduler:update', ROLES.STAFF, (
+        event,
         id: number,
         data: Partial<ScheduledReport>,
-        userId: number
+        legacyUserId?: number
     ) => {
         const idValidation = validateId(id, 'Schedule ID')
-        const userValidation = validateId(userId, 'User ID')
+        const actor = resolveActorId(event, legacyUserId)
         if (!idValidation.success) {
             return { success: false, errors: [idValidation.error || 'Invalid schedule ID'] }
         }
-        if (!userValidation.success) {
-            return { success: false, errors: [userValidation.error || 'Invalid user ID'] }
+        if (!actor.success) {
+            return { success: false, errors: [actor.error] }
         }
         const shapeErrors = validateScheduleShape(data, false)
         if (shapeErrors.length > 0) {
             return { success: false, errors: shapeErrors }
         }
-        return reportScheduler.updateSchedule(idValidation.data!, data, userValidation.data!)
+        return reportScheduler.updateSchedule(idValidation.data!, data, actor.actorId)
     })
 
-    safeHandleRaw('scheduler:delete', (_event, id: number, userId: number) => {
-        return reportScheduler.deleteSchedule(id, userId)
+    safeHandleRawWithRole('scheduler:delete', ROLES.STAFF, (event, id: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+        return reportScheduler.deleteSchedule(id, actor.actorId)
     })
 }

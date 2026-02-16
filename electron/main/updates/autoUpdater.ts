@@ -11,6 +11,24 @@ autoUpdater.logger = log
 // log.transports.file.level = 'info' // Commented out to avoid type error if log types mismatch
 
 const UPDATE_STATUS_CHANNEL = 'update-status'
+let updateIpcRegistered = false
+
+export function registerDisabledUpdateHandlers(reason: string = 'Auto-update is only available in packaged builds'): void {
+    if (updateIpcRegistered) {
+        return
+    }
+    updateIpcRegistered = true
+
+    safeHandleRaw('check-for-updates', () => ({ success: false, error: reason }))
+    safeHandleRaw('download-update', () => ({ success: false, error: reason }))
+    safeHandleRaw('install-update', () => ({ success: false, error: reason }))
+    safeHandleRaw('get-update-status', () => ({
+        isAvailable: false,
+        downloadProgress: 0,
+        status: 'disabled',
+        reason
+    }))
+}
 
 export class AutoUpdateManager {
     private readonly mainWindow: BrowserWindow
@@ -94,6 +112,10 @@ export class AutoUpdateManager {
     }
 
     private setupIPC(): void {
+        if (updateIpcRegistered) {
+            return
+        }
+        updateIpcRegistered = true
         safeHandleRaw('check-for-updates', () => this.checkForUpdates(false))
         safeHandleRaw('download-update', () => this.downloadUpdate())
         safeHandleRaw('install-update', () => this.installUpdate())

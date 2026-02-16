@@ -24,7 +24,7 @@ import { createSettingsAPI } from './api/settings'
 import { createStaffAPI } from './api/staff'
 import { createStudentAPI } from './api/students'
 import { createSystemAPI } from './api/system'
-import { setAPIFactories, createRoleAwareAPI } from './roleFilter'
+import { setAPIFactories, createRuntimeRoleAwareAPI, getCurrentRole, setCurrentRole } from './roleFilter'
 
 // Set API factories for role filter
 setAPIFactories({
@@ -41,12 +41,46 @@ setAPIFactories({
   createMenuEventAPI
 })
 
-// Expose the full API surface unconditionally.
-// Security enforcement happens server-side via safeHandleRawWithRole in the
-// main process IPC handlers (see ipc-result.ts). The preload layer is NOT a
-// security boundary — contextBridge freezes the object synchronously, making
-// any async role-based filtering unreliable (the previous Object.assign race).
-const namespacedAPI = createRoleAwareAPI('ADMIN')
+const runtimeRoleAPI = createRuntimeRoleAwareAPI(getCurrentRole)
+
+const authAPI = {
+  ...runtimeRoleAPI.auth,
+  login: async (username: string, password: string) => {
+    const result = await runtimeRoleAPI.auth.login(username, password) as { success?: boolean; user?: { role?: string } }
+    if (result.success && result.user?.role) {
+      setCurrentRole(result.user.role)
+    }
+    return result
+  },
+  getSession: async () => {
+    const session = await runtimeRoleAPI.auth.getSession() as { user?: { role?: string } } | null
+    setCurrentRole(session?.user?.role)
+    return session
+  },
+  setSession: async (session: { user?: { role?: string } }) => {
+    const result = await runtimeRoleAPI.auth.setSession(session) as { success?: boolean }
+    if (result.success !== false) {
+      setCurrentRole(session.user?.role)
+    }
+    return result
+  },
+  clearSession: async () => {
+    const result = await runtimeRoleAPI.auth.clearSession() as { success?: boolean }
+    if (result.success !== false) {
+      setCurrentRole('AUDITOR')
+    }
+    return result
+  }
+}
+
+// Hydrate runtime role as soon as preload starts. If it fails we keep
+// least-privilege default ('AUDITOR').
+void authAPI.getSession().catch(() => {})
+
+const namespacedAPI = {
+  ...runtimeRoleAPI,
+  auth: authAPI
+}
 
 // Compatibility bridge:
 // renderer code relies on both flat and namespaced API shapes.

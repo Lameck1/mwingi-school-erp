@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 type IpcHandler = (event: unknown, ...args: unknown[]) => Promise<unknown>
 const handlerMap = new Map<string, IpcHandler>()
 
+let sessionUserId = 7
+let sessionRole = 'TEACHER'
+
 const hireServiceMock = {
   getClients: vi.fn(() => []),
   getClientById: vi.fn(() => null),
@@ -22,6 +25,26 @@ const hireServiceMock = {
   getHireStats: vi.fn(() => ({ totalBookings: 0, totalIncome: 0, pendingAmount: 0, thisMonth: 0 })),
 }
 
+vi.mock('keytar', () => ({
+  default: {
+    getPassword: vi.fn(async () => JSON.stringify({
+      user: {
+        id: sessionUserId,
+        username: 'session-user',
+        role: sessionRole,
+        full_name: 'Session User',
+        email: null,
+        is_active: 1,
+        last_login: null,
+        created_at: '2026-01-01'
+      },
+      lastActivity: Date.now()
+    })),
+    setPassword: vi.fn().mockResolvedValue(null),
+    deletePassword: vi.fn().mockResolvedValue(true),
+  }
+}))
+
 vi.mock('../../../electron-env', () => ({
   ipcMain: {
     handle: vi.fn((channel: string, handler: IpcHandler) => handlerMap.set(channel, handler)),
@@ -40,6 +63,8 @@ import { registerHireHandlers } from '../hire-handlers'
 describe('hire handlers', () => {
   beforeEach(() => {
     handlerMap.clear()
+    sessionUserId = 7
+    sessionRole = 'TEACHER'
     hireServiceMock.createBooking.mockClear()
     hireServiceMock.updateBookingStatus.mockClear()
     registerHireHandlers()
@@ -106,5 +131,19 @@ describe('hire handlers', () => {
     expect(result.success).toBe(false)
     expect(result.error).toContain('Invalid booking status')
     expect(hireServiceMock.updateBookingStatus).not.toHaveBeenCalled()
+  })
+
+  it('hire:createBooking rejects renderer actor mismatch', async () => {
+    const handler = handlerMap.get('hire:createBooking')!
+    const result = await handler({}, {
+      asset_id: 1,
+      client_id: 2,
+      hire_date: '2026-02-10',
+      total_amount: 5000
+    }, 3) as { success: boolean; error?: string }
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('renderer user mismatch')
+    expect(hireServiceMock.createBooking).not.toHaveBeenCalled()
   })
 })

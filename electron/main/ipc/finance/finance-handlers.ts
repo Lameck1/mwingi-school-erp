@@ -5,8 +5,14 @@ import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 import { container } from '../../services/base/ServiceContainer'
 import { CashFlowService } from '../../services/finance/CashFlowService'
+import {
+    buildFeeInvoiceAmountSql,
+    buildFeeInvoiceOutstandingBalanceSql,
+    buildFeeInvoiceOutstandingStatusPredicate
+} from '../../utils/feeInvoiceSql'
+import { OUTSTANDING_INVOICE_STATUSES } from '../../utils/financeTransactionTypes'
 import { validateAmount, validateDate, validateId, sanitizeString, validatePastOrTodayDate } from '../../utils/validation'
-import { safeHandleRaw, safeHandleRawWithRole, ROLES } from '../ipc-result'
+import { safeHandleRaw, safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
 
 import type { PaymentData, PaymentResult, TransactionData, InvoiceData, InvoiceItem, FeeStructureItemData, FeeInvoiceDB, FeeInvoiceWithDetails, FeeStructureWithDetails } from './types'
 import type { ScholarshipData, AllocationData } from '../../services/finance/ScholarshipService'
@@ -58,7 +64,13 @@ const registerPaymentRecordHandler = (context: FinanceContext): void => {
         `).get(idempotencyKey) as { id: number; transaction_ref: string; receipt_number: string | null } | undefined
     }
 
-    safeHandleRawWithRole('payment:record', ROLES.FINANCE, (_event, data: PaymentData, userId: number): PaymentResult | { success: false, error: string } => {
+    safeHandleRawWithRole('payment:record', ROLES.FINANCE, (event, data: PaymentData, legacyUserId?: number): PaymentResult | { success: false, error: string } => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+        const actorId = actor.actorId
+
         const amountValidation = validateAmount(data.amount)
         if (!amountValidation.success) {
             return { success: false, error: amountValidation.error! }
@@ -99,13 +111,13 @@ const registerPaymentRecordHandler = (context: FinanceContext): void => {
                     payment_reference: sanitizeString(data.payment_reference),
                     idempotency_key: idempotencyKey,
                     description: sanitizeString(data.description) || 'Tuition Fee Payment',
-                    recorded_by_user_id: userId,
+                    recorded_by_user_id: actorId,
                     invoice_id: data.invoice_id,
                     term_id: data.term_id || 0,
                     amount_in_words: data.amount_in_words
                 })
 
-                if (paymentResult.success) {
+                if (paymentResult?.success) {
                     return {
                         success: true,
                         message: paymentResult.message || 'Payment recorded',
@@ -114,7 +126,10 @@ const registerPaymentRecordHandler = (context: FinanceContext): void => {
                     }
                 }
 
-                return { success: false, error: paymentResult.error || paymentResult.message || 'Payment failed' }
+                return {
+                    success: false,
+                    error: paymentResult?.error || paymentResult?.message || 'Payment failed'
+                }
             })
 
             return executePaymentRecord()
@@ -158,8 +173,17 @@ const registerPaymentQueryHandlers = (context: FinanceContext): void => {
 
 const registerPayWithCreditHandler = (context: FinanceContext): void => {
     const { db, getOrCreateCategoryId } = context
+    const invoiceAmountSql = buildFeeInvoiceAmountSql(db, 'fi')
+    const invoiceAmountSqlForUpdate = buildFeeInvoiceAmountSql(db, 'fee_invoice')
+    const outstandingBalanceSql = buildFeeInvoiceOutstandingBalanceSql(db, 'fi')
 
-    safeHandleRawWithRole('payment:payWithCredit', ROLES.FINANCE, (_event, data: { studentId: number, invoiceId: number, amount: number }, userId: number) => {
+    safeHandleRawWithRole('payment:payWithCredit', ROLES.FINANCE, (event, data: { studentId: number, invoiceId: number, amount: number }, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+        const actorId = actor.actorId
+
         return db.transaction(() => {
             if (!data.studentId || !data.invoiceId || !Number.isFinite(data.amount) || data.amount <= 0) {
                 return { success: false, error: 'Invalid payment payload' }
@@ -171,21 +195,34 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
             }
 
             const invoice = db.prepare(`
-                SELECT id, student_id, total_amount, amount_paid, status
-                FROM fee_invoice
-                WHERE id = ?
-            `).get(data.invoiceId) as { id: number, student_id: number, total_amount: number, amount_paid: number, status: string } | undefined
+                SELECT
+                    fi.id,
+                    fi.student_id,
+                    ${invoiceAmountSql} as invoice_amount,
+                    COALESCE(fi.amount_paid, 0) as amount_paid,
+                    COALESCE(fi.status, 'PENDING') as status,
+                    ${outstandingBalanceSql} as outstanding_balance
+                FROM fee_invoice fi
+                WHERE fi.id = ?
+            `).get(data.invoiceId) as {
+                id: number
+                student_id: number
+                invoice_amount: number
+                amount_paid: number
+                status: string
+                outstanding_balance: number
+            } | undefined
             if (!invoice) {
                 return { success: false, error: 'Invoice not found' }
             }
             if (invoice.student_id !== data.studentId) {
                 return { success: false, error: 'Invoice does not belong to selected student' }
             }
-            if (invoice.status === 'PAID' || invoice.status === 'CANCELLED') {
+            if (!OUTSTANDING_INVOICE_STATUSES.includes(invoice.status.toUpperCase() as (typeof OUTSTANDING_INVOICE_STATUSES)[number])) {
                 return { success: false, error: `Invoice cannot accept payments in ${invoice.status} state` }
             }
 
-            const availableBalance = Math.max(0, invoice.total_amount - invoice.amount_paid)
+            const availableBalance = Math.max(0, invoice.outstanding_balance || 0)
             if (data.amount > availableBalance) {
                 return { success: false, error: 'Payment amount exceeds invoice balance' }
             }
@@ -217,7 +254,7 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
                 data.studentId,
                 data.invoiceId,
                 amountCents,
-                userId,
+                actorId,
                 getTodayDate()
             ) as { id: number, transaction_ref: string } | undefined
 
@@ -243,7 +280,7 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
                 categoryId,
                 amountCents,
                 data.studentId,
-                userId,
+                actorId,
                 data.invoiceId
             )
 
@@ -263,12 +300,16 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
                 amountCents,
                 'CASH',
                 'CREDIT_BALANCE',
-                userId
+                actorId
             )
 
             db.prepare(`UPDATE fee_invoice SET amount_paid = amount_paid + ?,
-                status = CASE WHEN amount_paid + ? >= total_amount THEN 'PAID' ELSE 'PARTIAL' END
-                WHERE id = ?`).run(amountCents, amountCents, data.invoiceId)
+                status = CASE
+                    WHEN COALESCE(amount_paid, 0) + ? >= (${invoiceAmountSqlForUpdate}) THEN 'PAID'
+                    WHEN COALESCE(amount_paid, 0) + ? <= 0 THEN 'PENDING'
+                    ELSE 'PARTIAL'
+                END
+                WHERE id = ?`).run(amountCents, amountCents, amountCents, data.invoiceId)
 
             db.prepare('UPDATE student SET credit_balance = credit_balance - ? WHERE id = ?').run(amountCents, data.studentId)
 
@@ -294,14 +335,14 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
                 'CASH',
                 'CREDIT_BALANCE',
                 transactionDate,
-                userId,
+                actorId,
                 transactionId
             )
             if (!journalResult.success) {
                 throw new Error(journalResult.error || 'Failed to create journal entry for credit payment')
             }
 
-            logAudit(userId, 'CREATE', 'ledger_transaction', transactionId, null, {
+            logAudit(actorId, 'CREATE', 'ledger_transaction', transactionId, null, {
                 action: 'PAY_WITH_CREDIT',
                 amount: amountCents,
                 invoiceId: data.invoiceId
@@ -316,27 +357,30 @@ const registerPaymentVoidHandler = (context: FinanceContext): void => {
     const { paymentService } = context
 
     safeHandleRawWithRole('payment:void', ROLES.FINANCE, async (
-        _event,
+        event,
         transactionId: number,
         voidReason: string,
-        userId: number,
+        legacyUserId?: number,
         recoveryMethod?: string
     ) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+        const actorId = actor.actorId
+
         if (!transactionId || transactionId <= 0) {
             return { success: false, error: 'Invalid transaction ID' }
         }
         if (!voidReason.trim()) {
             return { success: false, error: 'Void reason is required' }
         }
-        if (!userId || userId <= 0) {
-            return { success: false, error: 'Invalid user session' }
-        }
 
         try {
             return await paymentService.voidPayment({
                 transaction_id: transactionId,
                 void_reason: voidReason.trim(),
-                voided_by: userId,
+                voided_by: actorId,
                 recovery_method: recoveryMethod
             })
         } catch (error) {
@@ -472,6 +516,9 @@ function createInvoice(
 
 const registerInvoiceHandlers = (context: FinanceContext): void => {
     const { db } = context
+    const invoiceAmountSql = buildFeeInvoiceAmountSql(db, 'fi')
+    const outstandingBalanceSql = buildFeeInvoiceOutstandingBalanceSql(db, 'fi')
+    const outstandingStatusPredicate = buildFeeInvoiceOutstandingStatusPredicate(db, 'fi')
 
     safeHandleRawWithRole('invoice:getItems', ROLES.STAFF, (_event, invoiceId: number) => {
         const items = db.prepare(`
@@ -487,7 +534,12 @@ const registerInvoiceHandlers = (context: FinanceContext): void => {
         }))
     })
 
-    safeHandleRawWithRole('invoice:create', ROLES.FINANCE, (_event, data: InvoiceData, items: InvoiceItem[], userId: number) => {
+    safeHandleRawWithRole('invoice:create', ROLES.FINANCE, (event, data: InvoiceData, items: InvoiceItem[], legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+
         const studentValidation = validateId(data.student_id, 'Student')
         if (!studentValidation.success) {
             return { success: false, error: studentValidation.error! }
@@ -514,7 +566,7 @@ const registerInvoiceHandlers = (context: FinanceContext): void => {
             return { success: false, error: 'All invoice items must have amounts greater than zero' }
         }
 
-        return createInvoice(db, data, items, userId)
+        return createInvoice(db, data, items, actor.actorId)
     })
 
     safeHandleRawWithRole('invoice:getByStudent', ROLES.STAFF, (_event, studentId: number) => {
@@ -525,18 +577,29 @@ const registerInvoiceHandlers = (context: FinanceContext): void => {
         const invoices = db.prepare(`
             SELECT fi.*,
                    s.first_name || ' ' || s.last_name as student_name,
-                   t.term_name
+                   t.term_name,
+                   ${invoiceAmountSql} as normalized_total_amount,
+                   COALESCE(fi.amount_paid, 0) as normalized_amount_paid,
+                   CASE
+                     WHEN ${outstandingStatusPredicate}
+                       THEN MAX(${outstandingBalanceSql}, 0)
+                     ELSE 0
+                   END as normalized_balance
             FROM fee_invoice fi
             JOIN student s ON fi.student_id = s.id
             LEFT JOIN term t ON fi.term_id = t.id
             ORDER BY fi.invoice_date DESC
-        `).all() as FeeInvoiceWithDetails[]
+        `).all() as Array<FeeInvoiceWithDetails & {
+            normalized_total_amount: number
+            normalized_amount_paid: number
+            normalized_balance: number
+        }>
 
         return invoices.map(invoice => ({
             ...invoice,
-            total_amount: invoice.total_amount,
-            amount_paid: invoice.amount_paid,
-            balance: (invoice.total_amount - invoice.amount_paid)
+            total_amount: invoice.normalized_total_amount,
+            amount_paid: invoice.normalized_amount_paid,
+            balance: invoice.normalized_balance
         }))
     })
 }
@@ -548,7 +611,12 @@ const registerFeeStructureHandlers = (context: FinanceContext): void => {
         return db.prepare('SELECT * FROM fee_category WHERE is_active = 1').all()
     })
 
-    safeHandleRawWithRole('fee:createCategory', ROLES.FINANCE, (_event, name: string, description: string, userId?: number) => {
+    safeHandleRawWithRole('fee:createCategory', ROLES.FINANCE, (event, name: string, description: string, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+
         const trimmedName = name.trim()
         if (!trimmedName) {
             return { success: false, error: 'Category name is required' }
@@ -562,9 +630,7 @@ const registerFeeStructureHandlers = (context: FinanceContext): void => {
         const statement = db.prepare('INSERT INTO fee_category (category_name, description) VALUES (?, ?)')
         const result = statement.run(trimmedName, description.trim() || '')
 
-        if (userId) {
-            logAudit(userId, 'CREATE', 'fee_category', result.lastInsertRowid as number, null, { name: trimmedName, description })
-        }
+        logAudit(actor.actorId, 'CREATE', 'fee_category', result.lastInsertRowid as number, null, { name: trimmedName, description })
 
         return { success: true, id: result.lastInsertRowid }
     })
@@ -579,7 +645,12 @@ const registerFeeStructureHandlers = (context: FinanceContext): void => {
         `).all(academicYearId, termId) as FeeStructureWithDetails[]
     })
 
-    safeHandleRawWithRole('fee:saveStructure', ROLES.FINANCE, (_event, data: FeeStructureItemData[], academicYearId: number, termId: number, userId?: number) => {
+    safeHandleRawWithRole('fee:saveStructure', ROLES.FINANCE, (event, data: FeeStructureItemData[], academicYearId: number, termId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+
         if (!Array.isArray(data) || data.length === 0) {
             return { success: false, error: 'At least one fee structure item is required' }
         }
@@ -601,32 +672,42 @@ const registerFeeStructureHandlers = (context: FinanceContext): void => {
                 insertStatement.run(academicYearId, termId, item.stream_id, item.student_type, item.fee_category_id, item.amount)
             }
 
-            if (userId) {
-                logAudit(userId, 'UPDATE', 'fee_structure', 0, null, {
-                    academicYearId, termId, itemCount: items.length
-                })
-            }
+            logAudit(actor.actorId, 'UPDATE', 'fee_structure', 0, null, {
+                academicYearId, termId, itemCount: items.length
+            })
         })
 
         execute(data)
         return { success: true }
     })
 
-    safeHandleRawWithRole('invoice:generateBatch', ROLES.FINANCE, (_event, academicYearId: number, termId: number, userId: number) => {
-        return generateBatchInvoices(context, academicYearId, termId, userId)
+    safeHandleRawWithRole('invoice:generateBatch', ROLES.FINANCE, (event, academicYearId: number, termId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+        return generateBatchInvoices(context, academicYearId, termId, actor.actorId)
     })
 
-    safeHandleRawWithRole('invoice:generateForStudent', ROLES.FINANCE, (_event, studentId: number, academicYearId: number, termId: number, userId: number) => {
-        return generateSingleStudentInvoice(context, studentId, academicYearId, termId, userId)
+    safeHandleRawWithRole('invoice:generateForStudent', ROLES.FINANCE, (event, studentId: number, academicYearId: number, termId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+        return generateSingleStudentInvoice(context, studentId, academicYearId, termId, actor.actorId)
     })
 }
 
 const registerCreditHandlers = (): void => {
     const creditService = container.resolve('CreditAutoApplicationService')
 
-    safeHandleRawWithRole('finance:allocateCredits', ROLES.FINANCE, async (_event, studentId: number, userId: number) => {
+    safeHandleRawWithRole('finance:allocateCredits', ROLES.FINANCE, async (event, studentId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
         try {
-            return await creditService.allocateCreditsToInvoices(studentId, userId)
+            return await creditService.allocateCreditsToInvoices(studentId, actor.actorId)
         } catch (error) {
             return { success: false, error: getErrorMessage(error, UNKNOWN_ERROR_MESSAGE) }
         }
@@ -648,9 +729,13 @@ const registerCreditHandlers = (): void => {
         }
     })
 
-    safeHandleRawWithRole('finance:addCredit', ROLES.FINANCE, async (_event, studentId: number, amount: number, notes: string, userId: number) => {
+    safeHandleRawWithRole('finance:addCredit', ROLES.FINANCE, async (event, studentId: number, amount: number, notes: string, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
         try {
-            return await creditService.addCreditToStudent(studentId, amount, notes, userId)
+            return await creditService.addCreditToStudent(studentId, amount, notes, actor.actorId)
         } catch (error) {
             return { success: false, error: getErrorMessage(error, UNKNOWN_ERROR_MESSAGE) }
         }
@@ -688,14 +773,18 @@ const registerProrationHandlers = (): void => {
     })
 
     safeHandleRawWithRole('finance:generateProRatedInvoice', ROLES.FINANCE, async (
-        _event,
+        event,
         studentId: number,
         templateInvoiceId: number,
         enrollmentDate: string,
-        userId: number
+        legacyUserId?: number
     ) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
         try {
-            return await prorationService.generateProRatedInvoice(studentId, templateInvoiceId, enrollmentDate, userId)
+            return await prorationService.generateProRatedInvoice(studentId, templateInvoiceId, enrollmentDate, actor.actorId)
         } catch (error) {
             return { success: false, error: getErrorMessage(error, UNKNOWN_ERROR_MESSAGE) }
         }
@@ -713,17 +802,25 @@ const registerProrationHandlers = (): void => {
 const registerScholarshipHandlers = (): void => {
     const scholarshipService = container.resolve('ScholarshipService')
 
-    safeHandleRawWithRole('finance:createScholarship', ROLES.FINANCE, async (_event, data: ScholarshipData, userId: number) => {
+    safeHandleRawWithRole('finance:createScholarship', ROLES.FINANCE, async (event, data: ScholarshipData, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
         try {
-            return await scholarshipService.createScholarship(data, userId)
+            return await scholarshipService.createScholarship(data, actor.actorId)
         } catch (error) {
             return { success: false, error: getErrorMessage(error, UNKNOWN_ERROR_MESSAGE) }
         }
     })
 
-    safeHandleRawWithRole('finance:allocateScholarship', ROLES.FINANCE, async (_event, allocationData: AllocationData, userId: number) => {
+    safeHandleRawWithRole('finance:allocateScholarship', ROLES.FINANCE, async (event, allocationData: AllocationData, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
         try {
-            return await scholarshipService.allocateScholarshipToStudent(allocationData, userId)
+            return await scholarshipService.allocateScholarshipToStudent(allocationData, actor.actorId)
         } catch (error) {
             return { success: false, error: getErrorMessage(error, UNKNOWN_ERROR_MESSAGE) }
         }
@@ -762,14 +859,18 @@ const registerScholarshipHandlers = (): void => {
     })
 
     safeHandleRawWithRole('finance:applyScholarshipToInvoice', ROLES.FINANCE, async (
-        _event,
+        event,
         studentScholarshipId: number,
         invoiceId: number,
         amountToApply: number,
-        userId: number
+        legacyUserId?: number
     ) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
         try {
-            return await scholarshipService.applyScholarshipToInvoice(studentScholarshipId, invoiceId, amountToApply, userId)
+            return await scholarshipService.applyScholarshipToInvoice(studentScholarshipId, invoiceId, amountToApply, actor.actorId)
         } catch (error) {
             return { success: false, error: getErrorMessage(error, UNKNOWN_ERROR_MESSAGE) }
         }

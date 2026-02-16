@@ -1,5 +1,5 @@
 import { container } from '../../services/base/ServiceContainer'
-import { safeHandleRaw } from '../ipc-result'
+import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
 
 import type { InventoryService } from '../../services/inventory/InventoryService'
 
@@ -17,39 +17,45 @@ interface InventoryMovementInput {
 const svc = () => container.resolve('InventoryService')
 
 export function registerInventoryHandlers() {
-    safeHandleRaw('inventory:getAll', (_event, filters?: InventoryFilters) => {
+    safeHandleRawWithRole('inventory:getAll', ROLES.STAFF, (_event, filters?: InventoryFilters) => {
         return svc().findAll(filters)
     })
 
-    safeHandleRaw('inventory:getItem', (_event, id: number) => {
+    safeHandleRawWithRole('inventory:getItem', ROLES.STAFF, (_event, id: number) => {
         return svc().findById(id)
     })
 
-    safeHandleRaw('inventory:createItem', (_event, data: InventoryCreateInput, userId: number) => {
-        return svc().create(data, userId)
+    safeHandleRawWithRole('inventory:createItem', ROLES.STAFF, (event, data: InventoryCreateInput, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
+        return svc().create(data, actor.actorId)
     })
 
-    safeHandleRaw('inventory:updateItem', (_event, id: number, data: InventoryUpdateInput, userId: number) => {
-        return svc().update(id, data, userId)
+    safeHandleRawWithRole('inventory:updateItem', ROLES.STAFF, (event, id: number, data: InventoryUpdateInput, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
+        return svc().update(id, data, actor.actorId)
     })
 
-    safeHandleRaw('inventory:recordMovement', (_event, data: InventoryMovementInput, userId: number) => {
-        return svc().adjustStock(data.item_id, data.quantity, data.movement_type, userId, data.description, data.unit_cost)
+    safeHandleRawWithRole('inventory:recordMovement', ROLES.STAFF, (event, data: InventoryMovementInput, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
+        return svc().adjustStock(data.item_id, data.quantity, data.movement_type, actor.actorId, data.description, data.unit_cost)
     })
 
-    safeHandleRaw('inventory:getHistory', (_event, itemId: number) => {
+    safeHandleRawWithRole('inventory:getHistory', ROLES.STAFF, (_event, itemId: number) => {
         return svc().getHistory(itemId)
     })
 
-    safeHandleRaw('inventory:getLowStock', () => {
+    safeHandleRawWithRole('inventory:getLowStock', ROLES.STAFF, () => {
         return svc().getLowStock()
     })
 
-    safeHandleRaw('inventory:getCategories', () => {
+    safeHandleRawWithRole('inventory:getCategories', ROLES.STAFF, () => {
         return svc().getCategories()
     })
 
-    safeHandleRaw('inventory:getSuppliers', () => {
+    safeHandleRawWithRole('inventory:getSuppliers', ROLES.STAFF, () => {
         return svc().getSuppliers()
     })
 }

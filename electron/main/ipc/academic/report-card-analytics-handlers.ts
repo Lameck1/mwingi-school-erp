@@ -1,5 +1,5 @@
 import { container } from '../../services/base/ServiceContainer'
-import { safeHandleRaw } from '../ipc-result'
+import { ROLES, safeHandleRawWithRole } from '../ipc-result'
 
 const getService = () => container.resolve('ReportCardAnalyticsService')
 
@@ -10,7 +10,7 @@ interface ReportCardAnalyticsPayload {
 }
 
 export function registerReportCardAnalyticsHandlers() {
-  safeHandleRaw('report-card-analytics:getPerformanceSummary', async (_event, payload: ReportCardAnalyticsPayload) => {
+  safeHandleRawWithRole('report-card-analytics:getPerformanceSummary', ROLES.STAFF, async (_event, payload: ReportCardAnalyticsPayload) => {
     try {
       return await getService().getPerformanceSummary(
         payload.exam_id,
@@ -22,7 +22,7 @@ export function registerReportCardAnalyticsHandlers() {
     }
   })
 
-  safeHandleRaw('report-card-analytics:getGradeDistribution', async (_event, payload: ReportCardAnalyticsPayload) => {
+  safeHandleRawWithRole('report-card-analytics:getGradeDistribution', ROLES.STAFF, async (_event, payload: ReportCardAnalyticsPayload) => {
     try {
       return await getService().getGradeDistribution(
         payload.exam_id,
@@ -34,7 +34,7 @@ export function registerReportCardAnalyticsHandlers() {
     }
   })
 
-  safeHandleRaw('report-card-analytics:getSubjectPerformance', async (_event, payload: ReportCardAnalyticsPayload) => {
+  safeHandleRawWithRole('report-card-analytics:getSubjectPerformance', ROLES.STAFF, async (_event, payload: ReportCardAnalyticsPayload) => {
     try {
       return await getService().getSubjectPerformance(
         payload.exam_id,
@@ -46,7 +46,7 @@ export function registerReportCardAnalyticsHandlers() {
     }
   })
 
-  safeHandleRaw('report-card-analytics:getStrugglingStudents', async (_event, payload: ReportCardAnalyticsPayload) => {
+  safeHandleRawWithRole('report-card-analytics:getStrugglingStudents', ROLES.STAFF, async (_event, payload: ReportCardAnalyticsPayload) => {
     try {
       return await getService().getStrugglingStu(
         payload.exam_id,
@@ -59,7 +59,7 @@ export function registerReportCardAnalyticsHandlers() {
     }
   })
 
-  safeHandleRaw('report-card-analytics:getTermComparison', async (_event, payload: ReportCardAnalyticsPayload) => {
+  safeHandleRawWithRole('report-card-analytics:getTermComparison', ROLES.STAFF, async (_event, payload: ReportCardAnalyticsPayload) => {
     try {
       return await getService().getTermComparison(
         payload.exam_id,

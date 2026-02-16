@@ -1,5 +1,5 @@
 import { container } from '../../services/base/ServiceContainer';
-import { safeHandleRaw } from '../ipc-result';
+import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result';
 
 import type { ReconciliationService } from '../../services/accounting/ReconciliationService';
 
@@ -16,15 +16,21 @@ export function registerReconciliationAndBudgetHandlers(): void {
 }
 
 function registerReconciliationHandlers(reconciliationService: ReconciliationService): void {
-  safeHandleRaw(
+  safeHandleRawWithRole(
     'reconciliation:runAll',
-    async (_event, userId: number) => {
-      return await reconciliationService.runAllChecks(userId);
+    ROLES.FINANCE,
+    async (event, legacyUserId?: number) => {
+      const actor = resolveActorId(event, legacyUserId);
+      if (!actor.success) {
+        return { success: false, error: actor.error };
+      }
+      return await reconciliationService.runAllChecks(actor.actorId);
     }
   );
 
-  safeHandleRaw(
+  safeHandleRawWithRole(
     'reconciliation:getHistory',
+    ROLES.STAFF,
     async (_event, limit: number = 30) => {
       return await reconciliationService.getReconciliationHistory(limit);
     }
@@ -33,8 +39,9 @@ function registerReconciliationHandlers(reconciliationService: ReconciliationSer
   /**
    * Get latest reconciliation summary
    */
-  safeHandleRaw(
+  safeHandleRawWithRole(
     'reconciliation:getLatest',
+    ROLES.STAFF,
     async () => {
       return await reconciliationService.getLatestReconciliationSummary();
     }

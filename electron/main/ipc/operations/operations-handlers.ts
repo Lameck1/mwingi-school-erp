@@ -1,5 +1,5 @@
 import { container } from '../../services/base/ServiceContainer'
-import { safeHandleRaw } from '../ipc-result'
+import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
 
 import type { BoardingCostService } from '../../services/operations/BoardingCostService'
 import type { TransportCostService } from '../../services/operations/TransportCostService'
@@ -41,52 +41,62 @@ export const registerOperationsHandlers = () => {
   const transportService = container.resolve('TransportCostService')
 
   // Boarding Handlers
-  safeHandleRaw('operations:boarding:getAllFacilities', () => {
+  safeHandleRawWithRole('operations:boarding:getAllFacilities', ROLES.STAFF, () => {
     return boardingService.getAllFacilities()
   })
 
-  safeHandleRaw('operations:boarding:getActiveFacilities', () => {
+  safeHandleRawWithRole('operations:boarding:getActiveFacilities', ROLES.STAFF, () => {
     return boardingService.getActiveFacilities()
   })
 
-  safeHandleRaw('operations:boarding:recordExpense', (_event, params: BoardingExpenseInput) => {
-    assertPositiveInteger(params.facility_id, 'Boarding facility')
-    assertExpensePayload(params, 'Boarding')
-    return boardingService.recordBoardingExpense(params)
+  safeHandleRawWithRole('operations:boarding:recordExpense', ROLES.FINANCE, (event, params: BoardingExpenseInput) => {
+    const actor = resolveActorId(event, params.recorded_by)
+    if (!actor.success) {
+      return actor
+    }
+    const sanitizedParams = { ...params, recorded_by: actor.actorId }
+    assertPositiveInteger(sanitizedParams.facility_id, 'Boarding facility')
+    assertExpensePayload(sanitizedParams, 'Boarding')
+    return boardingService.recordBoardingExpense(sanitizedParams)
   })
 
-  safeHandleRaw('operations:boarding:getExpenses', (_event, facilityId: number, fiscalYear: number, term?: number) => {
+  safeHandleRawWithRole('operations:boarding:getExpenses', ROLES.STAFF, (_event, facilityId: number, fiscalYear: number, term?: number) => {
     return boardingService.getFacilityExpenses(facilityId, fiscalYear, term)
   })
 
-  safeHandleRaw('operations:boarding:getExpenseSummary', (_event, facilityId: number, fiscalYear: number, term?: number) => {
+  safeHandleRawWithRole('operations:boarding:getExpenseSummary', ROLES.STAFF, (_event, facilityId: number, fiscalYear: number, term?: number) => {
     return boardingService.getExpenseSummaryByType(facilityId, fiscalYear, term)
   })
 
   // Transport Handlers
-  safeHandleRaw('operations:transport:getAllRoutes', () => {
+  safeHandleRawWithRole('operations:transport:getAllRoutes', ROLES.STAFF, () => {
     return transportService.getAllRoutes()
   })
 
-  safeHandleRaw('operations:transport:getActiveRoutes', () => {
+  safeHandleRawWithRole('operations:transport:getActiveRoutes', ROLES.STAFF, () => {
     return transportService.getActiveRoutes()
   })
 
-  safeHandleRaw('operations:transport:createRoute', (_event, params: TransportRouteInput) => {
+  safeHandleRawWithRole('operations:transport:createRoute', ROLES.STAFF, (_event, params: TransportRouteInput) => {
     return transportService.createRoute(params)
   })
 
-  safeHandleRaw('operations:transport:recordExpense', (_event, params: TransportExpenseInput) => {
-    assertPositiveInteger(params.route_id, 'Transport route')
-    assertExpensePayload(params, 'Transport')
-    return transportService.recordTransportExpense(params)
+  safeHandleRawWithRole('operations:transport:recordExpense', ROLES.FINANCE, (event, params: TransportExpenseInput) => {
+    const actor = resolveActorId(event, params.recorded_by)
+    if (!actor.success) {
+      return actor
+    }
+    const sanitizedParams = { ...params, recorded_by: actor.actorId }
+    assertPositiveInteger(sanitizedParams.route_id, 'Transport route')
+    assertExpensePayload(sanitizedParams, 'Transport')
+    return transportService.recordTransportExpense(sanitizedParams)
   })
 
-  safeHandleRaw('operations:transport:getExpenses', (_event, routeId: number, fiscalYear: number, term?: number) => {
+  safeHandleRawWithRole('operations:transport:getExpenses', ROLES.STAFF, (_event, routeId: number, fiscalYear: number, term?: number) => {
     return transportService.getRouteExpenses(routeId, fiscalYear, term)
   })
 
-  safeHandleRaw('operations:transport:getExpenseSummary', (_event, routeId: number, fiscalYear: number, term?: number) => {
+  safeHandleRawWithRole('operations:transport:getExpenseSummary', ROLES.STAFF, (_event, routeId: number, fiscalYear: number, term?: number) => {
     return transportService.getExpenseSummaryByType(routeId, fiscalYear, term)
   })
 }

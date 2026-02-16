@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 type IpcHandler = (event: unknown, ...args: unknown[]) => Promise<unknown>
 const handlerMap = new Map<string, IpcHandler>()
 
+let sessionUserId = 5
+let sessionRole = 'TEACHER'
+
 const { schedulerMock } = vi.hoisted(() => ({
   schedulerMock: {
     initialize: vi.fn(),
@@ -10,6 +13,26 @@ const { schedulerMock } = vi.hoisted(() => ({
     createSchedule: vi.fn(() => ({ success: true, id: 1 })),
     updateSchedule: vi.fn(() => ({ success: true })),
     deleteSchedule: vi.fn(() => ({ success: true })),
+  }
+}))
+
+vi.mock('keytar', () => ({
+  default: {
+    getPassword: vi.fn(async () => JSON.stringify({
+      user: {
+        id: sessionUserId,
+        username: 'session-user',
+        role: sessionRole,
+        full_name: 'Session User',
+        email: null,
+        is_active: 1,
+        last_login: null,
+        created_at: '2026-01-01'
+      },
+      lastActivity: Date.now()
+    })),
+    setPassword: vi.fn().mockResolvedValue(null),
+    deletePassword: vi.fn().mockResolvedValue(true),
   }
 }))
 
@@ -29,6 +52,8 @@ import { registerReportSchedulerHandlers } from '../scheduler-handlers'
 describe('scheduler handlers', () => {
   beforeEach(() => {
     handlerMap.clear()
+    sessionUserId = 5
+    sessionRole = 'TEACHER'
     schedulerMock.createSchedule.mockClear()
     registerReportSchedulerHandlers()
   })
@@ -49,7 +74,7 @@ describe('scheduler handlers', () => {
       created_by_user_id: 1
     }, 0) as { success: boolean; errors?: string[] }
     expect(result.success).toBe(false)
-    expect(result.errors?.[0]).toContain('Invalid User ID')
+    expect(result.errors?.[0]).toContain('Invalid user session')
     expect(schedulerMock.createSchedule).not.toHaveBeenCalled()
   })
 
@@ -124,10 +149,19 @@ describe('scheduler handlers', () => {
 
   it('scheduler:update rejects unsupported TERM_END and YEAR_END schedule types', async () => {
     const handler = handlerMap.get('scheduler:update')!
-    const result = await handler({}, 3, { schedule_type: 'TERM_END' }, 9) as { success: boolean; errors?: string[] }
+    const result = await handler({}, 3, { schedule_type: 'TERM_END' }, 5) as { success: boolean; errors?: string[] }
 
     expect(result.success).toBe(false)
     expect(result.errors?.[0]).toContain('not supported')
     expect(schedulerMock.updateSchedule).not.toHaveBeenCalled()
+  })
+
+  it('scheduler:delete rejects renderer actor mismatch', async () => {
+    const handler = handlerMap.get('scheduler:delete')!
+    const result = await handler({}, 3, 9) as { success: boolean; error?: string }
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('renderer user mismatch')
+    expect(schedulerMock.deleteSchedule).not.toHaveBeenCalled()
   })
 })

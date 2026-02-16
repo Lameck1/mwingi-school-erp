@@ -1,24 +1,39 @@
 import { getDatabase } from '../../database'
 import { container } from '../../services/base/ServiceContainer'
 import { REPORT_EXPENSE_TRANSACTION_TYPES, REPORT_INCOME_TRANSACTION_TYPES, OUTSTANDING_INVOICE_STATUSES, asSqlInList } from '../../utils/financeTransactionTypes'
-import { safeHandleRaw } from '../ipc-result'
+import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
 
 import type { NEMISExportConfig, NEMISStudent } from '../../services/reports/NEMISExportService.types'
 
 interface CountResult { count: number }
 interface TotalResult { total: number }
+const NORMALIZED_INVOICE_AMOUNT_SQL = `
+    COALESCE(
+      NULLIF(fi.total_amount, 0),
+      NULLIF(fi.amount_due, 0),
+      NULLIF(fi.amount, 0),
+      fi.total_amount,
+      fi.amount_due,
+      fi.amount,
+      0
+    )
+`
 function registerStudentAccountReports(db: ReturnType<typeof getDatabase>): void {
-    safeHandleRaw('report:defaulters', (_event, termId?: number) => {
+    safeHandleRawWithRole('report:defaulters', ROLES.STAFF, (_event, termId?: number) => {
         let query = `SELECT s.id, s.admission_number, s.first_name, s.last_name, 
-            s.guardian_phone, st.stream_name, fi.invoice_number, fi.total_amount, fi.amount_paid,
-            (fi.total_amount - fi.amount_paid) as balance, fi.due_date
+            s.guardian_phone, st.stream_name, fi.invoice_number,
+            ${NORMALIZED_INVOICE_AMOUNT_SQL} as total_amount,
+            COALESCE(fi.amount_paid, 0) as amount_paid,
+            (${NORMALIZED_INVOICE_AMOUNT_SQL} - COALESCE(fi.amount_paid, 0)) as balance,
+            fi.due_date
         FROM student s
         JOIN fee_invoice fi ON s.id = fi.student_id
         LEFT JOIN enrollment e ON s.id = e.student_id AND e.id = (
             SELECT MAX(id) FROM enrollment WHERE student_id = s.id
         )
         LEFT JOIN stream st ON e.stream_id = st.id
-        WHERE fi.status != 'PAID' AND fi.status != 'CANCELLED'`
+        WHERE UPPER(COALESCE(fi.status, 'PENDING')) NOT IN ('PAID', 'CANCELLED', 'VOIDED')
+          AND (${NORMALIZED_INVOICE_AMOUNT_SQL} - COALESCE(fi.amount_paid, 0)) > 0`
 
         const params: Array<number | string> = []
         if (termId) {
@@ -32,7 +47,7 @@ function registerStudentAccountReports(db: ReturnType<typeof getDatabase>): void
 }
 
 function registerAttendanceAndCollectionReports(db: ReturnType<typeof getDatabase>): void {
-    safeHandleRaw('report:attendance', (_event, startDate: string, endDate: string, streamId?: number) => {
+    safeHandleRawWithRole('report:attendance', ROLES.STAFF, (_event, startDate: string, endDate: string, streamId?: number) => {
         let query = `
             SELECT 
                 s.id, s.admission_number, s.first_name, s.last_name,
@@ -59,7 +74,7 @@ function registerAttendanceAndCollectionReports(db: ReturnType<typeof getDatabas
         return db.prepare(query).all(...params)
     })
 
-    safeHandleRaw('report:dailyCollection', (_event, date: string) => {
+    safeHandleRawWithRole('report:dailyCollection', ROLES.STAFF, (_event, date: string) => {
         return db.prepare(`
             SELECT 
                 lt.transaction_date as date,
@@ -89,7 +104,7 @@ function registerFinancialSummaryAndDashboardReports(db: ReturnType<typeof getDa
     const expenseTypesSql = asSqlInList(REPORT_EXPENSE_TRANSACTION_TYPES)
     const outstandingStatusesSql = asSqlInList(OUTSTANDING_INVOICE_STATUSES)
 
-    safeHandleRaw('report:financialSummary', (_event, startDate: string, endDate: string) => {
+    safeHandleRawWithRole('report:financialSummary', ROLES.STAFF, (_event, startDate: string, endDate: string) => {
         const income = db.prepare(`
             SELECT SUM(amount) as total FROM ledger_transaction 
             WHERE (transaction_type IN (${incomeTypesSql}))
@@ -118,13 +133,26 @@ function registerFinancialSummaryAndDashboardReports(db: ReturnType<typeof getDa
         }
     })
 
-    safeHandleRaw('report:dashboard', () => {
+    safeHandleRawWithRole('report:dashboard', ROLES.STAFF, () => {
         const totalStudents = db.prepare('SELECT COUNT(*) as count FROM student WHERE is_active = 1').get() as CountResult | undefined
         const totalStaff = db.prepare('SELECT COUNT(*) as count FROM staff WHERE is_active = 1').get() as CountResult | undefined
         const feeCollected = db.prepare(`SELECT COALESCE(SUM(amount), 0) as total FROM ledger_transaction 
       WHERE transaction_type = 'FEE_PAYMENT' AND is_voided = 0`).get() as TotalResult | undefined
-        const outstandingBalance = db.prepare(`SELECT COALESCE(SUM(total_amount - amount_paid), 0) as total 
-      FROM fee_invoice WHERE status IN (${outstandingStatusesSql})`).get() as TotalResult | undefined
+        const outstandingBalance = db.prepare(`
+      SELECT COALESCE(SUM((
+        COALESCE(
+          NULLIF(fi.total_amount, 0),
+          NULLIF(fi.amount_due, 0),
+          NULLIF(fi.amount, 0),
+          fi.total_amount,
+          fi.amount_due,
+          fi.amount,
+          0
+        ) - COALESCE(fi.amount_paid, 0)
+      )), 0) as total
+      FROM fee_invoice fi
+      WHERE UPPER(COALESCE(fi.status, 'PENDING')) IN (${outstandingStatusesSql})
+    `).get() as TotalResult | undefined
 
         return {
             totalStudents: totalStudents?.count || 0,
@@ -139,7 +167,7 @@ function registerCategoryBreakdownReports(db: ReturnType<typeof getDatabase>): v
     const incomeTypesSql = asSqlInList(REPORT_INCOME_TRANSACTION_TYPES)
     const expenseTypesSql = asSqlInList(REPORT_EXPENSE_TRANSACTION_TYPES)
 
-    safeHandleRaw('report:revenueByCategory', (_event, startDate: string, endDate: string) => {
+    safeHandleRawWithRole('report:revenueByCategory', ROLES.STAFF, (_event, startDate: string, endDate: string) => {
         return db.prepare(`
             SELECT 
                 COALESCE(tc.category_name, 'Uncategorized') as name, 
@@ -155,7 +183,7 @@ function registerCategoryBreakdownReports(db: ReturnType<typeof getDatabase>): v
         `).all(startDate, endDate)
     })
 
-    safeHandleRaw('report:expenseByCategory', (_event, startDate: string, endDate: string) => {
+    safeHandleRawWithRole('report:expenseByCategory', ROLES.STAFF, (_event, startDate: string, endDate: string) => {
         return db.prepare(`
             SELECT 
                 COALESCE(tc.category_name, 'Uncategorized') as name, 
@@ -171,7 +199,7 @@ function registerCategoryBreakdownReports(db: ReturnType<typeof getDatabase>): v
         `).all(startDate, endDate)
     })
 
-    safeHandleRaw('report:feeCategoryBreakdown', () => {
+    safeHandleRawWithRole('report:feeCategoryBreakdown', ROLES.STAFF, () => {
         return db.prepare(`
             SELECT 
                 tc.category_name as name, 
@@ -188,7 +216,7 @@ function registerCategoryBreakdownReports(db: ReturnType<typeof getDatabase>): v
 }
 
 function registerOperationsReports(db: ReturnType<typeof getDatabase>): void {
-    safeHandleRaw('report:inventoryValuation', () => {
+    safeHandleRawWithRole('report:inventoryValuation', ROLES.STAFF, () => {
         return db.prepare(`
             SELECT 
                 i.item_code, i.item_name, c.category_name,
@@ -201,7 +229,7 @@ function registerOperationsReports(db: ReturnType<typeof getDatabase>): void {
         `).all()
     })
 
-    safeHandleRaw('report:staffPayroll', (_event, periodId: number) => {
+    safeHandleRawWithRole('report:staffPayroll', ROLES.STAFF, (_event, periodId: number) => {
         const period = db.prepare('SELECT * FROM payroll_period WHERE id = ?').get(periodId)
         if (!period) { return { success: false, error: 'Payroll period not found' } }
 
@@ -227,7 +255,7 @@ function registerOperationsReports(db: ReturnType<typeof getDatabase>): void {
         return { period, payroll, summary }
     })
 
-    safeHandleRaw('report:feeCollection', (_event, startDate: string, endDate: string) => {
+    safeHandleRawWithRole('report:feeCollection', ROLES.STAFF, (_event, startDate: string, endDate: string) => {
         return db.prepare(`
             SELECT 
                 DATE(transaction_date) as payment_date, 
@@ -246,7 +274,7 @@ function registerOperationsReports(db: ReturnType<typeof getDatabase>): void {
 function registerNemisExportHandlers(): void {
     const nemisService = container.resolve('NEMISExportService')
 
-    safeHandleRaw('reports:extractStudentData', async (_event, filters?: {
+    safeHandleRawWithRole('reports:extractStudentData', ROLES.STAFF, async (_event, filters?: {
         academicYear?: string
         streamId?: number
         status?: string
@@ -258,7 +286,7 @@ function registerNemisExportHandlers(): void {
         }
     })
 
-    safeHandleRaw('reports:extractStaffData', async () => {
+    safeHandleRawWithRole('reports:extractStaffData', ROLES.STAFF, async () => {
         try {
             return await nemisService.extractStaffData()
         } catch (error) {
@@ -266,7 +294,7 @@ function registerNemisExportHandlers(): void {
         }
     })
 
-    safeHandleRaw('reports:extractEnrollmentData', async (_event, academicYear: string) => {
+    safeHandleRawWithRole('reports:extractEnrollmentData', ROLES.STAFF, async (_event, academicYear: string) => {
         try {
             return await nemisService.extractEnrollmentData(academicYear)
         } catch (error) {
@@ -274,15 +302,19 @@ function registerNemisExportHandlers(): void {
         }
     })
 
-    safeHandleRaw('reports:createNEMISExport', async (_event, exportConfig: NEMISExportConfig, userId: number) => {
+    safeHandleRawWithRole('reports:createNEMISExport', ROLES.MANAGEMENT, async (event, exportConfig: NEMISExportConfig, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return actor
+        }
         try {
-            return await nemisService.createExport(exportConfig, userId)
+            return await nemisService.createExport(exportConfig, actor.actorId)
         } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
         }
     })
 
-    safeHandleRaw('reports:getNEMISExportHistory', async (_event, limit?: number) => {
+    safeHandleRawWithRole('reports:getNEMISExportHistory', ROLES.STAFF, async (_event, limit?: number) => {
         try {
             return await nemisService.getExportHistory(limit)
         } catch (error) {
@@ -290,7 +322,7 @@ function registerNemisExportHandlers(): void {
         }
     })
 
-    safeHandleRaw('reports:validateNEMISStudentData', (_event, student: NEMISStudent) => {
+    safeHandleRawWithRole('reports:validateNEMISStudentData', ROLES.STAFF, (_event, student: NEMISStudent) => {
         try {
             return nemisService.validateStudentData(student)
         } catch (error) {

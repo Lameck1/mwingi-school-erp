@@ -3,17 +3,17 @@ import { app } from '../../electron-env'
 import { container } from '../../services/base/ServiceContainer'
 import { ConfigService } from '../../services/ConfigService'
 import { type SystemMaintenanceService } from '../../services/SystemMaintenanceService'
-import { safeHandleRaw } from '../ipc-result'
+import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
 
 export function registerSettingsHandlers(): void {
     const db = getDatabase()
 
     // ======== SCHOOL SETTINGS ========
-    safeHandleRaw('settings:get', () => {
+    safeHandleRawWithRole('settings:get', ROLES.STAFF, () => {
         return db.prepare('SELECT * FROM school_settings WHERE id = 1').get()
     })
 
-    safeHandleRaw('settings:update', (_event, data: unknown) => {
+    safeHandleRawWithRole('settings:update', ROLES.MANAGEMENT, (_event, data: unknown) => {
         // Use explicit UPDATE statement instead of dynamic builder for maximum security
         const settings = data as Record<string, unknown>
         const stmt = db.prepare(`
@@ -42,32 +42,40 @@ export function registerSettingsHandlers(): void {
 
 
     // ======== SECURE CONFIG ========
-    safeHandleRaw('settings:getSecure', (_event, key: string) => {
+    safeHandleRawWithRole('settings:getSecure', ROLES.ADMIN_ONLY, (_event, key: string) => {
         const val = ConfigService.getConfig(key)
         if (!val) {return null}
         return val
     })
 
-    safeHandleRaw('settings:saveSecure', (_event, key: string, value: string) => {
+    safeHandleRawWithRole('settings:saveSecure', ROLES.ADMIN_ONLY, (_event, key: string, value: string) => {
         return ConfigService.saveConfig(key, value, true)
     })
 
-    safeHandleRaw('settings:getAllConfigs', () => {
+    safeHandleRawWithRole('settings:getAllConfigs', ROLES.ADMIN_ONLY, () => {
         return ConfigService.getAllConfigs()
     })
 
     // ======== SYSTEM MAINTENANCE ========
-    safeHandleRaw('system:resetAndSeed', (_event, userId: number) => {
+    safeHandleRawWithRole('system:resetAndSeed', ROLES.ADMIN_ONLY, (event, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
         if (app.isPackaged) {
             return { success: false, error: 'Database reset is disabled in production builds.' }
         }
         const maintenanceService = container.resolve('SystemMaintenanceService') as SystemMaintenanceService
-        return maintenanceService.resetAndSeed2026(userId)
+        return maintenanceService.resetAndSeed2026(actor.actorId)
     })
 
-    safeHandleRaw('system:normalizeCurrencyScale', (_event, userId: number) => {
+    safeHandleRawWithRole('system:normalizeCurrencyScale', ROLES.ADMIN_ONLY, (event, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
         const maintenanceService = container.resolve('SystemMaintenanceService') as SystemMaintenanceService
-        return maintenanceService.normalizeCurrencyScale(userId)
+        return maintenanceService.normalizeCurrencyScale(actor.actorId)
     })
 }
 

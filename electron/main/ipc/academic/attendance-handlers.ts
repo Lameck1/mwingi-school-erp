@@ -1,6 +1,6 @@
 import { container } from '../../services/base/ServiceContainer'
 import { validateDate, validateId } from '../../utils/validation'
-import { safeHandleRaw } from '../ipc-result'
+import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
 
 import type { DailyAttendanceEntry } from '../../services/academic/AttendanceService'
 
@@ -28,7 +28,7 @@ function validateAttendanceDateInput(date: string): { success: boolean; error?: 
 }
 
 export function registerAttendanceHandlers(): void {
-    safeHandleRaw('attendance:getByDate', (
+    safeHandleRawWithRole('attendance:getByDate', ROLES.STAFF, (
         _event,
         streamId: number,
         date: string,
@@ -46,20 +46,20 @@ export function registerAttendanceHandlers(): void {
         return getService().getAttendanceByDate(streamValidation.data!, dateValidation.value!, yearValidation.data!, termValidation.data!)
     })
 
-    safeHandleRaw('attendance:markAttendance', (
-        _event,
+    safeHandleRawWithRole('attendance:markAttendance', ROLES.STAFF, (
+        event,
         entries: DailyAttendanceEntry[],
         streamId: number,
         date: string,
         academicYearId: number,
         termId: number,
-        userId: number
+        legacyUserId?: number
     ) => {
         const streamValidation = validateId(streamId, 'Stream ID')
         const yearValidation = validateId(academicYearId, 'Academic year ID')
         const termValidation = validateId(termId, 'Term ID')
-        const userValidation = validateId(userId, 'User ID')
         const dateValidation = validateAttendanceDateInput(date)
+        const actor = resolveActorId(event, legacyUserId)
         if (!streamValidation.success) {
             return { success: false, marked: 0, errors: [streamValidation.error || 'Invalid stream ID'] }
         }
@@ -69,8 +69,8 @@ export function registerAttendanceHandlers(): void {
         if (!termValidation.success) {
             return { success: false, marked: 0, errors: [termValidation.error || 'Invalid term ID'] }
         }
-        if (!userValidation.success) {
-            return { success: false, marked: 0, errors: [userValidation.error || 'Invalid user ID'] }
+        if (!actor.success) {
+            return { success: false, marked: 0, errors: [actor.error] }
         }
         if (!dateValidation.success) {
             return { success: false, marked: 0, errors: [dateValidation.error || 'Invalid attendance date'] }
@@ -91,11 +91,11 @@ export function registerAttendanceHandlers(): void {
             dateValidation.value!,
             yearValidation.data!,
             termValidation.data!,
-            userValidation.data!
+            actor.actorId
         )
     })
 
-    safeHandleRaw('attendance:getStudentSummary', (
+    safeHandleRawWithRole('attendance:getStudentSummary', ROLES.STAFF, (
         _event,
         studentId: number,
         academicYearId: number,
@@ -104,7 +104,7 @@ export function registerAttendanceHandlers(): void {
         return getService().getStudentAttendanceSummary(studentId, academicYearId, termId)
     })
 
-    safeHandleRaw('attendance:getClassSummary', (
+    safeHandleRawWithRole('attendance:getClassSummary', ROLES.STAFF, (
         _event,
         streamId: number,
         date: string,
@@ -122,7 +122,7 @@ export function registerAttendanceHandlers(): void {
         return getService().getClassAttendanceSummary(streamValidation.data!, dateValidation.value!, yearValidation.data!, termValidation.data!)
     })
 
-    safeHandleRaw('attendance:getStudentsForMarking', (
+    safeHandleRawWithRole('attendance:getStudentsForMarking', ROLES.STAFF, (
         _event,
         streamId: number,
         academicYearId: number,

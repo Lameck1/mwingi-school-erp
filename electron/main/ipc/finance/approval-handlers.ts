@@ -1,6 +1,6 @@
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
-import { safeHandleRaw } from '../ipc-result'
+import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
 
 type ApprovalRecord = {
   id: number
@@ -35,7 +35,7 @@ export function registerFinanceApprovalHandlers(): void {
 }
 
 function registerApprovalQueueHandler(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRaw('approvals:getQueue', (_event, filter: 'PENDING' | 'ALL' = 'PENDING') => {
+  safeHandleRawWithRole('approvals:getQueue', ROLES.FINANCE, (_event, filter: 'PENDING' | 'ALL' = 'PENDING') => {
     try {
       const whereClause = filter === 'PENDING' ? "AND ar.status = 'PENDING'" : ''
       const hasWorkflowTable = tableExists(db, 'approval_workflow')
@@ -100,7 +100,13 @@ function registerApprovalQueueHandler(db: ReturnType<typeof getDatabase>): void 
 }
 
 function registerApproveHandler(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRaw('approvals:approve', (_event, approvalId: number, reviewNotes: string, reviewerUserId: number) => {
+  safeHandleRawWithRole('approvals:approve', ROLES.MANAGEMENT, (event, approvalId: number, reviewNotes: string, legacyReviewerUserId?: number) => {
+    const actor = resolveActorId(event, legacyReviewerUserId)
+    if (!actor.success) {
+      return { success: false, error: actor.error }
+    }
+    const reviewerUserId = actor.actorId
+
     try {
       return db.transaction(() => {
         const approval = db.prepare(`
@@ -158,7 +164,13 @@ function registerApproveHandler(db: ReturnType<typeof getDatabase>): void {
 }
 
 function registerRejectHandler(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRaw('approvals:reject', (_event, approvalId: number, reviewNotes: string, reviewerUserId: number) => {
+  safeHandleRawWithRole('approvals:reject', ROLES.MANAGEMENT, (event, approvalId: number, reviewNotes: string, legacyReviewerUserId?: number) => {
+    const actor = resolveActorId(event, legacyReviewerUserId)
+    if (!actor.success) {
+      return { success: false, error: actor.error }
+    }
+    const reviewerUserId = actor.actorId
+
     try {
       if (!reviewNotes) {
         return { success: false, error: 'Review notes are required for rejection' }
@@ -227,7 +239,7 @@ function registerRejectHandler(db: ReturnType<typeof getDatabase>): void {
 }
 
 function registerApprovalStatsHandler(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRaw('approvals:getStats', () => {
+  safeHandleRawWithRole('approvals:getStats', ROLES.FINANCE, () => {
     try {
       const stats = db.prepare(`
         SELECT

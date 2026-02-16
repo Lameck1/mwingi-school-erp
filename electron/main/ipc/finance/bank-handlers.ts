@@ -1,6 +1,6 @@
 import { container } from '../../services/base/ServiceContainer'
 import { validateId, validatePastOrTodayDate } from '../../utils/validation'
-import { safeHandleRaw } from '../ipc-result'
+import { safeHandleRaw, safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
 
 const getService = () => container.resolve('BankReconciliationService')
 
@@ -14,7 +14,7 @@ export function registerBankReconciliationHandlers(): void {
         return getService().getBankAccountById(id)
     })
 
-    safeHandleRaw('bank:createAccount', (_event, data: {
+    safeHandleRawWithRole('bank:createAccount', ROLES.FINANCE, (_event, data: {
         account_name: string
         account_number: string
         bank_name: string
@@ -35,7 +35,7 @@ export function registerBankReconciliationHandlers(): void {
         return getService().getStatementWithLines(statementId)
     })
 
-    safeHandleRaw('bank:createStatement', (
+    safeHandleRawWithRole('bank:createStatement', ROLES.FINANCE, (
         _event,
         bankAccountId: number,
         statementDate: string,
@@ -58,7 +58,7 @@ export function registerBankReconciliationHandlers(): void {
         return getService().createStatement(bankAccountId, statementDate, openingBalance, closingBalance, reference)
     })
 
-    safeHandleRaw('bank:addStatementLine', (
+    safeHandleRawWithRole('bank:addStatementLine', ROLES.FINANCE, (
         _event,
         statementId: number,
         line: {
@@ -114,7 +114,7 @@ export function registerBankReconciliationHandlers(): void {
     })
 
     // Reconciliation
-    safeHandleRaw('bank:matchTransaction', (
+    safeHandleRawWithRole('bank:matchTransaction', ROLES.FINANCE, (
         _event,
         lineId: number,
         transactionId: number
@@ -122,7 +122,7 @@ export function registerBankReconciliationHandlers(): void {
         return getService().matchTransaction(lineId, transactionId)
     })
 
-    safeHandleRaw('bank:unmatchTransaction', (_event, lineId: number) => {
+    safeHandleRawWithRole('bank:unmatchTransaction', ROLES.FINANCE, (_event, lineId: number) => {
         return getService().unmatchTransaction(lineId)
     })
 
@@ -135,20 +135,20 @@ export function registerBankReconciliationHandlers(): void {
         return getService().getUnmatchedLedgerTransactions(startDate, endDate, bankAccountId)
     })
 
-    safeHandleRaw('bank:markReconciled', (
-        _event,
+    safeHandleRawWithRole('bank:markReconciled', ROLES.FINANCE, (
+        event,
         statementId: number,
-        userId: number
+        legacyUserId?: number
     ) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
         const statementValidation = validateId(statementId, 'Statement ID')
-        const userValidation = validateId(userId, 'User ID')
         if (!statementValidation.success) {
             return { success: false, error: statementValidation.error || 'Invalid statement ID' }
         }
-        if (!userValidation.success) {
-            return { success: false, error: userValidation.error || 'Invalid user ID' }
-        }
 
-        return getService().markStatementReconciled(statementValidation.data!, userValidation.data!)
+        return getService().markStatementReconciled(statementValidation.data!, actor.actorId)
     })
 }

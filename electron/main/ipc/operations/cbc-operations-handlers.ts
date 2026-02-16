@@ -1,5 +1,5 @@
 import { container } from '../../services/base/ServiceContainer'
-import { safeHandleRaw } from '../ipc-result'
+import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
 
 import type { GrantTrackingService } from '../../services/operations/GrantTrackingService'
 import type { StudentCostService } from '../../services/operations/StudentCostService'
@@ -14,48 +14,56 @@ export const registerCbcOperationsHandlers = () => {
   const studentCostService = container.resolve('StudentCostService')
 
   // Grant Handlers
-  safeHandleRaw('operations:grants:create', (_event, data: GrantCreateInput, userId: number) => {
-    return grantService.createGrant(data, userId)
+  safeHandleRawWithRole('operations:grants:create', ROLES.FINANCE, (event, data: GrantCreateInput, legacyUserId?: number) => {
+    const actor = resolveActorId(event, legacyUserId)
+    if (!actor.success) {
+      return { success: false, error: actor.error }
+    }
+    return grantService.createGrant(data, actor.actorId)
   })
 
-  safeHandleRaw('operations:grants:recordUtilization', (_event, payload: GrantUtilizationInput) => {
-    return grantService.recordUtilization(payload)
+  safeHandleRawWithRole('operations:grants:recordUtilization', ROLES.FINANCE, (event, payload: GrantUtilizationInput) => {
+    const actor = resolveActorId(event, payload.userId)
+    if (!actor.success) {
+      return { success: false, error: actor.error }
+    }
+    return grantService.recordUtilization({ ...payload, userId: actor.actorId })
   })
 
-  safeHandleRaw('operations:grants:getSummary', (_event, grantId: number) => {
+  safeHandleRawWithRole('operations:grants:getSummary', ROLES.STAFF, (_event, grantId: number) => {
     return grantService.getGrantSummary(grantId)
   })
 
-  safeHandleRaw('operations:grants:getByStatus', (_event, status: GrantStatus) => {
+  safeHandleRawWithRole('operations:grants:getByStatus', ROLES.STAFF, (_event, status: GrantStatus) => {
     return grantService.getGrantsByStatus(status)
   })
 
-  safeHandleRaw('operations:grants:getExpiring', (_event, daysThreshold: number) => {
+  safeHandleRawWithRole('operations:grants:getExpiring', ROLES.STAFF, (_event, daysThreshold: number) => {
     return grantService.getExpiringGrants(daysThreshold)
   })
 
-  safeHandleRaw('operations:grants:generateNEMISExport', (_event, fiscalYear: number) => {
+  safeHandleRawWithRole('operations:grants:generateNEMISExport', ROLES.FINANCE, (_event, fiscalYear: number) => {
     return grantService.generateNEMISExport(fiscalYear)
   })
 
   // Student Cost Handlers
-  safeHandleRaw('operations:studentCost:calculate', (_event, studentId: number, termId: number, academicYearId: number) => {
+  safeHandleRawWithRole('operations:studentCost:calculate', ROLES.STAFF, (_event, studentId: number, termId: number, academicYearId: number) => {
     return studentCostService.calculateStudentCost(studentId, termId, academicYearId)
   })
 
-  safeHandleRaw('operations:studentCost:getBreakdown', (_event, studentId: number, termId: number) => {
+  safeHandleRawWithRole('operations:studentCost:getBreakdown', ROLES.STAFF, (_event, studentId: number, termId: number) => {
     return studentCostService.getCostBreakdown(studentId, termId)
   })
 
-  safeHandleRaw('operations:studentCost:getVsRevenue', (_event, studentId: number, termId: number) => {
+  safeHandleRawWithRole('operations:studentCost:getVsRevenue', ROLES.STAFF, (_event, studentId: number, termId: number) => {
     return studentCostService.getCostVsRevenue(studentId, termId)
   })
 
-  safeHandleRaw('operations:studentCost:getAverage', (_event, grade: number, termId: number) => {
+  safeHandleRawWithRole('operations:studentCost:getAverage', ROLES.STAFF, (_event, grade: number, termId: number) => {
     return studentCostService.getAverageCostPerStudent(grade, termId)
   })
 
-  safeHandleRaw('operations:studentCost:getTrend', (_event, studentId: number, periods: StudentCostPeriodCount = 6) => {
+  safeHandleRawWithRole('operations:studentCost:getTrend', ROLES.STAFF, (_event, studentId: number, periods: StudentCostPeriodCount = 6) => {
     return studentCostService.getCostTrendAnalysis(studentId, periods)
   })
 }

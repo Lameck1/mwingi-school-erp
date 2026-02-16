@@ -36,6 +36,8 @@ const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
 
 async function initializeAutoUpdater(window: BrowserWindowType): Promise<unknown> {
     if (!app.isPackaged) {
+        const { registerDisabledUpdateHandlers } = await import('./updates/autoUpdater')
+        registerDisabledUpdateHandlers('Auto-update is unavailable in development mode')
         return null
     }
 

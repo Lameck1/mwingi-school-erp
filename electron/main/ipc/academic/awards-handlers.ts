@@ -1,5 +1,5 @@
 import { getDatabase } from '../../database';
-import { safeHandleRaw } from '../ipc-result';
+import { getActorFromEvent, ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result';
 
 // Roles that can approve awards
 const APPROVER_ROLES = new Set(['ADMIN', 'PRINCIPAL', 'DEPUTY_PRINCIPAL']);
@@ -11,19 +11,19 @@ interface AwardAssignParams {
   categoryId: number;
   academicYearId: number;
   termId?: number;
-  userId: number;
-  userRole: string;
+  userId?: number;
+  userRole?: string;
   remarks?: string;
 }
 
 interface AwardApproveParams {
   awardId: number;
-  userId: number;
+  userId?: number;
 }
 
 interface AwardRejectParams {
   awardId: number;
-  userId: number;
+  userId?: number;
   reason: string;
 }
 
@@ -34,13 +34,18 @@ export function registerAwardsHandlers() {
 }
 
 function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRaw('awards:assign', (_event, params: AwardAssignParams) => {
+  safeHandleRawWithRole('awards:assign', ROLES.STAFF, (event, params: AwardAssignParams) => {
     try {
+      const actor = resolveActorId(event, params.userId);
+      if (!actor.success) {
+        return actor;
+      }
+      const actorRole = getActorFromEvent(event)?.role ?? '';
       // Auto-approve if user is ADMIN/PRINCIPAL/DEPUTY_PRINCIPAL
-      const autoApprove = APPROVER_ROLES.has(params.userRole);
+      const autoApprove = APPROVER_ROLES.has(actorRole);
       const status = autoApprove ? 'approved' : 'pending';
       const approvedAt = autoApprove ? new Date().toISOString() : null;
-      const approvedBy = autoApprove ? params.userId : null;
+      const approvedBy = autoApprove ? actor.actorId : null;
 
       const result = db.prepare(`
         INSERT INTO student_award (
@@ -51,7 +56,7 @@ function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void
         VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?)
       `).run(
         params.studentId, params.categoryId, params.academicYearId, params.termId || null,
-        params.remarks || null, status, params.userId, approvedBy, approvedAt
+        params.remarks || null, status, actor.actorId, approvedBy, approvedAt
       );
 
       return {
@@ -66,8 +71,12 @@ function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void
     }
   });
 
-  safeHandleRaw('awards:approve', (_event, params: AwardApproveParams) => {
+  safeHandleRawWithRole('awards:approve', ROLES.MANAGEMENT, (event, params: AwardApproveParams) => {
     try {
+      const actor = resolveActorId(event, params.userId);
+      if (!actor.success) {
+        return actor;
+      }
       // Verify the award exists and is in pending state
       const award = db.prepare(SELECT_AWARD_STATUS).get(params.awardId) as { approval_status: string } | undefined;
       if (!award) { throw new Error(AWARD_NOT_FOUND); }
@@ -81,7 +90,7 @@ function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void
             approved_by_user_id = ?, 
             approved_at = datetime('now')
         WHERE id = ?
-      `).run(params.userId, params.awardId);
+      `).run(actor.actorId, params.awardId);
 
       return { status: 'success', message: 'Award approved successfully' };
     } catch (error: unknown) {
@@ -91,8 +100,12 @@ function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void
   });
 
   // Reject an award
-  safeHandleRaw('awards:reject', (_event, params: AwardRejectParams) => {
+  safeHandleRawWithRole('awards:reject', ROLES.MANAGEMENT, (event, params: AwardRejectParams) => {
     try {
+      const actor = resolveActorId(event, params.userId);
+      if (!actor.success) {
+        return actor;
+      }
       // Verify the award exists and is in pending state
       const award = db.prepare(SELECT_AWARD_STATUS).get(params.awardId) as { approval_status: string } | undefined;
       if (!award) { throw new Error(AWARD_NOT_FOUND); }
@@ -107,7 +120,7 @@ function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void
             approved_at = datetime('now'),
             rejection_reason = ?
         WHERE id = ?
-      `).run(params.userId, params.reason, params.awardId);
+      `).run(actor.actorId, params.reason, params.awardId);
 
       return { status: 'success', message: 'Award rejected' };
     } catch (error: unknown) {
@@ -120,8 +133,12 @@ function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void
 }
 
 function registerAwardDeleteHandler(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRaw('awards:delete', (_event, awardId: number, _userId?: number) => {
+  safeHandleRawWithRole('awards:delete', ROLES.MANAGEMENT, (event, awardId: number, legacyUserId?: number) => {
     try {
+      const actor = resolveActorId(event, legacyUserId);
+      if (!actor.success) {
+        return actor;
+      }
       const award = db.prepare(SELECT_AWARD_STATUS).get(awardId) as { approval_status: string } | undefined;
       if (!award) { throw new Error(AWARD_NOT_FOUND); }
       if (award.approval_status === 'approved') {
@@ -187,7 +204,7 @@ function buildAwardQueryFilters(params?: {
 }
 
 function registerAwardQueryHandlers(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRaw('awards:getAll', (_event, params?: {
+  safeHandleRawWithRole('awards:getAll', ROLES.STAFF, (_event, params?: {
     status?: string;
     categoryId?: number;
     academicYearId?: number;
@@ -203,7 +220,7 @@ function registerAwardQueryHandlers(db: ReturnType<typeof getDatabase>): void {
   });
 
   // Get pending awards count (for badge/notification)
-  safeHandleRaw('awards:getPendingCount', () => {
+  safeHandleRawWithRole('awards:getPendingCount', ROLES.STAFF, () => {
     try {
       const result = db.prepare(`
         SELECT COUNT(*) as count FROM student_award WHERE approval_status = 'pending'
@@ -216,7 +233,7 @@ function registerAwardQueryHandlers(db: ReturnType<typeof getDatabase>): void {
   });
 
   // Get student awards
-  safeHandleRaw('awards:getStudentAwards', (_event, studentId: number) => {
+  safeHandleRawWithRole('awards:getStudentAwards', ROLES.STAFF, (_event, studentId: number) => {
     try {
       return db.prepare(`
         SELECT sa.*, ac.name as category_name, ac.category_type
@@ -232,7 +249,7 @@ function registerAwardQueryHandlers(db: ReturnType<typeof getDatabase>): void {
   });
 
   // Get award by ID
-  safeHandleRaw('awards:getById', (_event, awardId: number) => {
+  safeHandleRawWithRole('awards:getById', ROLES.STAFF, (_event, awardId: number) => {
     try {
       return db.prepare(`
         SELECT sa.*, ac.name as category_name, ac.category_type, 
@@ -249,7 +266,7 @@ function registerAwardQueryHandlers(db: ReturnType<typeof getDatabase>): void {
   });
 
   // Get award categories
-  safeHandleRaw('awards:getCategories', () => {
+  safeHandleRawWithRole('awards:getCategories', ROLES.STAFF, () => {
     try {
       return db.prepare(`
         SELECT * FROM award_category

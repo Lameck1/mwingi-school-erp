@@ -3,7 +3,7 @@ import * as path from 'node:path'
 import { shell, app } from '../../electron-env'
 import { BackupService } from '../../services/BackupService'
 import { log } from '../../utils/logger'
-import { safeHandleRaw } from '../ipc-result'
+import { ROLES, safeHandleRaw, safeHandleRawWithRole } from '../ipc-result'
 
 export function registerBackupHandlers(): void {
 
@@ -11,26 +11,26 @@ export function registerBackupHandlers(): void {
         log.error(`[Renderer Error] ${data.error}`, data.stack || '', data.componentStack || '')
     })
 
-    safeHandleRaw('backup:create', async () => {
+    safeHandleRawWithRole('backup:create', ROLES.ADMIN_ONLY, async () => {
         const result = await BackupService.createBackup()
         return { ...result, cancelled: false }
     })
 
-    safeHandleRaw('backup:createTo', async (_event, filePath: string) => {
+    safeHandleRawWithRole('backup:createTo', ROLES.ADMIN_ONLY, async (_event, filePath: string) => {
         const result = await BackupService.createBackupToPath(filePath)
         return { ...result, cancelled: false }
     })
 
-    safeHandleRaw('backup:getList', () => {
+    safeHandleRawWithRole('backup:getList', ROLES.ADMIN_ONLY, () => {
         return BackupService.listBackups()
     })
 
-    safeHandleRaw('backup:restore', async (_event, filename: string) => {
+    safeHandleRawWithRole('backup:restore', ROLES.ADMIN_ONLY, async (_event, filename: string) => {
         const success = await BackupService.restoreBackup(filename)
         return { success, message: success ? 'Restore initiated. App will restart.' : 'Restore failed', cancelled: false }
     })
 
-    safeHandleRaw('backup:openFolder', async () => {
+    safeHandleRawWithRole('backup:openFolder', ROLES.ADMIN_ONLY, async () => {
         // We need to access private static or just reconstruct path
         // It's cleaner to ask Service for path or just use userData/backups
         // Let's add a openFolder method to Service or just do it here

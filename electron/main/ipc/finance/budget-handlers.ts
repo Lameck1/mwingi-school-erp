@@ -2,7 +2,7 @@ import { BudgetEnforcementService } from '../../services/accounting/BudgetEnforc
 import { container } from '../../services/base/ServiceContainer'
 import { type BudgetFilters, type CreateBudgetData } from '../../services/finance/BudgetService'
 import { validateId } from '../../utils/validation'
-import { safeHandleRaw, safeHandleRawWithRole, ROLES } from '../ipc-result'
+import { safeHandleRaw, safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
 
 export function registerBudgetHandlers(): void {
     safeHandleRaw('budget:getAll', (_event, filters: BudgetFilters = {}) => {
@@ -17,38 +17,38 @@ export function registerBudgetHandlers(): void {
         return service.getBudgetWithLineItems(v.data!)
     })
 
-    safeHandleRaw('budget:create', (_event, data: CreateBudgetData, userId: number) => {
-        const vUser = validateId(userId, 'User ID')
-        if (!vUser.success) { return { success: false, error: vUser.error } }
+    safeHandleRawWithRole('budget:create', ROLES.FINANCE, (event, data: CreateBudgetData, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return { success: false, error: actor.error } }
         const service = container.resolve('BudgetService')
-        return service.create(data, vUser.data!)
+        return service.create(data, actor.actorId)
     })
 
-    safeHandleRaw('budget:update', (_event, id: number, data: Partial<CreateBudgetData>, userId: number) => {
+    safeHandleRawWithRole('budget:update', ROLES.FINANCE, (event, id: number, data: Partial<CreateBudgetData>, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return { success: false, error: actor.error } }
         const vId = validateId(id, 'Budget ID')
-        const vUser = validateId(userId, 'User ID')
         if (!vId.success) { return { success: false, error: vId.error } }
-        if (!vUser.success) { return { success: false, error: vUser.error } }
         const service = container.resolve('BudgetService')
-        return service.update(vId.data!, data, vUser.data!)
+        return service.update(vId.data!, data, actor.actorId)
     })
 
-    safeHandleRawWithRole('budget:submit', ROLES.FINANCE, (_event, budgetId: number, userId: number) => {
+    safeHandleRawWithRole('budget:submit', ROLES.FINANCE, (event, budgetId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return { success: false, error: actor.error } }
         const vId = validateId(budgetId, 'Budget ID')
-        const vUser = validateId(userId, 'User ID')
         if (!vId.success) { return { success: false, error: vId.error } }
-        if (!vUser.success) { return { success: false, error: vUser.error } }
         const service = container.resolve('BudgetService')
-        return service.submitForApproval(vId.data!, vUser.data!)
+        return service.submitForApproval(vId.data!, actor.actorId)
     })
 
-    safeHandleRawWithRole('budget:approve', ROLES.MANAGEMENT, (_event, budgetId: number, userId: number) => {
+    safeHandleRawWithRole('budget:approve', ROLES.MANAGEMENT, (event, budgetId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return { success: false, error: actor.error } }
         const vId = validateId(budgetId, 'Budget ID')
-        const vUser = validateId(userId, 'User ID')
         if (!vId.success) { return { success: false, error: vId.error } }
-        if (!vUser.success) { return { success: false, error: vUser.error } }
         const service = container.resolve('BudgetService')
-        return service.approve(vId.data!, vUser.data!)
+        return service.approve(vId.data!, actor.actorId)
     })
 
     const enforcement = new BudgetEnforcementService()
@@ -61,8 +61,12 @@ export function registerBudgetHandlers(): void {
         return enforcement.getBudgetAllocations(fiscalYear)
     })
 
-    safeHandleRawWithRole('budget:setAllocation', ROLES.FINANCE, async (_event, glAccountCode: string, fiscalYear: number, allocatedAmount: number, department: string | null, userId: number) => {
-        return enforcement.setBudgetAllocation(glAccountCode, fiscalYear, allocatedAmount, department, userId)
+    safeHandleRawWithRole('budget:setAllocation', ROLES.FINANCE, async (event, glAccountCode: string, fiscalYear: number, allocatedAmount: number, department: string | null, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+        return enforcement.setBudgetAllocation(glAccountCode, fiscalYear, allocatedAmount, department, actor.actorId)
     })
 
     safeHandleRaw('budget:varianceReport', async (_event, fiscalYear: number) => {

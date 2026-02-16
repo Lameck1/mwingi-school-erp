@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type IpcHandler = (event: unknown, ...args: unknown[]) => Promise<unknown>
 const handlerMap = new Map<string, IpcHandler>()
+let sessionUserId = 9
+let sessionRole = 'ACCOUNTS_CLERK'
 
 const journalServiceMock = {
   getBalanceSheet: vi.fn(async () => ({ assets: [], liabilities: [], equity: [] })),
@@ -16,6 +18,26 @@ const plServiceMock = {
 const openingBalanceServiceMock = {
   getStudentLedger: vi.fn(async () => ({ opening_balance: 0, transactions: [], closing_balance: 0 })),
 }
+
+vi.mock('keytar', () => ({
+  default: {
+    getPassword: vi.fn(async () => JSON.stringify({
+      user: {
+        id: sessionUserId,
+        username: 'session-user',
+        role: sessionRole,
+        full_name: 'Session User',
+        email: null,
+        is_active: 1,
+        last_login: null,
+        created_at: '2026-01-01'
+      },
+      lastActivity: Date.now()
+    })),
+    setPassword: vi.fn().mockResolvedValue(null),
+    deletePassword: vi.fn().mockResolvedValue(true),
+  }
+}))
 
 vi.mock('../../../electron-env', () => ({
   ipcMain: {
@@ -48,6 +70,8 @@ import { registerFinancialReportsHandlers } from '../financial-reports-handlers'
 describe('financial reports IPC handlers', () => {
   beforeEach(() => {
     handlerMap.clear()
+    sessionUserId = 9
+    sessionRole = 'ACCOUNTS_CLERK'
     journalServiceMock.getBalanceSheet.mockReset()
     journalServiceMock.getTrialBalance.mockReset()
     plServiceMock.generateProfitAndLoss.mockReset()
@@ -99,5 +123,16 @@ describe('financial reports IPC handlers', () => {
     const result = await handler!({}, 11, 2026, '2026-01-01', '2026-03-31') as { success: boolean }
     expect(result.success).toBe(true)
     expect(openingBalanceServiceMock.getStudentLedger).toHaveBeenCalledWith(11, 2026, '2026-01-01', '2026-03-31')
+  })
+
+  it('reports:getProfitAndLoss enforces finance-role access', async () => {
+    sessionRole = 'TEACHER'
+    const handler = handlerMap.get('reports:getProfitAndLoss')
+    expect(handler).toBeDefined()
+    const result = await handler!({}, '2026-01-01', '2026-01-31') as { success: boolean; error?: string }
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('Unauthorized')
+    expect(plServiceMock.generateProfitAndLoss).not.toHaveBeenCalled()
   })
 })

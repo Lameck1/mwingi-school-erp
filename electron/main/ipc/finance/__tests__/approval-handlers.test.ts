@@ -21,6 +21,15 @@ vi.mock('../../../database/utils/audit', () => ({
   logAudit: vi.fn(),
 }))
 
+vi.mock('../../../security/session', () => ({
+  getSession: vi.fn(async () => ({
+    user: {
+      id: 2,
+      role: 'ADMIN'
+    }
+  }))
+}))
+
 import { registerFinanceApprovalHandlers } from '../approval-handlers'
 
 describe('finance approval handlers', () => {

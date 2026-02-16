@@ -1,5 +1,5 @@
 import { container } from '../../services/base/ServiceContainer';
-import { safeHandleRaw } from '../ipc-result';
+import { safeHandleRaw, safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result';
 
 import type { GLAccountService, GLAccountData } from '../../services/finance/GLAccountService';
 
@@ -16,15 +16,27 @@ export function registerGLAccountHandlers() {
     return await getService().getById(id);
   });
 
-  safeHandleRaw('gl:create-account', async (_event, data: GLAccountData, userId: number) => {
-    return await getService().create(data, userId);
+  safeHandleRawWithRole('gl:create-account', ROLES.FINANCE, async (event, data: GLAccountData, legacyUserId?: number) => {
+    const actor = resolveActorId(event, legacyUserId);
+    if (!actor.success) {
+      return { success: false, error: actor.error };
+    }
+    return await getService().create(data, actor.actorId);
   });
 
-  safeHandleRaw('gl:update-account', async (_event, id: number, data: Partial<GLAccountData>, userId: number) => {
-    return await getService().update(id, data, userId);
+  safeHandleRawWithRole('gl:update-account', ROLES.FINANCE, async (event, id: number, data: Partial<GLAccountData>, legacyUserId?: number) => {
+    const actor = resolveActorId(event, legacyUserId);
+    if (!actor.success) {
+      return { success: false, error: actor.error };
+    }
+    return await getService().update(id, data, actor.actorId);
   });
 
-  safeHandleRaw('gl:delete-account', async (_event, id: number, userId: number) => {
-    return await getService().delete(id, userId);
+  safeHandleRawWithRole('gl:delete-account', ROLES.FINANCE, async (event, id: number, legacyUserId?: number) => {
+    const actor = resolveActorId(event, legacyUserId);
+    if (!actor.success) {
+      return { success: false, error: actor.error };
+    }
+    return await getService().delete(id, actor.actorId);
   });
 }

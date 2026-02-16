@@ -1,5 +1,5 @@
 import { container } from '../../services/base/ServiceContainer'
-import { safeHandleRaw } from '../ipc-result'
+import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
 
 import type { CBCStrandService } from '../../services/cbc/CBCStrandService'
 
@@ -10,7 +10,7 @@ export function registerCBCHandlers() {
     const cbcService = container.resolve('CBCStrandService')
 
     // Get all strands
-    safeHandleRaw('cbc:getStrands', () => {
+    safeHandleRawWithRole('cbc:getStrands', ROLES.STAFF, () => {
         try {
             return { success: true, data: cbcService.getAllStrands() }
         } catch (error) {
@@ -19,7 +19,7 @@ export function registerCBCHandlers() {
     })
 
     // Get active strands
-    safeHandleRaw('cbc:getActiveStrands', () => {
+    safeHandleRawWithRole('cbc:getActiveStrands', ROLES.STAFF, () => {
         try {
             return { success: true, data: cbcService.getActiveStrands() }
         } catch (error) {
@@ -28,11 +28,16 @@ export function registerCBCHandlers() {
     })
 
     // Link fee category to strand
-    safeHandleRaw(
+    safeHandleRawWithRole(
         'cbc:linkFeeCategory',
-        (_event, feeCategoryId: number, strandId: number, allocationPercentage: number, userId: number) => {
+        ROLES.FINANCE,
+        (event, feeCategoryId: number, strandId: number, allocationPercentage: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
         try {
-            const id = cbcService.linkFeeCategoryToStrand(feeCategoryId, strandId, allocationPercentage, userId)
+            const id = cbcService.linkFeeCategoryToStrand(feeCategoryId, strandId, allocationPercentage, actor.actorId)
             return { success: true, data: id }
         } catch (error) {
             return { success: false, error: (error as Error).message }
@@ -40,7 +45,7 @@ export function registerCBCHandlers() {
     })
 
     // Record strand expense
-    safeHandleRaw('cbc:recordExpense', (_event, data: StrandExpenseInput) => {
+    safeHandleRawWithRole('cbc:recordExpense', ROLES.FINANCE, (_event, data: StrandExpenseInput) => {
         try {
             const id = cbcService.recordStrandExpense(data)
             return { success: true, data: id }
@@ -50,7 +55,7 @@ export function registerCBCHandlers() {
     })
 
     // Get profitability report
-    safeHandleRaw('cbc:getProfitabilityReport', (_event, fiscalYear: number, term?: number) => {
+    safeHandleRawWithRole('cbc:getProfitabilityReport', ROLES.STAFF, (_event, fiscalYear: number, term?: number) => {
         try {
             return { success: true, data: cbcService.getStrandProfitability(fiscalYear, term) }
         } catch (error) {
@@ -59,7 +64,7 @@ export function registerCBCHandlers() {
     })
 
     // Record participation
-    safeHandleRaw('cbc:recordParticipation', (_event, data: StudentParticipationInput) => {
+    safeHandleRawWithRole('cbc:recordParticipation', ROLES.STAFF, (_event, data: StudentParticipationInput) => {
         try {
             const id = cbcService.recordStudentParticipation(data)
             return { success: true, data: id }
@@ -69,7 +74,7 @@ export function registerCBCHandlers() {
     })
 
     // Get student participation
-    safeHandleRaw('cbc:getStudentParticipations', (_event, studentId: number) => {
+    safeHandleRawWithRole('cbc:getStudentParticipations', ROLES.STAFF, (_event, studentId: number) => {
         try {
             return { success: true, data: cbcService.getStudentParticipations(studentId) }
         } catch (error) {

@@ -1,7 +1,6 @@
 import { getDatabase } from '../../database';
-import { getSession } from '../../security/session';
 import { container } from '../../services/base/ServiceContainer';
-import { safeHandleRaw } from '../ipc-result';
+import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result';
 
 const getService = () => container.resolve('MeritListService');
 
@@ -59,7 +58,7 @@ function getPerformanceImprovement(studentId: number) {
 }
 
 export function registerMeritListHandlers() {
-  safeHandleRaw('merit-list:generate', async (_event, options: { academicYearId: number; termId: number; streamId: number }) => {
+  safeHandleRawWithRole('merit-list:generate', ROLES.STAFF, async (_event, options: { academicYearId: number; termId: number; streamId: number }) => {
     try {
       return await getService().generateMeritList(options);
     } catch (error) {
@@ -67,7 +66,7 @@ export function registerMeritListHandlers() {
     }
   });
 
-  safeHandleRaw('merit-list:getClass', async (_event, examId: number, streamId: number) => {
+  safeHandleRawWithRole('merit-list:getClass', ROLES.STAFF, async (event, examId: number, streamId: number, legacyUserId?: number) => {
     try {
       const db = getDatabase();
       const examInfo = db.prepare(
@@ -78,18 +77,20 @@ export function registerMeritListHandlers() {
         throw new Error('Exam not found');
       }
 
-      const session = await getSession();
-      const userId = session?.user.id ?? 1;
+      const actor = resolveActorId(event, legacyUserId);
+      if (!actor.success) {
+        return actor;
+      }
 
       return await getService().generateClassMeritList(
-        examInfo.academic_year_id, examInfo.term_id, streamId, examId, userId
+        examInfo.academic_year_id, examInfo.term_id, streamId, examId, actor.actorId
       );
     } catch (error) {
       throw new Error(`Failed to generate class merit list: ${(error as Error).message}`);
     }
   });
 
-  safeHandleRaw('merit-list:getImprovement', (_event, studentId: number) => {
+  safeHandleRawWithRole('merit-list:getImprovement', ROLES.STAFF, (_event, studentId: number) => {
     try {
       return getPerformanceImprovement(studentId);
     } catch (error) {
@@ -97,7 +98,7 @@ export function registerMeritListHandlers() {
     }
   });
 
-  safeHandleRaw('merit-list:getSubject', async (_event, payload: { examId: number; subjectId: number; streamId: number }) => {
+  safeHandleRawWithRole('merit-list:getSubject', ROLES.STAFF, async (_event, payload: { examId: number; subjectId: number; streamId: number }) => {
     try {
       return await getService().getSubjectMeritList(payload.examId, payload.subjectId, payload.streamId);
     } catch (error) {
@@ -105,7 +106,7 @@ export function registerMeritListHandlers() {
     }
   });
 
-  safeHandleRaw('merit-list:getSubjectDifficulty', async (_event, payload: { examId: number; subjectId: number; streamId: number }) => {
+  safeHandleRawWithRole('merit-list:getSubjectDifficulty', ROLES.STAFF, async (_event, payload: { examId: number; subjectId: number; streamId: number }) => {
     try {
       return await getService().getSubjectDifficulty(payload.examId, payload.subjectId, payload.streamId);
     } catch (error) {
@@ -113,7 +114,7 @@ export function registerMeritListHandlers() {
     }
   });
 
-  safeHandleRaw('merit-list:getMostImproved', async (_event, payload: {
+  safeHandleRawWithRole('merit-list:getMostImproved', ROLES.STAFF, async (_event, payload: {
     academicYearId: number;
     currentTermId: number;
     comparisonTermId: number;

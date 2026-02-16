@@ -268,8 +268,17 @@ export function registerAuthHandlers(): void {
 
     registerSessionHandlers(db)
 
-    safeHandleRaw('auth:changePassword', async (_event, userId: number, oldPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
-        const user = db.prepare('SELECT password_hash FROM user WHERE id = ?').get(userId) as { password_hash: string } | undefined
+    safeHandleRaw('auth:changePassword', async (_event, legacyUserId: number, oldPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
+        const session = await getSession()
+        const sessionUserId = Number(session?.user?.id)
+        if (!Number.isInteger(sessionUserId) || sessionUserId <= 0) {
+            return { success: false, error: 'No active authenticated session' }
+        }
+        if (legacyUserId && legacyUserId !== sessionUserId) {
+            return { success: false, error: 'Session user mismatch' }
+        }
+
+        const user = db.prepare('SELECT password_hash FROM user WHERE id = ?').get(sessionUserId) as { password_hash: string } | undefined
         if (!user) {return { success: false, error: 'User not found' }}
 
         const valid = await bcrypt.compare(oldPassword, user.password_hash)
@@ -279,7 +288,7 @@ export function registerAuthHandlers(): void {
         if (!pwCheck.success) {return { success: false, error: pwCheck.error }}
 
         const hash = await bcrypt.hash(newPassword, 10)
-        db.prepare('UPDATE user SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(hash, userId)
+        db.prepare('UPDATE user SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(hash, sessionUserId)
         await clearSession()
         return { success: true }
     })

@@ -2,24 +2,34 @@ import * as fs from 'node:fs'
 
 import { dialog, BrowserWindow } from '../../electron-env'
 import { dataImportService, type ImportConfig } from '../../services/data/DataImportService'
-import { safeHandleRaw } from '../ipc-result'
+import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
 
 
 export function registerDataImportHandlers(): void {
     // Import from file
-    safeHandleRaw('data:import', (
-        _event,
+    safeHandleRawWithRole('data:import', ROLES.ADMIN_ONLY, (
+        event,
         filePath: string,
         config: ImportConfig,
-        userId: number
+        legacyUserId?: number
     ) => {
         try {
+            const actor = resolveActorId(event, legacyUserId)
+            if (!actor.success) {
+                return {
+                    success: false,
+                    totalRows: 0,
+                    imported: 0,
+                    skipped: 0,
+                    errors: [{ row: 0, message: actor.error }]
+                }
+            }
             const buffer = fs.readFileSync(filePath)
             return dataImportService.importFromFile(
                 buffer,
                 filePath,
                 config,
-                userId
+                actor.actorId
             )
         } catch (error) {
             return {
@@ -36,12 +46,12 @@ export function registerDataImportHandlers(): void {
     })
 
     // Get Template
-    safeHandleRaw('data:getTemplate', (_event, entityType: string) => {
+    safeHandleRawWithRole('data:getTemplate', ROLES.ADMIN_ONLY, (_event, entityType: string) => {
         return dataImportService.getImportTemplate(entityType)
     })
 
     // Download Template
-    safeHandleRaw('data:downloadTemplate', async (event, entityType: string) => {
+    safeHandleRawWithRole('data:downloadTemplate', ROLES.ADMIN_ONLY, async (event, entityType: string) => {
         try {
             const buffer = await dataImportService.generateTemplateFile(entityType)
             const win = BrowserWindow.fromWebContents(event.sender)

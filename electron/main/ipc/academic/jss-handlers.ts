@@ -1,5 +1,5 @@
 import { container } from '../../services/base/ServiceContainer'
-import { safeHandleRaw } from '../ipc-result'
+import { ROLES, safeHandleRawWithRole } from '../ipc-result'
 
 import type { JSSTransitionService } from '../../services/cbc/JSSTransitionService'
 
@@ -11,7 +11,7 @@ export function registerJSSHandlers() {
     const jssService = container.resolve('JSSTransitionService')
 
     // Initiate transition for single student
-    safeHandleRaw('jss:initiateTransition', (_event, data: TransitionPayload) => {
+    safeHandleRawWithRole('jss:initiateTransition', ROLES.STAFF, (_event, data: TransitionPayload) => {
         try {
             const id = jssService.processStudentTransition(data)
             return { success: true, data: id }
@@ -21,7 +21,7 @@ export function registerJSSHandlers() {
     })
 
     // Bulk transition
-    safeHandleRaw('jss:bulkTransition', (_event, data: BulkTransitionPayload) => {
+    safeHandleRawWithRole('jss:bulkTransition', ROLES.STAFF, (_event, data: BulkTransitionPayload) => {
         try {
             const result = jssService.batchProcessTransitions(data)
             return { success: true, data: result }
@@ -31,7 +31,7 @@ export function registerJSSHandlers() {
     })
 
     // Get eligible students
-    safeHandleRaw('jss:getEligibleStudents', (_event, fromGrade: number, fiscalYear: number) => {
+    safeHandleRawWithRole('jss:getEligibleStudents', ROLES.STAFF, (_event, fromGrade: number, fiscalYear: number) => {
         try {
             const students = jssService.getEligibleStudentsForTransition(fromGrade, fiscalYear)
             return { success: true, data: students }
@@ -41,7 +41,7 @@ export function registerJSSHandlers() {
     })
 
     // Get fee structure
-    safeHandleRaw('jss:getFeeStructure', (_event, grade: number, fiscalYear: number) => {
+    safeHandleRawWithRole('jss:getFeeStructure', ROLES.STAFF, (_event, grade: number, fiscalYear: number) => {
         try {
             const structure = jssService.getJSSFeeStructure(grade, fiscalYear)
             if (structure) {
@@ -58,7 +58,7 @@ export function registerJSSHandlers() {
     })
 
     // Set fee structure
-    safeHandleRaw('jss:setFeeStructure', (_event, data: FeeStructurePayload) => {
+    safeHandleRawWithRole('jss:setFeeStructure', ROLES.STAFF, (_event, data: FeeStructurePayload) => {
         try {
             // Store data directly as provided (assuming frontend sends cents or normalized values)
             // But wait, if frontend sends shillings, we MUST convert here if we want consistency?
@@ -91,7 +91,7 @@ export function registerJSSHandlers() {
     })
 
     // Get transition report (history)
-    safeHandleRaw('jss:getTransitionReport', (_event, studentId: number) => {
+    safeHandleRawWithRole('jss:getTransitionReport', ROLES.STAFF, (_event, studentId: number) => {
         try {
             const history = jssService.getStudentTransitionHistory(studentId)
             return { success: true, data: history }
@@ -101,7 +101,7 @@ export function registerJSSHandlers() {
     })
 
     // Get transition summary
-    safeHandleRaw('jss:getTransitionSummary', (_event, fiscalYear: number) => {
+    safeHandleRawWithRole('jss:getTransitionSummary', ROLES.STAFF, (_event, fiscalYear: number) => {
         try {
             const summary = jssService.getTransitionSummary(fiscalYear)
             return { success: true, data: summary }

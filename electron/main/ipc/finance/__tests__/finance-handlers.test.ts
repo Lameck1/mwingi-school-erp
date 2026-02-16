@@ -17,7 +17,7 @@ const paymentServiceMock = {
 vi.mock('keytar', () => ({
   default: {
     getPassword: vi.fn().mockResolvedValue(JSON.stringify({
-      user: { id: 1, username: 'test', role: 'ACCOUNTANT', full_name: 'Test', email: 'test@test.com', is_active: 1, last_login: null, created_at: '2026-01-01' },
+      user: { id: 9, username: 'test', role: 'ACCOUNTS_CLERK', full_name: 'Test', email: 'test@test.com', is_active: 1, last_login: null, created_at: '2026-01-01' },
       lastActivity: Date.now()
     })),
     setPassword: vi.fn().mockResolvedValue(null),
@@ -104,7 +104,14 @@ describe('finance IPC handlers', () => {
     db.exec(`
       CREATE TABLE student (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        first_name TEXT,
+        last_name TEXT,
         credit_balance INTEGER DEFAULT 0
+      );
+
+      CREATE TABLE term (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        term_name TEXT
       );
 
       CREATE TABLE fee_invoice (
@@ -213,7 +220,7 @@ describe('finance IPC handlers', () => {
     const handler = handlerMap.get('payment:payWithCredit')
     expect(handler).toBeDefined()
 
-    const result = await handler!({}, { studentId: 1, invoiceId: 1, amount: 0 }, 10) as { success: boolean; error?: string }
+    const result = await handler!({}, { studentId: 1, invoiceId: 1, amount: 0 }, 9) as { success: boolean; error?: string }
     expect(result.success).toBe(false)
     expect(result.error).toContain('Invalid payment payload')
 
@@ -399,6 +406,28 @@ describe('finance IPC handlers', () => {
     expect(paymentServiceMock.recordPayment).not.toHaveBeenCalled()
   })
 
+  it('payment:record rejects renderer user mismatch even with finance role', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    const handler = handlerMap.get('payment:record')!
+    const result = await handler(
+      {},
+      {
+        student_id: 1,
+        amount: 1000,
+        payment_method: 'MPESA',
+        payment_reference: 'MPESA-MISMATCH',
+        transaction_date: today,
+        description: 'Tuition Fee Payment',
+        term_id: 1
+      },
+      3
+    ) as { success: boolean; error?: string }
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('renderer user mismatch')
+    expect(paymentServiceMock.recordPayment).not.toHaveBeenCalled()
+  })
+
   it('payment:record rejects future date before service call', async () => {
     const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
     const handler = handlerMap.get('payment:record')!
@@ -456,6 +485,27 @@ describe('finance IPC handlers', () => {
     expect(ledgerCount.count).toBe(1)
   })
 
+  it('payment:payWithCredit uses normalized invoice amount and status checks', async () => {
+    db.prepare(`INSERT INTO student (id, credit_balance) VALUES (1, 9000)`).run()
+    db.prepare(`
+      INSERT INTO fee_invoice (
+        id, invoice_number, student_id, total_amount, amount, amount_due, amount_paid, status, created_by_user_id
+      )
+      VALUES (1, 'INV-LOWER-1', 1, 0, 7000, 7000, 0, 'partial', 1)
+    `).run()
+
+    const handler = handlerMap.get('payment:payWithCredit')!
+    const result = await handler({}, { studentId: 1, invoiceId: 1, amount: 7000 }, 9) as { success: boolean; error?: string }
+    expect(result.success).toBe(true)
+
+    const invoice = db.prepare(`SELECT amount_paid, status FROM fee_invoice WHERE id = 1`).get() as { amount_paid: number; status: string }
+    expect(invoice.amount_paid).toBe(7000)
+    expect(invoice.status).toBe('PAID')
+
+    const student = db.prepare(`SELECT credit_balance FROM student WHERE id = 1`).get() as { credit_balance: number }
+    expect(student.credit_balance).toBe(2000)
+  })
+
   it('invoice:create returns failure and rolls back invoice when journal posting fails', async () => {
     journalServiceMock.recordInvoiceSync.mockReturnValueOnce({ success: false, error: 'GL mapping missing' })
 
@@ -471,7 +521,7 @@ describe('finance IPC handlers', () => {
         due_date: '2026-02-20'
       },
       [{ fee_category_id: 1, description: 'Tuition', amount: 10000 }],
-      7
+      9
     ) as { success: boolean; error?: string }
 
     expect(result.success).toBe(false)
@@ -488,7 +538,7 @@ describe('finance IPC handlers', () => {
       INSERT INTO fee_invoice (
         id, invoice_number, student_id, term_id, academic_term_id, invoice_date, due_date,
         total_amount, amount, amount_due, original_amount, created_by_user_id, created_at
-      ) VALUES (8, 'INV-EXIST-001', 1, 1, 1, '2026-02-01', '2026-02-20', 10000, 10000, 10000, 10000, 7, datetime('now'))
+      ) VALUES (8, 'INV-EXIST-001', 1, 1, 1, '2026-02-01', '2026-02-20', 10000, 10000, 10000, 10000, 9, datetime('now'))
     `).run()
     db.prepare(`
       INSERT INTO invoice_item (invoice_id, fee_category_id, description, amount)
@@ -505,7 +555,7 @@ describe('finance IPC handlers', () => {
         due_date: '2026-02-20'
       },
       [{ fee_category_id: 1, description: 'Tuition', amount: 10000 }],
-      7
+      9
     ) as { success: boolean; invoiceNumber?: string; id?: number; message?: string }
 
     expect(result.success).toBe(true)
@@ -523,7 +573,7 @@ describe('finance IPC handlers', () => {
       INSERT INTO fee_invoice (
         id, invoice_number, student_id, term_id, academic_term_id, invoice_date, due_date,
         total_amount, amount, amount_due, original_amount, created_by_user_id, created_at
-      ) VALUES (9, 'INV-EXIST-002', 1, 1, 1, '2026-02-01', '2026-02-20', 10000, 10000, 10000, 10000, 7, datetime('now'))
+      ) VALUES (9, 'INV-EXIST-002', 1, 1, 1, '2026-02-01', '2026-02-20', 10000, 10000, 10000, 10000, 9, datetime('now'))
     `).run()
     db.prepare(`
       INSERT INTO invoice_item (invoice_id, fee_category_id, description, amount)
@@ -543,7 +593,7 @@ describe('finance IPC handlers', () => {
         { fee_category_id: 1, description: 'Tuition', amount: 9000 },
         { fee_category_id: 1, description: 'Activity Fee', amount: 1000 }
       ],
-      7
+      9
     ) as { success: boolean; id?: number }
 
     expect(result.success).toBe(true)
@@ -553,6 +603,24 @@ describe('finance IPC handlers', () => {
 
     const invoiceCount = db.prepare(`SELECT COUNT(*) as count FROM fee_invoice`).get() as { count: number }
     expect(invoiceCount.count).toBe(2)
+  })
+
+  it('invoice:getAll returns normalized total/paid/balance values', async () => {
+    db.prepare(`INSERT INTO student (id, credit_balance) VALUES (1, 0)`).run()
+    db.prepare(`
+      INSERT INTO fee_invoice (
+        id, invoice_number, student_id, term_id, total_amount, amount, amount_due, amount_paid, status, created_by_user_id, invoice_date
+      ) VALUES (1, 'INV-NORM-1', 1, 1, 0, 17000, 17000, 2000, 'partial', 1, '2026-02-01')
+    `).run()
+
+    const handler = handlerMap.get('invoice:getAll')
+    expect(handler).toBeDefined()
+    const rows = await handler!({}) as Array<{ total_amount: number; amount_paid: number; balance: number }>
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0].total_amount).toBe(17000)
+    expect(rows[0].amount_paid).toBe(2000)
+    expect(rows[0].balance).toBe(15000)
   })
 
   it('invoice:create rejects invalid invoice date format', async () => {
@@ -566,7 +634,7 @@ describe('finance IPC handlers', () => {
         due_date: '2026-02-20'
       },
       [{ fee_category_id: 1, description: 'Tuition', amount: 10000 }],
-      7
+      9
     ) as { success: boolean; error?: string }
 
     expect(result.success).toBe(false)
@@ -584,7 +652,7 @@ describe('finance IPC handlers', () => {
         due_date: '2026-02-01'
       },
       [{ fee_category_id: 1, description: 'Tuition', amount: 10000 }],
-      7
+      9
     ) as { success: boolean; error?: string }
 
     expect(result.success).toBe(false)

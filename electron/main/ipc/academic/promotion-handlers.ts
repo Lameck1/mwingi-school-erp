@@ -1,10 +1,10 @@
 import { container } from '../../services/base/ServiceContainer'
-import { safeHandleRaw } from '../ipc-result'
+import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
 
 const getService = () => container.resolve('PromotionService')
 
 export function registerPromotionHandlers(): void {
-    safeHandleRaw('promotion:getStreams', () => {
+    safeHandleRawWithRole('promotion:getStreams', ROLES.STAFF, () => {
         try {
             return getService().getStreams()
         } catch (error) {
@@ -12,7 +12,7 @@ export function registerPromotionHandlers(): void {
         }
     })
 
-    safeHandleRaw('promotion:getStudentsForPromotion', (
+    safeHandleRawWithRole('promotion:getStudentsForPromotion', ROLES.STAFF, (
         _event,
         streamId: number,
         academicYearId: number
@@ -24,8 +24,8 @@ export function registerPromotionHandlers(): void {
         }
     })
 
-    safeHandleRaw('promotion:promoteStudent', (
-        _event,
+    safeHandleRawWithRole('promotion:promoteStudent', ROLES.MANAGEMENT, (
+        event,
         data: {
             student_id: number
             from_stream_id: number
@@ -34,36 +34,46 @@ export function registerPromotionHandlers(): void {
             to_academic_year_id: number
             to_term_id: number
         },
-        userId: number
+        legacyUserId?: number
     ) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+
         try {
-            return getService().promoteStudent(data, userId)
+            return getService().promoteStudent(data, actor.actorId)
         } catch (error) {
             throw new Error(`Failed to promote student: ${(error as Error).message}`)
         }
     })
 
-    safeHandleRaw('promotion:batchPromote', (
-        _event,
+    safeHandleRawWithRole('promotion:batchPromote', ROLES.MANAGEMENT, (
+        event,
         studentIds: number[],
         fromStreamId: number,
         toStreamId: number,
         fromAcademicYearId: number,
         toAcademicYearId: number,
         toTermId: number,
-        userId: number
+        legacyUserId?: number
     ) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+
         try {
             return getService().batchPromote(
                 studentIds, fromStreamId, toStreamId,
-                fromAcademicYearId, toAcademicYearId, toTermId, userId
+                fromAcademicYearId, toAcademicYearId, toTermId, actor.actorId
             )
         } catch (error) {
             throw new Error(`Failed to batch promote: ${(error as Error).message}`)
         }
     })
 
-    safeHandleRaw('promotion:getStudentHistory', (
+    safeHandleRawWithRole('promotion:getStudentHistory', ROLES.STAFF, (
         _event,
         studentId: number
     ) => {
@@ -74,7 +84,7 @@ export function registerPromotionHandlers(): void {
         }
     })
 
-    safeHandleRaw('promotion:getNextStream', (
+    safeHandleRawWithRole('promotion:getNextStream', ROLES.STAFF, (
         _event,
         currentStreamId: number
     ) => {

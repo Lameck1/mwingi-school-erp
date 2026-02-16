@@ -272,8 +272,12 @@ export const generateSingleStudentInvoice = (
     studentId: number,
     academicYearId: number,
     termId: number,
-    userId: number | null
+    userId: number
 ): { success: boolean; invoiceNumber?: string; error?: string } => {
+    if (!Number.isInteger(userId) || userId <= 0) {
+        return { success: false, error: 'Invalid authenticated user context' }
+    }
+
     const { db, exemptionService } = context
 
     const structure = fetchFeeStructure(db, academicYearId, termId)
@@ -329,7 +333,7 @@ export const generateSingleStudentInvoice = (
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
                 invoiceNumber, studentId, termId, termId,
-                invoiceDate, invoiceDate, invoiceTotal, invoiceTotal, invoiceTotal, originalTotal, userId || null
+                invoiceDate, invoiceDate, invoiceTotal, invoiceTotal, invoiceTotal, originalTotal, userId
             )
 
             const invoiceId = insertResult.lastInsertRowid as number
@@ -355,7 +359,7 @@ export const generateSingleStudentInvoice = (
                     studentId,
                     journalItems,
                     invoiceDate,
-                    userId || 1 // Fallback to ID 1 if null (System/Admin)
+                    userId
                 )
                 if (!journalResult.success) {
                     throw new Error(`Accounting Error: ${journalResult.error}`)

@@ -5,7 +5,7 @@ import path from 'node:path'
 import { getDatabase } from '../../database'
 import { app } from '../../electron-env'
 import { container } from '../../services/base/ServiceContainer'
-import { safeHandleRaw } from '../ipc-result'
+import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
 
 import type {
     CreateExamDTO,
@@ -33,46 +33,66 @@ interface EmailParentsPayload {
 }
 
 function registerSubjectAndExamHandlers(): void {
-    safeHandleRaw('academic:getSubjects', () => getService().getAllSubjects())
-    safeHandleRaw('academic:getSubjectsAdmin', () => getService().getAllSubjectsAdmin())
-    safeHandleRaw('academic:createSubject', (_event, data: SubjectCreateData, userId: number) => {
-        return getService().createSubject(data, userId)
+    safeHandleRawWithRole('academic:getSubjects', ROLES.STAFF, () => getService().getAllSubjects())
+    safeHandleRawWithRole('academic:getSubjectsAdmin', ROLES.STAFF, () => getService().getAllSubjectsAdmin())
+    safeHandleRawWithRole('academic:createSubject', ROLES.STAFF, (event, data: SubjectCreateData, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
+        return getService().createSubject(data, actor.actorId)
     })
-    safeHandleRaw('academic:updateSubject', (_event, id: number, data: SubjectUpdateData, userId: number) => {
-        return getService().updateSubject(id, data, userId)
+    safeHandleRawWithRole('academic:updateSubject', ROLES.STAFF, (event, id: number, data: SubjectUpdateData, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
+        return getService().updateSubject(id, data, actor.actorId)
     })
-    safeHandleRaw('academic:setSubjectActive', (_event, id: number, isActive: boolean, userId: number) => {
-        return getService().setSubjectActive(id, isActive, userId)
+    safeHandleRawWithRole('academic:setSubjectActive', ROLES.STAFF, (event, id: number, isActive: boolean, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
+        return getService().setSubjectActive(id, isActive, actor.actorId)
     })
-    safeHandleRaw('academic:getExams', (_event, academicYearId: number, termId: number) => {
+    safeHandleRawWithRole('academic:getExams', ROLES.STAFF, (_event, academicYearId: number, termId: number) => {
         return getService().getAllExams(academicYearId, termId)
     })
-    safeHandleRaw('academic:createExam', (_event, data: unknown, userId: number) => {
-        return getService().createExam(data as CreateExamDTO, userId)
+    safeHandleRawWithRole('academic:createExam', ROLES.STAFF, (event, data: unknown, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
+        return getService().createExam(data as CreateExamDTO, actor.actorId)
     })
-    safeHandleRaw('academic:deleteExam', (_event, id: number, userId: number) => {
-        return getService().deleteExam(id, userId)
+    safeHandleRawWithRole('academic:deleteExam', ROLES.STAFF, (event, id: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
+        return getService().deleteExam(id, actor.actorId)
     })
 }
 
 function registerAllocationAndResultsHandlers(): void {
-    safeHandleRaw('academic:allocateTeacher', (_event, data: unknown, userId: number) => {
-        return getService().allocateTeacher(data as Omit<SubjectAllocation, 'id'>, userId)
+    safeHandleRawWithRole('academic:allocateTeacher', ROLES.STAFF, (event, data: unknown, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
+        return getService().allocateTeacher(data as Omit<SubjectAllocation, 'id'>, actor.actorId)
     })
-    safeHandleRaw('academic:getAllocations', (_event, academicYearId: number, termId: number, streamId?: number) => {
+    safeHandleRawWithRole('academic:getAllocations', ROLES.STAFF, (_event, academicYearId: number, termId: number, streamId?: number) => {
         return getService().getAllocations(academicYearId, termId, streamId)
     })
-    safeHandleRaw('academic:deleteAllocation', (_event, allocationId: number, userId: number) => {
-        return getService().deleteAllocation(allocationId, userId)
+    safeHandleRawWithRole('academic:deleteAllocation', ROLES.STAFF, (event, allocationId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
+        return getService().deleteAllocation(allocationId, actor.actorId)
     })
-    safeHandleRaw('academic:saveResults', (_event, examId: number, results: unknown[], userId: number) => {
-        return getService().saveResults(examId, results as Omit<ExamResult, 'id' | 'exam_id'>[], userId)
+    safeHandleRawWithRole('academic:saveResults', ROLES.STAFF, (event, examId: number, results: unknown[], legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
+        return getService().saveResults(examId, results as Omit<ExamResult, 'id' | 'exam_id'>[], actor.actorId)
     })
-    safeHandleRaw('academic:getResults', (_event, examId: number, subjectId: number, streamId: number, userId: number) => {
-        return getService().getResults(examId, subjectId, streamId, userId)
+    safeHandleRawWithRole('academic:getResults', ROLES.STAFF, (event, examId: number, subjectId: number, streamId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
+        return getService().getResults(examId, subjectId, streamId, actor.actorId)
     })
-    safeHandleRaw('academic:processResults', (_event, examId: number, userId: number) => {
-        return getService().processResults(examId, userId)
+    safeHandleRawWithRole('academic:processResults', ROLES.STAFF, (event, examId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
+        return getService().processResults(examId, actor.actorId)
     })
 }
 
@@ -174,12 +194,14 @@ async function sendParentNotifications(data: EmailParentsPayload, userId: number
 }
 
 function registerCertificateAndEmailHandlers(): void {
-    safeHandleRaw('academic:generateCertificate', (_event, data: CertificatePayload) => {
+    safeHandleRawWithRole('academic:generateCertificate', ROLES.STAFF, (_event, data: CertificatePayload) => {
         return generateCertificateFile(data)
     })
 
-    safeHandleRaw('academic:emailParents', (_event, data: EmailParentsPayload, userId: number) => {
-        return sendParentNotifications(data, userId)
+    safeHandleRawWithRole('academic:emailParents', ROLES.STAFF, (event, data: EmailParentsPayload, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return actor }
+        return sendParentNotifications(data, actor.actorId)
     })
 }
 

@@ -3,7 +3,7 @@ import { logAudit } from '../../database/utils/audit'
 import { DoubleEntryJournalService } from '../../services/accounting/DoubleEntryJournalService'
 import { SystemAccounts } from '../../services/accounting/SystemAccounts'
 import { PayrollJournalService } from '../../services/finance/PayrollJournalService'
-import { safeHandleRaw, safeHandleRawWithRole, ROLES } from '../ipc-result'
+import { ROLES, resolveActorId, safeHandleRaw, safeHandleRawWithRole } from '../ipc-result'
 
 import type { StaffMember } from './types'
 
@@ -69,6 +69,15 @@ interface PayrollStaffComputationContext {
 const findRate = (rates: StatutoryRate[], rateType: string): StatutoryRate | undefined =>
     rates.find((rate) => rate.rate_type === rateType)
 
+const PAYROLL_VIEW_ROLES = ['ADMIN', 'ACCOUNTS_CLERK', 'PRINCIPAL', 'DEPUTY_PRINCIPAL'] as const
+
+const formatLocalDate = (date: Date): string => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+}
+
 const getPayeBands = (rates: StatutoryRate[]): StatutoryRate[] =>
     rates
         .filter((rate) => rate.rate_type === 'PAYE_BAND')
@@ -104,7 +113,7 @@ const createPayrollPeriod = (
 
     const periodName = `${new Date(year, month - 1).toLocaleString('default', { month: 'long' })} ${year}`
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-    const endDate = new Date(year, month, 0).toISOString().split('T')[0]
+    const endDate = formatLocalDate(new Date(year, month, 0))
 
     const periodResult = db.prepare(`
         INSERT INTO payroll_period (
@@ -256,24 +265,34 @@ function getPeriodOrFail(db: ReturnType<typeof getDatabase>, periodId: number): 
 }
 
 function registerPayrollStatusHandlers(db: ReturnType<typeof getDatabase>, journalService: DoubleEntryJournalService): void {
-    safeHandleRawWithRole('payroll:confirm', ROLES.FINANCE, (_event, periodId: number, userId: number) => {
+    safeHandleRawWithRole('payroll:confirm', ROLES.FINANCE, (event, periodId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+        const actorId = actor.actorId
         return db.transaction(() => {
             const period = getPeriodOrFail(db, periodId)
             if (!period) { return { success: false, error: PERIOD_NOT_FOUND } }
             if (period.status !== 'DRAFT') { return { success: false, error: 'Only DRAFT payrolls can be confirmed' } }
             db.prepare('UPDATE payroll_period SET status = ?, approved_by_user_id = ?, approved_at = CURRENT_TIMESTAMP WHERE id = ?')
-                .run('CONFIRMED', userId, periodId)
-            logAudit(userId, 'UPDATE', 'payroll_period', periodId, { status: 'DRAFT' }, { status: 'CONFIRMED' })
+                .run('CONFIRMED', actorId, periodId)
+            logAudit(actorId, 'UPDATE', 'payroll_period', periodId, { status: 'DRAFT' }, { status: 'CONFIRMED' })
             return { success: true }
         })()
     })
 
-    safeHandleRawWithRole('payroll:markPaid', ROLES.FINANCE, (_event, periodId: number, userId: number) => {
+    safeHandleRawWithRole('payroll:markPaid', ROLES.FINANCE, (event, periodId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+        const actorId = actor.actorId
         return db.transaction(() => {
             const period = getPeriodOrFail(db, periodId)
             if (!period) { return { success: false, error: PERIOD_NOT_FOUND } }
             if (period.status !== 'CONFIRMED') { return { success: false, error: 'Only CONFIRMED payrolls can be marked as paid' } }
-            const paymentDate = new Date().toISOString().split('T')[0]
+            const paymentDate = formatLocalDate(new Date())
             db.prepare('UPDATE payroll_period SET status = ? WHERE id = ?').run('PAID', periodId)
             db.prepare('UPDATE payroll SET payment_status = ?, payment_date = ? WHERE period_id = ?')
                 .run('PAID', paymentDate, periodId)
@@ -294,14 +313,14 @@ function registerPayrollStatusHandlers(db: ReturnType<typeof getDatabase>, journ
                     paymentDate,
                     salaryCategoryId,
                     `Salary payment for period #${periodId}`,
-                    userId
+                    actorId
                 )
 
                 const journalResult = journalService.createJournalEntrySync({
                     entry_date: paymentDate,
                     entry_type: 'SALARY',
                     description: `Salary payment for period #${periodId}`,
-                    created_by_user_id: userId,
+                    created_by_user_id: actorId,
                     lines: [
                         {
                             gl_account_code: SystemAccounts.SALARY_PAYABLE,
@@ -322,24 +341,34 @@ function registerPayrollStatusHandlers(db: ReturnType<typeof getDatabase>, journ
                 }
             }
 
-            logAudit(userId, 'UPDATE', 'payroll_period', periodId, { status: 'CONFIRMED' }, { status: 'PAID' })
+            logAudit(actorId, 'UPDATE', 'payroll_period', periodId, { status: 'CONFIRMED' }, { status: 'PAID' })
             return { success: true }
         })()
     })
 
-    safeHandleRawWithRole('payroll:revertToDraft', ROLES.FINANCE, (_event, periodId: number, userId: number) => {
+    safeHandleRawWithRole('payroll:revertToDraft', ROLES.FINANCE, (event, periodId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+        const actorId = actor.actorId
         return db.transaction(() => {
             const period = getPeriodOrFail(db, periodId)
             if (!period) { return { success: false, error: PERIOD_NOT_FOUND } }
             if (period.status !== 'CONFIRMED') { return { success: false, error: 'Only CONFIRMED payrolls can be reverted to draft' } }
             db.prepare('UPDATE payroll_period SET status = ?, approved_by_user_id = NULL, approved_at = NULL WHERE id = ?')
                 .run('DRAFT', periodId)
-            logAudit(userId, 'UPDATE', 'payroll_period', periodId, { status: 'CONFIRMED' }, { status: 'DRAFT' })
+            logAudit(actorId, 'UPDATE', 'payroll_period', periodId, { status: 'CONFIRMED' }, { status: 'DRAFT' })
             return { success: true }
         })()
     })
 
-    safeHandleRawWithRole('payroll:delete', ROLES.FINANCE, (_event, periodId: number, userId: number) => {
+    safeHandleRawWithRole('payroll:delete', ROLES.FINANCE, (event, periodId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+        const actorId = actor.actorId
         return db.transaction(() => {
             const period = getPeriodOrFail(db, periodId)
             if (!period) { return { success: false, error: PERIOD_NOT_FOUND } }
@@ -348,13 +377,17 @@ function registerPayrollStatusHandlers(db: ReturnType<typeof getDatabase>, journ
             db.prepare('DELETE FROM payroll_deduction WHERE payroll_id IN (SELECT id FROM payroll WHERE period_id = ?)').run(periodId)
             db.prepare('DELETE FROM payroll WHERE period_id = ?').run(periodId)
             db.prepare('DELETE FROM payroll_period WHERE id = ?').run(periodId)
-            logAudit(userId, 'DELETE', 'payroll_period', periodId, { period_name: period.period_name }, null)
+            logAudit(actorId, 'DELETE', 'payroll_period', periodId, { period_name: period.period_name }, null)
             return { success: true }
         })()
     })
 
-    safeHandleRawWithRole('payroll:recalculate', ROLES.FINANCE, (_event, periodId: number, userId: number) => {
-        return db.transaction(() => recalculatePayroll(db, periodId, userId))()
+    safeHandleRawWithRole('payroll:recalculate', ROLES.FINANCE, (event, periodId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+        return db.transaction(() => recalculatePayroll(db, periodId, actor.actorId))()
     })
 }
 
@@ -414,15 +447,19 @@ export function registerPayrollHandlers(): void {
     const db = getDatabase()
     const payrollJournalService = new PayrollJournalService(db)
 
-    safeHandleRawWithRole('payroll:run', ROLES.FINANCE, (_event, month: number, year: number, userId: number) => {
-        return db.transaction(() => runPayrollForPeriod(db, month, year, userId))()
+    safeHandleRawWithRole('payroll:run', ROLES.FINANCE, (event, month: number, year: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+        return db.transaction(() => runPayrollForPeriod(db, month, year, actor.actorId))()
     })
 
-    safeHandleRaw('payroll:getHistory', () => {
+    safeHandleRawWithRole('payroll:getHistory', PAYROLL_VIEW_ROLES, () => {
         return db.prepare('SELECT * FROM payroll_period ORDER BY year DESC, month DESC').all()
     })
 
-    safeHandleRaw('payroll:getDetails', (_event, periodId: number) => {
+    safeHandleRawWithRole('payroll:getDetails', PAYROLL_VIEW_ROLES, (_event, periodId: number) => {
         const period = db.prepare(SELECT_PERIOD).get(periodId)
         if (!period) { return { success: false, error: PERIOD_NOT_FOUND } }
 
@@ -443,8 +480,12 @@ export function registerPayrollHandlers(): void {
         return { success: true, period, results }
     })
 
-    safeHandleRawWithRole('payroll:postToGL', ROLES.FINANCE, async (_event, periodId: number, userId: number) => {
-        return payrollJournalService.postPayrollToGL(periodId, userId)
+    safeHandleRawWithRole('payroll:postToGL', ROLES.FINANCE, async (event, periodId: number, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) {
+            return { success: false, error: actor.error }
+        }
+        return payrollJournalService.postPayrollToGL(periodId, actor.actorId)
     })
 
     const journalService = new DoubleEntryJournalService(db)

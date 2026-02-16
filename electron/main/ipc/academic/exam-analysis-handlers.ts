@@ -1,28 +1,29 @@
 import { container } from '../../services/base/ServiceContainer';
-import { safeHandleRaw } from '../ipc-result';
+import { ROLES, safeHandleRawWithRole } from '../ipc-result';
 
 const getService = () => container.resolve('ExamAnalysisService');
 
 export function registerExamAnalysisHandlers() {
-  safeHandleRaw('exam-analysis:getSubjectAnalysis', (_event, subjectId: number, examId: number) => {
+  safeHandleRawWithRole('exam-analysis:getSubjectAnalysis', ROLES.STAFF, (_event, subjectId: number, examId: number) => {
     return getService().getSubjectAnalysis(examId, subjectId);
   });
 
-  safeHandleRaw('exam-analysis:analyzeAllSubjects', (_event, examId: number) => {
+  safeHandleRawWithRole('exam-analysis:analyzeAllSubjects', ROLES.STAFF, (_event, examId: number) => {
     return getService().analyzeAllSubjects(examId);
   });
 
-  safeHandleRaw(
+  safeHandleRawWithRole(
     'exam-analysis:getTeacherPerf',
+    ROLES.STAFF,
     (_event, teacherId: number, academicYearId: number, termId: number) => {
     return getService().getTeacherPerformance(teacherId, academicYearId, termId);
   });
 
-  safeHandleRaw('exam-analysis:getStudentPerf', (_event, studentId: number, examId: number) => {
+  safeHandleRawWithRole('exam-analysis:getStudentPerf', ROLES.STAFF, (_event, studentId: number, examId: number) => {
     return getService().getStudentPerformance(studentId, examId);
   });
 
-  safeHandleRaw('exam-analysis:getStruggling', (_event, examId: number, threshold?: number) => {
+  safeHandleRawWithRole('exam-analysis:getStruggling', ROLES.STAFF, (_event, examId: number, threshold?: number) => {
     return getService().getStrugglingStudents(examId, threshold ?? 50);
   });
 }

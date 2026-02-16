@@ -28,6 +28,7 @@ export function createReportsAPI() {
             date: string
             debit: number
             description: string
+            ref?: string
           }>
         }
         error?: string
@@ -49,14 +50,14 @@ export function createReportsAPI() {
         debit_credit: transaction.debit > 0 ? 'DEBIT' : 'CREDIT',
         amount: transaction.debit > 0 ? transaction.debit : transaction.credit,
         description: transaction.description,
-        ref: '',
+        ref: transaction.ref ?? '',
         runningBalance: transaction.balance
       }))
 
       return {
         student: result.data.student,
         openingBalance: result.data.opening_balance,
-        ledger: [...ledger].reverse(),
+        ledger,
         closingBalance: result.data.closing_balance
       }
     },

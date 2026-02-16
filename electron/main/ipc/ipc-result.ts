@@ -22,6 +22,58 @@ export type IPCResult<T = void> =
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyHandler = (event: IpcMainInvokeEvent, ...args: any[]) => any
 
+interface IpcActor {
+    id: number
+    role: string
+}
+
+const IPC_ACTOR_KEY = '__ipcActor'
+
+function attachActor(event: IpcMainInvokeEvent, actor: IpcActor): void {
+    const target = event as IpcMainInvokeEvent & { __ipcActor?: IpcActor }
+    target[IPC_ACTOR_KEY] = actor
+}
+
+export function getActorFromEvent(event: IpcMainInvokeEvent): IpcActor | null {
+    const target = event as IpcMainInvokeEvent & { __ipcActor?: IpcActor }
+    const actor = target[IPC_ACTOR_KEY]
+    if (!actor) {
+        return null
+    }
+    if (!Number.isInteger(actor.id) || actor.id <= 0) {
+        return null
+    }
+    if (typeof actor.role !== 'string' || actor.role.trim().length === 0) {
+        return null
+    }
+    return actor
+}
+
+/**
+ * Resolves the authenticated actor ID from IPC event context and validates
+ * legacy renderer-supplied user IDs for backward compatibility.
+ */
+export function resolveActorId(
+    event: IpcMainInvokeEvent,
+    legacyUserId?: unknown,
+): { success: true; actorId: number } | { success: false; error: string } {
+    const actor = getActorFromEvent(event)
+    if (!actor) {
+        return { success: false, error: 'Unauthorized: missing authenticated actor context' }
+    }
+
+    if (legacyUserId !== undefined && legacyUserId !== null) {
+        if (!Number.isInteger(legacyUserId) || legacyUserId <= 0) {
+            return { success: false, error: 'Invalid user session' }
+        }
+        if (legacyUserId !== actor.id) {
+            return { success: false, error: 'Unauthorized: renderer user mismatch' }
+        }
+    }
+
+    return { success: true, actorId: actor.id }
+}
+
 export function safeHandle<T>(
     channel: string,
     handler: AnyHandler,
@@ -73,6 +125,11 @@ export function safeHandleRawWithRole(
             if (!allowedRoles.includes(session.user.role)) {
                 return { success: false, error: `Unauthorized: role '${session.user.role}' cannot access '${channel}'` }
             }
+            const actorId = Number(session.user.id)
+            if (!Number.isInteger(actorId) || actorId <= 0) {
+                return { success: false, error: 'Unauthorized: invalid session actor' }
+            }
+            attachActor(event, { id: actorId, role: session.user.role })
             return await handler(event, ...args)
         } catch (error) {
             return { success: false, error: getErrorMessage(error, `${channel} failed`) }
@@ -94,6 +151,11 @@ export function safeHandleWithRole<T>(
             if (!allowedRoles.includes(session.user.role)) {
                 return { success: false, error: `Unauthorized: role '${session.user.role}' cannot access '${channel}'` }
             }
+            const actorId = Number(session.user.id)
+            if (!Number.isInteger(actorId) || actorId <= 0) {
+                return { success: false, error: 'Unauthorized: invalid session actor' }
+            }
+            attachActor(event, { id: actorId, role: session.user.role })
             const result = await handler(event, ...args)
             return { success: true, data: result as T }
         } catch (error) {
@@ -105,9 +167,9 @@ export function safeHandleWithRole<T>(
 /** Standard role groups for convenience */
 export const ROLES = {
     ADMIN_ONLY: ['ADMIN'] as const,
-    FINANCE: ['ADMIN', 'ACCOUNTANT', 'ACCOUNTS_CLERK'] as const,
+    FINANCE: ['ADMIN', 'ACCOUNTS_CLERK'] as const,
     MANAGEMENT: ['ADMIN', 'PRINCIPAL', 'DEPUTY_PRINCIPAL'] as const,
-    STAFF: ['ADMIN', 'PRINCIPAL', 'DEPUTY_PRINCIPAL', 'ACCOUNTANT', 'ACCOUNTS_CLERK', 'TEACHER', 'SECRETARY'] as const,
+    STAFF: ['ADMIN', 'PRINCIPAL', 'DEPUTY_PRINCIPAL', 'ACCOUNTS_CLERK', 'AUDITOR', 'TEACHER'] as const,
     ALL_AUTHENTICATED: [] as const, // empty = skip role check (handled by safeHandleRaw)
 } as const
 

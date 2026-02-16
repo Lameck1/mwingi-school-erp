@@ -1,6 +1,6 @@
 import { getDatabase } from '../../database'
 import { renderHtmlToPdfBuffer, resolveOutputPath, writePdfBuffer } from '../../utils/pdf'
-import { safeHandleRaw } from '../ipc-result'
+import { ROLES, safeHandleRawWithRole } from '../ipc-result'
 
 interface ExportPdfPayload {
     html?: string
@@ -62,15 +62,15 @@ const VENUE_TEMPLATE = [
 ]
 
 function registerAcademicYearAndTermHandlers(db: ReturnType<typeof getDatabase>): void {
-    safeHandleRaw('academicYear:getAll', () => {
+    safeHandleRawWithRole('academicYear:getAll', ROLES.STAFF, () => {
         return db.prepare('SELECT * FROM academic_year ORDER BY year_name DESC').all()
     })
 
-    safeHandleRaw('academicYear:getCurrent', () => {
+    safeHandleRawWithRole('academicYear:getCurrent', ROLES.STAFF, () => {
         return db.prepare('SELECT * FROM academic_year WHERE is_current = 1').get()
     })
 
-    safeHandleRaw('academicYear:create', (_event, data: AcademicYearCreateData) => {
+    safeHandleRawWithRole('academicYear:create', ROLES.MANAGEMENT, (_event, data: AcademicYearCreateData) => {
         try {
             db.transaction(() => {
                 if (data.is_current) {
@@ -86,7 +86,7 @@ function registerAcademicYearAndTermHandlers(db: ReturnType<typeof getDatabase>)
         }
     })
 
-    safeHandleRaw('academicYear:activate', (_event, id: number) => {
+    safeHandleRawWithRole('academicYear:activate', ROLES.MANAGEMENT, (_event, id: number) => {
         try {
             db.transaction(() => {
                 db.prepare('UPDATE academic_year SET is_current = 0').run()
@@ -99,21 +99,21 @@ function registerAcademicYearAndTermHandlers(db: ReturnType<typeof getDatabase>)
         }
     })
 
-    safeHandleRaw('term:getByYear', (_event, yearId: number) => {
+    safeHandleRawWithRole('term:getByYear', ROLES.STAFF, (_event, yearId: number) => {
         return db.prepare('SELECT * FROM term WHERE academic_year_id = ? ORDER BY term_number').all(yearId)
     })
 
-    safeHandleRaw('term:getCurrent', () => {
+    safeHandleRawWithRole('term:getCurrent', ROLES.STAFF, () => {
         return db.prepare('SELECT * FROM term WHERE is_current = 1').get()
     })
 }
 
 function registerExamLookupHandlers(db: ReturnType<typeof getDatabase>): void {
-    safeHandleRaw('stream:getAll', () => {
+    safeHandleRawWithRole('stream:getAll', ROLES.STAFF, () => {
         return db.prepare('SELECT * FROM stream WHERE is_active = 1 ORDER BY level_order').all()
     })
 
-    safeHandleRaw('academic:getExamsList', (_event, filters: { academicYearId?: number; termId?: number }) => {
+    safeHandleRawWithRole('academic:getExamsList', ROLES.STAFF, (_event, filters: { academicYearId?: number; termId?: number }) => {
         let query = 'SELECT id, name FROM academic_exam WHERE 1=1'
         const params: number[] = []
 
@@ -130,13 +130,13 @@ function registerExamLookupHandlers(db: ReturnType<typeof getDatabase>): void {
         return db.prepare(query).all(...params)
     })
 
-    safeHandleRaw('feeCategory:getAll', () => {
+    safeHandleRawWithRole('feeCategory:getAll', ROLES.STAFF, () => {
         return db.prepare('SELECT * FROM fee_category WHERE is_active = 1').all()
     })
 }
 
 function registerPdfExportHandler(): void {
-    safeHandleRaw('export:pdf', async (_event, data: ExportPdfPayload) => {
+    safeHandleRawWithRole('export:pdf', ROLES.STAFF, async (_event, data: ExportPdfPayload) => {
         try {
             const html = data.html || `
               <html>
@@ -214,17 +214,17 @@ function buildScheduleExportHtml(slots: Array<Record<string, unknown>>): string 
 }
 
 function registerSchedulerHandlers(db: ReturnType<typeof getDatabase>): void {
-    safeHandleRaw('schedule:generate', (_event, data: { examId?: number; startDate?: string; endDate?: string }) => {
+    safeHandleRawWithRole('schedule:generate', ROLES.STAFF, (_event, data: { examId?: number; startDate?: string; endDate?: string }) => {
         return generateSchedule(db, data.examId, data.startDate, data.endDate)
     })
 
-    safeHandleRaw('schedule:detectClashes', async (_event, data: { examId?: number }) => {
+    safeHandleRawWithRole('schedule:detectClashes', ROLES.STAFF, async (_event, data: { examId?: number }) => {
         if (!data.examId) {return []}
         const generated = await generateSchedule(db, data.examId)
         return detectClashes(db, data.examId, generated.slots)
     })
 
-    safeHandleRaw('schedule:exportPDF', async (_event, data: { examId?: number; slots?: Array<Record<string, unknown>> }) => {
+    safeHandleRawWithRole('schedule:exportPDF', ROLES.STAFF, async (_event, data: { examId?: number; slots?: Array<Record<string, unknown>> }) => {
         try {
             const html = buildScheduleExportHtml(data.slots || [])
             const buffer = await renderHtmlToPdfBuffer(html)

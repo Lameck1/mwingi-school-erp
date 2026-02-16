@@ -30,6 +30,15 @@ vi.mock('../../../services/base/ServiceContainer', () => ({
   }
 }))
 
+vi.mock('../../../security/session', () => ({
+  getSession: vi.fn(async () => ({
+    user: {
+      id: 2,
+      role: 'ADMIN'
+    }
+  }))
+}))
+
 import { registerBankReconciliationHandlers } from '../bank-handlers'
 
 describe('bank handlers', () => {
@@ -108,7 +117,7 @@ describe('bank handlers', () => {
 
   it('bank:markReconciled rejects invalid IDs before service call', async () => {
     const handler = handlerMap.get('bank:markReconciled')!
-    const result = await handler({}, 0, 0) as { success: boolean; error?: string }
+    const result = await handler({}, 0, 2) as { success: boolean; error?: string }
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('Invalid Statement ID')
