@@ -41,6 +41,7 @@ describe('CreditAutoApplicationService', () => {
         invoice_number TEXT UNIQUE NOT NULL,
         amount INTEGER NOT NULL,
         total_amount INTEGER,
+        amount_due INTEGER,
         amount_paid INTEGER DEFAULT 0,
         status TEXT DEFAULT 'PENDING',
         invoice_date TEXT NOT NULL DEFAULT '2026-01-01',
@@ -52,11 +53,12 @@ describe('CreditAutoApplicationService', () => {
       INSERT INTO student (first_name, last_name, admission_number)
       VALUES ('John', 'Doe', 'STU-001');
 
-      INSERT INTO fee_invoice (student_id, invoice_number, amount, total_amount, amount_paid, due_date, status, created_at)
+      INSERT INTO fee_invoice (student_id, invoice_number, amount, total_amount, amount_due, amount_paid, due_date, status, created_at)
       VALUES 
-        (1, 'INV-001', 50000, 50000, 0, '2026-01-15', 'PENDING', '2026-01-01 10:00:00'),
-        (1, 'INV-002', 30000, 30000, 0, '2026-01-20', 'PENDING', '2026-01-05 10:00:00'),
-        (1, 'INV-003', 20000, 20000, 0, '2026-01-25', 'PENDING', '2026-01-10 10:00:00');
+        (1, 'INV-001', 50000, 0, 50000, 0, '2026-01-15', 'PENDING', '2026-01-01 10:00:00'),
+        (1, 'INV-002', 30000, 30000, 30000, 0, '2026-01-20', 'pending', '2026-01-05 10:00:00'),
+        (1, 'INV-003', 20000, 20000, 20000, 0, '2026-01-25', 'PENDING', '2026-01-10 10:00:00'),
+        (1, 'INV-004', 15000, 15000, 15000, 0, '2026-01-26', 'cancelled', '2026-01-11 10:00:00');
 
       INSERT INTO credit_transaction (student_id, amount, transaction_type, notes, created_at)
       VALUES (1, 70000, 'CREDIT_RECEIVED', 'Overpayment', '2026-01-12 10:00:00');
@@ -81,6 +83,7 @@ describe('CreditAutoApplicationService', () => {
       const invoice1 = db.prepare('SELECT amount_paid, status FROM fee_invoice WHERE invoice_number = ?').get('INV-001') as DbRow
       const invoice2 = db.prepare('SELECT amount_paid, status FROM fee_invoice WHERE invoice_number = ?').get('INV-002') as DbRow
       const invoice3 = db.prepare('SELECT amount_paid, status FROM fee_invoice WHERE invoice_number = ?').get('INV-003') as DbRow
+      const invoice4 = db.prepare('SELECT amount_paid, status FROM fee_invoice WHERE invoice_number = ?').get('INV-004') as DbRow
 
       expect(invoice1.amount_paid).toBe(50000)
       expect(invoice1.status).toBe('PAID')
@@ -88,6 +91,8 @@ describe('CreditAutoApplicationService', () => {
       expect(invoice2.status).toBe('PARTIAL')
       expect(invoice3.amount_paid).toBe(0)
       expect(invoice3.status).toBe('PENDING')
+      expect(invoice4.amount_paid).toBe(0)
+      expect(invoice4.status).toBe('cancelled')
 
       const appliedRows = db.prepare(`SELECT COUNT(*) as count FROM credit_transaction WHERE transaction_type = 'CREDIT_APPLIED'`).get() as { count: number }
       expect(appliedRows.count).toBe(2)

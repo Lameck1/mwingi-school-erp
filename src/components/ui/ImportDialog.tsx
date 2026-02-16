@@ -59,7 +59,7 @@ async function fetchTemplateMappings(entityType: string): Promise<ImportMapping[
 }
 
 interface UploadStepProps {
-    fileInputRef: React.RefObject<HTMLInputElement>
+    fileInputRef: React.RefObject<HTMLInputElement | null>
     onFileSelect: (event: React.ChangeEvent<HTMLInputElement>) => void
     onDownloadTemplate: () => Promise<void>
 }
@@ -214,7 +214,7 @@ function ResultStep({ importResult, onDone }: Readonly<ResultStepProps>) {
 }
 
 interface ImportDialogController {
-    fileInputRef: React.RefObject<HTMLInputElement>
+    fileInputRef: React.RefObject<HTMLInputElement | null>
     step: ImportStep
     file: File | null
     error: string | null

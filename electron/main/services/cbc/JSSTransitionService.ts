@@ -1,4 +1,5 @@
 import { getDatabase } from '../../database';
+import { buildFeeInvoiceActiveStatusPredicate, buildFeeInvoiceOutstandingBalanceSql } from '../../utils/feeInvoiceSql';
 
 export interface GradeTransition {
   id: number;
@@ -199,11 +200,14 @@ export class JSSTransitionService {
    * Calculate student's outstanding balance
    */
   private getStudentOutstandingBalance(studentId: number): number {
+    const outstandingBalanceSql = buildFeeInvoiceOutstandingBalanceSql(this.db, 'fi');
+    const activeStatusPredicate = buildFeeInvoiceActiveStatusPredicate(this.db, 'fi');
     const stmt = this.db.prepare(`
       SELECT 
-        COALESCE(SUM(total_amount - amount_paid), 0) as balance
-      FROM fee_invoice
-      WHERE student_id = ?
+        COALESCE(SUM(${outstandingBalanceSql}), 0) as balance
+      FROM fee_invoice fi
+      WHERE fi.student_id = ?
+        AND ${activeStatusPredicate}
     `);
 
     const result = stmt.get(studentId) as { balance: number };

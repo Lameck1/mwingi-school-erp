@@ -233,7 +233,7 @@ export class SystemMaintenanceService {
         const payments = db.prepare(`SELECT lt.student_id, lt.amount, lt.payment_method, lt.payment_reference, lt.transaction_date FROM ledger_transaction lt WHERE lt.transaction_type = 'FEE_PAYMENT' AND (lt.is_voided = 0 OR lt.is_voided IS NULL) ORDER BY lt.id`)
             .all() as Array<{ student_id: number; amount: number; payment_method: string; payment_reference: string; transaction_date: string }>
         if (payments.length === 0) {
-            throw new Error('DEBUG: No payments found in ledger_transaction to seed journal entries from!')
+            console.warn('No fee payment transactions found while seeding journal entries; skipping payment journal posting.')
         }
         for (const p of payments) {
             const result = await journalService.recordPayment(p.student_id, p.amount, p.payment_method, p.payment_reference, p.transaction_date, userId)

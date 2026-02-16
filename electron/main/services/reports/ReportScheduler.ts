@@ -1,5 +1,6 @@
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
+import { buildFeeInvoiceOutstandingBalanceSql, buildFeeInvoiceOutstandingStatusPredicate } from '../../utils/feeInvoiceSql'
 import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
 import { NotificationService } from '../notifications/NotificationService'
 
@@ -273,6 +274,9 @@ export class ReportScheduler {
     }
 
     private async generateReportPayload(schedule: ScheduledReport, startDate: string, endDate: string): Promise<unknown> {
+        const outstandingBalanceSql = buildFeeInvoiceOutstandingBalanceSql(this.db, 'fi')
+        const outstandingStatusPredicate = buildFeeInvoiceOutstandingStatusPredicate(this.db, 'fi')
+
         switch (schedule.report_type) {
             case 'FEE_COLLECTION':
                 return this.db.prepare(`
@@ -292,12 +296,12 @@ export class ReportScheduler {
                         s.admission_number,
                         s.first_name,
                         s.last_name,
-                        (fi.total_amount - fi.amount_paid) as balance,
+                        ${outstandingBalanceSql} as balance,
                         fi.due_date
                     FROM fee_invoice fi
                     JOIN student s ON s.id = fi.student_id
-                    WHERE fi.status IN ('PENDING', 'PARTIAL', 'OUTSTANDING')
-                      AND (fi.total_amount - fi.amount_paid) > 0
+                    WHERE ${outstandingStatusPredicate}
+                      AND (${outstandingBalanceSql}) > 0
                     ORDER BY balance DESC
                 `).all()
             case 'EXPENSE_SUMMARY':

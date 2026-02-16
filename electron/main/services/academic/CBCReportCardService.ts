@@ -1,4 +1,5 @@
 import { getDatabase } from '../../database'
+import { buildFeeInvoiceActiveStatusPredicate, buildFeeInvoiceOutstandingBalanceSql } from '../../utils/feeInvoiceSql'
 
 import type {
   BatchGenerationResult,
@@ -23,6 +24,28 @@ export class CBCReportCardService {
   private get db() {
     return getDatabase()
   }
+  private subjectNameColumnCache: 'name' | 'subject_name' | null = null
+
+  private resolveSubjectNameColumn(forceRefresh: boolean = false): 'name' | 'subject_name' {
+    if (!forceRefresh && this.subjectNameColumnCache) {
+      return this.subjectNameColumnCache
+    }
+
+    const columns = this.db.prepare('PRAGMA table_info(subject)').all() as Array<{ name: string }>
+    const columnNames = new Set(columns.map((column) => column.name))
+
+    if (columnNames.has('name')) {
+      this.subjectNameColumnCache = 'name'
+      return this.subjectNameColumnCache
+    }
+
+    if (columnNames.has('subject_name')) {
+      this.subjectNameColumnCache = 'subject_name'
+      return this.subjectNameColumnCache
+    }
+
+    throw new Error('Subject schema mismatch: required subject name column is missing')
+  }
 
   private getRecordById<T>(tableName: string, id: number): T | undefined {
     return this.db.prepare(`SELECT * FROM ${tableName} WHERE id = ?`).get(id) as T | undefined
@@ -41,7 +64,11 @@ export class CBCReportCardService {
       SELECT s.id, s.admission_number, s.first_name, s.last_name, s.student_type, e.stream_id
       FROM student s
       JOIN enrollment e ON s.id = e.student_id
-      WHERE s.id = ? AND e.academic_year_id = ? AND e.term_id = ?
+      WHERE s.id = ?
+        AND s.is_active = 1
+        AND e.academic_year_id = ?
+        AND e.term_id = ?
+        AND e.status = 'ACTIVE'
       ORDER BY e.enrollment_date DESC
       LIMIT 1
     `).get(studentId, exam.academic_year_id, exam.term_id) as StudentResult | undefined
@@ -150,13 +177,21 @@ export class CBCReportCardService {
       WHERE exam_id = ? AND student_id = ?
     `).get(examId, studentId) as { avg_score: number } | undefined
 
+    if (!Number.isFinite(studentAverage?.avg_score)) {
+      return 1
+    }
+
     const classPosition = this.db.prepare(`
       SELECT COUNT(*) as position
       FROM (
         SELECT er.student_id, AVG(er.score) as avg_score
         FROM exam_result er
         JOIN enrollment e ON er.student_id = e.student_id
-        WHERE er.exam_id = ? AND e.stream_id = ? AND e.academic_year_id = ? AND e.term_id = ?
+        WHERE er.exam_id = ?
+          AND e.stream_id = ?
+          AND e.academic_year_id = ?
+          AND e.term_id = ?
+          AND e.status = 'ACTIVE'
         GROUP BY er.student_id
       ) t
       WHERE t.avg_score > ?
@@ -165,17 +200,20 @@ export class CBCReportCardService {
       streamId,
       exam.academic_year_id,
       exam.term_id,
-      studentAverage?.avg_score || 0
+      studentAverage.avg_score
     ) as ClassPositionResult | undefined
 
-    return classPosition?.position || 1
+    return (classPosition?.position ?? 0) + 1
   }
 
   private getFeesBalance(studentId: number): number {
+    const outstandingBalanceSql = buildFeeInvoiceOutstandingBalanceSql(this.db, 'fi')
+    const activeStatusPredicate = buildFeeInvoiceActiveStatusPredicate(this.db, 'fi')
     const feeBalance = this.db.prepare(`
-      SELECT COALESCE(SUM(total_amount - amount_paid), 0) as balance
-      FROM fee_invoice
-      WHERE student_id = ?
+      SELECT COALESCE(SUM(${outstandingBalanceSql}), 0) as balance
+      FROM fee_invoice fi
+      WHERE fi.student_id = ?
+        AND ${activeStatusPredicate}
     `).get(studentId) as FeeBalanceResult | undefined
 
     return feeBalance?.balance || 0
@@ -362,7 +400,11 @@ export class CBCReportCardService {
         SELECT s.id
         FROM student s
         JOIN enrollment e ON s.id = e.student_id
-        WHERE e.stream_id = ? AND e.academic_year_id = ? AND e.term_id = ? AND s.is_active = 1
+        WHERE e.stream_id = ?
+          AND e.academic_year_id = ?
+          AND e.term_id = ?
+          AND e.status = 'ACTIVE'
+          AND s.is_active = 1
         ORDER BY s.last_name, s.first_name
       `).all(streamId, exam.academic_year_id, exam.term_id) as { id: number }[]
 
@@ -497,13 +539,31 @@ export class CBCReportCardService {
   }
 
   private mapStoredReportCardSubjects(reportCardId: number): StudentReportCard['subjects'] {
-    const subjects = this.db.prepare(`
-      SELECT * FROM report_card_subject WHERE report_card_id = ?
+    const fetchSubjects = (nameColumn: 'name' | 'subject_name'): ReportCardSubjectRecord[] => this.db.prepare(`
+      SELECT rcs.*, s.${nameColumn} as subject_name
+      FROM report_card_subject rcs
+      LEFT JOIN subject s ON s.id = rcs.subject_id
+      WHERE rcs.report_card_id = ?
+      ORDER BY rcs.id ASC
     `).all(reportCardId) as ReportCardSubjectRecord[]
+
+    const nameColumn = this.resolveSubjectNameColumn()
+
+    let subjects: ReportCardSubjectRecord[]
+    try {
+      subjects = fetchSubjects(nameColumn)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (!message.includes('no such column')) {
+        throw error
+      }
+      this.subjectNameColumnCache = null
+      subjects = fetchSubjects(this.resolveSubjectNameColumn(true))
+    }
 
     return subjects.map((subject) => ({
       subject_id: subject.subject_id,
-      subject_name: '',
+      subject_name: subject.subject_name || 'Unknown',
       marks: subject.marks,
       grade: subject.grade,
       points: this.getPoints(subject.grade),
@@ -543,6 +603,7 @@ export class CBCReportCardService {
   ): Promise<StudentReportCard> {
     const { student, stream, year, term } = this.loadReportCardContext(rc, examId, studentId)
     const subjects = this.mapStoredReportCardSubjects(rc.id)
+    const feesBalance = this.getFeesBalance(studentId)
 
     return {
       student_id: studentId,
@@ -566,7 +627,7 @@ export class CBCReportCardService {
       class_teacher_comment: rc.class_teacher_remarks || '',
       principal_comment: rc.principal_remarks || '',
       next_term_begin_date: '',
-      fees_balance: 0,
+      fees_balance: feesBalance,
       qr_code_token: rc.qr_code_token || '',
       generated_at: rc.generated_at,
       email_sent_at: rc.email_sent_at

@@ -70,7 +70,7 @@ export default function CreateBudget() {
 
     const totalBudgeted = lineItems.reduce((sum, item) => sum + (item.budgeted_amount || 0), 0)
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         setError(null)
 

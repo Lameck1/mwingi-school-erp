@@ -14,8 +14,9 @@ export interface BackupInfo {
 
 export class BackupService {
     private static get BACKUP_DIR() { return path.join(app.getPath('userData'), 'backups') }
-    // Keep last 7 days + 1 monthly (not implemented strictly yet, just count based rotation)
-    private static readonly MAX_BACKUPS = 7
+    // Keep all backups from the last N days, plus the newest backup for each older month.
+    // This limits ransomware blast radius while preserving monthly restore points.
+    private static readonly DAILY_RETENTION_DAYS = 7
     private static schedulerInterval: ReturnType<typeof setInterval> | null = null
 
     private static createTempPath(targetPath: string): string {
@@ -178,7 +179,7 @@ export class BackupService {
                     return {
                         filename: f,
                         size: stats.size,
-                        created_at: stats.birthtime
+                        created_at: stats.mtime
                     }
                 })
                 .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
@@ -191,15 +192,42 @@ export class BackupService {
 
     private static async cleanupOldBackups() {
         const backups = this.listBackups()
-        if (backups.length > this.MAX_BACKUPS) {
-            const toDelete = backups.slice(this.MAX_BACKUPS)
-            for (const backup of toDelete) {
-                try {
-                    fs.unlinkSync(path.join(this.BACKUP_DIR, backup.filename))
-                    log.info(`Deleted old backup: ${backup.filename}`)
-                } catch (e) {
-                    log.error(`Failed to delete old backup ${backup.filename}`, e)
-                }
+        if (backups.length === 0) {
+            return
+        }
+
+        const now = new Date()
+        const dailyCutoff = new Date(now)
+        dailyCutoff.setDate(dailyCutoff.getDate() - this.DAILY_RETENTION_DAYS)
+
+        const keep = new Set<string>()
+        const monthlySnapshots = new Map<string, BackupInfo>()
+
+        for (const backup of backups) {
+            if (backup.created_at >= dailyCutoff) {
+                keep.add(backup.filename)
+                continue
+            }
+
+            const monthKey = `${backup.created_at.getUTCFullYear()}-${String(backup.created_at.getUTCMonth() + 1).padStart(2, '0')}`
+            if (!monthlySnapshots.has(monthKey)) {
+                monthlySnapshots.set(monthKey, backup)
+            }
+        }
+
+        for (const snapshot of monthlySnapshots.values()) {
+            keep.add(snapshot.filename)
+        }
+
+        for (const backup of backups) {
+            if (keep.has(backup.filename)) {
+                continue
+            }
+            try {
+                fs.unlinkSync(path.join(this.BACKUP_DIR, backup.filename))
+                log.info(`Deleted old backup: ${backup.filename}`)
+            } catch (e) {
+                log.error(`Failed to delete old backup ${backup.filename}`, e)
             }
         }
     }

@@ -421,7 +421,7 @@ export class HireService {
             SELECT 
                 COUNT(*) as totalBookings,
                 COALESCE(SUM(amount_paid), 0) as totalIncome,
-                COALESCE(SUM(total_amount - amount_paid), 0) as pendingAmount,
+                COALESCE(SUM(MAX(total_amount - amount_paid, 0)), 0) as pendingAmount,
                 (SELECT COALESCE(SUM(amount_paid), 0) FROM hire_booking 
                  WHERE strftime('%Y-%m', hire_date) = strftime('%Y-%m', 'now')) as thisMonth
             FROM hire_booking WHERE status != 'CANCELLED'

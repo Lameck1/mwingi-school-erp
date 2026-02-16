@@ -119,6 +119,7 @@ export interface ReportCardRecord {
 }
 
 export interface ReportCardSubjectRecord {
+  subject_name?: string
   subject_id: number
   marks: number
   grade: string

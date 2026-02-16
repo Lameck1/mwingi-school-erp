@@ -118,7 +118,7 @@ export default function Approvals() {
         setShowRejectModal(true)
     }
 
-    const renderRequests = (): JSX.Element => {
+    const renderRequests = () => {
         if (loading) {
             return (
                 <>

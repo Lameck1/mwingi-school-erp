@@ -85,4 +85,67 @@ describe('GrantTrackingService expiry logic', () => {
     expect(expiring).toHaveLength(1)
     expect(expiring[0].grant_name).toBe('Expiring Soon')
   })
+
+  it('flags compliance issues for invalid utilization timelines and amounts', async () => {
+    const grantId = db.prepare(`
+      INSERT INTO government_grant (
+        grant_name, grant_type, fiscal_year, amount_allocated, amount_received, date_received, expiry_date, nemis_reference_number, conditions
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'Infrastructure Grant',
+      'INFRASTRUCTURE',
+      2026,
+      100000,
+      90000,
+      '2026-02-01',
+      '2026-02-28',
+      'NEMIS-001',
+      'Must be fully utilized'
+    ).lastInsertRowid as number
+
+    db.prepare(`
+      INSERT INTO grant_utilization (grant_id, gl_account_code, amount_used, utilization_date, description)
+      VALUES
+        (?, '5300', 20000, '2026-01-20', 'Pre-receipt utilization'),
+        (?, '5300', 80000, '2026-03-02', 'Post-expiry utilization')
+    `).run(grantId, grantId)
+
+    const service = new GrantTrackingService()
+    const compliance = await service.validateGrantCompliance(grantId)
+
+    expect(compliance.compliant).toBe(false)
+    expect(compliance.issues).toContain('Utilization exceeds received amount')
+    expect(compliance.issues).toContain('Utilization recorded before grant receipt date')
+    expect(compliance.issues).toContain('Utilization recorded after grant expiry date')
+  })
+
+  it('returns compliant when grant utilization is within constraints', async () => {
+    const grantId = db.prepare(`
+      INSERT INTO government_grant (
+        grant_name, grant_type, fiscal_year, amount_allocated, amount_received, date_received, expiry_date, nemis_reference_number
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'Capitation Grant',
+      'CAPITATION',
+      2026,
+      120000,
+      100000,
+      '2026-01-10',
+      '2026-12-31',
+      'NEMIS-OK'
+    ).lastInsertRowid as number
+
+    db.prepare(`
+      INSERT INTO grant_utilization (grant_id, gl_account_code, amount_used, utilization_date, description)
+      VALUES
+        (?, '5300', 30000, '2026-01-25', 'Term 1 allocation'),
+        (?, '5300', 50000, '2026-03-10', 'Term 2 allocation')
+    `).run(grantId, grantId)
+
+    const service = new GrantTrackingService()
+    const compliance = await service.validateGrantCompliance(grantId)
+
+    expect(compliance.compliant).toBe(true)
+    expect(compliance.issues).toEqual([])
+  })
 })

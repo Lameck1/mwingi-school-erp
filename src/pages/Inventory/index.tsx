@@ -50,7 +50,7 @@ export default function Inventory() {
 
     useEffect(() => { void loadData() }, [])
 
-    const handleAddItem = async (e: React.FormEvent) => {
+    const handleAddItem = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         try {
             await globalThis.electronAPI.createInventoryItem({
@@ -72,7 +72,7 @@ export default function Inventory() {
         }
     }
 
-    const handleStockMovement = async (e: React.FormEvent) => {
+    const handleStockMovement = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         if (!selectedItem) {return}
 

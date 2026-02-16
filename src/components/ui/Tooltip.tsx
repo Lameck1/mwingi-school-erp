@@ -69,12 +69,12 @@ const renderClonedTrigger = (
     showTooltip: () => void,
     hideTooltip: () => void
 ) => {
-    const childProps = children.props as React.HTMLAttributes<HTMLElement>
+    const childProps = children.props as React.HTMLAttributes<HTMLElement> & { 'aria-describedby'?: string }
     const describedBy = childProps['aria-describedby']
         ? `${childProps['aria-describedby']} ${tooltipId}`
         : tooltipId
 
-    return React.cloneElement(children, {
+    return React.cloneElement(children as React.ReactElement<React.HTMLAttributes<HTMLElement>>, {
         onMouseEnter: mergeHandler(showTooltip, childProps.onMouseEnter),
         onMouseLeave: mergeHandler(hideTooltip, childProps.onMouseLeave),
         onFocus: mergeHandler(showTooltip, childProps.onFocus),

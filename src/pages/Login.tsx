@@ -29,7 +29,7 @@ export default function Login() {
         void checkSetup()
     }, [navigate])
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         setError('')
         setLoading(true)

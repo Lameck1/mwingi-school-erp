@@ -59,7 +59,7 @@ export default function RecordExpense() {
         }
     }
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         if (!formData.amount || !formData.category_id) {
             showToast('Please fill in all required fields', 'warning')

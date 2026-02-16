@@ -56,7 +56,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
         setUseCredit(false)
     }, [selectedStudent])
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         if (!selectedStudent || !formData.amount) {return}
         if (!user?.id) {

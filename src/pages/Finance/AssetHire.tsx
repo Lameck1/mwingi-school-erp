@@ -89,7 +89,7 @@ export default function AssetHire() {
         }
     }
 
-    const handleCreateBooking = async (e: React.FormEvent) => {
+    const handleCreateBooking = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         if (!user) {return}
 
@@ -129,7 +129,7 @@ export default function AssetHire() {
         }
     }
 
-    const handleCreateClient = async (e: React.FormEvent) => {
+    const handleCreateClient = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         const result = await globalThis.electronAPI.createHireClient(clientForm)
         if (result.success) {
@@ -142,7 +142,7 @@ export default function AssetHire() {
         }
     }
 
-    const handleRecordPayment = async (e: React.FormEvent) => {
+    const handleRecordPayment = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         if (!user || !selectedBooking) {return}
 

@@ -34,7 +34,7 @@ const SetupAdmin: React.FC = () => {
     setForm((prev) => ({ ...prev, [key]: e.target.value }))
   }
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault()
     setError('')
     if (!form.full_name || !form.username || !form.password) {

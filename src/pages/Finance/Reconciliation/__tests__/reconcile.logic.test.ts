@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { validateMatchSelection } from '../reconcile.logic'
+import { parseStatementCSV, validateMatchSelection } from '../reconcile.logic'
 
 describe('reconcile logic', () => {
     it('blocks matching when no statement line is selected', () => {
@@ -27,5 +27,34 @@ describe('reconcile logic', () => {
         )
         expect(result.canMatch).toBe(true)
         expect(result.reason).toBeUndefined()
+    })
+
+    it('parses valid bank statement CSV rows into cents', () => {
+        const csv = [
+            'Date,Description,Debit,Credit,Reference,Running Balance',
+            '2026-02-01,ATM Withdrawal,100.50,0,REF-1,1200.25',
+            '2026-02-02,Deposit,0,50.00,REF-2,1250.25'
+        ].join('\n')
+
+        const result = parseStatementCSV(csv)
+        expect(result.errors).toEqual([])
+        expect(result.lines).toHaveLength(2)
+        expect(result.lines[0].debit_amount).toBe(10050)
+        expect(result.lines[1].credit_amount).toBe(5000)
+        expect(result.lines[1].running_balance).toBe(125025)
+    })
+
+    it('reports row-level validation errors for invalid CSV lines', () => {
+        const csv = [
+            'Date,Description,Debit,Credit',
+            '2026-02-01,,10,0',
+            'invalid-date,Deposit,0,10',
+            '2026-02-03,Bad row,10,20'
+        ].join('\n')
+
+        const result = parseStatementCSV(csv)
+        expect(result.lines).toHaveLength(0)
+        expect(result.errors.length).toBe(3)
+        expect(result.errors[0]).toContain('description is required')
     })
 })

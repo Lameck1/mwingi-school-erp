@@ -89,7 +89,7 @@ export default function Students() {
         return () => unsubscribe()
     }, [])
 
-    const handleSearch = (e: React.FormEvent) => {
+    const handleSearch = (e: React.SyntheticEvent) => {
         e.preventDefault()
         loadStudents().catch((err: unknown) => console.error('Failed to search students', err))
     }

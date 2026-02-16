@@ -42,7 +42,7 @@ export default function UsersPage() {
 
     useEffect(() => { loadData().catch((err: unknown) => console.error('Failed to load users', err)) }, [loadData])
 
-    const handleSaveUser = async (e: React.FormEvent) => {
+    const handleSaveUser = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         setSaving(true)
         try {
@@ -66,7 +66,7 @@ export default function UsersPage() {
         }
     }
 
-    const handleResetPassword = async (e: React.FormEvent) => {
+    const handleResetPassword = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         if (passwordData.newPassword !== passwordData.confirmPassword) {
             showToast("Passwords do not match", 'error')

@@ -1,6 +1,14 @@
 
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
+import {
+  buildFeeInvoiceAmountSql,
+  buildFeeInvoiceDateSql,
+  buildFeeInvoiceOutstandingBalanceSql,
+  buildFeeInvoiceStatusSql,
+  buildFeeInvoiceOutstandingStatusPredicate
+} from '../../utils/feeInvoiceSql'
+import { STUDENT_COLLECTION_TRANSACTION_TYPES } from '../../utils/financeTransactionTypes'
 
 import type Database from 'better-sqlite3'
 
@@ -82,11 +90,14 @@ export interface Discrepancy {
   difference: number
 }
 
+const STUDENT_CREDIT_TRANSACTION_TYPES = new Set<string>(STUDENT_COLLECTION_TRANSACTION_TYPES.map((type) => type.toUpperCase()))
+const STUDENT_DEBIT_TRANSACTION_TYPES = new Set<string>(['DEBIT', 'CHARGE', 'REVERSAL', 'REFUND'])
+
 const isCreditTransaction = (transactionType: string): boolean =>
-  transactionType === 'CREDIT' || transactionType === 'PAYMENT'
+  STUDENT_CREDIT_TRANSACTION_TYPES.has((transactionType || '').toUpperCase())
 
 const isDebitTransaction = (transactionType: string): boolean =>
-  transactionType === 'DEBIT' || transactionType === 'CHARGE' || transactionType === 'REVERSAL'
+  STUDENT_DEBIT_TRANSACTION_TYPES.has((transactionType || '').toUpperCase())
 
 // ============================================================================
 // REPOSITORY LAYER (SRP)
@@ -119,19 +130,42 @@ class StudentLedgerRepository {
 
   async getOutstandingInvoices(studentId: number): Promise<FeeInvoiceRow[]> {
     const db = this.db
+    const outstandingBalanceSql = buildFeeInvoiceOutstandingBalanceSql(db, 'fi')
+    const outstandingStatusPredicate = buildFeeInvoiceOutstandingStatusPredicate(db, 'fi')
+    const invoiceDateSql = buildFeeInvoiceDateSql(db, 'fi')
+    const invoiceStatusSql = buildFeeInvoiceStatusSql(db, 'fi')
     return db.prepare(`
-      SELECT * FROM fee_invoice
-      WHERE student_id = ? AND status = 'OUTSTANDING'
-      ORDER BY due_date ASC
+      SELECT
+        fi.id,
+        fi.student_id,
+        ${outstandingBalanceSql} as amount,
+        ${invoiceStatusSql} as status,
+        ${invoiceDateSql} as invoice_date,
+        ${invoiceDateSql} as due_date
+      FROM fee_invoice fi
+      WHERE fi.student_id = ?
+        AND ${outstandingStatusPredicate}
+        AND (${outstandingBalanceSql}) > 0
+      ORDER BY ${invoiceDateSql} ASC
     `).all(studentId) as FeeInvoiceRow[]
   }
 
   async getInvoicesForPeriod(studentId: number, startDate: string, endDate: string): Promise<FeeInvoiceRow[]> {
     const db = this.db
+    const invoiceAmountSql = buildFeeInvoiceAmountSql(db, 'fi')
+    const invoiceDateSql = buildFeeInvoiceDateSql(db, 'fi')
+    const invoiceStatusSql = buildFeeInvoiceStatusSql(db, 'fi')
     return db.prepare(`
-      SELECT * FROM fee_invoice
-      WHERE student_id = ? AND invoice_date >= ? AND invoice_date <= ?
-      ORDER BY invoice_date ASC
+      SELECT
+        fi.id,
+        fi.student_id,
+        ${invoiceAmountSql} as amount,
+        ${invoiceStatusSql} as status,
+        ${invoiceDateSql} as invoice_date,
+        ${invoiceDateSql} as due_date
+      FROM fee_invoice fi
+      WHERE fi.student_id = ? AND ${invoiceDateSql} >= ? AND ${invoiceDateSql} <= ?
+      ORDER BY ${invoiceDateSql} ASC
     `).all(studentId, startDate, endDate) as FeeInvoiceRow[]
   }
 
@@ -179,11 +213,9 @@ class OpeningBalanceCalculator implements IOpeningBalanceCalculator {
     let balance = 0
     for (const transaction of transactions) {
       if (transaction.transaction_date < beforeDate) {
-        if (transaction.transaction_type === 'CREDIT' || transaction.transaction_type === 'PAYMENT') {
+        if (isCreditTransaction(transaction.transaction_type)) {
           balance += transaction.amount || 0
-        } else if (transaction.transaction_type === 'DEBIT' || transaction.transaction_type === 'CHARGE') {
-          balance -= transaction.amount || 0
-        } else if (transaction.transaction_type === 'REVERSAL') {
+        } else if (isDebitTransaction(transaction.transaction_type)) {
           balance -= transaction.amount || 0
         }
       }

@@ -52,7 +52,7 @@ export default function AssetRegister() {
         loadAssets('').catch((err: unknown) => console.error('Failed to load assets', err))
     }, [loadAssets])
 
-    const handleCreate = async (e: React.FormEvent) => {
+    const handleCreate = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         if (!user?.id) {
             showToast('You must be signed in to create assets', 'error')

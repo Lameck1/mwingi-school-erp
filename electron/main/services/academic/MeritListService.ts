@@ -139,15 +139,21 @@ export class MeritListService {
         rcs.class_position as position,
         s.id as student_id,
         s.admission_number,
-        s.first_name || ' ' || s.last_name as student_name,
+        TRIM(COALESCE(s.first_name, '') || ' ' || COALESCE(s.last_name, '')) as student_name,
         rcs.total_marks,
         rcs.mean_score as average_marks,
         rcs.mean_grade as grade
       FROM report_card_summary rcs
+      JOIN exam ex ON rcs.exam_id = ex.id
       JOIN student s ON rcs.student_id = s.id
-      WHERE rcs.exam_id = ? AND s.stream_id = ? AND s.is_active = 1
+      JOIN enrollment en ON en.student_id = s.id
+        AND en.stream_id = ?
+        AND en.academic_year_id = ex.academic_year_id
+        AND en.term_id = ex.term_id
+        AND en.status = 'ACTIVE'
+      WHERE rcs.exam_id = ? AND s.is_active = 1
       ORDER BY rcs.class_position ASC
-    `).all(exam.id, streamId) as MeritListRow[]
+    `).all(streamId, exam.id) as MeritListRow[]
 
     // Format results
     return meritList.map((item, index) => ({
@@ -169,20 +175,24 @@ export class MeritListService {
     return this.db.prepare(`
       SELECT 
         s.id,
-        s.name,
+        TRIM(COALESCE(s.first_name, '') || ' ' || COALESCE(s.last_name, '')) as name,
         s.admission_number,
         COUNT(er.id) as subject_count,
         SUM(er.score) as total_marks,
         AVG(er.score) as average_marks
-      FROM student s
-      JOIN stream st ON s.stream_id = st.id
-      JOIN exam_result er ON s.id = er.student_id
-      WHERE er.exam_id = ? 
-        AND st.id = ?
+      FROM exam_result er
+      JOIN exam ex ON er.exam_id = ex.id
+      JOIN student s ON s.id = er.student_id
+      JOIN enrollment en ON en.student_id = s.id
+        AND en.stream_id = ?
+        AND en.academic_year_id = ex.academic_year_id
+        AND en.term_id = ex.term_id
+        AND en.status = 'ACTIVE'
+      WHERE er.exam_id = ?
         AND s.is_active = 1
-      GROUP BY s.id
+      GROUP BY s.id, s.first_name, s.last_name, s.admission_number
       ORDER BY average_marks DESC, total_marks DESC
-    `).all(examId, streamId) as StudentResultRow[]
+    `).all(streamId, examId) as StudentResultRow[]
   }
 
   private createMeritListRecord(payload: MeritListRecordPayload): number {
@@ -307,6 +317,23 @@ export class MeritListService {
     }
   }
 
+  private getSubjectName(subjectId: number): string {
+    const columns = this.db.prepare('PRAGMA table_info(subject)').all() as Array<{ name: string }>
+    const hasName = columns.some((column) => column.name === 'name')
+    const hasLegacyName = columns.some((column) => column.name === 'subject_name')
+
+    if (hasName) {
+      const subject = this.db.prepare('SELECT name FROM subject WHERE id = ?').get(subjectId) as { name?: string } | undefined
+      return subject?.name || 'Unknown'
+    }
+    if (hasLegacyName) {
+      const subject = this.db.prepare('SELECT subject_name FROM subject WHERE id = ?').get(subjectId) as { subject_name?: string } | undefined
+      return subject?.subject_name || 'Unknown'
+    }
+
+    return 'Unknown'
+  }
+
   /**
    * Get subject merit list
    */
@@ -386,13 +413,13 @@ export class MeritListService {
     const bottomMean = sorted.slice(0, band).reduce((sum, v) => sum + v, 0) / band
     const discriminationIndex = topMean - bottomMean
 
-    const subject = this.db.prepare(`SELECT name FROM subject WHERE id = ?`).get(subjectId) as { name?: string } | undefined
+    const subjectName = this.getSubjectName(subjectId)
 
     const verdict = getSubjectDifficultyVerdict(mean)
 
     return {
       subject_id: subjectId,
-      subject_name: subject?.name || 'Unknown',
+      subject_name: subjectName,
       mean_score: Number(mean.toFixed(2)),
       median_score: Number(median.toFixed(2)),
       pass_rate: Number(passRate.toFixed(2)),

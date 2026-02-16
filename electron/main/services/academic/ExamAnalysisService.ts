@@ -45,7 +45,6 @@ interface StudentResult {
   id: number
   admission_number: string
   name: string;
-  stream_id: number;
 }
 
 interface StudentSubjectScoreResult {
@@ -105,7 +104,7 @@ export class ExamAnalysisService {
     streamId?: number
   ): Promise<SubjectAnalysis> {
     try {
-      let query = `
+      let summaryQuery = `
         SELECT 
           s.id as subject_id,
           s.name as subject_name,
@@ -114,55 +113,47 @@ export class ExamAnalysisService {
           MIN(er.score) as min_score,
           MAX(er.score) as max_score
         FROM exam_result er
+        JOIN exam ex ON er.exam_id = ex.id
+        JOIN enrollment en ON en.student_id = er.student_id
+          AND en.academic_year_id = ex.academic_year_id
+          AND en.term_id = ex.term_id
+          AND en.status = 'ACTIVE'
         JOIN subject s ON er.subject_id = s.id
-        JOIN student st ON er.student_id = st.id
         WHERE er.exam_id = ? AND er.subject_id = ?
           AND er.score IS NOT NULL
       `
 
-      const params = [examId, subjectId]
+      const summaryParams: number[] = [examId, subjectId]
 
       if (streamId) {
-        query += ` AND st.stream_id = ?`
-        params.push(streamId)
+        summaryQuery += ` AND en.stream_id = ?`
+        summaryParams.push(streamId)
       }
 
-      query += ` GROUP BY s.id`
+      summaryQuery += ` GROUP BY s.id`
 
-      const result = this.db.prepare(query).get(...params) as SubjectStatisticsResult | undefined
+      const result = this.db.prepare(summaryQuery).get(...summaryParams) as SubjectStatisticsResult | undefined
 
       if (!result) { throw new Error('No data found for this subject') }
 
-      // Get all scores for calculations
-      const scores = (this.db.prepare(`
+      let scoreQuery = `
         SELECT er.score FROM exam_result er
-        JOIN student st ON er.student_id = st.id
-        WHERE er.exam_id = ? AND er.subject_id = ? AND er.score IS NOT NULL
-      `).all(examId, subjectId) as ScoreResult[]).map(r => r.score)
-
+        JOIN exam ex ON er.exam_id = ex.id
+        JOIN enrollment en ON en.student_id = er.student_id
+          AND en.academic_year_id = ex.academic_year_id
+          AND en.term_id = ex.term_id
+          AND en.status = 'ACTIVE'
+        WHERE er.exam_id = ?
+          AND er.subject_id = ?
+          AND er.score IS NOT NULL
+      `
+      const scoreParams: number[] = [examId, subjectId]
       if (streamId) {
-        const filteredScores = (this.db.prepare(`
-          SELECT er.score FROM exam_result er
-          JOIN student st ON er.student_id = st.id
-          WHERE er.exam_id = ? AND er.subject_id = ? AND st.stream_id = ? AND er.score IS NOT NULL
-        `).all(examId, subjectId, streamId) as ScoreResult[]).map(r => r.score)
-
-        return {
-          subject_id: result.subject_id,
-          subject_name: result.subject_name,
-          mean_score: result.mean_score,
-          median_score: this.calculateMedian(filteredScores),
-          mode_score: this.calculateMode(filteredScores),
-          std_deviation: this.calculateStdDeviation(filteredScores, result.mean_score),
-          min_score: result.min_score,
-          max_score: result.max_score,
-          pass_rate: (filteredScores.filter(s => s >= 50).length / filteredScores.length) * 100,
-          fail_rate: (filteredScores.filter(s => s < 50).length / filteredScores.length) * 100,
-          difficulty_index: 100 - result.mean_score,
-          discrimination_index: this.calculateDiscriminationIndex(filteredScores),
-          student_count: filteredScores.length
-        }
+        scoreQuery += ' AND en.stream_id = ?'
+        scoreParams.push(streamId)
       }
+      const scores = (this.db.prepare(scoreQuery).all(...scoreParams) as ScoreResult[]).map(r => r.score)
+      const safeCount = scores.length || 1
 
       return {
         subject_id: result.subject_id,
@@ -173,8 +164,8 @@ export class ExamAnalysisService {
         std_deviation: this.calculateStdDeviation(scores, result.mean_score),
         min_score: result.min_score,
         max_score: result.max_score,
-        pass_rate: (scores.filter(s => s >= 50).length / scores.length) * 100,
-        fail_rate: (scores.filter(s => s < 50).length / scores.length) * 100,
+        pass_rate: (scores.filter(s => s >= 50).length / safeCount) * 100,
+        fail_rate: (scores.filter(s => s < 50).length / safeCount) * 100,
         difficulty_index: 100 - result.mean_score,
         discrimination_index: this.calculateDiscriminationIndex(scores),
         student_count: scores.length
@@ -191,11 +182,21 @@ export class ExamAnalysisService {
    */
   async analyzeAllSubjects(examId: number, streamId?: number): Promise<SubjectAnalysis[]> {
     try {
-      const subjects = (this.db.prepare(`
+      let subjectQuery = `
         SELECT DISTINCT er.subject_id FROM exam_result er
-        JOIN student st ON er.student_id = st.id
+        JOIN exam ex ON er.exam_id = ex.id
+        JOIN enrollment en ON en.student_id = er.student_id
+          AND en.academic_year_id = ex.academic_year_id
+          AND en.term_id = ex.term_id
+          AND en.status = 'ACTIVE'
         WHERE er.exam_id = ?
-      `).all(examId) as SubjectIdResult[]).map(r => r.subject_id)
+      `
+      const subjectParams: number[] = [examId]
+      if (streamId) {
+        subjectQuery += ' AND en.stream_id = ?'
+        subjectParams.push(streamId)
+      }
+      const subjects = (this.db.prepare(subjectQuery).all(...subjectParams) as SubjectIdResult[]).map(r => r.subject_id)
 
       const analyses: SubjectAnalysis[] = []
 
@@ -272,7 +273,14 @@ export class ExamAnalysisService {
    */
   async getStudentPerformance(studentId: number, examId: number): Promise<StudentAnalysis> {
     try {
-      const student = this.db.prepare('SELECT * FROM student WHERE id = ?').get(studentId) as StudentResult | undefined
+      const student = this.db.prepare(`
+        SELECT 
+          id,
+          admission_number,
+          TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')) as name
+        FROM student
+        WHERE id = ?
+      `).get(studentId) as StudentResult | undefined
 
       if (!student) { throw new Error('Student not found') }
 
@@ -370,12 +378,18 @@ export class ExamAnalysisService {
    * Private helper methods
    */
   private calculateMedian(scores: number[]): number {
+    if (scores.length === 0) {
+      return 0
+    }
     const sorted = [...scores].sort((a, b) => a - b)
     const mid = Math.floor(sorted.length / 2)
     return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
   }
 
   private calculateMode(scores: number[]): number {
+    if (scores.length === 0) {
+      return 0
+    }
     const frequency: { [key: number]: number } = {}
     let maxFreq = 0
     let mode = scores[0]
@@ -392,12 +406,18 @@ export class ExamAnalysisService {
   }
 
   private calculateStdDeviation(scores: number[], mean: number): number {
+    if (scores.length === 0) {
+      return 0
+    }
     const squareDiffs = scores.map(score => Math.pow(score - mean, 2))
     const avgSquareDiff = squareDiffs.reduce((a, b) => a + b, 0) / scores.length
     return Math.sqrt(avgSquareDiff)
   }
 
   private calculateDiscriminationIndex(scores: number[]): number {
+    if (scores.length < 2) {
+      return 0
+    }
     // Top 27% vs bottom 27%
     const sorted = [...scores].sort((a, b) => b - a)
     const cutoff = Math.ceil(sorted.length * 0.27)

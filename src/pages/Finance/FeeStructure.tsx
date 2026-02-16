@@ -142,7 +142,7 @@ export default function FeeStructure() {
     }
 
     const renderTableRows = () => {
-        const rows: JSX.Element[] = []
+        const rows: Array<ReturnType<typeof renderAmountCells>[number]> = []
         for (const stream of streams) {
             for (const [index, studentType] of STUDENT_TYPES_LIST.entries()) {
                 rows.push(

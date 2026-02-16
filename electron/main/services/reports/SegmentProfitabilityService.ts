@@ -1,8 +1,16 @@
 import { getDatabase } from '../../database'
+import { buildFeeInvoiceActiveStatusPredicate, buildFeeInvoiceAmountSql } from '../../utils/feeInvoiceSql'
+import {
+  REPORT_EXPENSE_TRANSACTION_TYPES,
+  STUDENT_COLLECTION_TRANSACTION_TYPES,
+  asSqlInList
+} from '../../utils/financeTransactionTypes'
 
 import type Database from 'better-sqlite3'
 
 type ProfitabilityStatus = 'PROFITABLE' | 'BREAKING_EVEN' | 'UNPROFITABLE'
+const studentCollectionTransactionTypesSql = asSqlInList(STUDENT_COLLECTION_TRANSACTION_TYPES)
+const debitAndExpenseTransactionTypesSql = asSqlInList(['DEBIT', ...REPORT_EXPENSE_TRANSACTION_TYPES])
 export interface ITransportProfitabilityCalculator { calculateTransportProfitability(): Promise<SegmentProfitability> }
 export interface IBoardingProfitabilityCalculator { calculateBoardingProfitability(): Promise<SegmentProfitability> }
 export interface IActivityFeeAnalyzer { calculateActivityProfitability(): Promise<SegmentProfitability> }
@@ -34,8 +42,8 @@ class ProfitabilityRepository {
     const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM ledger_transaction
-      WHERE description LIKE '%transport%' OR description LIKE '%bus%'
-      AND transaction_type IN ('CREDIT', 'PAYMENT')
+      WHERE (description LIKE '%transport%' OR description LIKE '%bus%')
+        AND UPPER(COALESCE(transaction_type, '')) IN (${studentCollectionTransactionTypesSql})
     `).get() as TotalResult | undefined
     return result?.total || 0
   }
@@ -49,9 +57,12 @@ class ProfitabilityRepository {
   }
   async getBoardingRevenue(): Promise<number> {
     const db = this.db
+    const invoiceAmountSql = buildFeeInvoiceAmountSql(db, 'fi')
+    const activeStatusPredicate = buildFeeInvoiceActiveStatusPredicate(db, 'fi')
     const result = db.prepare(`
-      SELECT SUM(amount) as total FROM fee_invoice
-      WHERE fee_type = 'BOARDING'
+      SELECT SUM(${invoiceAmountSql}) as total FROM fee_invoice fi
+      WHERE fi.fee_type = 'BOARDING'
+        AND ${activeStatusPredicate}
     `).get() as TotalResult | undefined
     return result?.total || 0
   }
@@ -65,9 +76,12 @@ class ProfitabilityRepository {
   }
   async getActivityFeeRevenue(): Promise<number> {
     const db = this.db
+    const invoiceAmountSql = buildFeeInvoiceAmountSql(db, 'fi')
+    const activeStatusPredicate = buildFeeInvoiceActiveStatusPredicate(db, 'fi')
     const result = db.prepare(`
-      SELECT SUM(amount) as total FROM fee_invoice
-      WHERE fee_type = 'ACTIVITY'
+      SELECT SUM(${invoiceAmountSql}) as total FROM fee_invoice fi
+      WHERE fi.fee_type = 'ACTIVITY'
+        AND ${activeStatusPredicate}
     `).get() as TotalResult | undefined
     return result?.total || 0
   }
@@ -81,9 +95,11 @@ class ProfitabilityRepository {
   }
   async getTotalRevenue(): Promise<number> {
     const db = this.db
+    const invoiceAmountSql = buildFeeInvoiceAmountSql(db, 'fi')
+    const activeStatusPredicate = buildFeeInvoiceActiveStatusPredicate(db, 'fi')
     const result = db.prepare(`
-      SELECT SUM(amount) as total FROM fee_invoice
-      WHERE status IN ('PAID', 'OUTSTANDING')
+      SELECT SUM(${invoiceAmountSql}) as total FROM fee_invoice fi
+      WHERE ${activeStatusPredicate}
     `).get() as TotalResult | undefined
     return result?.total || 0
   }
@@ -347,8 +363,8 @@ export class SegmentProfitabilityService
       SELECT 
         'TRANSPORT' as segment_type,
         'Transport Services' as segment_name,
-        COALESCE(SUM(CASE WHEN transaction_type IN ('CREDIT', 'PAYMENT') THEN amount ELSE 0 END), 0) as revenue,
-        COALESCE(SUM(CASE WHEN transaction_type = 'DEBIT' AND description LIKE '%transport%' THEN amount ELSE 0 END), 0) as costs
+        COALESCE(SUM(CASE WHEN UPPER(COALESCE(transaction_type, '')) IN (${studentCollectionTransactionTypesSql}) THEN amount ELSE 0 END), 0) as revenue,
+        COALESCE(SUM(CASE WHEN UPPER(COALESCE(transaction_type, '')) IN (${debitAndExpenseTransactionTypesSql}) AND description LIKE '%transport%' THEN amount ELSE 0 END), 0) as costs
       FROM ledger_transaction
       WHERE (description LIKE '%transport%' OR description LIKE '%bus%')
         AND (? IS NULL OR transaction_date >= ?)
@@ -374,8 +390,8 @@ export class SegmentProfitabilityService
       SELECT 
         'BOARDING' as segment_type,
         'Boarding Services' as segment_name,
-        COALESCE(SUM(CASE WHEN transaction_type IN ('CREDIT', 'PAYMENT') THEN amount ELSE 0 END), 0) as revenue,
-        COALESCE(SUM(CASE WHEN transaction_type = 'DEBIT' AND description LIKE '%boarding%' THEN amount ELSE 0 END), 0) as costs
+        COALESCE(SUM(CASE WHEN UPPER(COALESCE(transaction_type, '')) IN (${studentCollectionTransactionTypesSql}) THEN amount ELSE 0 END), 0) as revenue,
+        COALESCE(SUM(CASE WHEN UPPER(COALESCE(transaction_type, '')) IN (${debitAndExpenseTransactionTypesSql}) AND description LIKE '%boarding%' THEN amount ELSE 0 END), 0) as costs
       FROM ledger_transaction
       WHERE (description LIKE '%boarding%' OR description LIKE '%hostel%')
         AND (? IS NULL OR transaction_date >= ?)
@@ -405,8 +421,8 @@ export class SegmentProfitabilityService
       SELECT 
         'ACTIVITY' as segment_type,
         'Activity Fees' as segment_name,
-        COALESCE(SUM(CASE WHEN transaction_type IN ('CREDIT', 'PAYMENT') THEN amount ELSE 0 END), 0) as revenue,
-        COALESCE(SUM(CASE WHEN transaction_type = 'DEBIT' AND description LIKE '%activity%' THEN amount ELSE 0 END), 0) as costs
+        COALESCE(SUM(CASE WHEN UPPER(COALESCE(transaction_type, '')) IN (${studentCollectionTransactionTypesSql}) THEN amount ELSE 0 END), 0) as revenue,
+        COALESCE(SUM(CASE WHEN UPPER(COALESCE(transaction_type, '')) IN (${debitAndExpenseTransactionTypesSql}) AND description LIKE '%activity%' THEN amount ELSE 0 END), 0) as costs
       FROM ledger_transaction
       WHERE (description LIKE '%activity%' OR description LIKE '%club%')
         AND (? IS NULL OR transaction_date >= ?)

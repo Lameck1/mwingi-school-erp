@@ -199,7 +199,11 @@ export class ReportCardService {
         const student = this.db.prepare(`
       SELECT s.id, s.admission_number, s.first_name, s.last_name, st.stream_name
       FROM student s
-      LEFT JOIN enrollment e ON s.id = e.student_id AND e.academic_year_id = ? AND e.term_id = ?
+      LEFT JOIN enrollment e
+        ON s.id = e.student_id
+       AND e.academic_year_id = ?
+       AND e.term_id = ?
+       AND e.status = 'ACTIVE'
       LEFT JOIN stream st ON e.stream_id = st.id
       WHERE s.id = ?
     `).get(academicYearId, termId, studentId) as StudentInfoResult | undefined
@@ -214,23 +218,27 @@ export class ReportCardService {
         }
     }
 
-    private getSubjectExamResults(studentId: number, subjectId: number, termId: number): ExamResultRow[] {
+    private getSubjectExamResults(studentId: number, subjectId: number, academicYearId: number, termId: number): ExamResultRow[] {
         return this.db.prepare(`
                 SELECT er.score, er.competency_level, 1 as weight
                 FROM exam_result er
                 JOIN exam e ON er.exam_id = e.id
-                WHERE er.student_id = ? AND er.subject_id = ? AND e.term_id = ?
-            `).all(studentId, subjectId, termId) as ExamResultRow[]
+                WHERE er.student_id = ?
+                  AND er.subject_id = ?
+                  AND e.academic_year_id = ?
+                  AND e.term_id = ?
+            `).all(studentId, subjectId, academicYearId, termId) as ExamResultRow[]
     }
 
     private buildGradeRows(
         subjects: Subject[],
         studentId: number,
+        academicYearId: number,
         termId: number,
         resolveGrade: (score: number) => { grade: string; remarks: string }
     ): ReportCardData['grades'] {
         return subjects.map(subject => {
-            const results = this.getSubjectExamResults(studentId, subject.id, termId)
+            const results = this.getSubjectExamResults(studentId, subject.id, academicYearId, termId)
             if (results.length === 0) {return null}
 
             const totals = results.reduce((acc, result) => {
@@ -260,7 +268,16 @@ export class ReportCardService {
     private getClassSize(studentId: number, academicYearId: number, termId: number): number {
         const result = this.db.prepare(`
             SELECT COUNT(*) as count FROM enrollment 
-            WHERE stream_id = (SELECT stream_id FROM enrollment WHERE student_id = ? AND academic_year_id = ? AND term_id = ?)
+            WHERE stream_id = (
+              SELECT stream_id
+              FROM enrollment
+              WHERE student_id = ?
+                AND academic_year_id = ?
+                AND term_id = ?
+                AND status = 'ACTIVE'
+              ORDER BY created_at DESC
+              LIMIT 1
+            )
             AND academic_year_id = ? AND term_id = ? AND status = 'ACTIVE'
         `).get(studentId, academicYearId, termId, academicYearId, termId) as { count: number }
 
@@ -323,14 +340,20 @@ export class ReportCardService {
         const termInfo = this.db.prepare(`SELECT term_name FROM term WHERE id = ?`).get(termId) as { term_name: string }
         const subjects = await this.getSubjects()
         const resolveGrade = this.getDynamicGradeResolver()
-        const gradeRows = this.buildGradeRows(subjects, studentId, termId, resolveGrade)
+        const gradeRows = this.buildGradeRows(subjects, studentId, academicYearId, termId, resolveGrade)
 
         const attendance = await this.attendanceService.getStudentAttendanceSummary(studentId, academicYearId, termId)
         const summary = this.db.prepare(`
             SELECT * FROM report_card_summary 
-            WHERE student_id = ? AND exam_id IN (SELECT id FROM exam WHERE term_id = ?)
+            WHERE student_id = ?
+              AND exam_id IN (
+                SELECT id
+                FROM exam
+                WHERE term_id = ?
+                  AND academic_year_id = ?
+              )
             ORDER BY id DESC LIMIT 1
-        `).get(studentId, termId) as ReportCardSummaryRow | undefined
+        `).get(studentId, termId, academicYearId) as ReportCardSummaryRow | undefined
         const classSize = this.getClassSize(studentId, academicYearId, termId)
 
         return {
@@ -373,6 +396,7 @@ export class ReportCardService {
         AND e.academic_year_id = ?
         AND e.term_id = ?
         AND e.status = 'ACTIVE'
+        AND s.is_active = 1
       ORDER BY s.first_name, s.last_name
     `).all(streamId, academicYearId, termId) as { student_id: number; student_name: string; admission_number: string }[]
     }

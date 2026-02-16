@@ -313,9 +313,43 @@ export class GrantTrackingService {
             issues.push('Received amount exceeds allocation')
         }
 
-        // Check if utilization matches conditions (mock logic)
-        if (grant.conditions && !grant.is_utilized) {
-            // potential issue if time passed?
+        const usage = this.db.prepare(`
+            SELECT
+                COALESCE(SUM(amount_used), 0) as total_used,
+                MIN(utilization_date) as first_utilization_date,
+                MAX(utilization_date) as last_utilization_date
+            FROM grant_utilization
+            WHERE grant_id = ?
+        `).get(grantId) as {
+            total_used: number
+            first_utilization_date: string | null
+            last_utilization_date: string | null
+        }
+
+        const totalUsed = usage.total_used || 0
+        if (totalUsed > grant.amount_allocated) {
+            issues.push('Utilization exceeds allocated amount')
+        }
+        if (totalUsed > grant.amount_received) {
+            issues.push('Utilization exceeds received amount')
+        }
+
+        if (grant.date_received && usage.first_utilization_date && usage.first_utilization_date < grant.date_received) {
+            issues.push('Utilization recorded before grant receipt date')
+        }
+
+        if (grant.expiry_date) {
+            if (usage.last_utilization_date && usage.last_utilization_date > grant.expiry_date) {
+                issues.push('Utilization recorded after grant expiry date')
+            }
+            const nowIsoDate = new Date().toISOString().slice(0, 10)
+            if (grant.expiry_date < nowIsoDate && totalUsed < grant.amount_received) {
+                issues.push('Grant expired with unutilized received funds')
+            }
+        }
+
+        if (grant.conditions && /full|100%|fully\s+utili/i.test(grant.conditions) && totalUsed < grant.amount_received) {
+            issues.push('Grant conditions require full utilization but funds remain unused')
         }
 
         return { compliant: issues.length === 0, issues }

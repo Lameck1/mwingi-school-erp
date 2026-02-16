@@ -1,10 +1,12 @@
 import { Clock, PlayCircle, TrendingDown } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
+import { canRunDepreciation, getDefaultPeriodId, getUnlockedPeriods } from './depreciation.logic'
 import { PageHeader } from '../../../components/patterns/PageHeader'
+import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../contexts/ToastContext'
 import { useAuthStore, useAppStore } from '../../../stores'
-import { type FixedAsset } from '../../../types/electron-api/FixedAssetAPI'
+import { type FinancialPeriod, type FixedAsset } from '../../../types/electron-api/FixedAssetAPI'
 import { formatCurrencyFromCents } from '../../../utils/format'
 
 export default function Depreciation() {
@@ -12,42 +14,74 @@ export default function Depreciation() {
     const { currentAcademicYear } = useAppStore()
     const { showToast } = useToast()
     const [assets, setAssets] = useState<FixedAsset[]>([])
+    const [periods, setPeriods] = useState<FinancialPeriod[]>([])
+    const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null)
+    const [assetToConfirm, setAssetToConfirm] = useState<FixedAsset | null>(null)
     const [processing, setProcessing] = useState<number | null>(null)
 
-    useEffect(() => {
-        void loadAssets()
-    }, [])
-
-    const loadAssets = async () => {
+    const loadAssets = useCallback(async () => {
         try {
             const data = await globalThis.electronAPI.getAssets({ status: 'ACTIVE' })
             setAssets(data)
         } catch (error) {
             console.error('Failed to load assets', error)
+            showToast('Failed to load fixed assets', 'error')
         }
+    }, [showToast])
+
+    const loadPeriods = useCallback(async () => {
+        try {
+            const allPeriods = await globalThis.electronAPI.getFinancialPeriods()
+            const unlocked = getUnlockedPeriods(allPeriods)
+            setPeriods(unlocked)
+            setSelectedPeriodId((current) => current ?? getDefaultPeriodId(unlocked))
+        } catch (error) {
+            console.error('Failed to load periods', error)
+            showToast('Failed to load financial periods', 'error')
+        }
+    }, [showToast])
+
+    useEffect(() => {
+        void loadAssets()
+        void loadPeriods()
+    }, [loadAssets, loadPeriods])
+
+    const openDepreciationModal = (asset: FixedAsset) => {
+        const validation = canRunDepreciation(user?.id, selectedPeriodId)
+        if (!validation.allowed) {
+            showToast(validation.reason || 'Cannot run depreciation', 'error')
+            return
+        }
+        setAssetToConfirm(asset)
     }
 
-    const handleRunDepreciation = async (asset: FixedAsset) => {
-        if (!confirm(`Run depreciation for ${asset.asset_name}? This action cannot be undone.`)) {return}
-        if (!user?.id) {
-            showToast('You must be signed in to run depreciation', 'error')
+    const closeDepreciationModal = () => {
+        if (processing) {
+            return
+        }
+        setAssetToConfirm(null)
+    }
+
+    const handleRunDepreciation = async () => {
+        if (!assetToConfirm || !selectedPeriodId || !user?.id) {
+            showToast('Missing depreciation context', 'error')
             return
         }
 
-        setProcessing(asset.id)
+        setProcessing(assetToConfirm.id)
         try {
-            // Using a dummy period ID = 1 for now if no period management exists in UI
-            // Ideally should select a financial period
-            const result = await globalThis.electronAPI.runDepreciation(asset.id, 1, user.id)
+            const result = await globalThis.electronAPI.runDepreciation(assetToConfirm.id, selectedPeriodId, user.id)
 
             if (result.success) {
-                alert('Depreciation posted successfully')
+                showToast(`Depreciation posted for ${assetToConfirm.asset_name}`, 'success')
+                setAssetToConfirm(null)
                 void loadAssets()
+                void loadPeriods()
             } else {
-                alert('Failed: ' + result.error)
+                showToast(result.error || 'Depreciation failed', 'error')
             }
         } catch {
-            alert('Error processing depreciation')
+            showToast('Error processing depreciation', 'error')
         } finally {
             setProcessing(null)
         }
@@ -112,10 +146,10 @@ export default function Depreciation() {
                                     </td>
                                     <td className="px-4 py-4 text-center">
                                         <button
-                                            onClick={() => handleRunDepreciation(asset)}
+                                            onClick={() => openDepreciationModal(asset)}
                                             disabled={!!processing || asset.current_value === 0}
                                             className="btn btn-secondary py-1 px-3 text-xs flex items-center gap-2 mx-auto disabled:opacity-50"
-                                            title="Run 10% Depreciation"
+                                            title="Run depreciation in selected period"
                                         >
                                             {processing === asset.id ? <Clock className="w-3 h-3 animate-spin" /> : <PlayCircle className="w-3 h-3" />}
                                             Run
@@ -127,6 +161,58 @@ export default function Depreciation() {
                     </table>
                 </div>
             </div>
+
+            <Modal
+                isOpen={!!assetToConfirm}
+                onClose={closeDepreciationModal}
+                title="Confirm Depreciation Run"
+                size="sm"
+            >
+                {assetToConfirm && (
+                    <div className="space-y-4">
+                        <p className="text-sm text-foreground/70">
+                            Post depreciation for <span className="font-semibold text-foreground">{assetToConfirm.asset_name}</span>.
+                        </p>
+                        <div className="space-y-2">
+                            <label htmlFor="depreciation-period" className="label">Financial Period</label>
+                            <select
+                                id="depreciation-period"
+                                className="input"
+                                value={selectedPeriodId ?? ''}
+                                onChange={(event) => {
+                                    const value = Number(event.target.value)
+                                    setSelectedPeriodId(Number.isFinite(value) && value > 0 ? value : null)
+                                }}
+                            >
+                                {periods.length === 0 && <option value="">No unlocked periods available</option>}
+                                {periods.map((period) => (
+                                    <option key={period.id} value={period.id}>
+                                        {period.period_name} ({period.start_date} to {period.end_date})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={closeDepreciationModal}
+                                disabled={processing === assetToConfirm.id}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={() => { void handleRunDepreciation() }}
+                                disabled={processing === assetToConfirm.id || !selectedPeriodId}
+                            >
+                                {processing === assetToConfirm.id ? 'Processing...' : 'Run Depreciation'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
         </div>
     )
 }

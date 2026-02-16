@@ -82,7 +82,7 @@ export default function TransportRouteManagement() {
         loadData().catch((err: unknown) => console.error('Failed to load transport data', err))
     }, [loadData])
 
-    const handleCreateRoute = async (e: React.FormEvent) => {
+    const handleCreateRoute = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         try {
             await globalThis.electronAPI.createTransportRoute({
@@ -101,7 +101,7 @@ export default function TransportRouteManagement() {
         }
     }
 
-    const handleRecordExpense = async (e: React.FormEvent) => {
+    const handleRecordExpense = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         try {
             if (!user) {

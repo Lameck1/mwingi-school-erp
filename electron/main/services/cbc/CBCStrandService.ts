@@ -202,7 +202,11 @@ export class CBCStrandService {
     }
 
     sql += `
-      GROUP BY cs.id, cs.name, i.fiscal_year, i.term
+      GROUP BY
+        cs.id,
+        cs.name,
+        CAST(strftime('%Y', fi.invoice_date) AS INTEGER),
+        t.term_number
       ORDER BY cs.code
     `;
 

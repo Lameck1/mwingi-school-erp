@@ -31,6 +31,8 @@ describe('SegmentProfitabilityService', () => {
         student_id INTEGER NOT NULL,
         invoice_number TEXT UNIQUE,
         amount REAL NOT NULL,
+        total_amount REAL,
+        amount_due REAL,
         amount_paid REAL DEFAULT 0,
         fee_type TEXT,
         status TEXT DEFAULT 'OUTSTANDING',
@@ -79,13 +81,14 @@ describe('SegmentProfitabilityService', () => {
         ('Bob', 'Johnson', 'STU-003', 'ACTIVE');
 
       -- Insert test invoices
-      INSERT INTO fee_invoice (student_id, invoice_number, amount, amount_paid, fee_type, status)
+      INSERT INTO fee_invoice (student_id, invoice_number, amount, total_amount, amount_due, amount_paid, fee_type, status)
       VALUES 
-        (1, 'INV-001', 50000, 50000, 'TRANSPORT', 'PAID'),
-        (2, 'INV-002', 40000, 40000, 'BOARDING', 'PAID'),
-        (3, 'INV-003', 35000, 35000, 'TRANSPORT', 'PAID'),
-        (1, 'INV-004', 60000, 60000, 'BOARDING', 'PAID'),
-        (2, 'INV-005', 15000, 15000, 'ACTIVITY', 'PAID');
+        (1, 'INV-001', 50000, 0, 50000, 50000, 'TRANSPORT', 'PAID'),
+        (2, 'INV-002', 40000, 40000, 40000, 40000, 'BOARDING', 'PAID'),
+        (3, 'INV-003', 35000, 35000, 35000, 35000, 'TRANSPORT', 'PAID'),
+        (1, 'INV-004', 60000, 60000, 60000, 60000, 'BOARDING', 'PAID'),
+        (2, 'INV-005', 15000, 15000, 15000, 15000, 'ACTIVITY', 'PAID'),
+        (3, 'INV-006', 25000, 25000, 25000, 0, 'BOARDING', 'cancelled');
 
       -- Insert test ledger transactions
       INSERT INTO ledger_transaction (student_id, transaction_date, transaction_type, amount, description)
@@ -176,6 +179,16 @@ describe('SegmentProfitabilityService', () => {
       expect(result).toHaveProperty('status')
       expect(['PROFITABLE', 'BREAKING_EVEN', 'UNPROFITABLE']).toContain(result.status)
     })
+
+    it('includes FEE_PAYMENT transactions in transport revenue calculations', () => {
+      db.prepare(`
+        INSERT INTO ledger_transaction (student_id, transaction_date, transaction_type, amount, description)
+        VALUES (1, '2026-01-20', 'FEE_PAYMENT', 12000, 'bus transport top-up')
+      `).run()
+
+      const result = service.analyzeTransportProfitability('2026-01-01', '2026-01-31')
+      expect(result.revenue).toBe(97000)
+    })
   })
 
   describe('analyzeBoardingProfitability', () => {
@@ -265,6 +278,12 @@ describe('SegmentProfitabilityService', () => {
       const result = service.generateOverallProfitability('2026-01-01', '2026-01-31')
       expect(result).toHaveProperty('recommendations')
     })
+
+    it('normalizes invoice totals in async overall profitability breakdown', async () => {
+      const result = await service.getOverallProfitabilityBreakdown()
+
+      expect(result.overall_summary.total_revenue).toBe(200000)
+    })
   })
 
   describe('compareSegments', () => {
@@ -293,7 +312,7 @@ describe('SegmentProfitabilityService', () => {
 
     it('should have fee invoices in database', () => {
       const invoiceCount = db.prepare('SELECT COUNT(*) as count FROM fee_invoice').get() as DbRow
-      expect(invoiceCount.count).toBe(5)
+      expect(invoiceCount.count).toBe(6)
     })
 
     it('should have ledger transactions', () => {

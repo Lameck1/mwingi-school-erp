@@ -35,8 +35,22 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         console.error('ErrorBoundary caught:', error, errorInfo)
         
         // Report to main process for logging
-        if (globalThis.electronAPI?.system?.logError) {
-            globalThis.electronAPI.system.logError({
+        const runtime = globalThis as unknown as {
+            electronAPI?: {
+                system?: {
+                    logError?: (payload: {
+                        error: string
+                        stack?: string
+                        componentStack?: string | null
+                        timestamp: string
+                    }) => Promise<unknown>
+                }
+            }
+        }
+
+        const logErrorFn = runtime.electronAPI?.system?.logError
+        if (typeof logErrorFn === 'function') {
+            void logErrorFn({
                 error: error.message,
                 stack: error.stack,
                 componentStack: errorInfo.componentStack,
@@ -62,7 +76,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         window.location.reload()
     }
 
-    render(): JSX.Element {
+    render(): React.JSX.Element {
         if (this.state.hasError) {
             if (this.props.fallback) {
                 return <>{this.props.fallback}</>

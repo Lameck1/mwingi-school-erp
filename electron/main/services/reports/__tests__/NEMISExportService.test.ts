@@ -59,9 +59,11 @@ describe('NEMISExportService', () => {
       CREATE TABLE fee_invoice (
         id INTEGER PRIMARY KEY,
         student_id INTEGER NOT NULL,
-        total_amount INTEGER NOT NULL,
+        total_amount INTEGER,
+        amount INTEGER,
+        amount_due INTEGER,
         amount_paid INTEGER DEFAULT 0,
-        amount_due INTEGER
+        status TEXT
       );
 
       CREATE TABLE staff (
@@ -103,10 +105,11 @@ describe('NEMISExportService', () => {
         (1, 1, 1, 1, 1),
         (2, 2, 1, 1, 1);
 
-      INSERT INTO fee_invoice (id, student_id, total_amount, amount_paid, amount_due)
+      INSERT INTO fee_invoice (id, student_id, total_amount, amount, amount_due, amount_paid, status)
       VALUES
-        (1, 1, 100000, 20000, 100000),
-        (2, 2, 200000, 50000, 200000);
+        (1, 1, 0, 100000, 100000, 20000, 'pending'),
+        (2, 2, 200000, 200000, 200000, 50000, 'PAID'),
+        (3, 1, 50000, 50000, 50000, 0, 'cancelled');
 
       INSERT INTO staff (id, staff_number, first_name, last_name, id_number, job_title, employment_date, is_active)
       VALUES
@@ -143,6 +146,7 @@ describe('NEMISExportService', () => {
     expect(result?.total_invoices).toBe(2)
     expect(result?.total_fees).toBe(300000)
     expect(result?.total_paid).toBe(70000)
+    expect(result?.total_outstanding).toBe(230000)
   })
 
   it('generates a report with counts', async () => {

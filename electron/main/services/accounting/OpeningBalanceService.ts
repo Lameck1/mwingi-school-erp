@@ -37,10 +37,136 @@ export interface StudentOpeningBalance {
 export class OpeningBalanceService {
   private readonly db: Database.Database;
   private readonly journalService: DoubleEntryJournalService;
+  private readonly schemaPresence = new Map<string, boolean>();
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase();
     this.journalService = new DoubleEntryJournalService(this.db);
+  }
+
+  private tableExists(tableName: string): boolean {
+    const cacheKey = `table:${tableName}`;
+    const cached = this.schemaPresence.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const exists = Boolean(
+      this.db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1`).get(tableName)
+    );
+    this.schemaPresence.set(cacheKey, exists);
+    return exists;
+  }
+
+  private columnExists(tableName: string, columnName: string): boolean {
+    const cacheKey = `column:${tableName}.${columnName}`;
+    const cached = this.schemaPresence.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    if (!this.tableExists(tableName)) {
+      this.schemaPresence.set(cacheKey, false);
+      return false;
+    }
+
+    const columns = this.db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+    const exists = columns.some((column) => column.name === columnName);
+    this.schemaPresence.set(cacheKey, exists);
+    return exists;
+  }
+
+  private getInvoiceAmountExpression(alias: string): string {
+    const candidates: string[] = [];
+
+    if (this.columnExists('fee_invoice', 'total_amount')) {
+      candidates.push(`NULLIF(${alias}.total_amount, 0)`);
+    }
+    if (this.columnExists('fee_invoice', 'amount_due')) {
+      candidates.push(`NULLIF(${alias}.amount_due, 0)`);
+    }
+    if (this.columnExists('fee_invoice', 'amount')) {
+      candidates.push(`NULLIF(${alias}.amount, 0)`);
+    }
+    if (this.columnExists('fee_invoice', 'total_amount')) {
+      candidates.push(`${alias}.total_amount`);
+    }
+    if (this.columnExists('fee_invoice', 'amount_due')) {
+      candidates.push(`${alias}.amount_due`);
+    }
+    if (this.columnExists('fee_invoice', 'amount')) {
+      candidates.push(`${alias}.amount`);
+    }
+
+    if (candidates.length === 0) {
+      return '0';
+    }
+
+    return `COALESCE(${candidates.join(', ')}, 0)`;
+  }
+
+  private getInvoiceDateExpression(alias: string): string {
+    const candidates: string[] = [];
+    if (this.columnExists('fee_invoice', 'invoice_date')) {
+      candidates.push(`${alias}.invoice_date`);
+    }
+    if (this.columnExists('fee_invoice', 'created_at')) {
+      candidates.push(`substr(${alias}.created_at, 1, 10)`);
+    }
+    if (this.columnExists('fee_invoice', 'due_date')) {
+      candidates.push(`${alias}.due_date`);
+    }
+
+    if (candidates.length === 0) {
+      return `DATE('now')`;
+    }
+
+    return `COALESCE(${candidates.join(', ')}, DATE('now'))`;
+  }
+
+  private getLedgerDateExpression(alias: string): string {
+    const candidates: string[] = [];
+    if (this.columnExists('ledger_transaction', 'transaction_date')) {
+      candidates.push(`${alias}.transaction_date`);
+    }
+    if (this.columnExists('ledger_transaction', 'created_at')) {
+      candidates.push(`substr(${alias}.created_at, 1, 10)`);
+    }
+
+    if (candidates.length === 0) {
+      return `DATE('now')`;
+    }
+
+    return `COALESCE(${candidates.join(', ')}, DATE('now'))`;
+  }
+
+  private getCreditDateExpression(alias: string): string {
+    const candidates: string[] = [];
+    if (this.columnExists('credit_transaction', 'created_at')) {
+      candidates.push(`substr(${alias}.created_at, 1, 10)`);
+    }
+
+    if (candidates.length === 0) {
+      return `DATE('now')`;
+    }
+
+    return `COALESCE(${candidates.join(', ')}, DATE('now'))`;
+  }
+
+  private getExternalCreditFilter(alias: string): string {
+    return `
+      (
+        (
+          UPPER(${alias}.transaction_type) = 'CREDIT_RECEIVED'
+          AND LOWER(COALESCE(${alias}.notes, '')) NOT LIKE 'overpayment from transaction #%'
+        )
+        OR
+        (
+          UPPER(${alias}.transaction_type) = 'CREDIT_REFUNDED'
+          AND LOWER(COALESCE(${alias}.notes, '')) NOT LIKE 'void reversal of transaction #%'
+        )
+      )
+    `;
   }
 
   /**
@@ -246,6 +372,7 @@ export class OpeningBalanceService {
     opening_balance: number;
     transactions: Array<{
       date: string;
+      ref?: string;
       description: string;
       debit: number;
       credit: number;
@@ -258,7 +385,18 @@ export class OpeningBalanceService {
       SELECT admission_number, first_name || ' ' || last_name as full_name
       FROM student
       WHERE id = ?
-    `).get(studentId) as { admission_number: string; full_name: string };
+    `).get(studentId) as { admission_number: string; full_name: string } | undefined;
+
+    if (!student) {
+      throw new Error('Student not found');
+    }
+
+    const invoiceAmountExpr = this.getInvoiceAmountExpression('fi');
+    const invoiceDateExpr = this.getInvoiceDateExpression('fi');
+    const ledgerDateExpr = this.getLedgerDateExpression('lt');
+    const hasCreditTransactions = this.tableExists('credit_transaction');
+    const creditDateExpr = hasCreditTransactions ? this.getCreditDateExpression('ct') : `DATE('now')`;
+    const externalCreditFilter = hasCreditTransactions ? this.getExternalCreditFilter('ct') : '0';
 
     // Get opening balance
     const openingBalanceRecord = this.db.prepare(`
@@ -269,27 +407,131 @@ export class OpeningBalanceService {
       WHERE student_id = ? AND academic_year_id = ?
     `).get(studentId, academicYearId) as { total_debit: number; total_credit: number };
 
-    const openingBalance = openingBalanceRecord.total_debit - openingBalanceRecord.total_credit;
+    const historicalInvoiceDebits = this.db.prepare(`
+      SELECT COALESCE(SUM(${invoiceAmountExpr}), 0) as total_debit
+      FROM fee_invoice fi
+      WHERE fi.student_id = ?
+        AND ${invoiceDateExpr} < ?
+        AND UPPER(COALESCE(fi.status, 'PENDING')) NOT IN ('CANCELLED', 'VOIDED')
+    `).get(studentId, startDate) as { total_debit: number };
 
-    // Get transactions
-    const transactions = this.db.prepare(`
+    const historicalLedgerNetMovement = this.db.prepare(`
+      SELECT COALESCE(
+        SUM(
+          CASE
+            WHEN UPPER(COALESCE(debit_credit, '')) = 'DEBIT' THEN ABS(COALESCE(amount, 0))
+            WHEN UPPER(COALESCE(debit_credit, '')) = 'CREDIT' THEN -ABS(COALESCE(amount, 0))
+            ELSE 0
+          END
+        ),
+        0
+      ) as net_movement
+      FROM ledger_transaction lt
+      WHERE lt.student_id = ?
+        AND ${ledgerDateExpr} < ?
+        AND COALESCE(lt.is_voided, 0) = 0
+        AND UPPER(COALESCE(lt.transaction_type, '')) != 'OPENING_BALANCE'
+    `).get(studentId, startDate) as { net_movement: number };
+
+    const historicalCreditAdjustments = hasCreditTransactions
+      ? this.db.prepare(`
+          SELECT COALESCE(
+            SUM(
+              CASE
+                WHEN UPPER(COALESCE(ct.transaction_type, '')) = 'CREDIT_RECEIVED' THEN -ABS(COALESCE(ct.amount, 0))
+                WHEN UPPER(COALESCE(ct.transaction_type, '')) = 'CREDIT_REFUNDED' THEN ABS(COALESCE(ct.amount, 0))
+                ELSE 0
+              END
+            ),
+            0
+          ) as net_movement
+          FROM credit_transaction ct
+          WHERE ct.student_id = ?
+            AND ${creditDateExpr} < ?
+            AND ${externalCreditFilter}
+        `).get(studentId, startDate) as { net_movement: number }
+      : { net_movement: 0 };
+
+    const openingBalance =
+      (openingBalanceRecord.total_debit - openingBalanceRecord.total_credit) +
+      historicalInvoiceDebits.total_debit +
+      historicalLedgerNetMovement.net_movement +
+      historicalCreditAdjustments.net_movement;
+
+    const transactionSqlParts = [`
       SELECT
-        je.entry_date as date,
-        je.description,
-        COALESCE(SUM(jel.debit_amount), 0) as debit,
-        COALESCE(SUM(jel.credit_amount), 0) as credit
-      FROM journal_entry je
-      JOIN journal_entry_line jel ON je.id = jel.journal_entry_id
-      JOIN gl_account ga ON jel.gl_account_id = ga.id
-      WHERE je.student_id = ?
-        AND je.entry_date BETWEEN ? AND ?
-        AND je.is_posted = 1
-        AND je.is_voided = 0
-        AND ga.account_code IN ('1100', '2020')  -- Student Receivable or Credit Balance
-      GROUP BY je.id, je.entry_date, je.description
-      ORDER BY je.entry_date, je.id
-    `).all(studentId, startDate, endDate) as Array<{
+        statement_entry.date,
+        statement_entry.ref,
+        statement_entry.description,
+        statement_entry.debit,
+        statement_entry.credit
+      FROM (
+        SELECT
+          ${invoiceDateExpr} as date,
+          COALESCE(fi.created_at, ${invoiceDateExpr} || 'T00:00:00.000Z') as created_at,
+          10 as sort_priority,
+          fi.id as sort_id,
+          COALESCE(NULLIF(fi.invoice_number, ''), 'INV-' || fi.id) as ref,
+          COALESCE(NULLIF(fi.description, ''), 'Fee invoice for student') as description,
+          ${invoiceAmountExpr} as debit,
+          0 as credit
+        FROM fee_invoice fi
+        WHERE fi.student_id = ?
+          AND ${invoiceDateExpr} BETWEEN ? AND ?
+          AND UPPER(COALESCE(fi.status, 'PENDING')) NOT IN ('CANCELLED', 'VOIDED')
+
+        UNION ALL
+
+        SELECT
+          ${ledgerDateExpr} as date,
+          COALESCE(lt.created_at, ${ledgerDateExpr} || 'T00:00:00.000Z') as created_at,
+          20 as sort_priority,
+          lt.id as sort_id,
+          COALESCE(NULLIF(lt.payment_reference, ''), lt.transaction_ref, '-') as ref,
+          COALESCE(NULLIF(lt.description, ''), lt.transaction_type, 'Ledger transaction') as description,
+          CASE WHEN UPPER(COALESCE(lt.debit_credit, '')) = 'DEBIT' THEN ABS(COALESCE(lt.amount, 0)) ELSE 0 END as debit,
+          CASE WHEN UPPER(COALESCE(lt.debit_credit, '')) = 'CREDIT' THEN ABS(COALESCE(lt.amount, 0)) ELSE 0 END as credit
+        FROM ledger_transaction lt
+        WHERE lt.student_id = ?
+          AND ${ledgerDateExpr} BETWEEN ? AND ?
+          AND COALESCE(lt.is_voided, 0) = 0
+          AND UPPER(COALESCE(lt.transaction_type, '')) != 'OPENING_BALANCE'
+    `];
+
+    const transactionParams: Array<number | string> = [studentId, startDate, endDate, studentId, startDate, endDate];
+
+    if (hasCreditTransactions) {
+      transactionSqlParts.push(`
+          UNION ALL
+
+          SELECT
+            ${creditDateExpr} as date,
+            COALESCE(ct.created_at, ${creditDateExpr} || 'T00:00:00.000Z') as created_at,
+            30 as sort_priority,
+            ct.id as sort_id,
+            'CR-' || ct.id as ref,
+            COALESCE(NULLIF(ct.notes, ''), CASE
+              WHEN UPPER(COALESCE(ct.transaction_type, '')) = 'CREDIT_RECEIVED' THEN 'Student credit adjustment'
+              ELSE 'Student credit reversal'
+            END) as description,
+            CASE WHEN UPPER(COALESCE(ct.transaction_type, '')) = 'CREDIT_REFUNDED' THEN ABS(COALESCE(ct.amount, 0)) ELSE 0 END as debit,
+            CASE WHEN UPPER(COALESCE(ct.transaction_type, '')) = 'CREDIT_RECEIVED' THEN ABS(COALESCE(ct.amount, 0)) ELSE 0 END as credit
+          FROM credit_transaction ct
+          WHERE ct.student_id = ?
+            AND ${creditDateExpr} BETWEEN ? AND ?
+            AND ${externalCreditFilter}
+      `);
+      transactionParams.push(studentId, startDate, endDate);
+    }
+
+    transactionSqlParts.push(`
+      ) statement_entry
+      ORDER BY statement_entry.date, statement_entry.created_at, statement_entry.sort_priority, statement_entry.sort_id
+    `);
+
+    const transactions = this.db.prepare(transactionSqlParts.join('\n')).all(...transactionParams) as Array<{
       date: string;
+      ref: string;
       description: string;
       debit: number;
       credit: number;

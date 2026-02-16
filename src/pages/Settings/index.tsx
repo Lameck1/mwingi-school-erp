@@ -129,7 +129,7 @@ export default function Settings() {
         { id: 'maintenance', label: 'System Maintenance', icon: Database },
     ]
 
-    const renderAcademicYears = (): JSX.Element => {
+    const renderAcademicYears = () => {
         if (loadingYears) {
             return (
                 <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary/40" /></div>

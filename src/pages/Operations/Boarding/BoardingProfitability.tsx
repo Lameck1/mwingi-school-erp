@@ -74,7 +74,7 @@ export default function BoardingProfitability() {
         loadData().catch((err: unknown) => console.error('Failed to load boarding data', err))
     }, [loadData])
 
-    const handleRecordExpense = async (e: React.FormEvent) => {
+    const handleRecordExpense = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         try {
             if (!user) {

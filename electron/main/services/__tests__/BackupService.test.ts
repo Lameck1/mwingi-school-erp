@@ -109,4 +109,43 @@ describe('BackupService safety checks', () => {
     expect(result.success).toBe(false)
     expect(fs.readFileSync(targetPath, 'utf8')).toBe('existing-backup-content')
   })
+
+  it('cleanupOldBackups keeps 7-day backups and one snapshot per older month', async () => {
+    const backupsDir = path.join(mocks.tempDir, 'backups')
+    fs.mkdirSync(backupsDir, { recursive: true })
+
+    const now = Date.now()
+    const createBackdatedBackup = (filename: string, daysAgo: number) => {
+      const filePath = path.join(backupsDir, filename)
+      fs.writeFileSync(filePath, 'backup')
+      const timestamp = new Date(now - daysAgo * 24 * 60 * 60 * 1000)
+      fs.utimesSync(filePath, timestamp, timestamp)
+    }
+
+    // Recent daily backups (expected to stay)
+    createBackdatedBackup('backup-day-0.sqlite', 0)
+    createBackdatedBackup('backup-day-1.sqlite', 1)
+    createBackdatedBackup('backup-day-2.sqlite', 2)
+    createBackdatedBackup('backup-day-3.sqlite', 3)
+    createBackdatedBackup('backup-day-4.sqlite', 4)
+    createBackdatedBackup('backup-day-5.sqlite', 5)
+    createBackdatedBackup('backup-day-6.sqlite', 6)
+
+    // Older backups from the same month (only newest should remain)
+    createBackdatedBackup('backup-month-a.sqlite', 40)
+    createBackdatedBackup('backup-month-a-older.sqlite', 45)
+
+    // Older backup from another month
+    createBackdatedBackup('backup-month-b.sqlite', 75)
+
+    // Trigger private cleanup function directly for deterministic testing.
+    await (BackupService as unknown as { cleanupOldBackups: () => Promise<void> }).cleanupOldBackups()
+
+    const remaining = fs.readdirSync(backupsDir)
+    expect(remaining).toContain('backup-day-0.sqlite')
+    expect(remaining).toContain('backup-day-6.sqlite')
+    expect(remaining).toContain('backup-month-a.sqlite')
+    expect(remaining).toContain('backup-month-b.sqlite')
+    expect(remaining).not.toContain('backup-month-a-older.sqlite')
+  })
 })

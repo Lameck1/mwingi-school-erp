@@ -1,5 +1,11 @@
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
+import {
+  buildFeeInvoiceActiveStatusPredicate,
+  buildFeeInvoiceAmountSql,
+  buildFeeInvoiceOutstandingBalanceSql,
+  buildFeeInvoicePaidAmountSql
+} from '../../utils/feeInvoiceSql'
 import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
 
 import type Database from 'better-sqlite3'
@@ -148,32 +154,39 @@ class InvoiceRepository {
 
   async getOutstandingInvoices(studentId: number): Promise<OutstandingInvoice[]> {
     const db = this.db
+    const amountSql = buildFeeInvoiceAmountSql(db, 'fi')
+    const paidAmountSql = buildFeeInvoicePaidAmountSql(db, 'fi')
+    const outstandingBalanceSql = buildFeeInvoiceOutstandingBalanceSql(db, 'fi')
+    const activeStatusPredicate = buildFeeInvoiceActiveStatusPredicate(db, 'fi')
     return db.prepare(`
       SELECT 
-        id,
-        student_id,
-        amount,
-        amount_paid,
-        (amount - amount_paid) as balance,
-        due_date,
-        invoice_date,
-        invoice_number,
-        description,
-        CAST(julianday('now') - julianday(due_date) AS INTEGER) as days_overdue
-      FROM fee_invoice
-      WHERE student_id = ? AND (amount - amount_paid) > 0
-      ORDER BY due_date ASC
+        fi.id,
+        fi.student_id,
+        ${amountSql} as amount,
+        ${paidAmountSql} as amount_paid,
+        ${outstandingBalanceSql} as balance,
+        fi.due_date,
+        fi.invoice_date,
+        fi.invoice_number,
+        fi.description,
+        CAST(julianday('now') - julianday(fi.due_date) AS INTEGER) as days_overdue
+      FROM fee_invoice fi
+      WHERE fi.student_id = ?
+        AND ${activeStatusPredicate}
+        AND (${outstandingBalanceSql}) > 0
+      ORDER BY fi.due_date ASC
     `).all(studentId) as OutstandingInvoice[]
   }
 
   updateInvoicePayment(invoiceId: number, amountToAdd: number): void {
     const db = this.db
+    const invoiceAmountSql = buildFeeInvoiceAmountSql(db, 'fee_invoice')
     db.prepare(`
       UPDATE fee_invoice
-      SET amount_paid = amount_paid + ?,
+      SET amount_paid = COALESCE(amount_paid, 0) + ?,
           status = CASE
-            WHEN amount_paid + ? >= total_amount THEN 'PAID'
-            WHEN amount_paid + ? > 0 THEN 'PARTIAL'
+            WHEN COALESCE(amount_paid, 0) + ? >= ${invoiceAmountSql} THEN 'PAID'
+            WHEN COALESCE(amount_paid, 0) + ? > 0 THEN 'PARTIAL'
             ELSE 'PENDING'
           END,
           updated_at = ?
@@ -453,16 +466,22 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
         return { success: true, message: 'No credits to apply', credits_applied: 0 }
       }
 
+      const invoiceAmountSql = buildFeeInvoiceAmountSql(this.db, 'fi')
+      const paidAmountSql = buildFeeInvoicePaidAmountSql(this.db, 'fi')
+      const outstandingBalanceSql = buildFeeInvoiceOutstandingBalanceSql(this.db, 'fi')
+      const activeStatusPredicate = buildFeeInvoiceActiveStatusPredicate(this.db, 'fi')
       const invoices = this.db.prepare(`
         SELECT
-          id,
-          COALESCE(total_amount, amount) as amount_due,
-          COALESCE(amount_paid, 0) as amount_paid,
-          invoice_number,
-          status
-        FROM fee_invoice
-        WHERE student_id = ? AND COALESCE(amount_paid, 0) < COALESCE(total_amount, amount)
-        ORDER BY due_date ASC, id ASC
+          fi.id,
+          ${invoiceAmountSql} as amount_due,
+          ${paidAmountSql} as amount_paid,
+          fi.invoice_number,
+          fi.status
+        FROM fee_invoice fi
+        WHERE fi.student_id = ?
+          AND ${activeStatusPredicate}
+          AND (${outstandingBalanceSql}) > 0
+        ORDER BY fi.due_date ASC, fi.id ASC
       `).all(studentId) as LegacyInvoiceRow[]
 
       const applyTransaction = this.db.transaction(() => {

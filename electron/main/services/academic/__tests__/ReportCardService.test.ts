@@ -126,6 +126,12 @@ describe('ReportCardService', () => {
         if (sql.includes('e.weight')) {
           throw new Error('Legacy exam.weight usage is not allowed in current schema')
         }
+        if (sql.includes('FROM exam_result er') && sql.includes('1 as weight') && !sql.includes('e.academic_year_id = ?')) {
+          throw new Error('Report card exam result query must scope by academic year')
+        }
+        if (sql.includes('FROM report_card_summary') && !sql.includes('academic_year_id = ?')) {
+          throw new Error('Report card summary lookup must scope by academic year')
+        }
         return createStatementHandlers(sql)
       },
     }

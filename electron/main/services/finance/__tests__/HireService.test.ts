@@ -112,4 +112,16 @@ describe('HireService status transitions', () => {
     const updated = db.prepare(`SELECT status FROM hire_booking WHERE id = 12`).get() as { status: string }
     expect(updated.status).toBe('CONFIRMED')
   })
+
+  it('clamps pending hire stats to zero for overpaid bookings', () => {
+    db.prepare(`
+      INSERT INTO hire_booking (id, booking_number, asset_id, client_id, hire_date, total_amount, amount_paid, status)
+      VALUES (13, 'HB-13', 1, 1, '2026-02-14', 10000, 15000, 'COMPLETED')
+    `).run()
+
+    const service = new HireService()
+    const stats = service.getHireStats()
+
+    expect(stats.pendingAmount).toBe(0)
+  })
 })

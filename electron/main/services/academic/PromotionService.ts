@@ -94,45 +94,72 @@ export class PromotionService {
         data: PromotionData,
         userId: number
     ): Promise<{ success: boolean; errors?: string[] }> {
+        if (data.from_stream_id === data.to_stream_id) {
+            return { success: false, errors: ['Source and destination streams must be different'] }
+        }
+
         try {
             return this.db.transaction(() => {
+                const sourceEnrollment = this.db.prepare(`
+                    SELECT id, student_type
+                    FROM enrollment
+                    WHERE student_id = ?
+                      AND academic_year_id = ?
+                      AND stream_id = ?
+                      AND status = 'ACTIVE'
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                `).get(data.student_id, data.from_academic_year_id, data.from_stream_id) as { id: number; student_type: 'DAY_SCHOLAR' | 'BOARDER' } | undefined
+
+                if (!sourceEnrollment) {
+                    return { success: false, errors: ['Student is not actively enrolled in the source stream/year'] }
+                }
+
                 // Check if already promoted/active in target year
                 const existing = this.db.prepare(`
-                    SELECT id FROM enrollment
+                    SELECT id, stream_id FROM enrollment
                     WHERE student_id = ? AND academic_year_id = ? AND status = 'ACTIVE'
-                `).get(data.student_id, data.to_academic_year_id)
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                `).get(data.student_id, data.to_academic_year_id) as { id: number; stream_id: number } | undefined
 
                 if (existing) {
-                    return { success: true } // Already promoted (Idempotent)
+                    if (existing.stream_id === data.to_stream_id) {
+                        return { success: true } // Already promoted (Idempotent)
+                    }
+
+                    return { success: false, errors: ['Student already has an active enrollment in the target academic year'] }
                 }
 
                 // Mark old enrollment as PROMOTED
-                this.db.prepare(`
+                const updateResult = this.db.prepare(`
           UPDATE enrollment 
           SET status = 'PROMOTED' 
-          WHERE student_id = ? 
-            AND academic_year_id = ? 
-            AND stream_id = ?
-            AND status = 'ACTIVE'
-        `).run(data.student_id, data.from_academic_year_id, data.from_stream_id)
+          WHERE id = ?
+        `).run(sourceEnrollment.id)
+
+                if (updateResult.changes === 0) {
+                    return { success: false, errors: ['Failed to update source enrollment status'] }
+                }
 
                 // Create new enrollment
                 const result = this.db.prepare(`
-          INSERT INTO enrollment (student_id, academic_year_id, term_id, academic_term_id, stream_id, student_type, status)
-          SELECT ?, ?, ?, ?, ?, student_type, 'ACTIVE'
-          FROM enrollment 
-          WHERE student_id = ? AND academic_year_id = ? AND stream_id = ?
-          LIMIT 1
+          INSERT INTO enrollment (
+            student_id, academic_year_id, term_id, academic_term_id, stream_id, student_type, status
+          )
+          VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE')
         `).run(
                     data.student_id,
                     data.to_academic_year_id,
                     data.to_term_id,
                     data.to_term_id,
                     data.to_stream_id,
-                    data.student_id,
-                    data.from_academic_year_id,
-                    data.from_stream_id
+                    sourceEnrollment.student_type
                 )
+
+                if (result.changes === 0 || !result.lastInsertRowid) {
+                    return { success: false, errors: ['Failed to create target enrollment'] }
+                }
 
                 if (result.changes > 0) {
                     logAudit(userId, 'PROMOTE', 'enrollment', result.lastInsertRowid as number,

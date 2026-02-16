@@ -351,5 +351,11 @@ describe('StudentLedgerService', () => {
 
       expect(typeof result.verified).toBe('boolean')
     })
+
+    it('treats FEE_PAYMENT transactions as credits when calculating opening balance', async () => {
+      const openingBalance = await service.calculateOpeningBalance(1, '2026-01-01')
+
+      expect(openingBalance).toBe(110000)
+    })
   })
 })

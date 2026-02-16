@@ -92,7 +92,7 @@ export default function GrantTracking() {
         loadData().catch((err: unknown) => console.error('Failed to load grants data', err))
     }, [loadData])
 
-    const handleCreateGrant = async (e: React.FormEvent) => {
+    const handleCreateGrant = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         if (!user?.id) {
             showToast('You must be signed in to create a grant', 'error')
@@ -113,7 +113,7 @@ export default function GrantTracking() {
         }
     }
 
-    const handleRecordUtilization = async (e: React.FormEvent) => {
+    const handleRecordUtilization = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         if (!selectedGrant) {return}
         if (!user?.id) {

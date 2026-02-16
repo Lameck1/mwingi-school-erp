@@ -133,7 +133,7 @@ export default function FeeExemptions() {
         setFilteredStudents([])
     }
 
-    const handleCreate = async (e: React.FormEvent) => {
+    const handleCreate = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         if (!user || !formData.student_id || !formData.academic_year_id || !formData.exemption_percentage || !formData.exemption_reason) {
             showToast('Please fill in all required fields', 'warning')

@@ -3,7 +3,12 @@ import { randomUUID } from 'node:crypto'
 
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
-import { OUTSTANDING_INVOICE_STATUSES, asSqlInList } from '../../utils/financeTransactionTypes'
+import {
+  buildFeeInvoiceAmountSql,
+  buildFeeInvoiceOutstandingBalanceSql,
+  buildFeeInvoiceOutstandingStatusPredicate
+} from '../../utils/feeInvoiceSql'
+import { OUTSTANDING_INVOICE_STATUSES } from '../../utils/financeTransactionTypes'
 import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
 
 import type {
@@ -21,7 +26,7 @@ import type {
 } from './PaymentService.types'
 import type Database from 'better-sqlite3'
 
-const PAYABLE_INVOICE_STATUSES_SQL = asSqlInList(OUTSTANDING_INVOICE_STATUSES)
+const normalizeInvoiceStatus = (status: string | null | undefined): string => (status ?? 'PENDING').toUpperCase()
 
 interface VoidAuditRecordData {
   transactionId: number
@@ -186,9 +191,13 @@ export class VoidAuditRepository {
 
 export class InvoiceValidator implements IPaymentValidator {
   private readonly db: Database.Database
+  private readonly invoiceOutstandingBalanceSql: string
+  private readonly invoiceOutstandingStatusPredicate: string
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
+    this.invoiceOutstandingBalanceSql = buildFeeInvoiceOutstandingBalanceSql(this.db, 'fi')
+    this.invoiceOutstandingStatusPredicate = buildFeeInvoiceOutstandingStatusPredicate(this.db, 'fi')
   }
 
   validatePaymentAgainstInvoices(studentId: number, amount: number): ValidationResult {
@@ -196,10 +205,15 @@ export class InvoiceValidator implements IPaymentValidator {
 
     try {
       const invoices = db.prepare(`
-        SELECT * FROM fee_invoice
-        WHERE student_id = ? AND status IN (${PAYABLE_INVOICE_STATUSES_SQL})
-        ORDER BY due_date ASC
-      `).all(studentId) as Invoice[]
+        SELECT
+          fi.*,
+          ${this.invoiceOutstandingBalanceSql} as outstanding_balance
+        FROM fee_invoice fi
+        WHERE fi.student_id = ?
+          AND ${this.invoiceOutstandingStatusPredicate}
+          AND (${this.invoiceOutstandingBalanceSql}) > 0
+        ORDER BY COALESCE(fi.due_date, fi.invoice_date, substr(fi.created_at, 1, 10)) ASC
+      `).all(studentId) as Array<Invoice & { outstanding_balance: number }>
 
       if (invoices.length === 0) {
         return {
@@ -210,9 +224,7 @@ export class InvoiceValidator implements IPaymentValidator {
       }
 
       const totalOutstanding = invoices.reduce((sum, inv) => {
-        const total = typeof inv.total_amount === 'number' ? inv.total_amount : (inv.amount ?? 0)
-        const paid = typeof inv.amount_paid === 'number' ? inv.amount_paid : 0
-        return sum + Math.max(total - paid, 0)
+        return sum + Math.max(inv.outstanding_balance || 0, 0)
       }, 0)
 
       if (amount > totalOutstanding) {
@@ -240,10 +252,18 @@ export class InvoiceValidator implements IPaymentValidator {
 
 export class PaymentProcessor {
   private readonly db: Database.Database
+  private readonly invoiceAmountSql: string
+  private readonly invoiceAmountSqlForUpdate: string
+  private readonly invoiceOutstandingBalanceSql: string
+  private readonly invoiceOutstandingStatusPredicate: string
   private idempotencyColumnAvailable: boolean | null = null
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
+    this.invoiceAmountSql = buildFeeInvoiceAmountSql(this.db, 'fi')
+    this.invoiceAmountSqlForUpdate = buildFeeInvoiceAmountSql(this.db, 'fee_invoice')
+    this.invoiceOutstandingBalanceSql = buildFeeInvoiceOutstandingBalanceSql(this.db, 'fi')
+    this.invoiceOutstandingStatusPredicate = buildFeeInvoiceOutstandingStatusPredicate(this.db, 'fi')
   }
 
   private hasIdempotencyColumn(): boolean {
@@ -379,29 +399,34 @@ export class PaymentProcessor {
 
   private applyPaymentToSpecificInvoice(transactionId: number, invoiceId: number, amount: number): number {
     const invoice = this.db.prepare(`
-      SELECT total_amount, amount_paid, status
-      FROM fee_invoice
+      SELECT
+        ${this.invoiceAmountSql} as invoice_amount,
+        COALESCE(fi.amount_paid, 0) as amount_paid,
+        COALESCE(fi.status, 'PENDING') as status
+      FROM fee_invoice fi
       WHERE id = ?
-    `).get(invoiceId) as { total_amount: number; amount_paid: number; status: string } | undefined
+    `).get(invoiceId) as { invoice_amount: number; amount_paid: number; status: string } | undefined
 
     if (
       !invoice ||
-      !OUTSTANDING_INVOICE_STATUSES.includes(invoice.status as (typeof OUTSTANDING_INVOICE_STATUSES)[number])
+      !OUTSTANDING_INVOICE_STATUSES.includes(
+        normalizeInvoiceStatus(invoice.status) as (typeof OUTSTANDING_INVOICE_STATUSES)[number]
+      )
     ) {
       return amount
     }
 
-    const outstanding = Math.max(0, invoice.total_amount - (invoice.amount_paid || 0))
+    const outstanding = Math.max(0, invoice.invoice_amount - (invoice.amount_paid || 0))
     const appliedAmount = Math.min(amount, outstanding)
     const remainingAmount = amount - appliedAmount
 
     if (appliedAmount > 0) {
       this.db.prepare(`
         UPDATE fee_invoice
-        SET amount_paid = amount_paid + ?,
+        SET amount_paid = COALESCE(amount_paid, 0) + ?,
             status = CASE
-                WHEN amount_paid + ? >= total_amount THEN 'PAID'
-                WHEN amount_paid + ? <= 0 THEN 'PENDING'
+                WHEN COALESCE(amount_paid, 0) + ? >= (${this.invoiceAmountSqlForUpdate}) THEN 'PAID'
+                WHEN COALESCE(amount_paid, 0) + ? <= 0 THEN 'PENDING'
                 ELSE 'PARTIAL'
             END
         WHERE id = ?
@@ -415,16 +440,24 @@ export class PaymentProcessor {
   private applyPaymentAcrossOutstandingInvoices(transactionId: number, studentId: number, paymentAmount: number): number {
     let remainingAmount = paymentAmount
     const pendingInvoices = this.db.prepare(`
-      SELECT id, total_amount, amount_paid
-      FROM fee_invoice
-      WHERE student_id = ? AND status IN (${PAYABLE_INVOICE_STATUSES_SQL})
-      ORDER BY invoice_date ASC
-    `).all(studentId) as Array<{ id: number; total_amount: number; amount_paid: number }>
+      SELECT
+        fi.id,
+        ${this.invoiceOutstandingBalanceSql} as outstanding_balance
+      FROM fee_invoice fi
+      WHERE fi.student_id = ?
+        AND ${this.invoiceOutstandingStatusPredicate}
+        AND (${this.invoiceOutstandingBalanceSql}) > 0
+      ORDER BY COALESCE(fi.invoice_date, fi.due_date, substr(fi.created_at, 1, 10)) ASC
+    `).all(studentId) as Array<{ id: number; outstanding_balance: number }>
 
     const updateInvoiceStatement = this.db.prepare(`
       UPDATE fee_invoice
-      SET amount_paid = amount_paid + ?,
-          status = CASE WHEN amount_paid + ? >= total_amount THEN 'PAID' ELSE 'PARTIAL' END
+      SET amount_paid = COALESCE(amount_paid, 0) + ?,
+          status = CASE
+            WHEN COALESCE(amount_paid, 0) + ? >= (${this.invoiceAmountSqlForUpdate}) THEN 'PAID'
+            WHEN COALESCE(amount_paid, 0) + ? <= 0 THEN 'PENDING'
+            ELSE 'PARTIAL'
+          END
       WHERE id = ?
     `)
 
@@ -433,10 +466,13 @@ export class PaymentProcessor {
         break
       }
 
-      const outstanding = invoice.total_amount - (invoice.amount_paid || 0)
+      const outstanding = Math.max(0, invoice.outstanding_balance || 0)
+      if (outstanding <= 0) {
+        continue
+      }
       const appliedAmount = Math.min(remainingAmount, outstanding)
 
-      updateInvoiceStatement.run(appliedAmount, appliedAmount, invoice.id)
+      updateInvoiceStatement.run(appliedAmount, appliedAmount, appliedAmount, invoice.id)
       this.recordPaymentAllocation(transactionId, invoice.id, appliedAmount)
       remainingAmount -= appliedAmount
     }
@@ -523,10 +559,14 @@ export class PaymentProcessor {
 
 export class VoidProcessor implements IPaymentVoidProcessor {
   private readonly db: Database.Database
+  private readonly invoiceAmountSql: string
+  private readonly invoiceAmountSqlForUpdate: string
   private sourceLedgerColumnAvailable: boolean | null = null
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
+    this.invoiceAmountSql = buildFeeInvoiceAmountSql(this.db, 'fi')
+    this.invoiceAmountSqlForUpdate = buildFeeInvoiceAmountSql(this.db, 'fee_invoice')
   }
 
 
@@ -551,17 +591,19 @@ export class VoidProcessor implements IPaymentVoidProcessor {
 
   private reverseInvoiceAllocation(invoiceId: number, appliedAmount: number): void {
     const invoice = this.db.prepare(`
-      SELECT total_amount, amount_paid
-      FROM fee_invoice
+      SELECT
+        ${this.invoiceAmountSql} as invoice_amount,
+        COALESCE(fi.amount_paid, 0) as amount_paid
+      FROM fee_invoice fi
       WHERE id = ?
-    `).get(invoiceId) as { total_amount: number; amount_paid: number } | undefined
+    `).get(invoiceId) as { invoice_amount: number; amount_paid: number } | undefined
 
     if (!invoice) {
       return
     }
 
     const newPaid = Math.max(0, (invoice.amount_paid || 0) - appliedAmount)
-    const status = newPaid <= 0 ? 'PENDING' : (newPaid >= invoice.total_amount ? 'PAID' : 'PARTIAL')
+    const status = newPaid <= 0 ? 'PENDING' : (newPaid >= invoice.invoice_amount ? 'PAID' : 'PARTIAL')
 
     this.db.prepare(`
       UPDATE fee_invoice
@@ -762,10 +804,10 @@ export class VoidProcessor implements IPaymentVoidProcessor {
     if (invoiceId) {
       this.db.prepare(`
         UPDATE fee_invoice
-        SET amount_paid = MAX(amount_paid - ?, 0),
+        SET amount_paid = MAX(COALESCE(amount_paid, 0) - ?, 0),
             status = CASE
-                WHEN MAX(amount_paid - ?, 0) <= 0 THEN 'PENDING'
-                WHEN MAX(amount_paid - ?, 0) >= total_amount THEN 'PAID'
+                WHEN MAX(COALESCE(amount_paid, 0) - ?, 0) <= 0 THEN 'PENDING'
+                WHEN MAX(COALESCE(amount_paid, 0) - ?, 0) >= (${this.invoiceAmountSqlForUpdate}) THEN 'PAID'
                 ELSE 'PARTIAL'
             END
         WHERE id = ?

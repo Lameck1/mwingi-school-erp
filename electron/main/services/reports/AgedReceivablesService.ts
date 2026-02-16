@@ -1,4 +1,11 @@
 import { getDatabase } from '../../database'
+import {
+  buildFeeInvoiceAmountSql,
+  buildFeeInvoiceDateSql,
+  buildFeeInvoiceOutstandingBalanceSql,
+  buildFeeInvoiceOutstandingStatusPredicate
+} from '../../utils/feeInvoiceSql'
+import { STUDENT_COLLECTION_TRANSACTION_TYPES, asSqlInList } from '../../utils/financeTransactionTypes'
 
 import type Database from 'better-sqlite3'
 
@@ -113,6 +120,7 @@ export interface CollectionAction {
 }
 
 type BucketKey = '0-30' | '31-60' | '61-90' | '91-120' | '120+'
+const studentCollectionTransactionTypesSql = asSqlInList(STUDENT_COLLECTION_TRANSACTION_TYPES)
 
 // ============================================================================
 // REPOSITORY LAYER (SRP)
@@ -126,14 +134,27 @@ class AgedReceivablesRepository {
   }
 
   async getOutstandingInvoices(asOfDate: string): Promise<OutstandingInvoice[]> {
+    const outstandingBalanceSql = buildFeeInvoiceOutstandingBalanceSql(this.db, 'fi')
+    const outstandingStatusPredicate = buildFeeInvoiceOutstandingStatusPredicate(this.db, 'fi')
+
     return this.db
       .prepare(
         `
-      SELECT fi.*, s.first_name, s.last_name, s.admission_number, s.phone,
-             JULIANDAY(?) - JULIANDAY(fi.due_date) as days_overdue
+      SELECT
+        fi.id,
+        fi.student_id,
+        s.first_name,
+        s.last_name,
+        s.admission_number,
+        s.phone,
+        ${outstandingBalanceSql} as amount,
+        fi.due_date,
+        JULIANDAY(?) - JULIANDAY(fi.due_date) as days_overdue
       FROM fee_invoice fi
       JOIN student s ON fi.student_id = s.id
-      WHERE fi.status = 'OUTSTANDING' AND fi.due_date <= ?
+      WHERE ${outstandingStatusPredicate}
+        AND (${outstandingBalanceSql}) > 0
+        AND fi.due_date <= ?
       ORDER BY fi.due_date ASC
     `
       )
@@ -145,7 +166,7 @@ class AgedReceivablesRepository {
       .prepare(
         `
       SELECT transaction_date FROM ledger_transaction
-      WHERE student_id = ? AND transaction_type IN ('CREDIT', 'PAYMENT')
+      WHERE student_id = ? AND UPPER(COALESCE(transaction_type, '')) IN (${studentCollectionTransactionTypesSql})
       ORDER BY transaction_date DESC LIMIT 1
     `
       )
@@ -398,7 +419,7 @@ class CollectionsAnalyzer implements ICollectionsAnalyzer {
         AVG(amount) as average_payment,
         COUNT(DISTINCT student_id) as unique_students
       FROM ledger_transaction
-      WHERE transaction_type IN ('CREDIT', 'PAYMENT')
+      WHERE UPPER(COALESCE(transaction_type, '')) IN (${studentCollectionTransactionTypesSql})
         AND transaction_date >= date('now', '-3 months')
     `
       )
@@ -406,27 +427,33 @@ class CollectionsAnalyzer implements ICollectionsAnalyzer {
   }
 
   private getOutstandingMetrics(): OutstandingMetricsResult | undefined {
+    const outstandingBalanceSql = buildFeeInvoiceOutstandingBalanceSql(this.db, 'fi')
+    const outstandingStatusPredicate = buildFeeInvoiceOutstandingStatusPredicate(this.db, 'fi')
+
     return this.db
       .prepare(
         `
       SELECT
         COUNT(*) as total_outstanding_invoices,
-        SUM(amount) as total_outstanding_amount,
+        SUM(${outstandingBalanceSql}) as total_outstanding_amount,
         COUNT(DISTINCT student_id) as students_with_arrears
-      FROM fee_invoice
-      WHERE status = 'OUTSTANDING'
+      FROM fee_invoice fi
+      WHERE ${outstandingStatusPredicate}
+        AND (${outstandingBalanceSql}) > 0
     `
       )
       .get() as OutstandingMetricsResult | undefined
   }
 
   private getTotalBilledAmount(): number {
+    const invoiceAmountSql = buildFeeInvoiceAmountSql(this.db, 'fi')
+    const invoiceDateSql = buildFeeInvoiceDateSql(this.db, 'fi')
     const totalBilled = this.db
       .prepare(
         `
-      SELECT SUM(amount) as total
-      FROM fee_invoice
-      WHERE invoice_date >= date('now', '-3 months')
+      SELECT SUM(${invoiceAmountSql}) as total
+      FROM fee_invoice fi
+      WHERE ${invoiceDateSql} >= date('now', '-3 months')
     `
       )
       .get() as TotalBilledResult | undefined

@@ -107,6 +107,8 @@ describe('PaymentService', () => {
             invoice_date DATE NOT NULL,
             due_date DATE NOT NULL,
             total_amount INTEGER NOT NULL,
+            amount_due INTEGER,
+            amount INTEGER,
             amount_paid INTEGER DEFAULT 0,
             status TEXT DEFAULT 'PENDING',
             notes TEXT,
@@ -191,8 +193,8 @@ describe('PaymentService', () => {
             ('1020', 'Bank Account', 'ASSET', 'DEBIT', 1),
             ('1100', 'Student Receivables', 'ASSET', 'DEBIT', 1),
             ('4300', 'General Revenue', 'REVENUE', 'CREDIT', 1);
-          INSERT INTO fee_invoice (student_id, invoice_number, term_id, invoice_date, due_date, total_amount, amount_paid, status, created_by_user_id)
-          VALUES (1, 'INV-001', 1, '2026-01-15', '2026-02-15', 50000, 0, 'OUTSTANDING', 1);
+          INSERT INTO fee_invoice (student_id, invoice_number, term_id, invoice_date, due_date, total_amount, amount_due, amount, amount_paid, status, created_by_user_id)
+          VALUES (1, 'INV-001', 1, '2026-01-15', '2026-02-15', 50000, 50000, 50000, 0, 'OUTSTANDING', 1);
         `)
 
         service = new PaymentService(db)
@@ -330,6 +332,53 @@ describe('PaymentService', () => {
             `).get(result.transaction_id) as { applied_amount: number } | undefined
 
             expect(allocation?.applied_amount).toBe(15000)
+        })
+
+        it('applies payment to invoices with lowercase outstanding status', () => {
+            db.prepare(`UPDATE fee_invoice SET status = 'outstanding', amount_paid = 0 WHERE id = 1`).run()
+
+            const result = service.recordPayment({
+                student_id: 1,
+                amount: 10000,
+                transaction_date: '2026-01-18',
+                payment_method: 'CASH',
+                payment_reference: 'TEST-LOWERCASE-STATUS',
+                recorded_by_user_id: 1,
+                term_id: 1
+            })
+
+            expect(result.success).toBe(true)
+
+            const invoice = db.prepare(`SELECT amount_paid, status FROM fee_invoice WHERE id = 1`).get() as { amount_paid: number; status: string }
+            expect(invoice.amount_paid).toBe(10000)
+            expect(invoice.status).toBe('PARTIAL')
+
+            const student = db.prepare(`SELECT credit_balance FROM student WHERE id = 1`).get() as { credit_balance: number }
+            expect(student.credit_balance).toBe(0)
+        })
+
+        it('uses amount_due fallback when total_amount is zero', () => {
+            db.prepare(`
+              UPDATE fee_invoice
+              SET total_amount = 0, amount_due = 17000, amount = 17000, amount_paid = 0, status = 'PENDING'
+              WHERE id = 1
+            `).run()
+
+            const result = service.recordPayment({
+                student_id: 1,
+                amount: 17000,
+                transaction_date: '2026-01-18',
+                payment_method: 'MPESA',
+                payment_reference: 'TEST-AMOUNT-FALLBACK',
+                recorded_by_user_id: 1,
+                term_id: 1
+            })
+
+            expect(result.success).toBe(true)
+
+            const invoice = db.prepare(`SELECT amount_paid, status FROM fee_invoice WHERE id = 1`).get() as { amount_paid: number; status: string }
+            expect(invoice.amount_paid).toBe(17000)
+            expect(invoice.status).toBe('PAID')
         })
     })
 

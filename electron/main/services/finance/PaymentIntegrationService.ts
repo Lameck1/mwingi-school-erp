@@ -16,6 +16,12 @@
 
 import { getDatabase } from '../../database';
 import { logAudit } from '../../database/utils/audit';
+import {
+  buildFeeInvoiceAmountSql,
+  buildFeeInvoiceOutstandingBalanceSql,
+  buildFeeInvoiceOutstandingStatusPredicate
+} from '../../utils/feeInvoiceSql';
+import { OUTSTANDING_INVOICE_STATUSES } from '../../utils/financeTransactionTypes';
 import { DoubleEntryJournalService, type JournalEntryData } from '../accounting/DoubleEntryJournalService';
 
 import type Database from 'better-sqlite3';
@@ -101,6 +107,8 @@ interface JournalEntryContext {
   paymentRef: string;
   legacyTransactionId: number;
 }
+
+const normalizeInvoiceStatus = (status: string | null | undefined): string => (status ?? 'PENDING').toUpperCase();
 
 export class PaymentIntegrationService {
   private readonly db: Database.Database;
@@ -227,40 +235,77 @@ export class PaymentIntegrationService {
     }
   }
 
-  private applyInvoicePayments(data: PaymentIntegrationData, amountCents: number): void {
+  private applyInvoicePayments(data: PaymentIntegrationData, amountCents: number): number {
+    const invoiceAmountSql = buildFeeInvoiceAmountSql(this.db, 'fi')
+    const invoiceAmountSqlForUpdate = buildFeeInvoiceAmountSql(this.db, 'fee_invoice')
+    const outstandingBalanceSql = buildFeeInvoiceOutstandingBalanceSql(this.db, 'fi')
+    const outstandingStatusPredicate = buildFeeInvoiceOutstandingStatusPredicate(this.db, 'fi')
+
     if (data.invoice_id) {
       const invoice = this.db
-        .prepare('SELECT total_amount, amount_paid FROM fee_invoice WHERE id = ?')
-        .get(data.invoice_id) as { total_amount: number; amount_paid: number } | undefined
+        .prepare(`
+          SELECT
+            ${invoiceAmountSql} as invoice_amount,
+            COALESCE(fi.amount_paid, 0) as amount_paid,
+            COALESCE(fi.status, 'PENDING') as status
+          FROM fee_invoice fi
+          WHERE fi.id = ?
+        `)
+        .get(data.invoice_id) as { invoice_amount: number; amount_paid: number; status: string } | undefined
 
       if (invoice) {
+        const normalizedStatus = normalizeInvoiceStatus(invoice.status)
+        if (!OUTSTANDING_INVOICE_STATUSES.includes(normalizedStatus as (typeof OUTSTANDING_INVOICE_STATUSES)[number])) {
+          return amountCents
+        }
+
+        const outstanding = Math.max(0, (invoice.invoice_amount || 0) - (invoice.amount_paid || 0))
+        if (outstanding <= 0) {
+          return amountCents
+        }
+        const appliedAmount = Math.min(amountCents, outstanding)
+
         this.db
           .prepare(
             `UPDATE fee_invoice 
-              SET amount_paid = amount_paid + ?,
-                  status = CASE WHEN amount_paid + ? >= total_amount THEN 'PAID' ELSE 'PARTIAL' END
+              SET amount_paid = COALESCE(amount_paid, 0) + ?,
+                  status = CASE
+                    WHEN COALESCE(amount_paid, 0) + ? >= (${invoiceAmountSqlForUpdate}) THEN 'PAID'
+                    WHEN COALESCE(amount_paid, 0) + ? <= 0 THEN 'PENDING'
+                    ELSE 'PARTIAL'
+                  END
               WHERE id = ?`
           )
-          .run(amountCents, amountCents, data.invoice_id)
+          .run(appliedAmount, appliedAmount, appliedAmount, data.invoice_id)
+
+        return amountCents - appliedAmount
       }
 
-      return
+      return amountCents
     }
 
     let remainingAmount = amountCents
     const pendingInvoices = this.db
       .prepare(
-        `SELECT id, total_amount, amount_paid 
-         FROM fee_invoice 
-         WHERE student_id = ? AND status != 'PAID'
-         ORDER BY invoice_date ASC`
+        `SELECT
+           fi.id,
+           ${outstandingBalanceSql} as outstanding_balance
+         FROM fee_invoice fi
+         WHERE fi.student_id = ?
+           AND ${outstandingStatusPredicate}
+           AND (${outstandingBalanceSql}) > 0
+         ORDER BY COALESCE(fi.invoice_date, fi.due_date, substr(fi.created_at, 1, 10)) ASC`
       )
-      .all(data.student_id) as Array<{ id: number; total_amount: number; amount_paid: number }>
+      .all(data.student_id) as Array<{ id: number; outstanding_balance: number }>
 
     const updateInvoiceStmt = this.db.prepare(`
       UPDATE fee_invoice 
-      SET amount_paid = amount_paid + ?,
-          status = CASE WHEN amount_paid + ? >= total_amount THEN 'PAID' ELSE 'PARTIAL' END
+      SET amount_paid = COALESCE(amount_paid, 0) + ?,
+          status = CASE
+            WHEN COALESCE(amount_paid, 0) + ? >= (${invoiceAmountSqlForUpdate}) THEN 'PAID'
+            WHEN COALESCE(amount_paid, 0) + ? <= 0 THEN 'PENDING'
+            ELSE 'PARTIAL'
+          END
       WHERE id = ?
     `)
 
@@ -269,14 +314,23 @@ export class PaymentIntegrationService {
         break
       }
 
-      const outstanding = invoice.total_amount - (invoice.amount_paid || 0)
+      const outstanding = Math.max(0, invoice.outstanding_balance || 0)
+      if (outstanding <= 0) {
+        continue
+      }
       const payAmount = Math.min(remainingAmount, outstanding)
-      updateInvoiceStmt.run(payAmount, payAmount, invoice.id)
+      updateInvoiceStmt.run(payAmount, payAmount, payAmount, invoice.id)
       remainingAmount -= payAmount
     }
+
+    return remainingAmount
   }
 
   private updateStudentCreditBalance(studentId: number, amountCents: number): void {
+    if (amountCents <= 0) {
+      return
+    }
+
     this.db.prepare(`
       UPDATE student
       SET credit_balance = COALESCE(credit_balance, 0) + ?
@@ -315,8 +369,8 @@ export class PaymentIntegrationService {
         legacyTransactionId
       })
 
-      this.applyInvoicePayments(data, amountCents)
-      this.updateStudentCreditBalance(data.student_id, amountCents)
+      const remainingAmount = this.applyInvoicePayments(data, amountCents)
+      this.updateStudentCreditBalance(data.student_id, remainingAmount)
 
       this.db.prepare('COMMIT').run()
 

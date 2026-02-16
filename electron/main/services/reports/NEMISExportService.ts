@@ -1,6 +1,12 @@
 
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
+import {
+  buildFeeInvoiceActiveStatusPredicate,
+  buildFeeInvoiceAmountSql,
+  buildFeeInvoiceOutstandingBalanceSql,
+  buildFeeInvoicePaidAmountSql
+} from '../../utils/feeInvoiceSql'
 
 import type {
   ExportResult,
@@ -127,13 +133,18 @@ class NEMISDataRepository {
 
   async extractFinancialData(): Promise<FinancialData | undefined> {
     const db = this.db
+    const invoiceAmountSql = buildFeeInvoiceAmountSql(db, 'f')
+    const invoicePaidSql = buildFeeInvoicePaidAmountSql(db, 'f')
+    const invoiceOutstandingSql = buildFeeInvoiceOutstandingBalanceSql(db, 'f')
+    const invoiceStatusPredicate = buildFeeInvoiceActiveStatusPredicate(db, 'f')
     return db.prepare(`
       SELECT 
         COUNT(DISTINCT f.id) as total_invoices,
-        SUM(COALESCE(f.amount_due, f.total_amount, 0)) as total_fees,
-        SUM(f.amount_paid) as total_paid,
-        SUM(COALESCE(f.amount_due, f.total_amount, 0) - COALESCE(f.amount_paid, 0)) as total_outstanding
+        COALESCE(SUM(${invoiceAmountSql}), 0) as total_fees,
+        COALESCE(SUM(${invoicePaidSql}), 0) as total_paid,
+        COALESCE(SUM(${invoiceOutstandingSql}), 0) as total_outstanding
       FROM fee_invoice f
+      WHERE ${invoiceStatusPredicate}
     `).get() as FinancialData | undefined
   }
 

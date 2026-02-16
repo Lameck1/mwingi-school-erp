@@ -80,11 +80,15 @@ export class PerformanceAnalysisService {
         SELECT 
           s.id as student_id,
           s.admission_number,
-          s.name as student_name,
+          TRIM(COALESCE(s.first_name, '') || ' ' || COALESCE(s.last_name, '')) as student_name,
           COALESCE(prev.average_marks, 0) as previous_term_average,
           COALESCE(curr.average_marks, 0) as current_term_average,
           COALESCE(curr.average_marks - prev.average_marks, 0) as improvement_points
         FROM student s
+        JOIN enrollment en ON en.student_id = s.id
+          AND en.academic_year_id = ?
+          AND en.term_id = ?
+          AND en.status = 'ACTIVE'
         LEFT JOIN (
           SELECT student_id, AVG(mean_score) as average_marks
           FROM report_card_summary rcs
@@ -103,10 +107,10 @@ export class PerformanceAnalysisService {
           AND COALESCE(prev.average_marks, 0) > 0
       `
 
-      const params = [comparisonTermId, academicYearId, currentTermId, academicYearId]
+      const params = [academicYearId, currentTermId, comparisonTermId, academicYearId, currentTermId, academicYearId]
 
       if (streamId) {
-        query += ` AND s.stream_id = ?`
+        query += ` AND en.stream_id = ?`
         params.push(streamId)
       }
 
@@ -159,7 +163,14 @@ export class PerformanceAnalysisService {
       name: string
     }
 
-    const student = this.db.prepare('SELECT * FROM student WHERE id = ?').get(studentId) as StudentRaw | undefined
+    const student = this.db.prepare(`
+      SELECT 
+        id,
+        admission_number,
+        TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')) as name
+      FROM student
+      WHERE id = ?
+    `).get(studentId) as StudentRaw | undefined
     return student || null
   }
 
@@ -272,7 +283,7 @@ export class PerformanceAnalysisService {
         SELECT 
           s.id as student_id,
           s.admission_number,
-          s.name as student_name,
+          TRIM(COALESCE(s.first_name, '') || ' ' || COALESCE(s.last_name, '')) as student_name,
           COUNT(er.id) as total_subjects,
           SUM(CASE WHEN er.score < ? THEN 1 ELSE 0 END) as failing_subjects,
           AVG(er.score) as average_score,
@@ -280,22 +291,29 @@ export class PerformanceAnalysisService {
         FROM student s
         JOIN exam_result er ON s.id = er.student_id
         JOIN exam e ON er.exam_id = e.id
+        JOIN enrollment en ON en.student_id = s.id
+          AND en.academic_year_id = e.academic_year_id
+          AND en.term_id = e.term_id
+          AND en.status = 'ACTIVE'
         WHERE e.term_id = ?
           AND e.academic_year_id = ?
           AND s.is_active = 1
           AND er.score IS NOT NULL
-        GROUP BY s.id
-        HAVING failing_subjects > 0
       `
 
       const params = [passThreshold, termId, academicYearId]
 
       if (streamId) {
-        query += ` AND s.stream_id = ?`
+        query += ` AND en.stream_id = ?`
         params.push(streamId)
       }
 
-      query += ` ORDER BY failing_subjects DESC, average_score ASC`
+      query += `
+        GROUP BY s.id, s.admission_number, s.first_name, s.last_name
+        HAVING SUM(CASE WHEN er.score < ? THEN 1 ELSE 0 END) > 0
+        ORDER BY failing_subjects DESC, average_score ASC
+      `
+      params.push(passThreshold)
 
       return this.db.prepare(query).all(...params) as StrugglingStudent[]
     } catch (error) {
@@ -317,7 +335,7 @@ export class PerformanceAnalysisService {
       const trends = this.db.prepare(`
         SELECT 
           t.id as term_id,
-          t.name as term_name,
+          t.term_name as term_name,
           t.term_number,
           ROUND(AVG(er.score), 2) as average_score,
           COUNT(er.id) as subject_count,
