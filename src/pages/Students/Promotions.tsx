@@ -6,10 +6,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { buildPromotionRunFeedback, type PromotionRunFeedback } from './promotion-feedback.logic'
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Select } from '../../components/ui/Select'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../stores'
 import { type Stream, type AcademicYear, type Term, type PromotionStudent } from '../../types/electron-api/AcademicAPI'
+import { reportRuntimeError } from '../../utils/runtimeError'
 
 export default function Promotions() {
     const { currentAcademicYear } = useAppStore()
@@ -29,13 +31,14 @@ export default function Promotions() {
     const [toTerm, setToTerm] = useState<number>(0)
     const [terms, setTerms] = useState<Term[]>([])
     const [lastPromotionFeedback, setLastPromotionFeedback] = useState<PromotionRunFeedback | null>(null)
+    const [confirmingPromotion, setConfirmingPromotion] = useState(false)
 
     const loadStreams = useCallback(async () => {
         try {
             const data = await globalThis.electronAPI.getPromotionStreams()
             setStreams(data)
         } catch (error) {
-            console.error('Failed to load streams:', error)
+            reportRuntimeError(error, { area: 'Students.Promotions', action: 'loadStreams' }, 'Failed to load streams')
         }
     }, [])
 
@@ -48,7 +51,7 @@ export default function Promotions() {
                 setToAcademicYear(data[0].id)
             }
         } catch (error) {
-            console.error('Failed to load academic years:', error)
+            reportRuntimeError(error, { area: 'Students.Promotions', action: 'loadAcademicYears' }, 'Failed to load academic years')
         }
     }, [])
 
@@ -60,7 +63,7 @@ export default function Promotions() {
                 setToTerm(data[0].id)
             }
         } catch (error) {
-            console.error('Failed to load terms:', error)
+            reportRuntimeError(error, { area: 'Students.Promotions', action: 'loadTerms' }, 'Failed to load terms')
         }
     }, [toAcademicYear])
 
@@ -83,7 +86,7 @@ export default function Promotions() {
             setStudents(data)
             setSelectedStudents([])
         } catch (error) {
-            console.error('Failed to load students:', error)
+            reportRuntimeError(error, { area: 'Students.Promotions', action: 'loadStudents' }, 'Failed to load students')
         } finally {
             setLoading(false)
         }
@@ -96,14 +99,18 @@ export default function Promotions() {
                 setToStream(next.id)
             }
         } catch (error) {
-            console.error('Failed to get next stream:', error)
+            reportRuntimeError(error, { area: 'Students.Promotions', action: 'suggestNextStream' }, 'Failed to get next stream')
         }
     }, [fromStream])
 
     useEffect(() => {
         if (fromStream && currentAcademicYear) {
-            loadStudents().catch((err: unknown) => console.error('Failed to load students for promotion', err))
-            suggestNextStream().catch((err: unknown) => console.error('Failed to suggest next stream', err))
+            loadStudents().catch((err: unknown) => {
+                reportRuntimeError(err, { area: 'Students.Promotions', action: 'loadStudentsEffect' }, 'Failed to load students for promotion')
+            })
+            suggestNextStream().catch((err: unknown) => {
+                reportRuntimeError(err, { area: 'Students.Promotions', action: 'suggestNextStreamEffect' }, 'Failed to suggest next stream')
+            })
         }
     }, [fromStream, currentAcademicYear, loadStudents, suggestNextStream])
 
@@ -123,7 +130,7 @@ export default function Promotions() {
         }
     }
 
-    const handlePromote = async () => {
+    const handlePromote = () => {
         if (!currentAcademicYear || !user) {return}
         if (selectedStudents.length === 0) {
             showToast('Please select students to promote', 'warning')
@@ -134,8 +141,13 @@ export default function Promotions() {
             return
         }
 
-        if (!confirm(`Promote ${selectedStudents.length} students to the selected class?`)) {return}
+        setConfirmingPromotion(true)
+    }
 
+    const executePromotion = async () => {
+        if (!currentAcademicYear || !user) {return}
+
+        setConfirmingPromotion(false)
         setLastPromotionFeedback(null)
         setPromoting(true)
         try {
@@ -161,8 +173,7 @@ export default function Promotions() {
                 }
             }
         } catch (error) {
-            console.error('Failed to promote:', error)
-            const errorMessage = error instanceof Error ? error.message : 'Failed to promote students'
+            const errorMessage = reportRuntimeError(error, { area: 'Students.Promotions', action: 'executePromotion' }, 'Failed to promote students')
             setLastPromotionFeedback({
                 attempted: selectedStudents.length,
                 promoted: 0,
@@ -375,6 +386,16 @@ export default function Promotions() {
 
                 {renderStudents()}
             </div>
+
+            <ConfirmDialog
+                isOpen={confirmingPromotion}
+                title="Confirm Promotion"
+                message={`Promote ${selectedStudents.length} selected student${selectedStudents.length === 1 ? '' : 's'} to the selected class and academic term?`}
+                confirmLabel="Promote Students"
+                onCancel={() => setConfirmingPromotion(false)}
+                onConfirm={() => { void executePromotion() }}
+                isProcessing={promoting}
+            />
         </div>
     )
 }

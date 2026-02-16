@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
 import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
+import { useToast } from '../../../contexts/ToastContext'
 import { useAuthStore } from '../../../stores';
 import { formatCurrencyFromCents } from '../../../utils/format';
+import { reportRuntimeError } from '../../../utils/runtimeError'
 
 import type { EligibleStudent, JSSFeeStructure, TransitionResult } from '../../../types/electron-api/JSSAPI';
 
 
 const JSSTransition: React.FC = () => {
   const { user } = useAuthStore();
+  const { showToast } = useToast()
   const [eligibleStudents, setEligibleStudents] = useState<EligibleStudent[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<Set<number>>(new Set());
   const [feeStructures, setFeeStructures] = useState<JSSFeeStructure[]>([]);
@@ -21,6 +25,7 @@ const JSSTransition: React.FC = () => {
     to_grade: 7,
     academic_year: 2026
   });
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
 
   const loadEligibleStudents = useCallback(async () => {
     try {
@@ -29,7 +34,7 @@ const JSSTransition: React.FC = () => {
       const students: EligibleStudent[] = result?.data ?? [];
       setEligibleStudents(students);
     } catch (error) {
-      console.error('Error loading students:', error);
+      reportRuntimeError(error, { area: 'Academic.JSSTransition', action: 'loadEligibleStudents' }, 'Error loading students')
     } finally {
       setLoading(false);
     }
@@ -46,7 +51,7 @@ const JSSTransition: React.FC = () => {
         .filter((data): data is JSSFeeStructure => Boolean(data));
       setFeeStructures(structures);
     } catch (error) {
-      console.error('Error loading fee structures:', error);
+      reportRuntimeError(error, { area: 'Academic.JSSTransition', action: 'loadFeeStructures' }, 'Error loading fee structures')
     }
   }, [filters.academic_year]);
 
@@ -73,21 +78,23 @@ const JSSTransition: React.FC = () => {
     setSelectedStudents(newSelected);
   };
 
-  const handleBatchTransition = async () => {
+  const handleBatchTransition = () => {
     if (!user) {
-      alert('User not authenticated');
+      showToast('User not authenticated', 'error')
       return;
     }
 
     if (selectedStudents.size === 0) {
-      alert('Please select at least one student to process');
+      showToast('Please select at least one student to process', 'warning')
       return;
     }
 
-    if (!confirm(`Process transition for ${selectedStudents.size} student(s) from Grade ${filters.from_grade} to Grade ${filters.to_grade}?`)) {
-      return;
-    }
+    setShowConfirmDialog(true)
+  };
 
+  const executeBatchTransition = async () => {
+    if (!user) {return}
+    setShowConfirmDialog(false)
     try {
       setProcessing(true);
       const result = await globalThis.electronAPI.academic.bulkJSSTransition({
@@ -105,10 +112,10 @@ const JSSTransition: React.FC = () => {
       setTransitionResult(transitionSummary);
       setSelectedStudents(new Set());
       
-      alert(`Transition complete! ${transitionSummary.successful.length} student(s) promoted successfully.`);
+      showToast(`Transition complete: ${transitionSummary.successful.length} student(s) promoted`, 'success')
     } catch (error) {
-      console.error('Error processing transition:', error);
-      alert('Failed to process transition');
+      const message = reportRuntimeError(error, { area: 'Academic.JSSTransition', action: 'executeBatchTransition' }, 'Failed to process transition')
+      showToast(message, 'error')
     } finally {
       setProcessing(false);
     }
@@ -304,6 +311,16 @@ const JSSTransition: React.FC = () => {
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={showConfirmDialog}
+        title="Confirm JSS Transition"
+        message={`Process transition for ${selectedStudents.size} student(s) from Grade ${filters.from_grade} to Grade ${filters.to_grade}?`}
+        confirmLabel="Process Transition"
+        onCancel={() => setShowConfirmDialog(false)}
+        onConfirm={() => { void executeBatchTransition() }}
+        isProcessing={processing}
+      />
     </div>
   );
 };

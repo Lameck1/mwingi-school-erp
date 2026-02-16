@@ -9,7 +9,9 @@ import {
 import React, { useRef, useState } from 'react'
 
 import { Modal } from './Modal'
+import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore } from '../../stores'
+import { reportRuntimeError } from '../../utils/runtimeError'
 
 interface ImportDialogProps {
     isOpen: boolean
@@ -232,6 +234,7 @@ function useImportDialogController(
     onSuccess: (result: unknown) => void
 ): ImportDialogController {
     const { user } = useAuthStore()
+    const { showToast } = useToast()
     const [step, setStep] = useState<ImportStep>('UPLOAD')
     const [file, setFile] = useState<File | null>(null)
     const [importResult, setImportResult] = useState<ImportResult | null>(null)
@@ -270,10 +273,19 @@ function useImportDialogController(
         handleDownloadTemplate: async () => {
             try {
                 const result = await globalThis.electronAPI.system.downloadImportTemplate(entityType)
-                if (result.success) { alert(`Template downloaded to: ${result.filePath}`) }
+                if (result.success) {
+                    showToast(
+                        result.filePath ? `Template downloaded to: ${result.filePath}` : 'Template downloaded successfully',
+                        'success'
+                    )
+                } else {
+                    showToast(result.error || 'Failed to download template', 'error')
+                }
             } catch (downloadError) {
-                console.error(downloadError)
-                alert('Failed to download template')
+                showToast(
+                    reportRuntimeError(downloadError, { area: 'ImportDialog', action: 'downloadTemplate' }, 'Failed to download template'),
+                    'error'
+                )
             }
         },
         handleImport: async () => {

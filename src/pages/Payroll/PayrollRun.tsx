@@ -3,14 +3,20 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 
 import { normalizePayrollStatus, type PayrollUiStatus } from './payrollStatus'
 import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore, useAppStore } from '../../stores'
 import { type PayrollPeriod, type PayrollEntry } from '../../types/electron-api/PayrollAPI'
 import { formatCurrencyFromCents } from '../../utils/format'
 import { printDocument } from '../../utils/print'
+import { reportRuntimeError } from '../../utils/runtimeError'
+
+type PayrollConfirmAction = 'confirm' | 'markPaid' | 'revert' | 'delete' | 'recalculate' | 'bulkNotify'
 
 export default function PayrollRun() {
     const { user } = useAuthStore()
     const { schoolSettings } = useAppStore()
+    const { showToast } = useToast()
     const [month, setMonth] = useState(new Date().getMonth() + 1)
     const [year, setYear] = useState(new Date().getFullYear())
     const [payrollData, setPayrollData] = useState<PayrollEntry[]>([])
@@ -20,7 +26,8 @@ export default function PayrollRun() {
     const [error, setError] = useState('')
     const [selectedPeriod, setSelectedPeriod] = useState<Partial<PayrollPeriod> | null>(null)
     const [notifying, setNotifying] = useState(false)
-    const [actionLoading, setActionLoading] = useState('')
+    const [actionLoading, setActionLoading] = useState<PayrollConfirmAction | ''>('')
+    const [confirmAction, setConfirmAction] = useState<PayrollConfirmAction | null>(null)
 
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -41,11 +48,12 @@ export default function PayrollRun() {
             const data = await api.getPayrollHistory()
             setHistory(data)
         } catch (err) {
-            console.error('Failed to load history', err)
+            reportRuntimeError(err, { area: 'Payroll.Run', action: 'loadHistory' }, 'Failed to load payroll history')
+            showToast('Failed to load payroll history', 'error')
         } finally {
             setLoadingHistory(false)
         }
-    }, [])
+    }, [showToast])
 
     useEffect(() => {
         void loadHistory()
@@ -64,8 +72,7 @@ export default function PayrollRun() {
                 setError(response.error || 'Failed to load payroll details')
             }
         } catch (err) {
-            console.error(err)
-            setError('Failed to load payroll details')
+            setError(reportRuntimeError(err, { area: 'Payroll.Run', action: 'loadPeriodDetails' }, 'Failed to load payroll details'))
         } finally {
             setRunning(false)
         }
@@ -92,8 +99,7 @@ export default function PayrollRun() {
                 setError(result.error || 'Failed to run payroll')
             }
         } catch (err) {
-            console.error(err)
-            setError('An error occurred while processing payroll')
+            setError(reportRuntimeError(err, { area: 'Payroll.Run', action: 'runPayroll' }, 'An error occurred while processing payroll'))
         } finally {
             setRunning(false)
         }
@@ -106,83 +112,137 @@ export default function PayrollRun() {
         void loadHistory()
     }, [loadHistory])
 
-    const handleConfirm = useCallback(async () => {
+    const requestActionConfirmation = useCallback((action: PayrollConfirmAction) => {
+        if (!user) {
+            showToast('User not authenticated', 'error')
+            return
+        }
+
+        if (action !== 'bulkNotify' && !selectedPeriod?.id) {
+            showToast('Select a payroll period first', 'warning')
+            return
+        }
+
+        if (action === 'bulkNotify' && payrollData.length === 0) {
+            showToast('No staff records available to notify', 'warning')
+            return
+        }
+
+        setConfirmAction(action)
+    }, [payrollData.length, selectedPeriod?.id, showToast, user])
+
+    const handleConfirm = useCallback(() => {
+        requestActionConfirmation('confirm')
+    }, [requestActionConfirmation])
+
+    const handleMarkPaid = useCallback(() => {
+        requestActionConfirmation('markPaid')
+    }, [requestActionConfirmation])
+
+    const handleRevertToDraft = useCallback(() => {
+        requestActionConfirmation('revert')
+    }, [requestActionConfirmation])
+
+    const handleDelete = useCallback(() => {
+        requestActionConfirmation('delete')
+    }, [requestActionConfirmation])
+
+    const handleRecalculate = useCallback(() => {
+        requestActionConfirmation('recalculate')
+    }, [requestActionConfirmation])
+
+    const executeConfirm = useCallback(async () => {
         if (!selectedPeriod?.id || !user) { return }
-        if (!confirm('Confirm this payroll? Once confirmed, calculations are locked and the payroll is ready for payment processing.')) { return }
         setActionLoading('confirm')
         try {
             const result = await globalThis.electronAPI.confirmPayroll(selectedPeriod.id, user.id)
             if (result.success) {
                 setSelectedPeriod(prev => prev ? { ...prev, status: 'CONFIRMED' } : null)
                 await loadHistory()
-            } else {
-                setError(result.error || 'Failed to confirm payroll')
+                showToast('Payroll confirmed successfully', 'success')
+                return
             }
-        } catch { setError('Failed to confirm payroll') }
-        finally { setActionLoading('') }
-    }, [loadHistory, selectedPeriod?.id, user])
+            setError(result.error || 'Failed to confirm payroll')
+        } catch (err) {
+            setError(reportRuntimeError(err, { area: 'Payroll.Run', action: 'confirmPayroll' }, 'Failed to confirm payroll'))
+        } finally {
+            setActionLoading('')
+        }
+    }, [loadHistory, selectedPeriod?.id, showToast, user])
 
-    const handleMarkPaid = useCallback(async () => {
+    const executeMarkPaid = useCallback(async () => {
         if (!selectedPeriod?.id || !user) { return }
-        if (!confirm(`Mark all ${payrollData.length} staff members as PAID for ${selectedPeriod.period_name}? This records todays date as the payment date.`)) { return }
         setActionLoading('markPaid')
         try {
             const result = await globalThis.electronAPI.markPayrollPaid(selectedPeriod.id, user.id)
             if (result.success) {
                 setSelectedPeriod(prev => prev ? { ...prev, status: 'PAID' } : null)
                 await loadHistory()
-            } else {
-                setError(result.error || 'Failed to mark payroll as paid')
+                showToast('Payroll marked as paid', 'success')
+                return
             }
-        } catch { setError('Failed to mark payroll as paid') }
-        finally { setActionLoading('') }
-    }, [loadHistory, selectedPeriod?.id, selectedPeriod?.period_name, user, payrollData.length])
+            setError(result.error || 'Failed to mark payroll as paid')
+        } catch (err) {
+            setError(reportRuntimeError(err, { area: 'Payroll.Run', action: 'markPayrollPaid' }, 'Failed to mark payroll as paid'))
+        } finally {
+            setActionLoading('')
+        }
+    }, [loadHistory, selectedPeriod?.id, showToast, user])
 
-    const handleRevertToDraft = useCallback(async () => {
+    const executeRevertToDraft = useCallback(async () => {
         if (!selectedPeriod?.id || !user) { return }
-        if (!confirm('Revert this payroll back to DRAFT? This unlocks the payroll for editing and recalculation.')) { return }
         setActionLoading('revert')
         try {
             const result = await globalThis.electronAPI.revertPayrollToDraft(selectedPeriod.id, user.id)
             if (result.success) {
                 setSelectedPeriod(prev => prev ? { ...prev, status: 'DRAFT' } : null)
                 await loadHistory()
-            } else {
-                setError(result.error || 'Failed to revert payroll')
+                showToast('Payroll reverted to draft', 'success')
+                return
             }
-        } catch { setError('Failed to revert payroll') }
-        finally { setActionLoading('') }
-    }, [loadHistory, selectedPeriod?.id, user])
+            setError(result.error || 'Failed to revert payroll')
+        } catch (err) {
+            setError(reportRuntimeError(err, { area: 'Payroll.Run', action: 'revertPayrollToDraft' }, 'Failed to revert payroll'))
+        } finally {
+            setActionLoading('')
+        }
+    }, [loadHistory, selectedPeriod?.id, showToast, user])
 
-    const handleDelete = useCallback(async () => {
+    const executeDelete = useCallback(async () => {
         if (!selectedPeriod?.id || !user) { return }
-        if (!confirm(`Permanently delete the ${selectedPeriod.period_name} payroll? This action cannot be undone.`)) { return }
         setActionLoading('delete')
         try {
             const result = await globalThis.electronAPI.deletePayroll(selectedPeriod.id, user.id)
             if (result.success) {
                 handleBack()
-            } else {
-                setError(result.error || 'Failed to delete payroll')
+                showToast('Payroll draft deleted', 'success')
+                return
             }
-        } catch { setError('Failed to delete payroll') }
-        finally { setActionLoading('') }
-    }, [handleBack, selectedPeriod?.id, selectedPeriod?.period_name, user])
+            setError(result.error || 'Failed to delete payroll')
+        } catch (err) {
+            setError(reportRuntimeError(err, { area: 'Payroll.Run', action: 'deletePayroll' }, 'Failed to delete payroll'))
+        } finally {
+            setActionLoading('')
+        }
+    }, [handleBack, selectedPeriod?.id, showToast, user])
 
-    const handleRecalculate = useCallback(async () => {
+    const executeRecalculate = useCallback(async () => {
         if (!selectedPeriod?.id || !user) { return }
-        if (!confirm('Recalculate this payroll with current staff data and statutory rates? Existing calculations will be replaced.')) { return }
         setActionLoading('recalculate')
         try {
             const result = await globalThis.electronAPI.recalculatePayroll(selectedPeriod.id, user.id)
             if (result.success) {
                 setPayrollData(result.results || [])
-            } else {
-                setError(result.error || 'Failed to recalculate payroll')
+                showToast('Payroll recalculated', 'success')
+                return
             }
-        } catch { setError('Failed to recalculate payroll') }
-        finally { setActionLoading('') }
-    }, [selectedPeriod?.id, user])
+            setError(result.error || 'Failed to recalculate payroll')
+        } catch (err) {
+            setError(reportRuntimeError(err, { area: 'Payroll.Run', action: 'recalculatePayroll' }, 'Failed to recalculate payroll'))
+        } finally {
+            setActionLoading('')
+        }
+    }, [selectedPeriod?.id, showToast, user])
 
     const handleExportCSV = useCallback(() => {
         if (payrollData.length === 0) { return }
@@ -270,7 +330,7 @@ export default function PayrollRun() {
             </button>
             {(status === 'CONFIRMED' || status === 'PAID') && (
                 <button
-                    onClick={handleBulkNotify}
+                    onClick={() => requestActionConfirmation('bulkNotify')}
                     disabled={notifying || payrollData.length === 0}
                     className="btn btn-primary flex items-center gap-2 py-2 px-4 text-xs shadow-lg shadow-primary/20"
                 >
@@ -281,9 +341,84 @@ export default function PayrollRun() {
         </div>
     )
 
+    const confirmDialogCopy = useMemo(() => {
+        switch (confirmAction) {
+            case 'confirm':
+                return {
+                    title: 'Confirm Payroll',
+                    message: 'Confirm this payroll? Once confirmed, calculations are locked and the payroll is ready for payment processing.',
+                    confirmLabel: 'Confirm Payroll',
+                }
+            case 'markPaid':
+                return {
+                    title: 'Mark Payroll as Paid',
+                    message: `Mark all ${payrollData.length} staff member(s) as paid for ${selectedPeriod?.period_name || 'this period'}? This records today as the payment date.`,
+                    confirmLabel: 'Mark as Paid',
+                }
+            case 'revert':
+                return {
+                    title: 'Revert Payroll to Draft',
+                    message: 'Revert this payroll to draft? This unlocks the payroll for recalculation and editing.',
+                    confirmLabel: 'Revert to Draft',
+                }
+            case 'delete':
+                return {
+                    title: 'Delete Draft Payroll',
+                    message: `Permanently delete ${selectedPeriod?.period_name || 'this payroll'}? This action cannot be undone.`,
+                    confirmLabel: 'Delete Draft',
+                }
+            case 'recalculate':
+                return {
+                    title: 'Recalculate Payroll',
+                    message: 'Recalculate this payroll with current staff data and statutory rates? Existing calculations will be replaced.',
+                    confirmLabel: 'Recalculate',
+                }
+            case 'bulkNotify':
+                return {
+                    title: 'Notify All Staff',
+                    message: `Send salary notifications to ${payrollData.length} staff member(s) for ${selectedPeriod?.period_name || 'this period'}?`,
+                    confirmLabel: 'Send Notifications',
+                }
+            case null:
+                return null
+        }
+    }, [confirmAction, payrollData.length, selectedPeriod?.period_name])
+
+    async function executeConfirmedAction() {
+        if (!confirmAction) {
+            return
+        }
+
+        const action: PayrollConfirmAction = confirmAction
+        setConfirmAction(null)
+
+        switch (action) {
+            case 'confirm':
+                await executeConfirm()
+                break
+            case 'markPaid':
+                await executeMarkPaid()
+                break
+            case 'revert':
+                await executeRevertToDraft()
+                break
+            case 'delete':
+                await executeDelete()
+                break
+            case 'recalculate':
+                await executeRecalculate()
+                break
+            case 'bulkNotify':
+                await handleBulkNotify()
+                break
+            default:
+                break
+        }
+    }
+
     if (selectedPeriod || payrollData.length > 0) {
         const status = normalizePayrollStatus(selectedPeriod?.status)
-        const cfg = statusConfig[status]
+        const cfg = statusConfig[status] ?? statusConfig.DRAFT
         const StatusIcon = cfg.icon
         const periodId = selectedPeriod?.id
 
@@ -440,6 +575,20 @@ export default function PayrollRun() {
                         <span className={status === 'PAID' ? 'text-emerald-400' : 'text-foreground/20'}>③ Paid</span>
                     </div>
                 </div>
+
+                <ConfirmDialog
+                    isOpen={confirmDialogCopy !== null}
+                    title={confirmDialogCopy?.title || 'Confirm Payroll Action'}
+                    message={confirmDialogCopy?.message || 'Proceed with this payroll action?'}
+                    confirmLabel={confirmDialogCopy?.confirmLabel || 'Proceed'}
+                    onCancel={() => setConfirmAction(null)}
+                    onConfirm={() => { void executeConfirmedAction() }}
+                    isProcessing={
+                        confirmAction === 'bulkNotify'
+                            ? notifying
+                            : confirmAction !== null && actionLoading === confirmAction
+                    }
+                />
             </div>
         )
     }
@@ -564,17 +713,31 @@ export default function PayrollRun() {
                     )}
                 </div>
             </div>
+
+            <ConfirmDialog
+                isOpen={confirmDialogCopy !== null}
+                title={confirmDialogCopy?.title || 'Confirm Payroll Action'}
+                message={confirmDialogCopy?.message || 'Proceed with this payroll action?'}
+                confirmLabel={confirmDialogCopy?.confirmLabel || 'Proceed'}
+                onCancel={() => setConfirmAction(null)}
+                onConfirm={() => { void executeConfirmedAction() }}
+                isProcessing={
+                    confirmAction === 'bulkNotify'
+                        ? notifying
+                        : confirmAction !== null && actionLoading === confirmAction
+                }
+            />
         </div>
     )
 
 
     async function handleNotifyStaff(staff: PayrollEntry) {
         if (!staff.phone) {
-            alert('Staff phone number missing')
+            showToast('Staff phone number is missing', 'warning')
             return
         }
         if (!user) {
-            alert('User not authenticated')
+            showToast('User not authenticated', 'error')
             return
         }
 
@@ -590,19 +753,25 @@ export default function PayrollRun() {
             })
 
             if (result.success) {
-                alert(`Notification sent to ${staff.staff_name}`)
+                showToast(`Notification sent to ${staff.staff_name}`, 'success')
             } else {
-                alert('Failed to send: ' + result.error)
+                showToast(result.error || `Failed to notify ${staff.staff_name}`, 'error')
             }
-        } catch {
-            alert('Error sending notification')
+        } catch (err) {
+            showToast(
+                reportRuntimeError(err, { area: 'Payroll.Run', action: 'notifyStaff' }, `Error sending notification to ${staff.staff_name}`),
+                'error'
+            )
         }
     }
 
     async function handleBulkNotify() {
-        if (!confirm(`Send salary notifications to ${payrollData.length} staff members?`)) {return}
         if (!user) {
-            alert('User not authenticated')
+            showToast('User not authenticated', 'error')
+            return
+        }
+        if (payrollData.length === 0) {
+            showToast('No payroll staff entries found for notifications', 'warning')
             return
         }
 
@@ -634,7 +803,11 @@ export default function PayrollRun() {
         }
 
         setNotifying(false)
-        alert(`Finished: ${sent} sent, ${failed} failed.`)
+        if (failed === 0) {
+            showToast(`Salary notifications sent to ${sent} staff member(s)`, 'success')
+            return
+        }
+        showToast(`Notifications complete: ${sent} sent, ${failed} failed`, 'warning')
     }
 
     async function handlePrintPayslip(staffEntry: PayrollEntry) {
