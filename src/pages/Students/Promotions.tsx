@@ -3,15 +3,18 @@ import {
 } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 
+import { buildPromotionRunFeedback, type PromotionRunFeedback } from './promotion-feedback.logic'
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
 import { Select } from '../../components/ui/Select'
+import { useToast } from '../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../stores'
 import { type Stream, type AcademicYear, type Term, type PromotionStudent } from '../../types/electron-api/AcademicAPI'
 
 export default function Promotions() {
     const { currentAcademicYear } = useAppStore()
     const { user } = useAuthStore()
+    const { showToast } = useToast()
 
     const [streams, setStreams] = useState<Stream[]>([])
     const [students, setStudents] = useState<PromotionStudent[]>([])
@@ -25,12 +28,7 @@ export default function Promotions() {
     const [toAcademicYear, setToAcademicYear] = useState<number>(0)
     const [toTerm, setToTerm] = useState<number>(0)
     const [terms, setTerms] = useState<Term[]>([])
-
-
-
-
-
-
+    const [lastPromotionFeedback, setLastPromotionFeedback] = useState<PromotionRunFeedback | null>(null)
 
     const loadStreams = useCallback(async () => {
         try {
@@ -128,16 +126,17 @@ export default function Promotions() {
     const handlePromote = async () => {
         if (!currentAcademicYear || !user) {return}
         if (selectedStudents.length === 0) {
-            alert('Please select students to promote')
+            showToast('Please select students to promote', 'warning')
             return
         }
         if (!toStream || !toAcademicYear || !toTerm) {
-            alert('Please select destination stream, academic year, and term')
+            showToast('Please select destination stream, academic year, and term', 'warning')
             return
         }
 
         if (!confirm(`Promote ${selectedStudents.length} students to the selected class?`)) {return}
 
+        setLastPromotionFeedback(null)
         setPromoting(true)
         try {
             const result = await globalThis.electronAPI.batchPromoteStudents(
@@ -150,18 +149,78 @@ export default function Promotions() {
                 user.id
             )
 
+            setLastPromotionFeedback(buildPromotionRunFeedback(result, selectedStudents, students))
+
             if (result.success) {
-                alert(`Successfully promoted ${result.promoted} students!`)
+                showToast(`Successfully promoted ${result.promoted} students`, 'success')
                 await loadStudents()
             } else {
-                alert(`Promoted ${result.promoted}, Failed: ${result.failed}`)
+                showToast(`Promotion completed with ${result.failed} failure(s)`, 'warning')
+                if (result.promoted > 0) {
+                    await loadStudents()
+                }
             }
         } catch (error) {
             console.error('Failed to promote:', error)
-            alert('Failed to promote students')
+            const errorMessage = error instanceof Error ? error.message : 'Failed to promote students'
+            setLastPromotionFeedback({
+                attempted: selectedStudents.length,
+                promoted: 0,
+                failed: selectedStudents.length,
+                errors: [errorMessage],
+                failureDetails: []
+            })
+            showToast(errorMessage, 'error')
         } finally {
             setPromoting(false)
         }
+    }
+
+    const renderPromotionFeedback = () => {
+        if (!lastPromotionFeedback) {return null}
+
+        const hasFailures = lastPromotionFeedback.failed > 0
+        const borderTone = hasFailures ? 'border-amber-500/30' : 'border-emerald-500/30'
+        const badgeTone = hasFailures
+            ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+            : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+
+        return (
+            <div className={`premium-card border ${borderTone}`}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h3 className="text-lg font-bold text-foreground">Last Promotion Run</h3>
+                    <span className={`text-xs px-3 py-1 rounded-full border ${badgeTone}`}>
+                        Promoted {lastPromotionFeedback.promoted} / Failed {lastPromotionFeedback.failed}
+                    </span>
+                </div>
+
+                <p className="text-sm text-foreground/70 mt-2">
+                    Attempted {lastPromotionFeedback.attempted} student{lastPromotionFeedback.attempted === 1 ? '' : 's'}.
+                </p>
+
+                {lastPromotionFeedback.errors.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                        {lastPromotionFeedback.errors.map(error => (
+                            <p key={error} className="text-sm text-amber-200">
+                                {error}
+                            </p>
+                        ))}
+                    </div>
+                )}
+
+                {lastPromotionFeedback.failureDetails.length > 0 && (
+                    <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        {lastPromotionFeedback.failureDetails.map(detail => (
+                            <div key={`${detail.student_id}-${detail.reason}`} className="rounded-xl border border-border/40 bg-secondary/20 p-3">
+                                <p className="text-sm font-semibold text-foreground">{detail.student_name}</p>
+                                <p className="text-xs text-foreground/50 font-mono">{detail.admission_number}</p>
+                                <p className="text-sm text-foreground/70 mt-2">{detail.reason}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        )
     }
 
     const renderStudents = () => {
@@ -285,6 +344,8 @@ export default function Promotions() {
                     />
                 </div>
             </div>
+
+            {renderPromotionFeedback()}
 
             {/* Students List */}
             <div className="premium-card">

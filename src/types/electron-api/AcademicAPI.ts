@@ -115,6 +115,19 @@ export interface AcademicResult {
   teacher_remarks?: string
 }
 
+export interface PromotionBatchFailure {
+  student_id: number
+  reason: string
+}
+
+export interface PromotionBatchResult {
+  success: boolean
+  promoted: number
+  failed: number
+  errors?: string[]
+  failureDetails?: PromotionBatchFailure[]
+}
+
 export interface AcademicAPI {
   // Academic Year & Terms
   getAcademicYears: () => Promise<AcademicYear[]>
@@ -150,7 +163,7 @@ export interface AcademicAPI {
 
 
   getStudentsForPromotion: (streamId: number, academicYearId: number) => Promise<PromotionStudent[]>
-  batchPromoteStudents: (studentIds: number[], fromStreamId: number, toStreamId: number, currentYearId: number, nextYearId: number, nextTermId: number, userId: number) => Promise<{ success: boolean; promoted: number; failed: number }>
+  batchPromoteStudents: (studentIds: number[], fromStreamId: number, toStreamId: number, currentYearId: number, nextYearId: number, nextTermId: number, userId: number) => Promise<PromotionBatchResult>
 
   // Merit Lists & Analysis
   generateMeritList: (options: { academicYearId: number; termId: number; streamId: number }) => Promise<MeritListResult['rankings']>;

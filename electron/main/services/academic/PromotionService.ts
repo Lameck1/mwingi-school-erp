@@ -43,6 +43,11 @@ type BatchPromoteArgs = [
     userId: number
 ]
 
+export interface PromotionBatchFailure {
+    student_id: number
+    reason: string
+}
+
 export class PromotionService {
     private get db() { return getDatabase() }
 
@@ -180,9 +185,10 @@ export class PromotionService {
      */
     async batchPromote(
         ...[studentIds, fromStreamId, toStreamId, fromAcademicYearId, toAcademicYearId, toTermId, userId]: BatchPromoteArgs
-    ): Promise<{ success: boolean; promoted: number; failed: number; errors?: string[] }> {
+    ): Promise<{ success: boolean; promoted: number; failed: number; errors?: string[]; failureDetails?: PromotionBatchFailure[] }> {
         let promoted = 0
         let failed = 0
+        const failureDetails: PromotionBatchFailure[] = []
 
         for (const studentId of studentIds) {
             const result = await this.promoteStudent({
@@ -198,14 +204,28 @@ export class PromotionService {
                 promoted++
             } else {
                 failed++
+                failureDetails.push({
+                    student_id: studentId,
+                    reason: result.errors?.[0] || 'Unknown promotion error'
+                })
             }
         }
+
+        const groupedReasons = failureDetails.reduce<Record<string, number>>((acc, entry) => {
+            acc[entry.reason] = (acc[entry.reason] || 0) + 1
+            return acc
+        }, {})
+
+        const errors = Object.entries(groupedReasons).map(([reason, count]) =>
+            count > 1 ? `${reason} (${count} students)` : reason
+        )
 
         return {
             success: failed === 0,
             promoted,
             failed,
-            errors: failed > 0 ? [`${failed} students failed to promote`] : undefined
+            errors: failed > 0 ? errors : undefined,
+            failureDetails: failed > 0 ? failureDetails : undefined
         }
     }
 

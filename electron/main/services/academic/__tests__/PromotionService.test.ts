@@ -113,3 +113,63 @@ describe('PromotionService.promoteStudent', () => {
     expect(target.academic_term_id).toBe(1)
   })
 })
+
+describe('PromotionService.batchPromote', () => {
+  beforeEach(() => {
+    db = new Database(':memory:')
+    db.exec(`
+      CREATE TABLE enrollment (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL,
+        academic_year_id INTEGER NOT NULL,
+        term_id INTEGER NOT NULL,
+        academic_term_id INTEGER,
+        stream_id INTEGER NOT NULL,
+        student_type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `)
+  })
+
+  afterEach(() => {
+    db.close()
+  })
+
+  it('returns grouped errors and per-student failure details', async () => {
+    const service = new PromotionService()
+    vi.spyOn(service, 'promoteStudent')
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ success: false, errors: ['Student already has an active enrollment in the target academic year'] })
+      .mockResolvedValueOnce({ success: false, errors: ['Student already has an active enrollment in the target academic year'] })
+      .mockResolvedValueOnce({ success: false, errors: ['Student is not actively enrolled in the source stream/year'] })
+
+    const result = await service.batchPromote([1, 2, 3, 4], 1, 2, 2025, 2026, 1, 7)
+
+    expect(result.success).toBe(false)
+    expect(result.promoted).toBe(1)
+    expect(result.failed).toBe(3)
+    expect(result.failureDetails).toEqual([
+      { student_id: 2, reason: 'Student already has an active enrollment in the target academic year' },
+      { student_id: 3, reason: 'Student already has an active enrollment in the target academic year' },
+      { student_id: 4, reason: 'Student is not actively enrolled in the source stream/year' },
+    ])
+    expect(result.errors).toEqual([
+      'Student already has an active enrollment in the target academic year (2 students)',
+      'Student is not actively enrolled in the source stream/year',
+    ])
+  })
+
+  it('returns clean success payload when all promotions succeed', async () => {
+    const service = new PromotionService()
+    vi.spyOn(service, 'promoteStudent').mockResolvedValue({ success: true })
+
+    const result = await service.batchPromote([1, 2], 1, 2, 2025, 2026, 1, 7)
+
+    expect(result.success).toBe(true)
+    expect(result.promoted).toBe(2)
+    expect(result.failed).toBe(0)
+    expect(result.errors).toBeUndefined()
+    expect(result.failureDetails).toBeUndefined()
+  })
+})
