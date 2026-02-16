@@ -13,6 +13,18 @@ export function pathMatches(pathname: string, itemPath: string): boolean {
     return pathname === itemPath || pathname.startsWith(itemPath + '/')
 }
 
+export function hasMoreSpecificSiblingMatch(pathname: string, itemPath: string, siblings: NavItem[]): boolean {
+    return siblings.some((sibling) => {
+        if (!sibling.path || sibling.path === itemPath) {
+            return false
+        }
+        if (!sibling.path.startsWith(itemPath + '/')) {
+            return false
+        }
+        return pathMatches(pathname, sibling.path)
+    })
+}
+
 /** Walk the nav tree and return the chain of parent labels leading to `pathname`. */
 export function findMenuChainForPath(pathname: string, items: NavItem[]): string[] | null {
     for (const item of items) {

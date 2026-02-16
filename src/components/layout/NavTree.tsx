@@ -1,6 +1,8 @@
 import { ChevronDown } from 'lucide-react'
 import { NavLink, useLocation } from 'react-router-dom'
 
+import { hasMoreSpecificSiblingMatch } from './nav-utils'
+
 import type { NavItem } from './types'
 
 interface NavTreeProps {
@@ -55,6 +57,7 @@ export function NavTree({ items, expandedMenus, toggleMenu, closeSidebar, isChil
                 const isPatternActive = item.activePatterns?.some(
                     pattern => location.pathname.startsWith(pattern)
                 ) ?? false
+                const isShadowedByMoreSpecificSibling = hasMoreSpecificSiblingMatch(location.pathname, item.path, items)
 
                 return (
                     <NavLink
@@ -62,7 +65,7 @@ export function NavTree({ items, expandedMenus, toggleMenu, closeSidebar, isChil
                         to={item.path}
                         onClick={closeSidebar}
                         className={({ isActive }) => {
-                            const active = isActive || isPatternActive
+                            const active = (isActive || isPatternActive) && !isShadowedByMoreSpecificSibling
                             return `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${active
                                 ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
                                 : 'text-foreground/60 hover:bg-secondary'
