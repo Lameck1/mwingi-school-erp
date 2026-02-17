@@ -146,8 +146,22 @@ export class BackupService {
         if (!isDatabaseInitialized()) {return { success: false, error: 'Database not initialized' }}
         if (!targetPath) {return { success: false, error: 'Backup path is required' }}
 
+        // Validate path to prevent path traversal (F08)
+        const resolved = path.resolve(targetPath)
+        if (resolved.includes('..') || targetPath.includes('..')) {
+            return { success: false, error: 'Invalid backup path: path traversal detected' }
+        }
+        const userDataDir = path.resolve(app.getPath('userData'))
+        const desktopDir = path.resolve(app.getPath('desktop'))
+        const documentsDir = path.resolve(app.getPath('documents'))
+        const downloadsDir = path.resolve(app.getPath('downloads'))
+        const allowedPrefixes = [userDataDir, desktopDir, documentsDir, downloadsDir]
+        if (!allowedPrefixes.some(prefix => resolved.startsWith(prefix + path.sep) || resolved === prefix)) {
+            return { success: false, error: 'Invalid backup path: must be within user data, desktop, documents, or downloads directory' }
+        }
+
         try {
-            const dir = path.dirname(targetPath)
+            const dir = path.dirname(resolved)
             if (!fs.existsSync(dir)) {
                 fs.mkdirSync(dir, { recursive: true })
             }

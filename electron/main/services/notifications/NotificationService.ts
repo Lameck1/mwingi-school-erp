@@ -1,11 +1,11 @@
+import { EmailService } from './EmailService'
 import { getDefaultMessageTemplates } from './notification-default-templates'
+import { SMSService } from './SMSService'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
+import { ConfigService } from '../ConfigService'
 
 const UNKNOWN_ERROR = 'Unknown error'
-const API_REQUEST_FAILED = 'API request failed'
-const SMS_PROVIDER_UNSUPPORTED = 'Unsupported SMS provider'
-const EMAIL_PROVIDER_UNSUPPORTED = 'Unsupported email provider'
 export type {
     CommunicationLog,
     EmailProviderConfig,
@@ -79,20 +79,32 @@ const buildCommunicationHistoryQuery = (filters?: CommunicationHistoryFilters) =
 export class NotificationService {
     private get db() { return getDatabase() }
     private isConfigLoaded = false
-    private smsConfig: SMSProviderConfig | null = null
-    private emailConfig: EmailProviderConfig | null = null
+    private smsService: SMSService | null = null
+    private emailService: EmailService | null = null
 
     private loadConfig(): void {
         if (this.isConfigLoaded) {return}
         try {
-            const settings = this.db.prepare('SELECT * FROM settings LIMIT 1').get() as Record<string, string> | undefined
+            // Read SMS config from encrypted system_config via ConfigService (F03 remediation)
+            const smsApiKey = ConfigService.getConfig('sms_api_key')
+            const smsApiSecret = ConfigService.getConfig('sms_api_secret')
+            const smsSenderId = ConfigService.getConfig('sms_sender_id')
 
-            if (settings?.sms_provider_config) {
-                this.smsConfig = JSON.parse(settings.sms_provider_config)
+            if (smsApiKey) {
+                const smsConfig: SMSProviderConfig = {
+                    provider: 'AFRICASTALKING',
+                    apiKey: smsApiKey,
+                    apiSecret: smsApiSecret || '',
+                    senderId: smsSenderId || ''
+                }
+                this.smsService = new SMSService(smsConfig)
             }
 
+            // Email config still read from school_settings (not migrated yet)
+            const settings = this.db.prepare('SELECT * FROM school_settings WHERE id = 1').get() as Record<string, string> | undefined
             if (settings?.email_provider_config) {
-                this.emailConfig = JSON.parse(settings.email_provider_config)
+                const emailConfig: EmailProviderConfig = JSON.parse(settings.email_provider_config)
+                this.emailService = new EmailService(emailConfig)
             }
             this.isConfigLoaded = true
         } catch (error) {
@@ -105,6 +117,8 @@ export class NotificationService {
      */
     reloadConfig(): void {
         this.isConfigLoaded = false
+        this.smsService = null
+        this.emailService = null
         this.loadConfig()
     }
 
@@ -128,13 +142,7 @@ export class NotificationService {
                 }
             }
 
-            let result: NotificationResult
-
-            if (request.channel === 'SMS') {
-                result = await this.sendSMS(request.to, message)
-            } else {
-                result = await this.sendEmail(request.to, subject || 'Notification', message)
-            }
+            const result = await this.dispatchMessage(request.channel, request.to, subject || 'Notification', message)
 
             // Log the communication
             this.logCommunication({
@@ -171,198 +179,17 @@ export class NotificationService {
     }
 
     /**
-     * Send SMS
+     * Dispatch message to the appropriate channel service
      */
-    private async sendSMS(to: string, message: string): Promise<NotificationResult> {
-        if (!this.smsConfig) {
-            return { success: false, error: 'SMS provider not configured' }
+    private async dispatchMessage(channel: 'SMS' | 'EMAIL', to: string, subject: string, message: string): Promise<NotificationResult> {
+        if (channel === 'SMS') {
+            return this.smsService
+                ? this.smsService.send(to, message)
+                : { success: false, error: 'SMS provider not configured' }
         }
-
-        const normalizedPhone = this.normalizePhone(to)
-
-        switch (this.smsConfig.provider) {
-            case 'AFRICASTALKING':
-                return this.sendAfricasTalking(normalizedPhone, message)
-            case 'TWILIO':
-                return this.sendTwilio(normalizedPhone, message)
-            case 'NEXMO':
-            case 'CUSTOM':
-                return { success: false, error: SMS_PROVIDER_UNSUPPORTED }
-            default:
-                return { success: false, error: `Unknown SMS provider: ${String(this.smsConfig.provider)}` }
-        }
-    }
-
-    private buildAfricasTalkingResult(data: Record<string, unknown>): NotificationResult {
-        const recipients = (data.SMSMessageData as { Recipients?: Array<{ status?: string; messageId?: string }> } | undefined)?.Recipients
-        const firstRecipient = recipients?.[0]
-        if (firstRecipient?.status === 'Success') {
-            return {
-                success: true,
-                messageId: firstRecipient.messageId,
-                provider: 'AFRICASTALKING'
-            }
-        }
-
-        return {
-            success: false,
-            error: firstRecipient?.status || UNKNOWN_ERROR,
-            provider: 'AFRICASTALKING'
-        }
-    }
-
-    private async sendAfricasTalking(to: string, message: string): Promise<NotificationResult> {
-        const config = this.smsConfig!
-
-        try {
-            const response = await fetch('https://api.africastalking.com/version1/messaging', {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'apiKey': config.apiKey
-                },
-                body: new URLSearchParams({
-                    username: config.apiSecret || 'sandbox',
-                    to,
-                    message,
-                    from: config.senderId || ''
-                })
-            })
-
-            const data = await response.json() as Record<string, unknown>
-            return this.buildAfricasTalkingResult(data)
-        } catch (error) {
-            return {
-                success: false,
-                error: error instanceof Error ? error.message : API_REQUEST_FAILED,
-                provider: 'AFRICASTALKING'
-            }
-        }
-    }
-
-    private async sendTwilio(to: string, message: string): Promise<NotificationResult> {
-        const config = this.smsConfig!
-        const accountSid = config.apiKey
-        const authToken = config.apiSecret
-
-        try {
-            const response = await fetch(
-                `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    },
-                    body: new URLSearchParams({
-                        To: to,
-                        From: config.senderId || '',
-                        Body: message
-                    })
-                }
-            )
-
-            const data = await response.json() as { sid?: string; message?: string }
-
-            if (data.sid) {
-                return { success: true, messageId: data.sid, provider: 'TWILIO' }
-            }
-
-            return { success: false, error: data.message || UNKNOWN_ERROR, provider: 'TWILIO' }
-        } catch (error) {
-            return {
-                success: false,
-                error: error instanceof Error ? error.message : API_REQUEST_FAILED,
-                provider: 'TWILIO'
-            }
-        }
-    }
-
-    /**
-     * Send Email
-     */
-    private async sendEmail(to: string, subject: string, body: string): Promise<NotificationResult> {
-        if (!this.emailConfig) {
-            return { success: false, error: 'Email provider not configured' }
-        }
-
-        switch (this.emailConfig.provider) {
-            case 'SENDGRID':
-                return this.sendSendGrid(to, subject, body)
-            case 'SMTP':
-                return this.sendSMTP(to, subject, body)
-            case 'MAILGUN':
-                return { success: false, error: EMAIL_PROVIDER_UNSUPPORTED }
-            default:
-                return { success: false, error: `Unknown email provider: ${String(this.emailConfig.provider)}` }
-        }
-    }
-
-    private async sendSendGrid(to: string, subject: string, body: string): Promise<NotificationResult> {
-        const config = this.emailConfig!
-
-        try {
-            const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${config.apiKey}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    personalizations: [{ to: [{ email: to }] }],
-                    from: { email: config.fromEmail, name: config.fromName },
-                    subject,
-                    content: [{ type: 'text/html', value: body }]
-                })
-            })
-
-            if (response.status === 202) {
-                return { success: true, provider: 'SENDGRID' }
-            }
-
-            const data = await response.json() as { errors?: Array<{ message?: string }> }
-            return { success: false, error: data.errors?.[0]?.message || UNKNOWN_ERROR, provider: 'SENDGRID' }
-        } catch (error) {
-            return {
-                success: false,
-                error: error instanceof Error ? error.message : API_REQUEST_FAILED,
-                provider: 'SENDGRID'
-            }
-        }
-    }
-
-    private async sendSMTP(to: string, subject: string, body: string): Promise<NotificationResult> {
-        // Use nodemailer for SMTP
-        const { default: nodemailer } = await import('nodemailer')
-        const config = this.emailConfig!
-
-        try {
-            const transporter = nodemailer.createTransport({
-                host: config.host,
-                port: config.port || 587,
-                secure: config.port === 465,
-                auth: {
-                    user: config.user,
-                    pass: config.password
-                }
-            })
-
-            const info = await transporter.sendMail({
-                from: `"${config.fromName}" <${config.fromEmail}>`,
-                to,
-                subject,
-                html: body
-            })
-
-            return { success: true, messageId: info.messageId, provider: 'SMTP' }
-        } catch (error) {
-            return {
-                success: false,
-                error: error instanceof Error ? error.message : 'SMTP error',
-                provider: 'SMTP'
-            }
-        }
+        return this.emailService
+            ? this.emailService.send(to, subject, message)
+            : { success: false, error: 'Email provider not configured' }
     }
 
     /**
@@ -372,25 +199,6 @@ export class NotificationService {
         return template.replaceAll(/\{\{(\w+)\}\}/g, (match: string, key: string) => {
             return variables[key] ?? match
         })
-    }
-
-    /**
-     * Normalize phone number to international format
-     */
-    private normalizePhone(phone: string): string {
-        // Remove spaces and dashes
-        let normalized = phone.replaceAll(/[\s-]/g, '')
-
-        // Handle Kenya numbers
-        if (normalized.startsWith('0')) {
-            normalized = '+254' + normalized.substring(1)
-        } else if (normalized.startsWith('254')) {
-            normalized = '+' + normalized
-        } else if (!normalized.startsWith('+')) {
-            normalized = '+254' + normalized
-        }
-
-        return normalized
     }
 
     /**

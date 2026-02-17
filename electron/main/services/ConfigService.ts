@@ -11,7 +11,7 @@ export class ConfigService {
         if (isEncrypted && safeStorage.isEncryptionAvailable()) {
             storedValue = safeStorage.encryptString(value).toString('base64')
         } else if (isEncrypted) {
-            console.warn('SafeStorage unavailable, saving in plaintext (INSECURE)')
+            throw new Error('SafeStorage unavailable. Cannot store encrypted configuration securely.')
         }
 
         const stmt = db.prepare(`

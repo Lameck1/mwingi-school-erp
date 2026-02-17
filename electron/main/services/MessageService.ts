@@ -1,6 +1,7 @@
 import log from 'electron-log'
 
 import { getDatabase } from '../database'
+import { ConfigService } from './ConfigService'
 
 interface MessageTemplateInput {
     id?: number
@@ -51,9 +52,8 @@ export class MessageService {
     }
 
     sendSms(options: SMSOptions) {
-        const settings = this.db.prepare(
-            'SELECT sms_api_key, sms_api_secret, sms_sender_id FROM school_settings WHERE id = 1'
-        ).get() as { sms_api_key: string; sms_api_secret: string; sms_sender_id: string } | undefined
+        // Read SMS credentials from encrypted system_config (F03 remediation)
+        const smsApiKey = ConfigService.getConfig('sms_api_key')
 
         const logStmt = this.db.prepare(
             `INSERT INTO message_log
@@ -71,7 +71,7 @@ export class MessageService {
         const logId = result.lastInsertRowid
 
         try {
-            if (!settings?.sms_api_key) {
+            if (!smsApiKey) {
                 throw new Error('SMS API Key not configured in settings')
             }
 
