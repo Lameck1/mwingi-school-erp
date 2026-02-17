@@ -1,19 +1,19 @@
 import { getDatabase } from '../../database'
 import { PeriodLockingService } from '../../services/finance/PeriodLockingService'
-import { safeHandleRaw, safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
+import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
 
 export function registerPeriodLockingHandlers(): void {
     const service = new PeriodLockingService(getDatabase())
 
-    safeHandleRaw('period:getAll', (_event, status?: string) => {
+    safeHandleRawWithRole('period:getAll', ROLES.STAFF, (_event, status?: string) => {
         return service.getAllPeriods(status)
     })
 
-    safeHandleRaw('period:getForDate', (_event, date: string) => {
+    safeHandleRawWithRole('period:getForDate', ROLES.STAFF, (_event, date: string) => {
         return service.getPeriodForDate(date)
     })
 
-    safeHandleRaw('period:isTransactionAllowed', (_event, transactionDate: string) => {
+    safeHandleRawWithRole('period:isTransactionAllowed', ROLES.STAFF, (_event, transactionDate: string) => {
         return service.isTransactionAllowed(transactionDate)
     })
 

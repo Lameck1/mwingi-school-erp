@@ -3,11 +3,11 @@ import * as path from 'node:path'
 import { shell, app } from '../../electron-env'
 import { BackupService } from '../../services/BackupService'
 import { log } from '../../utils/logger'
-import { ROLES, safeHandleRaw, safeHandleRawWithRole } from '../ipc-result'
+import { ROLES, safeHandleRawWithRole } from '../ipc-result'
 
 export function registerBackupHandlers(): void {
 
-    safeHandleRaw('system:logError', (_event, data: { error: string; stack?: string; componentStack?: string | null; timestamp: string }) => {
+    safeHandleRawWithRole('system:logError', ROLES.STAFF, (_event, data: { error: string; stack?: string; componentStack?: string | null; timestamp: string }) => {
         log.error(`[Renderer Error] ${data.error}`, data.stack || '', data.componentStack || '')
     })
 

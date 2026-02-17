@@ -2,15 +2,15 @@ import { BudgetEnforcementService } from '../../services/accounting/BudgetEnforc
 import { container } from '../../services/base/ServiceContainer'
 import { type BudgetFilters, type CreateBudgetData } from '../../services/finance/BudgetService'
 import { validateId } from '../../utils/validation'
-import { safeHandleRaw, safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
+import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
 
 export function registerBudgetHandlers(): void {
-    safeHandleRaw('budget:getAll', (_event, filters: BudgetFilters = {}) => {
+    safeHandleRawWithRole('budget:getAll', ROLES.FINANCE, (_event, filters: BudgetFilters = {}) => {
         const service = container.resolve('BudgetService')
         return service.findAll(filters)
     })
 
-    safeHandleRaw('budget:getById', (_event, id: number) => {
+    safeHandleRawWithRole('budget:getById', ROLES.FINANCE, (_event, id: number) => {
         const v = validateId(id, 'Budget ID')
         if (!v.success) { return { success: false, error: v.error } }
         const service = container.resolve('BudgetService')
@@ -53,11 +53,11 @@ export function registerBudgetHandlers(): void {
 
     const enforcement = new BudgetEnforcementService()
 
-    safeHandleRaw('budget:validateTransaction', async (_event, glAccountCode: string, amount: number, fiscalYear: number, department?: string) => {
+    safeHandleRawWithRole('budget:validateTransaction', ROLES.FINANCE, async (_event, glAccountCode: string, amount: number, fiscalYear: number, department?: string) => {
         return enforcement.validateTransaction(glAccountCode, amount, fiscalYear, department || null)
     })
 
-    safeHandleRaw('budget:getAllocations', async (_event, fiscalYear: number) => {
+    safeHandleRawWithRole('budget:getAllocations', ROLES.FINANCE, async (_event, fiscalYear: number) => {
         return enforcement.getBudgetAllocations(fiscalYear)
     })
 
@@ -69,11 +69,11 @@ export function registerBudgetHandlers(): void {
         return enforcement.setBudgetAllocation(glAccountCode, fiscalYear, allocatedAmount, department, actor.actorId)
     })
 
-    safeHandleRaw('budget:varianceReport', async (_event, fiscalYear: number) => {
+    safeHandleRawWithRole('budget:varianceReport', ROLES.FINANCE, async (_event, fiscalYear: number) => {
         return enforcement.generateBudgetVarianceReport(fiscalYear)
     })
 
-    safeHandleRaw('budget:alerts', async (_event, fiscalYear: number, threshold?: number) => {
+    safeHandleRawWithRole('budget:alerts', ROLES.FINANCE, async (_event, fiscalYear: number, threshold?: number) => {
         return enforcement.getBudgetAlerts(fiscalYear, threshold)
     })
 }

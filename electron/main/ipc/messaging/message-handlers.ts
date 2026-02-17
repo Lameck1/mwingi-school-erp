@@ -9,7 +9,7 @@ export function registerMessageHandlers(): void {
         return svc().getTemplates();
     });
 
-    safeHandleRawWithRole('message:saveTemplate', ROLES.STAFF, (_event, template: Parameters<MessageService['saveTemplate']>[0]) => {
+    safeHandleRawWithRole('message:saveTemplate', ROLES.MANAGEMENT, (_event, template: Parameters<MessageService['saveTemplate']>[0]) => {
         return svc().saveTemplate(template);
     });
 

@@ -1,6 +1,6 @@
 import { getDatabase } from '../../database'
 import { sanitizeString, validateAmount, validateId } from '../../utils/validation'
-import { safeHandleRaw, safeHandleRawWithRole, ROLES } from '../ipc-result'
+import { safeHandleRawWithRole, ROLES } from '../ipc-result'
 
 interface StaffMember {
   id: number
@@ -146,14 +146,14 @@ function buildUpdateParams(data: Partial<StaffCreateData>, id: number): Array<nu
 }
 
 function registerStaffQueryHandlers(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRaw('staff:getAll', (_event, activeOnly = true) => {
+  safeHandleRawWithRole('staff:getAll', ROLES.STAFF, (_event, activeOnly = true) => {
     const query = activeOnly
       ? 'SELECT * FROM staff WHERE is_active = 1 ORDER BY staff_number'
       : 'SELECT * FROM staff ORDER BY staff_number'
     return db.prepare(query).all() as StaffMember[]
   })
 
-  safeHandleRaw('staff:getById', (_event, id: number) => {
+  safeHandleRawWithRole('staff:getById', ROLES.STAFF, (_event, id: number) => {
     return db.prepare('SELECT * FROM staff WHERE id = ?').get(id) as StaffMember | undefined
   })
 }

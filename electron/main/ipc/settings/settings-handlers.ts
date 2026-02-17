@@ -3,14 +3,22 @@ import { app } from '../../electron-env'
 import { container } from '../../services/base/ServiceContainer'
 import { ConfigService } from '../../services/ConfigService'
 import { type SystemMaintenanceService } from '../../services/SystemMaintenanceService'
-import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
+import { safeHandleRawWithRole, ROLES, resolveActorId, getActorFromEvent } from '../ipc-result'
 
 export function registerSettingsHandlers(): void {
     const db = getDatabase()
 
     // ======== SCHOOL SETTINGS ========
-    safeHandleRawWithRole('settings:get', ROLES.STAFF, () => {
-        return db.prepare('SELECT * FROM school_settings WHERE id = 1').get()
+    safeHandleRawWithRole('settings:get', ROLES.STAFF, (event) => {
+        const row = db.prepare('SELECT * FROM school_settings WHERE id = 1').get() as Record<string, unknown> | undefined
+        if (!row) { return row }
+        // Mask sensitive API credentials for non-ADMIN roles
+        const actor = getActorFromEvent(event)
+        if (actor?.role !== 'ADMIN') {
+            if (row.sms_api_key) { row.sms_api_key = '********' }
+            if (row.sms_api_secret) { row.sms_api_secret = '********' }
+        }
+        return row
     })
 
     safeHandleRawWithRole('settings:update', ROLES.MANAGEMENT, (_event, data: unknown) => {
@@ -25,8 +33,6 @@ export function registerSettingsHandlers(): void {
                 email = COALESCE(?, email),
                 logo_path = COALESCE(?, logo_path),
                 mpesa_paybill = COALESCE(?, mpesa_paybill),
-                sms_api_key = COALESCE(?, sms_api_key),
-                sms_api_secret = COALESCE(?, sms_api_secret),
                 sms_sender_id = COALESCE(?, sms_sender_id),
                 updated_at = CURRENT_TIMESTAMP 
             WHERE id = 1
@@ -34,9 +40,20 @@ export function registerSettingsHandlers(): void {
 
         stmt.run(
             settings.school_name, settings.school_motto, settings.address, settings.phone,
-            settings.email, settings.logo_path, settings.mpesa_paybill, settings.sms_api_key,
-            settings.sms_api_secret, settings.sms_sender_id
+            settings.email, settings.logo_path, settings.mpesa_paybill, settings.sms_sender_id
         )
+
+        // Route SMS credentials through encrypted ConfigService (F03 remediation)
+        if (typeof settings.sms_api_key === 'string' && settings.sms_api_key) {
+            ConfigService.saveConfig('sms_api_key', settings.sms_api_key, true)
+        }
+        if (typeof settings.sms_api_secret === 'string' && settings.sms_api_secret) {
+            ConfigService.saveConfig('sms_api_secret', settings.sms_api_secret, true)
+        }
+        if (typeof settings.sms_sender_id === 'string' && settings.sms_sender_id) {
+            ConfigService.saveConfig('sms_sender_id', settings.sms_sender_id, false)
+        }
+
         return { success: true }
     })
 

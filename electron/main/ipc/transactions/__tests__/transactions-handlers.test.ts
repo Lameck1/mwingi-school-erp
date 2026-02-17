@@ -9,6 +9,24 @@ const journalServiceMock = {
   createJournalEntrySync: vi.fn((): { success: boolean; error?: string } => ({ success: true })),
 }
 
+// Mock keytar to provide a valid ADMIN session so safeHandleRawWithRole passes
+vi.mock('keytar', () => ({
+  default: {
+    getPassword: vi.fn().mockResolvedValue(JSON.stringify({
+      user: { id: 1, username: 'admin', role: 'ADMIN', full_name: 'Admin', email: 'a@t.com', is_active: 1, last_login: null, created_at: '2026-01-01' },
+      lastActivity: Date.now()
+    })),
+    setPassword: vi.fn().mockResolvedValue(null),
+    deletePassword: vi.fn().mockResolvedValue(true)
+  },
+  getPassword: vi.fn().mockResolvedValue(JSON.stringify({
+    user: { id: 1, username: 'admin', role: 'ADMIN', full_name: 'Admin', email: 'a@t.com', is_active: 1, last_login: null, created_at: '2026-01-01' },
+    lastActivity: Date.now()
+  })),
+  setPassword: vi.fn().mockResolvedValue(null),
+  deletePassword: vi.fn().mockResolvedValue(true)
+}))
+
 vi.mock('../../../electron-env', () => ({
   ipcMain: {
     handle: vi.fn((channel: string, handler: IpcHandler) => {
@@ -97,7 +115,7 @@ describe('transactions IPC handlers', () => {
         amount: -1,
         payment_method: 'CASH',
       },
-      3
+      1
     ) as { success: boolean; error?: string }
 
     expect(result.success).toBe(false)
@@ -115,7 +133,7 @@ describe('transactions IPC handlers', () => {
         amount: 1200,
         payment_method: 'CASH',
       },
-      3
+      1
     ) as { success: boolean; error?: string }
 
     expect(result.success).toBe(false)
@@ -134,7 +152,7 @@ describe('transactions IPC handlers', () => {
         amount: 1200,
         payment_method: 'CASH',
       },
-      3
+      1
     ) as { success: boolean; error?: string }
 
     expect(result.success).toBe(false)
@@ -156,7 +174,7 @@ describe('transactions IPC handlers', () => {
         payment_method: 'CASH',
         description: 'Fundraiser',
       },
-      11
+      1
     ) as { success: boolean; error?: string }
 
     expect(result.success).toBe(false)
@@ -180,7 +198,7 @@ describe('transactions IPC handlers', () => {
         payment_reference: 'BNK-REF-1',
         description: 'Grant income',
       },
-      11
+      1
     ) as { success: boolean; id?: number }
 
     expect(result.success).toBe(true)

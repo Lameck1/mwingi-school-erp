@@ -1,5 +1,5 @@
 import { container } from '../../services/base/ServiceContainer';
-import { safeHandleRaw, safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result';
+import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result';
 
 import type { GLAccountService, GLAccountData } from '../../services/finance/GLAccountService';
 
@@ -8,11 +8,11 @@ const getService = () => container.resolve('GLAccountService');
 type GLAccountFilters = Parameters<GLAccountService['getAll']>[0]
 
 export function registerGLAccountHandlers() {
-  safeHandleRaw('gl:get-accounts', async (_event, filters?: GLAccountFilters) => {
+  safeHandleRawWithRole('gl:get-accounts', ROLES.FINANCE, async (_event, filters?: GLAccountFilters) => {
     return await getService().getAll(filters);
   });
 
-  safeHandleRaw('gl:get-account', async (_event, id: number) => {
+  safeHandleRawWithRole('gl:get-account', ROLES.FINANCE, async (_event, id: number) => {
     return await getService().getById(id);
   });
 

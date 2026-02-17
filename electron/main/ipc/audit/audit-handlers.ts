@@ -1,11 +1,11 @@
 import { getDatabase } from '../../database'
-import { safeHandleRaw } from '../ipc-result'
+import { safeHandleRawWithRole, ROLES } from '../ipc-result'
 
 export function registerAuditHandlers(): void {
     const db = getDatabase()
 
     // ======== AUDIT LOG ========
-    safeHandleRaw('audit:getLog', (_event, limit = 100) => {
+    safeHandleRawWithRole('audit:getLog', ROLES.MANAGEMENT, (_event, limit = 100) => {
         return db.prepare(`
             SELECT a.*, u.full_name as user_name 
             FROM audit_log a

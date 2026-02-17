@@ -1,16 +1,16 @@
 import { container } from '../../services/base/ServiceContainer'
 import { validateId, validatePastOrTodayDate } from '../../utils/validation'
-import { safeHandleRaw, safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
+import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
 
 const getService = () => container.resolve('BankReconciliationService')
 
 export function registerBankReconciliationHandlers(): void {
     // Bank Accounts
-    safeHandleRaw('bank:getAccounts', () => {
+    safeHandleRawWithRole('bank:getAccounts', ROLES.FINANCE, () => {
         return getService().getBankAccounts()
     })
 
-    safeHandleRaw('bank:getAccountById', (_event, id: number) => {
+    safeHandleRawWithRole('bank:getAccountById', ROLES.FINANCE, (_event, id: number) => {
         return getService().getBankAccountById(id)
     })
 
@@ -27,11 +27,11 @@ export function registerBankReconciliationHandlers(): void {
     })
 
     // Bank Statements
-    safeHandleRaw('bank:getStatements', (_event, bankAccountId?: number) => {
+    safeHandleRawWithRole('bank:getStatements', ROLES.FINANCE, (_event, bankAccountId?: number) => {
         return getService().getStatements(bankAccountId)
     })
 
-    safeHandleRaw('bank:getStatementWithLines', (_event, statementId: number) => {
+    safeHandleRawWithRole('bank:getStatementWithLines', ROLES.FINANCE, (_event, statementId: number) => {
         return getService().getStatementWithLines(statementId)
     })
 
@@ -126,7 +126,7 @@ export function registerBankReconciliationHandlers(): void {
         return getService().unmatchTransaction(lineId)
     })
 
-    safeHandleRaw('bank:getUnmatchedTransactions', (
+    safeHandleRawWithRole('bank:getUnmatchedTransactions', ROLES.FINANCE, (
         _event,
         startDate: string,
         endDate: string,

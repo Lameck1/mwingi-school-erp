@@ -3,7 +3,7 @@ import { logAudit } from '../../database/utils/audit'
 import { DoubleEntryJournalService } from '../../services/accounting/DoubleEntryJournalService'
 import { SystemAccounts } from '../../services/accounting/SystemAccounts'
 import { PayrollJournalService } from '../../services/finance/PayrollJournalService'
-import { ROLES, resolveActorId, safeHandleRaw, safeHandleRawWithRole } from '../ipc-result'
+import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
 
 import type { StaffMember } from './types'
 
@@ -426,7 +426,7 @@ function recalculatePayroll(db: ReturnType<typeof getDatabase>, periodId: number
 }
 
 function registerStaffAllowanceHandlers(db: ReturnType<typeof getDatabase>): void {
-    safeHandleRaw('staff:getAllowances', (_event, staffId: number) => {
+    safeHandleRawWithRole('staff:getAllowances', ROLES.STAFF, (_event, staffId: number) => {
         return db.prepare('SELECT * FROM staff_allowance WHERE staff_id = ? AND is_active = 1 ORDER BY allowance_name').all(staffId)
     })
 

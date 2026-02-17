@@ -4,7 +4,7 @@ import { container } from '../../services/base/ServiceContainer'
 import { toDbGender, fromDbGender, toDbActiveFlag } from '../../utils/transforms'
 import { sanitizeString, validateId } from '../../utils/validation'
 import { createGetOrCreateCategoryId, generateSingleStudentInvoice, type FinanceContext } from '../finance/finance-handler-utils'
-import { safeHandleRaw, safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
+import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
 
 interface Student {
   id: number
@@ -226,7 +226,7 @@ function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
       )
     `
 
-  safeHandleRaw('student:getAll', (_event, filters?: StudentFilters) => {
+  safeHandleRawWithRole('student:getAll', ROLES.STAFF, (_event, filters?: StudentFilters) => {
     let query = `SELECT s.*, st.stream_name, e.student_type as current_type,
         (SELECT COALESCE(SUM((${normalizedInvoiceAmountSql}) - COALESCE(amount_paid, 0)), 0)
          FROM fee_invoice
@@ -260,7 +260,7 @@ function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
     return students.map((student) => ({ ...student, gender: fromDbGender(student.gender) })) as Student[]
   })
 
-  safeHandleRaw('student:getById', (_event, id: number) => {
+  safeHandleRawWithRole('student:getById', ROLES.STAFF, (_event, id: number) => {
     const student = db.prepare('SELECT * FROM student WHERE id = ?').get(id) as Student | undefined
     if (!student) {
       return
@@ -284,7 +284,7 @@ function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
     }
   })
 
-  safeHandleRaw('student:getBalance', (_event, studentId: number) => {
+  safeHandleRawWithRole('student:getBalance', ROLES.STAFF, (_event, studentId: number) => {
     const invoices = db.prepare(`
       SELECT COALESCE(SUM((${normalizedInvoiceAmountSql}) - COALESCE(amount_paid, 0)), 0) as invoice_balance
       FROM fee_invoice

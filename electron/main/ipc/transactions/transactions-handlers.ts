@@ -3,7 +3,7 @@ import { logAudit } from '../../database/utils/audit'
 import { container } from '../../services/base/ServiceContainer'
 import { REPORT_EXPENSE_TRANSACTION_TYPES, REPORT_INCOME_TRANSACTION_TYPES, asSqlInList } from '../../utils/financeTransactionTypes'
 import { validateAmount, sanitizeString, validatePastOrTodayDate } from '../../utils/validation'
-import { safeHandleRaw, safeHandleRawWithRole, ROLES } from '../ipc-result'
+import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
 
 interface TransactionData {
     transaction_date: string
@@ -144,7 +144,7 @@ export function registerTransactionsHandlers(): void {
     const incomeTypesSql = asSqlInList(REPORT_INCOME_TRANSACTION_TYPES)
     const expenseTypesSql = asSqlInList(REPORT_EXPENSE_TRANSACTION_TYPES)
 
-    safeHandleRaw('transaction:getCategories', () => {
+    safeHandleRawWithRole('transaction:getCategories', ROLES.STAFF, () => {
         return db.prepare('SELECT * FROM transaction_category WHERE is_active = 1 ORDER BY category_name').all()
     })
 
@@ -161,11 +161,13 @@ export function registerTransactionsHandlers(): void {
         return { success: true, id: result.lastInsertRowid }
     })
 
-    safeHandleRawWithRole('transaction:create', ROLES.FINANCE, (_event, data: TransactionData, userId: number) => {
-        return createTransaction(db, data, userId)
+    safeHandleRawWithRole('transaction:create', ROLES.FINANCE, (event, data: TransactionData, legacyUserId?: number) => {
+        const actor = resolveActorId(event, legacyUserId)
+        if (!actor.success) { return { success: false, error: actor.error } }
+        return createTransaction(db, data, actor.actorId)
     })
 
-    safeHandleRaw('transaction:getAll', (_event, filters?: TransactionFilters) => {
+    safeHandleRawWithRole('transaction:getAll', ROLES.FINANCE, (_event, filters?: TransactionFilters) => {
         let query = `SELECT t.*, c.category_name, u.full_name as recorded_by 
                      FROM ledger_transaction t
                      LEFT JOIN transaction_category c ON t.category_id = c.id
@@ -187,7 +189,7 @@ export function registerTransactionsHandlers(): void {
         return db.prepare(query).all(...params)
     })
 
-    safeHandleRaw('transaction:getSummary', (_event, startDate: string, endDate: string) => {
+    safeHandleRawWithRole('transaction:getSummary', ROLES.FINANCE, (_event, startDate: string, endDate: string) => {
         const income = db.prepare(`
             SELECT COALESCE(SUM(amount), 0) as total 
             FROM ledger_transaction 

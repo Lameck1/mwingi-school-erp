@@ -1,5 +1,5 @@
 import { container } from '../../services/base/ServiceContainer'
-import { safeHandleRaw, safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
+import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
 
 import type { FixedAssetService } from '../../services/finance/FixedAssetService'
 
@@ -8,22 +8,22 @@ type FixedAssetCreateInput = Parameters<FixedAssetService['create']>[0]
 type FixedAssetUpdateInput = Parameters<FixedAssetService['update']>[1]
 
 export function registerFixedAssetHandlers() {
-    safeHandleRaw('assets:get-categories', async () => {
+    safeHandleRawWithRole('assets:get-categories', ROLES.FINANCE, async () => {
         const service = container.resolve('FixedAssetService')
         return await service.getCategories()
     })
 
-    safeHandleRaw('assets:get-financial-periods', async () => {
+    safeHandleRawWithRole('assets:get-financial-periods', ROLES.FINANCE, async () => {
         const service = container.resolve('FixedAssetService')
         return await service.getFinancialPeriods()
     })
 
-    safeHandleRaw('assets:get-all', async (_event, filters?: FixedAssetFilters) => {
+    safeHandleRawWithRole('assets:get-all', ROLES.FINANCE, async (_event, filters?: FixedAssetFilters) => {
         const service = container.resolve('FixedAssetService')
         return await service.findAll(filters)
     })
 
-    safeHandleRaw('assets:get-one', async (_event, id: number) => {
+    safeHandleRawWithRole('assets:get-one', ROLES.FINANCE, async (_event, id: number) => {
         const service = container.resolve('FixedAssetService')
         return await service.findById(id)
     })
