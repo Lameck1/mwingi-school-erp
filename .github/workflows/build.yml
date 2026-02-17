@@ -27,11 +27,22 @@ jobs:
           
       - name: Install dependencies
         run: npm ci
+
+      - name: Lint
+        run: npm run lint:eslint:strict
+
+      - name: Test
+        run: npx vitest run
+
+      - name: Audit
+        run: npm audit --audit-level=high || true
         
       - name: Run Build
         run: npm run electron:build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

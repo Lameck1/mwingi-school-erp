@@ -11,7 +11,7 @@ export default defineConfig({
         coverage: {
             provider: 'v8',
             reporter: ['text', 'json', 'html', 'lcov'],
-            include: ['electron/main/services/**/*.ts', 'electron/main/database/**/*.ts'],
+            include: ['electron/main/services/**/*.ts', 'electron/main/database/**/*.ts', 'electron/main/ipc/**/*.ts'],
             exclude: [
                 '**/node_modules/**',
                 '**/dist/**',

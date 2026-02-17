@@ -107,7 +107,7 @@
     ],
     "win": {
       "icon": "assets/icon.ico",
-      "forceCodeSigning": false,
+      "forceCodeSigning": true,
       "target": [
         {
           "target": "nsis",
