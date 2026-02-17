@@ -3,7 +3,9 @@ import { logAudit } from '../../database/utils/audit'
 import { container } from '../../services/base/ServiceContainer'
 import { REPORT_EXPENSE_TRANSACTION_TYPES, REPORT_INCOME_TRANSACTION_TYPES, asSqlInList } from '../../utils/financeTransactionTypes'
 import { validateAmount, sanitizeString, validatePastOrTodayDate } from '../../utils/validation'
-import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
+import { safeHandleRawWithRole, ROLES } from '../ipc-result'
+import { TransactionCreateSchema, TransactionCreateCategorySchema } from '../schemas/transaction-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 interface TransactionData {
     transaction_date: string
@@ -148,23 +150,15 @@ export function registerTransactionsHandlers(): void {
         return db.prepare('SELECT * FROM transaction_category WHERE is_active = 1 ORDER BY category_name').all()
     })
 
-    safeHandleRawWithRole('transaction:createCategory', ROLES.FINANCE, (_event, name: string, type: string) => {
-        const trimmedName = typeof name === 'string' ? name.trim() : ''
-        if (!trimmedName) {
-            return { success: false, error: 'Category name is required' }
-        }
-        if (type !== 'INCOME' && type !== 'EXPENSE') {
-            return { success: false, error: 'Category type must be INCOME or EXPENSE' }
-        }
+    validatedHandlerMulti('transaction:createCategory', ROLES.FINANCE, TransactionCreateCategorySchema, (_event, [name, _type], _actor) => {
+        const trimmedName = name.trim()
         const stmt = db.prepare('INSERT INTO transaction_category (category_name, category_type) VALUES (?, ?)')
-        const result = stmt.run(trimmedName, type)
+        const result = stmt.run(trimmedName, _type)
         return { success: true, id: result.lastInsertRowid }
     })
 
-    safeHandleRawWithRole('transaction:create', ROLES.FINANCE, (event, data: TransactionData, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return { success: false, error: actor.error } }
-        return createTransaction(db, data, actor.actorId)
+    validatedHandler('transaction:create', ROLES.FINANCE, TransactionCreateSchema, (_event, data, actor) => {
+        return createTransaction(db, data, actor.id)
     })
 
     safeHandleRawWithRole('transaction:getAll', ROLES.FINANCE, (_event, filters?: TransactionFilters) => {

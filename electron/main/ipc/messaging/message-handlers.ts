@@ -34,7 +34,7 @@ export function registerMessageHandlers(): void {
         }, actor.actorId);
     });
 
-    safeHandleRawWithRole('message:getLogs', ROLES.STAFF, (_event, limit = 50) => {
+    safeHandleRawWithRole('message:getLogs', ROLES.STAFF, (_event, limit: number = 50) => {
         return svc().getLogs(limit);
     });
 }

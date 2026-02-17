@@ -13,7 +13,9 @@ jobs:
     strategy:
       matrix:
         os: [windows-latest]
-        # os: [ubuntu-latest, windows-latest, macos-latest] # Simplified for now
+        # mac/linux targets are declared in package.json build config but not yet CI-tested.
+        # To enable: os: [ubuntu-latest, windows-latest, macos-latest]
+        # Requires: native dependency builds (better-sqlite3) and platform-specific testing.
         
     steps:
       - name: Checkout code
@@ -35,14 +37,14 @@ jobs:
         run: npx vitest run
 
       - name: Audit
-        run: npm audit --audit-level=high || true
-        
+        run: npm audit --audit-level=high
+
+      
       - name: Run Build
+        if: startsWith(github.ref, 'refs/tags/')
         run: npm run electron:build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -64,7 +66,7 @@ jobs:
         uses: actions/download-artifact@v4
         
       - name: Create Release
-        uses: softprops/action-gh-release@c062e08bd532815e2082a375925a7b6ef44dc119 # v1
+        uses: softprops/action-gh-release@v1
         with:
           files: |
             dist-*/

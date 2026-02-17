@@ -9,5 +9,6 @@ export function createStudentAPI() {
     createStudent: (data: Partial<StudentData>, userId?: number) => ipcRenderer.invoke('student:create', data, userId),
     updateStudent: (id: number, data: Partial<StudentData>) => ipcRenderer.invoke('student:update', id, data),
     getStudentBalance: (studentId: number) => ipcRenderer.invoke('student:getBalance', studentId),
+    purgeStudent: (id: number, reason?: string) => ipcRenderer.invoke('student:purge', id, reason),
   }
 }

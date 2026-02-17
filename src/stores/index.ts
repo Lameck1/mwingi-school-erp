@@ -86,7 +86,19 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
             })
             return
         }
-        set({ user: session.user as User, isAuthenticated: true, lastActivity: session.lastActivity, isSessionLoaded: true })
+        const u = session.user
+        const validatedUser: User = {
+            id: u.id,
+            username: u.username,
+            full_name: u.full_name,
+            email: u.email,
+            role: u.role as User['role'],
+            is_active: Boolean(u.is_active),
+            created_at: u.created_at,
+            last_login: u.last_login || '',
+            updated_at: u.updated_at || '',
+        }
+        set({ user: validatedUser, isAuthenticated: true, lastActivity: session.lastActivity, isSessionLoaded: true })
     }
 }))
 

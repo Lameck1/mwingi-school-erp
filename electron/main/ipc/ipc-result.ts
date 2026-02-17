@@ -12,15 +12,17 @@ export type IPCResult<T = void> =
     | { success: false; error: string }
 
 /**
- * Wraps an IPC handler so that:
- * 1. Thrown errors are caught and returned as { success: false, error: message }
- * 2. Successful returns are wrapped in { success: true, data: result }
+ * Generic IPC handler wrappers providing RBAC and error handling.
+ * Handler parameter types are inferred via TypeScript generics (compile-time only).
  *
- * Use `safeHandle` for new handlers that should return IPCResult<T>.
- * Use `safeHandleRaw` for handlers that already return their own shape (migration helper).
+ * - `safeHandle` — wraps result in IPCResult<T>
+ * - `safeHandleRaw` — passes handler result through as-is
+ * - `safeHandleRawWithRole` — adds role check, passes result through
+ * - `safeHandleWithRole` — adds role check, wraps result in IPCResult<T>
+ *
+ * For runtime input validation (untrusted renderer data), use `validatedHandler()`
+ * from `./validated-handler.ts` which adds Zod schema parsing before the handler runs.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyHandler = (event: IpcMainInvokeEvent, ...args: any[]) => any
 
 interface IpcActor {
     id: number
@@ -63,10 +65,10 @@ export function resolveActorId(
     }
 
     if (legacyUserId !== undefined && legacyUserId !== null) {
-        if (!Number.isInteger(legacyUserId) || legacyUserId <= 0) {
+        if (!Number.isInteger(legacyUserId) || (legacyUserId as number) <= 0) {
             return { success: false, error: 'Invalid user session' }
         }
-        if (legacyUserId !== actor.id) {
+        if ((legacyUserId as number) !== actor.id) {
             return { success: false, error: 'Unauthorized: renderer user mismatch' }
         }
     }
@@ -74,13 +76,13 @@ export function resolveActorId(
     return { success: true, actorId: actor.id }
 }
 
-export function safeHandle<T>(
+export function safeHandle<T, TArgs extends unknown[]>(
     channel: string,
-    handler: AnyHandler,
+    handler: (event: IpcMainInvokeEvent, ...args: TArgs) => unknown | Promise<unknown>,
 ): void {
     ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]): Promise<IPCResult<T>> => {
         try {
-            const result = await handler(event, ...args)
+            const result = await handler(event, ...(args as TArgs))
             return { success: true, data: result as T }
         } catch (error) {
             return { success: false, error: getErrorMessage(error, `${channel} failed`) }
@@ -93,13 +95,13 @@ export function safeHandle<T>(
  * Only catches unhandled exceptions and converts them to { success: false, error }.
  * Use this as a migration helper for existing handlers.
  */
-export function safeHandleRaw(
+export function safeHandleRaw<TArgs extends unknown[]>(
     channel: string,
-    handler: AnyHandler,
+    handler: (event: IpcMainInvokeEvent, ...args: TArgs) => unknown | Promise<unknown>,
 ): void {
     ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
         try {
-            return await handler(event, ...args)
+            return await handler(event, ...(args as TArgs))
         } catch (error) {
             return { success: false, error: getErrorMessage(error, `${channel} failed`) }
         }
@@ -111,10 +113,10 @@ export function safeHandleRaw(
  * Checks the current session role before executing the handler.
  * Returns { success: false, error: 'Unauthorized' } if the role is not allowed.
  */
-export function safeHandleRawWithRole(
+export function safeHandleRawWithRole<TArgs extends unknown[]>(
     channel: string,
     allowedRoles: readonly string[],
-    handler: AnyHandler,
+    handler: (event: IpcMainInvokeEvent, ...args: TArgs) => unknown | Promise<unknown>,
 ): void {
     ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
         try {
@@ -130,17 +132,17 @@ export function safeHandleRawWithRole(
                 return { success: false, error: 'Unauthorized: invalid session actor' }
             }
             attachActor(event, { id: actorId, role: session.user.role })
-            return await handler(event, ...args)
+            return await handler(event, ...(args as TArgs))
         } catch (error) {
             return { success: false, error: getErrorMessage(error, `${channel} failed`) }
         }
     })
 }
 
-export function safeHandleWithRole<T>(
+export function safeHandleWithRole<T, TArgs extends unknown[]>(
     channel: string,
     allowedRoles: readonly string[],
-    handler: AnyHandler,
+    handler: (event: IpcMainInvokeEvent, ...args: TArgs) => unknown | Promise<unknown>,
 ): void {
     ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]): Promise<IPCResult<T>> => {
         try {
@@ -156,7 +158,7 @@ export function safeHandleWithRole<T>(
                 return { success: false, error: 'Unauthorized: invalid session actor' }
             }
             attachActor(event, { id: actorId, role: session.user.role })
-            const result = await handler(event, ...args)
+            const result = await handler(event, ...(args as TArgs))
             return { success: true, data: result as T }
         } catch (error) {
             return { success: false, error: getErrorMessage(error, `${channel} failed`) }

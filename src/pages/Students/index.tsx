@@ -15,13 +15,6 @@ import { type Student } from '../../types/electron-api/StudentAPI'
 import { formatCurrencyFromCents } from '../../utils/format'
 import { printDocument } from '../../utils/print'
 
-interface StudentLedgerResult {
-    student: Student;
-    openingBalance: number;
-    ledger: Record<string, unknown>[];
-    closingBalance: number;
-    error?: string;
-}
 
 export default function Students() {
     const navigate = useNavigate()
@@ -107,7 +100,7 @@ export default function Students() {
     const handlePrintStatement = async (student: Student) => {
         setPrintingId(student.id)
         try {
-            const result = await globalThis.electronAPI.getStudentLedgerReport(student.id) as unknown as StudentLedgerResult
+            const result = await globalThis.electronAPI.getStudentLedgerReport(student.id)
             if (result && !result.error) {
                 printDocument({
                     title: `Statement - ${student.first_name} ${student.last_name}`,
@@ -120,7 +113,7 @@ export default function Students() {
                         ledger: result.ledger,
                         closingBalance: result.closingBalance
                     },
-                    schoolSettings: (schoolSettings as unknown as Record<string, unknown>) || undefined
+                    schoolSettings: schoolSettings ? { ...schoolSettings } : undefined
                 })
             } else {
                 showToast('Failed to load ledger data', 'error')

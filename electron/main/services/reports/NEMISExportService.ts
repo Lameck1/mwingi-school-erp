@@ -342,7 +342,9 @@ class NEMISFormatter implements INEMISFormatter {
     if (data.length === 0) {return ''}
 
     // Get column headers
-    const headers = Object.keys(data[0])
+    const firstRow = data[0]
+    if (!firstRow) {return ''}
+    const headers = Object.keys(firstRow)
     let csv = headers.join(',') + '\n'
 
     // Add data rows
@@ -381,12 +383,16 @@ class NEMISExportManager implements INEMISExportManager {
     private readonly exportRepo: NEMISExportRepository
   ) {}
 
+  private toRecordArray<T extends object>(items: T[]): Record<string, unknown>[] {
+    return items as Record<string, unknown>[]
+  }
+
   private async extractExportData(exportConfig: NEMISExportConfig): Promise<Record<string, unknown>[] | ExportResult> {
     switch (exportConfig.export_type) {
       case 'STUDENTS':
-        return (await this.extractor.extractStudentData(exportConfig.filters)) as unknown as Record<string, unknown>[]
+        return this.toRecordArray(await this.extractor.extractStudentData(exportConfig.filters))
       case 'STAFF':
-        return (await this.extractor.extractStaffData()) as unknown as Record<string, unknown>[]
+        return this.toRecordArray(await this.extractor.extractStaffData())
       case 'ENROLLMENT':
         if (!exportConfig.academic_year) {
           return {
@@ -395,10 +401,10 @@ class NEMISExportManager implements INEMISExportManager {
           }
         }
 
-        return (await this.extractor.extractEnrollmentData(exportConfig.academic_year)) as unknown as Record<string, unknown>[]
+        return this.toRecordArray(await this.extractor.extractEnrollmentData(exportConfig.academic_year))
       case 'FINANCIAL': {
         const financial = await this.extractor.extractFinancialData()
-        return financial ? [financial as unknown as Record<string, unknown>] : []
+        return financial ? this.toRecordArray([financial]) : []
       }
       default:
         return {
@@ -408,7 +414,7 @@ class NEMISExportManager implements INEMISExportManager {
     }
   }
 
-  private validateExportData(exportType: NEMISExportType, data: Record<string, unknown>[]): ExportResult | null {
+  private validateExportData(exportType: NEMISExportType, data: Record<string, unknown>[] | NEMISStudent[]): ExportResult | null {
     if (data.length === 0) {
       return {
         success: false,
@@ -420,7 +426,7 @@ class NEMISExportManager implements INEMISExportManager {
       return null
     }
 
-    for (const student of data as unknown as NEMISStudent[]) {
+    for (const student of data as NEMISStudent[]) {
       const validation = this.validator.validateStudentData(student)
       if (!validation.valid) {
         return {

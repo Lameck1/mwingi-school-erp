@@ -68,6 +68,7 @@ export interface StudentAPI {
   createStudent(data: Partial<Student>, userId?: number): Promise<{ success: boolean; id: number; invoiceGenerated?: boolean; invoiceNumber?: string; invoiceError?: string }>
   updateStudent(id: number, data: Partial<Student>): Promise<{ success: boolean }>
   getStudentBalance(studentId: number): Promise<number>
+  purgeStudent(id: number, reason?: string): Promise<{ success: boolean; message?: string; error?: string }>
   // Attendance
   getStudentsForAttendance(streamId: number, yearId: number, termId: number): Promise<AttendanceStudent[]>
   getAttendanceByDate(streamId: number, date: string, yearId: number, termId: number): Promise<AttendanceRecord[]>

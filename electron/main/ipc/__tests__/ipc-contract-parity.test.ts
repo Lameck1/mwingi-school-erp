@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -40,7 +41,7 @@ function collectInvokedChannels(files: string[]): Set<string> {
 
 function collectRegisteredInvokeChannels(files: string[]): Set<string> {
   const channels = new Set<string>()
-  const registerRegex = /safeHandle(?:RawWithRole|WithRole|Raw)?\(\s*'([^']+)'/g
+  const registerRegex = /(?:safeHandle(?:RawWithRole|WithRole|Raw)?|validatedHandler(?:Multi)?)\(\s*'([^']+)'/g
 
   for (const filePath of files) {
     const content = fs.readFileSync(filePath, 'utf8')

@@ -318,6 +318,71 @@ function registerStudentWriteHandlers(db: ReturnType<typeof getDatabase>): void 
     logAudit(actor.actorId, 'DEACTIVATE', 'student', idVal.data!, { is_active: 1 }, { is_active: 0 })
     return { success: true }
   })
+
+  // M-05: Kenya DPA 2019 — PII purge (anonymize student data while retaining financial records)
+  safeHandleRawWithRole('student:purge', ROLES.ADMIN_ONLY, (event, id: number, reason?: string) => {
+    const actor = resolveActorId(event)
+    if (!actor.success) { return { success: false, error: actor.error } }
+    const idVal = validateId(id, 'Student')
+    if (!idVal.success) { return { success: false, error: idVal.error } }
+    const studentId = idVal.data!
+
+    const student = db.prepare(
+      'SELECT id, admission_number, first_name, last_name, is_active FROM student WHERE id = ?'
+    ).get(studentId) as { id: number; admission_number: string; first_name: string; last_name: string; is_active: number } | undefined
+    if (!student) { return { success: false, error: 'Student not found' } }
+    if (student.is_active === 1) {
+      return { success: false, error: 'Cannot purge an active student. Deactivate first.' }
+    }
+
+    const purgeReason = sanitizeString(reason, 500) || 'Kenya DPA 2019 data subject request'
+    const redacted = `[REDACTED-${studentId}]`
+
+    const executePurge = db.transaction(() => {
+      // Anonymize student PII — keep id and admission_number for FK integrity
+      db.prepare(`
+        UPDATE student SET
+          first_name = ?,
+          middle_name = NULL,
+          last_name = ?,
+          date_of_birth = NULL,
+          guardian_name = NULL,
+          guardian_phone = NULL,
+          guardian_email = NULL,
+          guardian_relationship = NULL,
+          address = NULL,
+          photo_path = NULL,
+          notes = 'PII purged',
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(redacted, redacted, studentId)
+
+      // Delete enrollment records (non-financial)
+      db.prepare('DELETE FROM enrollment WHERE student_id = ?').run(studentId)
+
+      // Anonymize message logs referencing this student
+      const hasMessageLog = db.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='message_log'"
+      ).get()
+      if (hasMessageLog) {
+        db.prepare(
+          "UPDATE message_log SET recipient = ?, message_body = 'purged' WHERE recipient LIKE '%' || ? || '%'"
+        ).run(redacted, student.admission_number)
+      }
+    })
+
+    try {
+      executePurge()
+      logAudit(actor.actorId, 'PURGE', 'student', studentId, {
+        first_name: student.first_name,
+        last_name: student.last_name,
+        admission_number: student.admission_number,
+      }, { reason: purgeReason })
+      return { success: true, message: `Student ${studentId} PII purged successfully` }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Purge failed' }
+    }
+  })
 }
 
 function registerCreateStudentHandler(db: ReturnType<typeof getDatabase>): void {

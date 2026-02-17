@@ -1,6 +1,9 @@
 import { getDatabase } from '../../database'
-import { sanitizeString, validateAmount, validateId } from '../../utils/validation'
+import { logAudit } from '../../database/utils/audit'
+import { sanitizeString, validateAmount } from '../../utils/validation'
 import { safeHandleRawWithRole, ROLES } from '../ipc-result'
+import { StaffCreateSchema, StaffUpdateSchema, StaffSetActiveSchema } from '../schemas/staff-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 interface StaffMember {
   id: number
@@ -159,7 +162,7 @@ function registerStaffQueryHandlers(db: ReturnType<typeof getDatabase>): void {
 }
 
 function registerStaffMutationHandlers(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRawWithRole('staff:create', ROLES.MANAGEMENT, (_event, data: StaffCreateData) => {
+  validatedHandler('staff:create', ROLES.MANAGEMENT, StaffCreateSchema, (_event, data, actor) => {
     const validated = validateCreateData(data)
     const stmt = db.prepare(`INSERT INTO staff (
       staff_number, first_name, middle_name, last_name, id_number, kra_pin,
@@ -185,16 +188,11 @@ function registerStaffMutationHandlers(db: ReturnType<typeof getDatabase>): void
       validated.basic_salary,
       validated.is_active
     )
+    logAudit(actor.id, 'CREATE', 'staff', result.lastInsertRowid as number, null, { staff_number: validated.staff_number, first_name: validated.first_name, last_name: validated.last_name })
     return { success: true, id: result.lastInsertRowid }
   })
 
-  safeHandleRawWithRole('staff:update', ROLES.MANAGEMENT, (_event, id: number, data: Partial<StaffCreateData>) => {
-    // Validate staff ID
-    const idValidation = validateId(id, 'Staff')
-    if (!idValidation.success) {
-      return { success: false, error: idValidation.error }
-    }
-
+  validatedHandlerMulti('staff:update', ROLES.MANAGEMENT, StaffUpdateSchema, (_event, [id, data], actor) => {
     db.prepare(`
       UPDATE staff SET
         staff_number = COALESCE(?, staff_number),
@@ -215,12 +213,14 @@ function registerStaffMutationHandlers(db: ReturnType<typeof getDatabase>): void
         basic_salary = COALESCE(?, basic_salary),
         is_active = COALESCE(?, is_active)
       WHERE id = ?
-    `).run(...buildUpdateParams(data, idValidation.data!))
+    `).run(...buildUpdateParams(data, id))
+    logAudit(actor.id, 'UPDATE', 'staff', id, null, { changed_fields: Object.keys(data) })
     return { success: true }
   })
 
-  safeHandleRawWithRole('staff:setActive', ROLES.MANAGEMENT, (_event, id: number, isActive: boolean) => {
+  validatedHandlerMulti('staff:setActive', ROLES.MANAGEMENT, StaffSetActiveSchema, (_event, [id, isActive], actor) => {
     db.prepare('UPDATE staff SET is_active = ? WHERE id = ?').run(isActive ? 1 : 0, id)
+    logAudit(actor.id, 'UPDATE', 'staff', id, null, { is_active: isActive })
     return { success: true }
   })
   // Payroll handlers moved to payroll-handlers.ts

@@ -50,15 +50,15 @@ export const GLAccountManagement: React.FC = () => {
       const result = await globalThis.electronAPI.getGLAccounts(
         filterType === 'ALL' ? undefined : { type: filterType }
       );
-      const data = (result?.data ?? []) as unknown as Array<Record<string, unknown>>;
+      const data = result?.data ?? [];
       // Map backend response to local interface
-      const mapped: GLAccount[] = (data || []).map((a: Record<string, unknown>) => ({
-        code: a.code as string || a.account_code as string || '',
-        name: a.name as string || a.account_name as string || '',
-        type: (a.type as string || a.account_type as string || 'ASSET') as GLAccount['type'],
-        isActive: a.isActive === undefined ? Boolean(a.is_active ?? true) : Boolean(a.isActive),
-        description: (a.description as string) || '',
-        currentBalance: Number(a.currentBalance ?? a.balance ?? 0),
+      const mapped: GLAccount[] = data.map((a) => ({
+        code: a.account_code || '',
+        name: a.account_name || '',
+        type: a.account_type || 'ASSET',
+        isActive: a.is_active !== false,
+        description: a.description || '',
+        currentBalance: Number(a.current_balance ?? 0),
       }));
       setAccounts(mapped);
     } catch (error) {
