@@ -489,9 +489,10 @@ export class DoubleEntryJournalService {
       }
 
       // Check if approval required for void
-      const daysOld = Math.floor(
-        (Date.now() - new Date(originalEntry[0].entry_date).getTime()) / (1000 * 60 * 60 * 24)
-      );
+      const firstEntry = originalEntry[0]
+      const daysOld = firstEntry ? Math.floor(
+        (Date.now() - new Date(firstEntry.entry_date).getTime()) / (1000 * 60 * 60 * 24)
+      ) : 0;
 
       // Calculate total amount from line items
       const totalAmount = originalEntry.reduce((sum, line) => sum + (line.debit_amount || 0), 0);
@@ -579,7 +580,7 @@ export class DoubleEntryJournalService {
       const reversalData: JournalEntryData = {
         entry_date: new Date().toISOString().slice(0, 10), // Today
         entry_type: 'VOID_REVERSAL',
-        description: `Void Reversal for Ref: ${originalEntry[0].entry_ref}. Reason: ${voidReason}`,
+        description: `Void Reversal for Ref: ${originalEntry[0]?.entry_ref ?? 'N/A'}. Reason: ${voidReason}`,
         created_by_user_id: userId,
         lines: reversalLines,
         requires_approval: false // Reversals usually don't need double approval if void itself was approved/checked

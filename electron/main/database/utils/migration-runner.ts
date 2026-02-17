@@ -169,7 +169,7 @@ export class MigrationRunner {
       total_migrations: executed.length + pending.length,
       executed_migrations: executed.length,
       pending_migrations: pending.length,
-      last_migration: executed.length > 0 ? executed[executed.length - 1] : null
+      last_migration: executed.length > 0 ? (executed[executed.length - 1] ?? null) : null
     }
   }
 

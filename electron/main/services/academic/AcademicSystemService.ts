@@ -310,7 +310,7 @@ export class AcademicSystemService {
 
         // SECURITY: Verify access for the first entry (assuming batch is for same class/subject)
         if (results.length > 0) {
-            const hasAccess = await this.verifyAccess(results[0].subject_id, 0, userId)
+            const hasAccess = await this.verifyAccess(results[0]!.subject_id, 0, userId)
             if (!hasAccess) {
                 throw new Error('Unauthorized: You are not assigned to teach this subject.')
             }

@@ -136,7 +136,7 @@ export default function ReportCards() {
             let x = 17
             headers.forEach((h, i) => {
                 doc.text(h, x, y + 5.5)
-                x += colWidths[i]
+                x += colWidths[i] ?? 0
             })
             y += 10
             doc.setTextColor(0, 0, 0)
@@ -161,7 +161,7 @@ export default function ReportCards() {
                 ]
                 row.forEach((cell, i) => {
                     doc.text(cell, x, y + 3)
-                    x += colWidths[i]
+                    x += colWidths[i] ?? 0
                 })
                 y += 7
             })

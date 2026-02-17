@@ -606,7 +606,7 @@ export class ReconciliationService {
    */
   async getLatestReconciliationSummary(): Promise<ReconciliationReport | null> {
     const history = await this.getReconciliationHistory(1);
-    return history.length > 0 ? history[0] : null;
+    return history.length > 0 ? (history[0] ?? null) : null;
   }
 }
 

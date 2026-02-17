@@ -182,7 +182,7 @@ function renderTableHeader(params: TableHeaderParams): number {
     let xPosition = margin + 2
     columns.forEach((col, i) => {
         doc.text(col.header, xPosition, yPosition + 5.5)
-        xPosition += columnWidths[i]
+        xPosition += columnWidths[i] ?? 0
     })
 
     doc.setTextColor(0, 0, 0)
@@ -258,16 +258,16 @@ function renderRowCells(params: RowCellsParams): void {
         const value = formatValue(row[col.key], col.format)
         let textX = xPosition
         if (col.align === 'right') {
-            textX = xPosition + columnWidths[i] - 4
+            textX = xPosition + (columnWidths[i] ?? 0) - 4
         } else if (col.align === 'center') {
-            textX = xPosition + columnWidths[i] / 2
+            textX = xPosition + (columnWidths[i] ?? 0) / 2
         }
 
         doc.text(value, textX, yPosition + 5, {
             align: col.align || 'left',
-            maxWidth: columnWidths[i] - 4
+            maxWidth: (columnWidths[i] ?? 0) - 4
         })
-        xPosition += columnWidths[i]
+        xPosition += columnWidths[i] ?? 0
     })
 }
 

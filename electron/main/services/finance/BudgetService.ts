@@ -64,8 +64,8 @@ export interface CreateBudgetLineItemData {
 export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial<CreateBudgetData>, BudgetFilters> {
     protected getTableName(): string { return 'budget' }
     protected getPrimaryKey(): string { return 'id' }
-    protected getTableAlias(): string { return 'b' }
-    protected getTablePrefix(): string { return 'b.' }
+    protected override getTableAlias(): string { return 'b' }
+    protected override getTablePrefix(): string { return 'b.' }
 
     protected buildSelectQuery(): string {
         return `
@@ -88,7 +88,7 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
     `
     }
 
-    protected getGroupBy(): string {
+    protected override getGroupBy(): string {
         return ' GROUP BY b.id'
     }
 
@@ -212,7 +212,7 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
         })()
     }
 
-    protected applyFilters(filters: BudgetFilters, conditions: string[], params: unknown[]): void {
+    protected override applyFilters(filters: BudgetFilters, conditions: string[], params: unknown[]): void {
         if (filters.academic_year_id) {
             conditions.push('b.academic_year_id = ?')
             params.push(filters.academic_year_id)
@@ -271,7 +271,7 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
         return { success: true }
     }
 
-    async create(data: CreateBudgetData, userId: number): Promise<{ success: boolean; id: number; errors?: string[] }> {
+    override async create(data: CreateBudgetData, userId: number): Promise<{ success: boolean; id: number; errors?: string[] }> {
         const errors = this.validateCreate(data)
         if (errors) {
             return { success: false, id: 0, errors }

@@ -40,6 +40,7 @@ function getPerformanceImprovement(studentId: number) {
   for (let i = 0; i < improvements.length - 1; i++) {
     const current = improvements[i];
     const previous = improvements[i + 1];
+    if (!current || !previous) { continue; }
     const improvementPoints = current.average_score - previous.average_score;
     const improvementPercentage = previous.average_score > 0
       ? (improvementPoints / previous.average_score) * 100

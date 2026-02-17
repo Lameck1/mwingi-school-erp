@@ -409,8 +409,8 @@ export class CBCStrandService {
       total_expenses_cents: totalExpenses,
       total_profit_cents: totalProfit,
       avg_profit_margin_percent: avgMargin,
-      most_profitable_strand: mostProfitable.strand_name,
-      least_profitable_strand: leastProfitable.strand_name,
+      most_profitable_strand: mostProfitable?.strand_name ?? 'N/A',
+      least_profitable_strand: leastProfitable?.strand_name ?? 'N/A',
     };
   }
 }

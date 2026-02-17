@@ -619,7 +619,7 @@ export class VoidProcessor implements IPaymentVoidProcessor {
 
       // If no invoice specific linkage, assume it was an On Account payment
       // and return the full amount to be deducted from credit balance.
-      const invoiceId = (transaction as unknown as { invoice_id: number | null }).invoice_id
+      const invoiceId = transaction.invoice_id
       if (!invoiceId) {
         return transaction.amount
       }
@@ -717,7 +717,7 @@ export class VoidProcessor implements IPaymentVoidProcessor {
         }
 
         // Resolve category for reversal entry
-        const categoryId = (transaction as unknown as { category_id: number }).category_id || 1
+        const categoryId = transaction.category_id || 1
 
         const reversalId = this.createReversalTransaction(transaction, data, categoryId)
         this.markTransactionVoided(data)
@@ -783,7 +783,7 @@ export class VoidProcessor implements IPaymentVoidProcessor {
         data.transaction_id, 'PAYMENT', transaction.amount, transaction.student_id,
         transaction.description, data.void_reason, data.voided_by,
         new Date().toISOString(), data.recovery_method || null, null, null,
-        (data as unknown as { approval_request_id?: number }).approval_request_id || null
+        data.approval_request_id || null
       )
     } else {
       this.db.prepare(`
@@ -800,7 +800,7 @@ export class VoidProcessor implements IPaymentVoidProcessor {
   }
 
   private reverseInvoiceApplication(transaction: PaymentTransaction): void {
-    const invoiceId = (transaction as unknown as { invoice_id: number | null }).invoice_id
+    const invoiceId = transaction.invoice_id
     if (invoiceId) {
       this.db.prepare(`
         UPDATE fee_invoice

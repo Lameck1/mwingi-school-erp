@@ -37,7 +37,7 @@ export default function ReconcileAccount() {
         try {
             const data = await globalThis.electronAPI.getAccounts()
             setAccounts(data)
-            if (data.length > 0 && !selectedAccount) {
+            if (data.length > 0 && !selectedAccount && data[0]) {
                 setSelectedAccount(data[0].id)
             }
         } catch (error) {

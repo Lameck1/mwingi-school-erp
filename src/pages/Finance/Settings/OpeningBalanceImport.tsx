@@ -36,7 +36,7 @@ const parseCsvBalances = (text: string): { balances: ImportedBalance[]; error?: 
     return { balances: [], error: 'CSV file must have a header row and at least one data row' };
   }
 
-  const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const header = (lines[0] ?? '').split(',').map(h => h.trim().toLowerCase());
   const typeIdx = header.indexOf('type');
   const idIdx = findFirstIndex(header, ['identifier', 'id', 'code']);
   const nameIdx = header.indexOf('name');
@@ -49,19 +49,19 @@ const parseCsvBalances = (text: string): { balances: ImportedBalance[]; error?: 
 
   const parsed: ImportedBalance[] = [];
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(',').map(c => c.trim());
+    const cols = (lines[i] ?? '').split(',').map(c => c.trim());
     if (cols.length < Math.max(typeIdx, idIdx, amountIdx) + 1) {continue;}
 
-    const type = cols[typeIdx].toUpperCase() as 'STUDENT' | 'GL_ACCOUNT';
-    const amount = Number.parseFloat(cols[amountIdx]);
+    const type = (cols[typeIdx] ?? '').toUpperCase() as 'STUDENT' | 'GL_ACCOUNT';
+    const amount = Number.parseFloat(cols[amountIdx] ?? '');
     if (Number.isNaN(amount) || amount <= 0) {continue;}
 
     parsed.push({
       type: type === 'GL_ACCOUNT' ? 'GL_ACCOUNT' : 'STUDENT',
-      identifier: cols[idIdx],
-      name: nameIdx >= 0 ? cols[nameIdx] : cols[idIdx],
+      identifier: cols[idIdx] ?? '',
+      name: nameIdx >= 0 ? (cols[nameIdx] ?? '') : (cols[idIdx] ?? ''),
       amount,
-      debitCredit: dcIdx >= 0 && cols[dcIdx].toUpperCase().startsWith('C') ? 'CREDIT' : 'DEBIT'
+      debitCredit: dcIdx >= 0 && (cols[dcIdx] ?? '').toUpperCase().startsWith('C') ? 'CREDIT' : 'DEBIT'
     });
   }
 

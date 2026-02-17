@@ -212,22 +212,22 @@ function generatePrintHTML(
   let content = ''
 
   if (template === 'statement') {
-    const ledger = (Array.isArray(data.ledger) ? data.ledger : []) as LedgerRow[]
+    const ledger = (Array.isArray(data['ledger']) ? data['ledger'] : []) as LedgerRow[]
     content = `
       <div class="meta-grid">
         <div class="meta-box">
           <div class="meta-label">Student Details</div>
-          <div class="meta-value">${escapeHtml(safeString(data.studentName))}</div>
-          <div>ADM: ${escapeHtml(safeString(data.admissionNumber))}</div>
-          <div>Stream: ${escapeHtml(safeString(data.streamName))}</div>
+          <div class="meta-value">${escapeHtml(safeString(data['studentName']))}</div>
+          <div>ADM: ${escapeHtml(safeString(data['admissionNumber']))}</div>
+          <div>Stream: ${escapeHtml(safeString(data['streamName']))}</div>
         </div>
         <div class="meta-box">
           <div class="meta-label">Statement Summary</div>
-          <div>Opening: ${formatCurrencyFromCents(safeNum(data.openingBalance, 0))}</div>
+          <div>Opening: ${formatCurrencyFromCents(safeNum(data['openingBalance'], 0))}</div>
           <div style="margin-top: 5px; font-weight: bold;">
-            ${safeNum(data.closingBalance, 0) < 0
-        ? `Credit Surplus: <span style="color: #10b981">${formatCurrencyFromCents(Math.abs(safeNum(data.closingBalance, 0)))} (CR)</span>`
-        : `Balance Due: <span style="color: #f59e0b">${formatCurrencyFromCents(safeNum(data.closingBalance, 0))}</span>`
+            ${safeNum(data['closingBalance'], 0) < 0
+        ? `Credit Surplus: <span style="color: #10b981">${formatCurrencyFromCents(Math.abs(safeNum(data['closingBalance'], 0)))} (CR)</span>`
+        : `Balance Due: <span style="color: #f59e0b">${formatCurrencyFromCents(safeNum(data['closingBalance'], 0))}</span>`
       }
           </div>
         </div>
@@ -278,24 +278,24 @@ function generatePrintHTML(
       <div class="meta-grid">
         <div class="meta-box">
           <div class="meta-label">Receipt For</div>
-          <div class="meta-value">${escapeHtml(safeString(data.studentName))}</div>
-          <div>ADM: ${escapeHtml(safeString(data.admissionNumber))}</div>
+          <div class="meta-value">${escapeHtml(safeString(data['studentName']))}</div>
+          <div>ADM: ${escapeHtml(safeString(data['admissionNumber']))}</div>
         </div>
         <div class="meta-box">
           <div class="meta-label">Receipt Details</div>
-          <div class="meta-value">No: ${escapeHtml(safeString(data.receiptNumber))}</div>
-          <div>Date: ${new Date(safeStr(data.date, '')).toLocaleDateString()}</div>
-          <div>Mode: ${escapeHtml(safeString(data.paymentMode))}</div>
+          <div class="meta-value">No: ${escapeHtml(safeString(data['receiptNumber']))}</div>
+          <div>Date: ${new Date(safeStr(data['date'], '')).toLocaleDateString()}</div>
+          <div>Mode: ${escapeHtml(safeString(data['paymentMode']))}</div>
         </div>
       </div>
 
       <div style="background: #f8fafc; padding: 20px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
         <div style="font-size: 14px; text-align: center;">Amount Received</div>
         <div style="font-size: 24px; font-weight: bold; text-align: center; margin: 10px 0;">
-          ${formatCurrencyFromCents(safeNum(data.amount, 0))}
+          ${formatCurrencyFromCents(safeNum(data['amount'], 0))}
         </div>
         <div style="text-align: center; font-style: italic; color: #64748b;">
-          ${escapeHtml(safeString(data.amountInWords))}
+          ${escapeHtml(safeString(data['amountInWords']))}
         </div>
       </div>
 
@@ -308,23 +308,23 @@ function generatePrintHTML(
       description?: string
       amount?: number
     }
-    const items = (Array.isArray(data.items) ? data.items : []) as InvoiceItem[]
-    const totalAmount = safeNum(data.totalAmount, items.reduce((sum, item) => sum + safeNum(item.amount, 0), 0))
+    const items = (Array.isArray(data['items']) ? data['items'] : []) as InvoiceItem[]
+    const totalAmount = safeNum(data['totalAmount'], items.reduce((sum, item) => sum + safeNum(item.amount, 0), 0))
 
     content = `
       <div class="meta-grid">
         <div class="meta-box">
           <div class="meta-label">Bill To</div>
-          <div class="meta-value">${escapeHtml(safeString(data.studentName))}</div>
-          <div>ADM: ${escapeHtml(safeString(data.admissionNumber))}</div>
-          <div>Stream: ${escapeHtml(safeString(data.streamName))}</div>
+          <div class="meta-value">${escapeHtml(safeString(data['studentName']))}</div>
+          <div>ADM: ${escapeHtml(safeString(data['admissionNumber']))}</div>
+          <div>Stream: ${escapeHtml(safeString(data['streamName']))}</div>
         </div>
         <div class="meta-box">
           <div class="meta-label">Invoice Details</div>
-          <div class="meta-value">No: ${escapeHtml(safeString(data.invoiceNumber))}</div>
-          <div>Date: ${new Date(safeStr(data.date, '')).toLocaleDateString()}</div>
-          <div>Due: ${data.dueDate ? new Date(safeStr(data.dueDate, '')).toLocaleDateString() : 'On Receipt'}</div>
-          <div>Term: ${escapeHtml(safeString(data.termName))}</div>
+          <div class="meta-value">No: ${escapeHtml(safeString(data['invoiceNumber']))}</div>
+          <div>Date: ${new Date(safeStr(data['date'], '')).toLocaleDateString()}</div>
+          <div>Due: ${data['dueDate'] ? new Date(safeStr(data['dueDate'], '')).toLocaleDateString() : 'On Receipt'}</div>
+          <div>Term: ${escapeHtml(safeString(data['termName']))}</div>
         </div>
       </div>
 
@@ -348,15 +348,15 @@ function generatePrintHTML(
             <td style="font-weight: bold; text-align: right">Total</td>
             <td style="font-weight: bold; text-align: right">${formatCurrencyFromCents(totalAmount)}</td>
           </tr>
-          ${data.amountPaid != null ? `
+          ${data['amountPaid'] != null ? `
           <tr>
             <td style="text-align: right">Amount Paid</td>
-            <td style="text-align: right">${formatCurrencyFromCents(safeNum(data.amountPaid, 0))}</td>
+            <td style="text-align: right">${formatCurrencyFromCents(safeNum(data['amountPaid'], 0))}</td>
           </tr>
           <tr>
             <td style="font-weight: bold; text-align: right">Balance Due</td>
-            <td style="font-weight: bold; text-align: right; color: ${safeNum(data.balanceDue, 0) > 0 ? '#f59e0b' : '#10b981'};">
-              ${formatCurrencyFromCents(safeNum(data.balanceDue, 0))}
+            <td style="font-weight: bold; text-align: right; color: ${safeNum(data['balanceDue'], 0) > 0 ? '#f59e0b' : '#10b981'};">
+              ${formatCurrencyFromCents(safeNum(data['balanceDue'], 0))}
             </td>
           </tr>
           ` : ''}
@@ -373,20 +373,20 @@ function generatePrintHTML(
       name?: string
       amount?: number
     }
-    const allowances = (Array.isArray(data.allowancesList) ? data.allowancesList : []) as PayslipLine[]
-    const deductions = (Array.isArray(data.deductionsList) ? data.deductionsList : []) as PayslipLine[]
+    const allowances = (Array.isArray(data['allowancesList']) ? data['allowancesList'] : []) as PayslipLine[]
+    const deductions = (Array.isArray(data['deductionsList']) ? data['deductionsList'] : []) as PayslipLine[]
 
     content = `
       <div class="meta-grid">
         <div class="meta-box">
           <div class="meta-label">Employee Details</div>
-          <div class="meta-value">${escapeHtml(safeString(data.staff_name))}</div>
-          <div>Staff No: ${escapeHtml(safeString(data.staff_number))}</div>
-          <div>Department: ${escapeHtml(safeString(data.department))}</div>
+          <div class="meta-value">${escapeHtml(safeString(data['staff_name']))}</div>
+          <div>Staff No: ${escapeHtml(safeString(data['staff_number']))}</div>
+          <div>Department: ${escapeHtml(safeString(data['department']))}</div>
         </div>
         <div class="meta-box">
           <div class="meta-label">Pay Period</div>
-          <div class="meta-value">${escapeHtml(safeString(data.periodName))}</div>
+          <div class="meta-value">${escapeHtml(safeString(data['periodName']))}</div>
         </div>
       </div>
 
@@ -395,13 +395,13 @@ function generatePrintHTML(
           <table>
             <thead><tr><th colspan="2">Earnings</th></tr></thead>
             <tbody>
-              <tr><td>Basic Salary</td><td style="text-align: right">${formatCurrencyFromCents(safeNum(data.basicSalary, 0))}</td></tr>
+              <tr><td>Basic Salary</td><td style="text-align: right">${formatCurrencyFromCents(safeNum(data['basicSalary'], 0))}</td></tr>
               ${allowances.map((a) => `
                 <tr><td>${escapeHtml(safeString(a.name))}</td><td style="text-align: right">${formatCurrencyFromCents(safeNum(a.amount, 0))}</td></tr>
               `).join('')}
               <tr style="font-weight: bold; border-top: 2px solid #e2e8f0">
                 <td>Gross Salary</td>
-                <td style="text-align: right">${formatCurrencyFromCents(safeNum(data.grossSalary, 0))}</td>
+                <td style="text-align: right">${formatCurrencyFromCents(safeNum(data['grossSalary'], 0))}</td>
               </tr>
             </tbody>
           </table>
@@ -415,7 +415,7 @@ function generatePrintHTML(
               `).join('')}
               <tr style="font-weight: bold; border-top: 2px solid #e2e8f0">
                 <td>Total Deductions</td>
-                <td style="text-align: right">${formatCurrencyFromCents(safeNum(data.totalDeductions, 0))}</td>
+                <td style="text-align: right">${formatCurrencyFromCents(safeNum(data['totalDeductions'], 0))}</td>
               </tr>
             </tbody>
           </table>
@@ -424,7 +424,7 @@ function generatePrintHTML(
 
       <div style="background: #f8fafc; padding: 20px; border: 1px solid #e2e8f0; margin: 20px 0; text-align: center;">
         <div style="font-size: 14px;">Net Pay</div>
-        <div style="font-size: 24px; font-weight: bold; margin: 10px 0;">${formatCurrencyFromCents(safeNum(data.netSalary, 0))}</div>
+        <div style="font-size: 24px; font-weight: bold; margin: 10px 0;">${formatCurrencyFromCents(safeNum(data['netSalary'], 0))}</div>
       </div>
 
       <div class="signatures">
@@ -436,9 +436,9 @@ function generatePrintHTML(
     interface ReportRow {
       [key: string]: unknown
     }
-    const columns = (Array.isArray(data.columns) ? data.columns : []) as string[]
-    const rows = (Array.isArray(data.rows) ? data.rows : []) as ReportRow[]
-    const summary = safeString(data.summary)
+    const columns = (Array.isArray(data['columns']) ? data['columns'] : []) as string[]
+    const rows = (Array.isArray(data['rows']) ? data['rows'] : []) as ReportRow[]
+    const summary = safeString(data['summary'])
 
     content = `
       ${summary ? `<div style="margin-bottom: 15px; color: #64748b; font-size: 11px;">${escapeHtml(summary)}</div>` : ''}
@@ -458,9 +458,9 @@ function generatePrintHTML(
         </tbody>
       </table>
 
-      ${data.totals ? `
+      ${data['totals'] ? `
         <div style="text-align: right; font-weight: bold; margin-top: 10px; padding: 10px; border-top: 2px solid #e2e8f0;">
-          ${escapeHtml(safeString(data.totals))}
+          ${escapeHtml(safeString(data['totals']))}
         </div>
       ` : ''}
     `

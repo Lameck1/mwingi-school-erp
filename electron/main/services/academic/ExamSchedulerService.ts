@@ -3,8 +3,8 @@ import { getDatabase } from '../../database'
 const UNKNOWN_ERROR = 'Unknown error'
 
 const toMinutes = (time: string): number => {
-  const [hours, minutes] = time.split(':').map(Number)
-  return hours * 60 + minutes
+  const [hours, minutes] = time.split(':').map(Number) as [number | undefined, number | undefined]
+  return (hours ?? 0) * 60 + (minutes ?? 0)
 }
 
 interface ExamSlot {
@@ -275,7 +275,7 @@ class ExamSchedulerService {
           const slot2 = slots[j]
 
           // Check if times overlap
-          if (this.timesOverlap(slot1.start_time, slot1.end_time, slot2.start_time, slot2.end_time)) {
+          if (slot1 && slot2 && this.timesOverlap(slot1.start_time, slot1.end_time, slot2.start_time, slot2.end_time)) {
             // Find students taking both subjects
             const clashingStudents = db
               .prepare(`
@@ -349,7 +349,7 @@ class ExamSchedulerService {
 
       for (const slot of slots) {
         for (let i = 0; i < invigilatorsPerSlot; i++) {
-          const { staffId: minStaff, load: minLoad } = this.pickLeastLoadedStaff(staffLoads, availableStaff[0].id)
+          const { staffId: minStaff, load: minLoad } = this.pickLeastLoadedStaff(staffLoads, availableStaff[0]?.id ?? 0)
 
           // Assign this staff to slot
           db.prepare(`

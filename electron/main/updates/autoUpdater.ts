@@ -127,7 +127,7 @@ export class AutoUpdateManager {
 
     async checkForUpdates(silent: boolean = true): Promise<void> {
         try {
-            if (process.env.NODE_ENV === 'development') {
+            if (process.env['NODE_ENV'] === 'development') {
                 console.error('[Dev] Keeping auto-update check skipped.')
                 return
             }

@@ -48,6 +48,7 @@ export interface VoidPaymentData {
   void_reason: string
   voided_by: number
   recovery_method?: string
+  approval_request_id?: number
 }
 
 export interface ValidationResult {
@@ -64,6 +65,8 @@ export interface PaymentTransaction {
   payment_method: string
   reference: string
   description: string
+  invoice_id?: number | null
+  category_id?: number | null
 }
 
 export interface VoidedTransaction {

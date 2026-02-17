@@ -276,7 +276,7 @@ class ProRatedInvoiceGenerator implements IProRatedInvoiceGenerator {
       amount: proRation.pro_rated_amount,
       original_amount: proRation.full_amount,
       due_date: template.due_date,
-      invoice_date: new Date().toISOString().split('T')[0],
+      invoice_date: new Date().toISOString().split('T')[0] ?? '',
       description: `${template.description} (Pro-rated: ${proRation.discount_percentage.toFixed(1)}% discount)`,
       invoice_type: template.invoice_type,
       term_id: template.term_id,

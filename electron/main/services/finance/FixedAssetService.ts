@@ -71,7 +71,7 @@ export interface FinancialPeriod {
 export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, UpdateAssetData, AssetFilters> {
     protected getTableName(): string { return 'fixed_asset' }
     protected getPrimaryKey(): string { return 'id' }
-    protected getTableAlias(): string { return 'fa' }
+    protected override getTableAlias(): string { return 'fa' }
 
     protected buildSelectQuery(): string {
         return `
@@ -98,7 +98,7 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
         return null
     }
 
-    async create(data: CreateAssetData, userId: number): Promise<{ success: boolean; id: number; errors?: string[] }> {
+    override async create(data: CreateAssetData, userId: number): Promise<{ success: boolean; id: number; errors?: string[] }> {
         const errors = this.validateCreate(data)
         if (errors) {
             return { success: false, id: 0, errors }
@@ -112,7 +112,7 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
             // GL journal entry: Debit Fixed Asset, Credit Cash/AP
             const journalService = new DoubleEntryJournalService(this.db)
             journalService.createJournalEntrySync({
-                entry_date: new Date().toISOString().split('T')[0],
+                entry_date: new Date().toISOString().split('T')[0] ?? '',
                 entry_type: 'ASSET_ACQUISITION',
                 description: `Acquisition: ${data.asset_name} (${data.asset_code})`,
                 created_by_user_id: userId,
@@ -181,7 +181,7 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
         }
     }
 
-    protected applyFilters(filters: AssetFilters, conditions: string[], params: unknown[]): void {
+    protected override applyFilters(filters: AssetFilters, conditions: string[], params: unknown[]): void {
         if (filters.category_id) {
             conditions.push('fa.category_id = ?')
             params.push(filters.category_id)
@@ -279,7 +279,7 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
             // GL journal entry: Debit Depreciation Expense, Credit Accumulated Depreciation
             const journalService = new DoubleEntryJournalService(this.db)
             journalService.createJournalEntrySync({
-                entry_date: new Date().toISOString().split('T')[0],
+                entry_date: new Date().toISOString().split('T')[0] ?? '',
                 entry_type: 'DEPRECIATION',
                 description: `Depreciation: ${asset.asset_name} (${asset.asset_code})`,
                 created_by_user_id: userId,

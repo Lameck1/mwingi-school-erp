@@ -203,7 +203,7 @@ export class ApprovalWorkflowService {
         }
       }
 
-      const maxLevel = matchingConfigs[matchingConfigs.length - 1].required_level
+      const maxLevel = matchingConfigs[matchingConfigs.length - 1]?.required_level ?? 1
       const now = new Date().toISOString()
       const requestId = this.createApprovalRequestRecord({
         requestType,

@@ -402,7 +402,7 @@ class CashFlowForecaster implements ICashFlowForecaster {
       if (i > 45) {confidence = 'LOW'}
 
       forecasts.push({
-        forecast_date: forecastDate.toISOString().split('T')[0],
+        forecast_date: forecastDate.toISOString().split('T')[0] ?? '',
         projected_balance: Math.max(0, currentBalance),
         confidence_level: confidence
       })
@@ -548,8 +548,8 @@ export class CashFlowStatementService
     const start = new Date(now.getFullYear(), now.getMonth(), 1)
     const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
     return {
-      startDate: start.toISOString().split('T')[0],
-      endDate: end.toISOString().split('T')[0]
+      startDate: start.toISOString().split('T')[0] ?? '',
+      endDate: end.toISOString().split('T')[0] ?? ''
     }
   }
 

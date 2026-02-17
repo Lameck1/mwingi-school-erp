@@ -34,9 +34,9 @@ export default function Transactions() {
         setLoading(true)
         try {
             const filterParams: Record<string, unknown> = {}
-            if (appliedFilter.startDate) {filterParams.startDate = appliedFilter.startDate}
-            if (appliedFilter.endDate) {filterParams.endDate = appliedFilter.endDate}
-            if (appliedFilter.category_id) {filterParams.type = appliedFilter.category_id}
+            if (appliedFilter.startDate) {filterParams['startDate'] = appliedFilter.startDate}
+            if (appliedFilter.endDate) {filterParams['endDate'] = appliedFilter.endDate}
+            if (appliedFilter.category_id) {filterParams['type'] = appliedFilter.category_id}
             const results = await globalThis.electronAPI.getTransactions(filterParams)
             setTransactions(results)
         } catch (error) {

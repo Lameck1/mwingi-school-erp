@@ -55,10 +55,10 @@ function calculateMedian(sortedScores: number[]): number {
   }
 
   if (sortedScores.length % 2 === 0) {
-    return (sortedScores[sortedScores.length / 2 - 1] + sortedScores[sortedScores.length / 2]) / 2
+    return ((sortedScores[sortedScores.length / 2 - 1] ?? 0) + (sortedScores[sortedScores.length / 2] ?? 0)) / 2
   }
 
-  return sortedScores[Math.floor(sortedScores.length / 2)]
+  return sortedScores[Math.floor(sortedScores.length / 2)] ?? 0
 }
 
 class ReportCardAnalyticsService {
@@ -123,8 +123,8 @@ class ReportCardAnalyticsService {
         mean_score: mean,
         median_score: median,
         mode_score: mode,
-        top_performer: topStudent.student_name || 'N/A',
-        top_performer_score: topStudent.average_score || 0,
+        top_performer: topStudent?.student_name || 'N/A',
+        top_performer_score: topStudent?.average_score || 0,
         total_students: totalStudents,
         pass_count: passCount,
         pass_rate: totalStudents > 0 ? (passCount / totalStudents) * 100 : 0,

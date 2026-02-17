@@ -401,7 +401,7 @@ export class MeritListService {
     const mean = scores.reduce((sum, v) => sum + v, 0) / scores.length
     const sorted = [...scores].sort((a, b) => a - b)
     const mid = Math.floor(sorted.length / 2)
-    const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+    const median = sorted.length % 2 === 0 ? ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2 : (sorted[mid] ?? 0)
     const passCount = scores.filter(s => s >= 50).length
     const passRate = (passCount / scores.length) * 100
 
@@ -513,14 +513,17 @@ export class MeritListService {
 
     for (let i = 0; i < students.length; i++) {
       const student = students[i]
+      if (!student) { continue }
 
-      // Check if tied with previous student
-      if (i > 0 && students[i].average_marks === students[i - 1].average_marks) {
+      const prev = students[i - 1]
+      if (i > 0 && prev && student.average_marks === prev.average_marks) {
         const lastRanking = rankings[rankings.length - 1]
-        lastRanking.tied_with.push(student.id)
+        if (lastRanking) {
+          lastRanking.tied_with.push(student.id)
+        }
 
         rankings.push({
-          position: lastRanking.position,
+          position: lastRanking?.position ?? i + 1,
           student_id: student.id,
           student_name: student.name,
           admission_number: student.admission_number,
@@ -528,7 +531,7 @@ export class MeritListService {
           average_marks: student.average_marks,
           grade: '',
           percentage: 0,
-          tied_with: [lastRanking.student_id]
+          tied_with: [lastRanking?.student_id ?? 0]
         })
       } else {
         position = i + 1

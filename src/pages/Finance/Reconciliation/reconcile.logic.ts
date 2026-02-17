@@ -150,7 +150,7 @@ export function parseStatementCSV(csv: string): ParsedStatementCSV {
         return { lines: [], errors: ['CSV must contain a header row and at least one data row'] }
     }
 
-    const headers = parseCsvRow(rows[0]).map((header) => normalizeHeader(header))
+    const headers = parseCsvRow(rows[0] ?? '').map((header) => normalizeHeader(header))
     const indexes: StatementColumnIndexes = {
         dateIndex: findColumnIndex(headers, ['date', 'transactiondate', 'transaction_date']),
         descriptionIndex: findColumnIndex(headers, ['description', 'narration', 'details']),
@@ -171,7 +171,7 @@ export function parseStatementCSV(csv: string): ParsedStatementCSV {
     const lines: ParsedStatementLine[] = []
 
     for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
-        const values = parseCsvRow(rows[rowIndex])
+        const values = parseCsvRow(rows[rowIndex] ?? '')
         const rowLabel = `Row ${rowIndex + 1}`
         const parsedRow = parseStatementRow(values, rowLabel, indexes)
         if (parsedRow.error) {

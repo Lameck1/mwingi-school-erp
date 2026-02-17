@@ -15,7 +15,8 @@ export type UserRole =
   | 'DEPUTY_PRINCIPAL'
   | 'TEACHER'
 
-type APIMethod = (...args: unknown[]) => unknown
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type APIMethod = (...args: any[]) => any
 type APISlice = Record<string, APIMethod>
 
 interface APIFactories {
@@ -210,6 +211,9 @@ function createDomainGuard<T extends APISlice>(
         return Promise.reject(
           new Error(`Renderer role '${role}' cannot invoke '${String(methodName)}' in '${domain}' domain`)
         )
+      }
+      if (!originalMethod) {
+        return Promise.reject(new Error(`Method '${String(methodName)}' not found in '${domain}' domain`))
       }
       return originalMethod(...args)
     }) as T[keyof T]

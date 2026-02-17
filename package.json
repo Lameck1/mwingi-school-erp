@@ -54,6 +54,7 @@
     "react-router-dom": "^6.21.0",
     "recharts": "^2.10.3",
     "tailwind-merge": "^2.2.0",
+    "zod": "^4.3.6",
     "zustand": "^4.4.7"
   },
   "devDependencies": {
@@ -107,7 +108,7 @@
     ],
     "win": {
       "icon": "assets/icon.ico",
-      "forceCodeSigning": true,
+      "forceCodeSigning": false,
       "target": [
         {
           "target": "nsis",

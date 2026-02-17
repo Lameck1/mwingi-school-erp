@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 
@@ -22,7 +23,7 @@ export class BackupService {
     private static createTempPath(targetPath: string): string {
         const dir = path.dirname(targetPath)
         const base = path.basename(targetPath)
-        return path.join(dir, `.${base}.tmp-${Date.now()}-${Math.floor(Math.random() * 100000)}`)
+        return path.join(dir, `.${base}.tmp-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`)
     }
 
     private static replaceFileAtomically(tempPath: string, targetPath: string): void {
@@ -100,6 +101,7 @@ export class BackupService {
             }
 
             const lastBackup = backups[0] // list is sorted desc
+            if (!lastBackup) { return }
             const hoursSinceLast = (Date.now() - lastBackup.created_at.getTime()) / (1000 * 60 * 60)
 
             if (hoursSinceLast >= 24) {

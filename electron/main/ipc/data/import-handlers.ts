@@ -1,4 +1,5 @@
 import * as fs from 'node:fs'
+import * as path from 'node:path'
 
 import { dialog, BrowserWindow } from '../../electron-env'
 import { dataImportService, type ImportConfig } from '../../services/data/DataImportService'
@@ -24,7 +25,19 @@ export function registerDataImportHandlers(): void {
                     errors: [{ row: 0, message: actor.error }]
                 }
             }
-            const buffer = fs.readFileSync(filePath)
+            const resolved = path.resolve(filePath)
+            const allowedExtensions = ['.csv', '.xlsx', '.xls']
+            const ext = path.extname(resolved).toLowerCase()
+            if (!allowedExtensions.includes(ext)) {
+                return {
+                    success: false,
+                    totalRows: 0,
+                    imported: 0,
+                    skipped: 0,
+                    errors: [{ row: 0, message: `Invalid file type '${ext}'. Allowed: ${allowedExtensions.join(', ')}` }]
+                }
+            }
+            const buffer = fs.readFileSync(resolved)
             return dataImportService.importFromFile(
                 buffer,
                 filePath,

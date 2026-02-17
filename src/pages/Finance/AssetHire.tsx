@@ -39,7 +39,7 @@ export default function AssetHire() {
     const [bookingForm, setBookingForm] = useState({
         asset_id: 0,
         client_id: 0,
-        hire_date: new Date().toISOString().split('T')[0],
+        hire_date: new Date().toISOString().split('T')[0] ?? '',
         return_date: '',
         purpose: '',
         destination: '',
@@ -120,7 +120,7 @@ export default function AssetHire() {
             alert(`Booking created! Number: ${result.booking_number}`)
             setShowBookingModal(false)
             setBookingForm({
-                asset_id: 0, client_id: 0, hire_date: new Date().toISOString().split('T')[0],
+                asset_id: 0, client_id: 0, hire_date: new Date().toISOString().split('T')[0] ?? '',
                 return_date: '', purpose: '', destination: '', distance_km: '', total_amount: ''
             })
             void loadData()
@@ -208,9 +208,9 @@ export default function AssetHire() {
         const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
 
         if (num === 0) {return 'Zero'}
-        if (num < 20) {return ones[num]}
-        if (num < 100) {return tens[Math.floor(num / 10)] + (num % 10 ? ' ' + ones[num % 10] : '')}
-        if (num < 1000) {return ones[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' and ' + numberToWords(num % 100) : '')}
+        if (num < 20) {return ones[num] ?? ''}
+        if (num < 100) {return (tens[Math.floor(num / 10)] ?? '') + (num % 10 ? ' ' + (ones[num % 10] ?? '') : '')}
+        if (num < 1000) {return (ones[Math.floor(num / 100)] ?? '') + ' Hundred' + (num % 100 ? ' and ' + numberToWords(num % 100) : '')}
         if (num < 1000000) {return numberToWords(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + numberToWords(num % 1000) : '')}
         return numberToWords(Math.floor(num / 1000000)) + ' Million' + (num % 1000000 ? ' ' + numberToWords(num % 1000000) : '')
     }

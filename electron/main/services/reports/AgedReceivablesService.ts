@@ -319,7 +319,8 @@ class PriorityDeterminer implements IPriorityDeterminer {
   }
 
   async getHighPriorityCollections(): Promise<HighPriorityCollectionResult[]> {
-    const invoices = await this.repo.getOutstandingInvoices(new Date().toISOString().split('T')[0])
+    const date = new Date().toISOString().split('T')[0] ?? '';
+    const invoices = await this.repo.getOutstandingInvoices(date)
 
     return [...invoices]
       .filter((invoice) => {
@@ -368,7 +369,8 @@ class CollectionReminderGenerator implements ICollectionReminder {
   }
 
   async generateCollectionReminders(): Promise<CollectionReminderResult[]> {
-    const invoices = await this.repo.getOutstandingInvoices(new Date().toISOString().split('T')[0])
+    const date = new Date().toISOString().split('T')[0] ?? '';
+    const invoices = await this.repo.getOutstandingInvoices(date)
     const reminders: CollectionReminderResult[] = []
 
     for (const invoice of invoices) {
@@ -538,7 +540,7 @@ export class AgedReceivablesService
   }
 
   async generateAgedReceivablesReport(asOfDate?: string): Promise<AgedReceivableBucket[]> {
-    const date = asOfDate || new Date().toISOString().split('T')[0]
+    const date = asOfDate || (new Date().toISOString().split('T')[0] ?? '')
     return this.agingCalculator.calculateAgedReceivables(date)
   }
 
@@ -552,7 +554,7 @@ export class AgedReceivablesService
   }
 
   async getTopOverdueAccounts(limit: number = 20): Promise<AgedReceivableBucket['accounts']> {
-    const invoices = await this.calculateAgedReceivables(new Date().toISOString().split('T')[0])
+    const invoices = await this.calculateAgedReceivables(new Date().toISOString().split('T')[0] ?? '')
     const allAccounts = invoices.flatMap((bucket) => bucket.accounts)
     const sortedAccounts = [...allAccounts].sort((a, b) => (b.amount || 0) - (a.amount || 0))
     return sortedAccounts.slice(0, limit)

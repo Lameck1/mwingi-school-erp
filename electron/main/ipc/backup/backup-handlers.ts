@@ -2,14 +2,9 @@ import * as path from 'node:path'
 
 import { shell, app } from '../../electron-env'
 import { BackupService } from '../../services/BackupService'
-import { log } from '../../utils/logger'
 import { ROLES, safeHandleRawWithRole } from '../ipc-result'
 
 export function registerBackupHandlers(): void {
-
-    safeHandleRawWithRole('system:logError', ROLES.STAFF, (_event, data: { error: string; stack?: string; componentStack?: string | null; timestamp: string }) => {
-        log.error(`[Renderer Error] ${data.error}`, data.stack || '', data.componentStack || '')
-    })
 
     safeHandleRawWithRole('backup:create', ROLES.ADMIN_ONLY, async () => {
         const result = await BackupService.createBackup()

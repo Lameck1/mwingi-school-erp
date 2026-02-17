@@ -15,8 +15,8 @@ export function registerSettingsHandlers(): void {
         // Mask sensitive API credentials for non-ADMIN roles
         const actor = getActorFromEvent(event)
         if (actor?.role !== 'ADMIN') {
-            if (row.sms_api_key) { row.sms_api_key = '********' }
-            if (row.sms_api_secret) { row.sms_api_secret = '********' }
+            if (row['sms_api_key']) { row['sms_api_key'] = '********' }
+            if (row['sms_api_secret']) { row['sms_api_secret'] = '********' }
         }
         return row
     })
@@ -39,19 +39,19 @@ export function registerSettingsHandlers(): void {
         `)
 
         stmt.run(
-            settings.school_name, settings.school_motto, settings.address, settings.phone,
-            settings.email, settings.logo_path, settings.mpesa_paybill, settings.sms_sender_id
+            settings['school_name'], settings['school_motto'], settings['address'], settings['phone'],
+            settings['email'], settings['logo_path'], settings['mpesa_paybill'], settings['sms_sender_id']
         )
 
         // Route SMS credentials through encrypted ConfigService (F03 remediation)
-        if (typeof settings.sms_api_key === 'string' && settings.sms_api_key) {
-            ConfigService.saveConfig('sms_api_key', settings.sms_api_key, true)
+        if (typeof settings['sms_api_key'] === 'string' && settings['sms_api_key']) {
+            ConfigService.saveConfig('sms_api_key', settings['sms_api_key'], true)
         }
-        if (typeof settings.sms_api_secret === 'string' && settings.sms_api_secret) {
-            ConfigService.saveConfig('sms_api_secret', settings.sms_api_secret, true)
+        if (typeof settings['sms_api_secret'] === 'string' && settings['sms_api_secret']) {
+            ConfigService.saveConfig('sms_api_secret', settings['sms_api_secret'], true)
         }
-        if (typeof settings.sms_sender_id === 'string' && settings.sms_sender_id) {
-            ConfigService.saveConfig('sms_sender_id', settings.sms_sender_id, false)
+        if (typeof settings['sms_sender_id'] === 'string' && settings['sms_sender_id']) {
+            ConfigService.saveConfig('sms_sender_id', settings['sms_sender_id'], false)
         }
 
         return { success: true }

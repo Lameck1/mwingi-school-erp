@@ -98,8 +98,7 @@ export class DataImportService {
      */
     private async parseExcel(buffer: Buffer): Promise<Record<string, unknown>[]> {
         const workbook = new ExcelJS.Workbook()
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await workbook.xlsx.load(buffer as any)
+        await workbook.xlsx.load(new Uint8Array(buffer).buffer)
         const worksheet = workbook.getWorksheet(1)
         if (!worksheet) {return []}
 
@@ -249,7 +248,13 @@ export class DataImportService {
             return result
         }
 
-        const sourceColumns = Object.keys(rows[0])
+        const firstRow = rows[0]
+        if (!firstRow) {
+            result.errors.push({ row: 0, message: 'No data rows found in file' })
+            result.success = false
+            return result
+        }
+        const sourceColumns = Object.keys(firstRow)
         result.errors.push(...this.validateRequiredColumns(sourceColumns, config.mappings))
 
         if (result.errors.length > 0) {
@@ -261,6 +266,7 @@ export class DataImportService {
             for (let i = 0; i < rows.length; i++) {
                 const rowNum = i + 2 // +2 for 1-based index + header row
                 const sourceRow = rows[i]
+                if (!sourceRow) { continue }
 
                 try {
                     const { mappedRow, rowErrors } = this.mapAndValidateRow(sourceRow, config)
@@ -345,18 +351,18 @@ export class DataImportService {
         guardian_name, guardian_phone, guardian_email, address
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-            data.admission_number,
-            data.first_name,
-            data.middle_name || null,
-            data.last_name,
-            data.date_of_birth,
-            data.gender || 'MALE',
-            data.student_type || 'DAY_SCHOLAR',
-            data.admission_date || new Date().toISOString().slice(0, 10),
-            data.guardian_name,
-            data.guardian_phone,
-            data.guardian_email || null,
-            data.address || null
+            data['admission_number'],
+            data['first_name'],
+            data['middle_name'] || null,
+            data['last_name'],
+            data['date_of_birth'],
+            data['gender'] || 'MALE',
+            data['student_type'] || 'DAY_SCHOLAR',
+            data['admission_date'] || new Date().toISOString().slice(0, 10),
+            data['guardian_name'],
+            data['guardian_phone'],
+            data['guardian_email'] || null,
+            data['address'] || null
         )
     }
 
@@ -368,18 +374,18 @@ export class DataImportService {
         department, job_title, employment_date, basic_salary, is_active
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
     `).run(
-            data.staff_number,
-            data.first_name,
-            data.middle_name || null,
-            data.last_name,
-            data.id_number || null,
-            data.kra_pin || null,
-            data.phone || null,
-            data.email || null,
-            data.department || null,
-            data.job_title || null,
-            data.employment_date || new Date().toISOString().slice(0, 10),
-            data.basic_salary || 0
+            data['staff_number'],
+            data['first_name'],
+            data['middle_name'] || null,
+            data['last_name'],
+            data['id_number'] || null,
+            data['kra_pin'] || null,
+            data['phone'] || null,
+            data['email'] || null,
+            data['department'] || null,
+            data['job_title'] || null,
+            data['employment_date'] || new Date().toISOString().slice(0, 10),
+            data['basic_salary'] || 0
         )
     }
 
@@ -389,13 +395,13 @@ export class DataImportService {
         academic_year_id, term_id, stream_id, student_type, fee_category_id, amount, description
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
-            data.academic_year_id,
-            data.term_id,
-            data.stream_id,
-            data.student_type || 'DAY_SCHOLAR',
-            data.fee_category_id,
-            data.amount,
-            data.description || null
+            data['academic_year_id'],
+            data['term_id'],
+            data['stream_id'],
+            data['student_type'] || 'DAY_SCHOLAR',
+            data['fee_category_id'],
+            data['amount'],
+            data['description'] || null
         )
     }
 
@@ -405,13 +411,13 @@ export class DataImportService {
         item_code, item_name, category_id, unit_of_measure, current_stock, reorder_level, unit_cost
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
-            data.item_code,
-            data.item_name,
-            data.category_id,
-            data.unit_of_measure || 'Unit',
-            data.current_stock || 0,
-            data.reorder_level || 0,
-            data.unit_cost || 0
+            data['item_code'],
+            data['item_name'],
+            data['category_id'],
+            data['unit_of_measure'] || 'Unit',
+            data['current_stock'] || 0,
+            data['reorder_level'] || 0,
+            data['unit_cost'] || 0
         )
     }
 
@@ -521,11 +527,12 @@ export class DataImportService {
         // Create data sheet
         const dataSheet = workbook.addWorksheet('Data')
         if (template.sampleData.length > 0) {
-            const columns = Object.keys(template.sampleData[0]).map(key => ({
+            const firstSample = template.sampleData[0]
+            const columns = firstSample ? Object.keys(firstSample).map(key => ({
                 header: key,
                 key,
                 width: 20
-            }))
+            })) : []
             dataSheet.columns = columns
             template.sampleData.forEach(row => dataSheet.addRow(row))
         }

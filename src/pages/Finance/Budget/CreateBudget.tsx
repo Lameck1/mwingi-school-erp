@@ -64,8 +64,11 @@ export default function CreateBudget() {
 
     const updateLineItem = (index: number, field: keyof CreateBudgetLineItemData, value: unknown) => {
         const updated = [...lineItems]
-        updated[index] = { ...updated[index], [field]: value }
-        setLineItems(updated)
+        const existing = updated[index]
+        if (existing) {
+            updated[index] = { ...existing, [field]: value }
+            setLineItems(updated)
+        }
     }
 
     const totalBudgeted = lineItems.reduce((sum, item) => sum + (item.budgeted_amount || 0), 0)

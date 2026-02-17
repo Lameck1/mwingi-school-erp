@@ -28,7 +28,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         return { hasError: true, error }
     }
 
-    componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    override componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
         this.setState({ errorInfo })
         
         // Log to console in development
@@ -76,7 +76,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         window.location.reload()
     }
 
-    render(): React.JSX.Element {
+    override render(): React.JSX.Element {
         if (this.state.hasError) {
             if (this.props.fallback) {
                 return <>{this.props.fallback}</>
@@ -116,7 +116,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                         )}
                     </div>
                     
-                    {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+                    {process.env['NODE_ENV'] === 'development' && this.state.errorInfo && (
                         <details className="mt-4 text-left text-xs text-gray-500 max-w-2xl">
                             <summary className="cursor-pointer hover:text-gray-700">Error Details (Development)</summary>
                             <pre className="mt-2 p-2 bg-gray-100 rounded overflow-auto">

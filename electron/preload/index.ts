@@ -46,26 +46,26 @@ const runtimeRoleAPI = createRuntimeRoleAwareAPI(getCurrentRole)
 const authAPI = {
   ...runtimeRoleAPI.auth,
   login: async (username: string, password: string) => {
-    const result = await runtimeRoleAPI.auth.login(username, password) as { success?: boolean; user?: { role?: string } }
+    const result = await runtimeRoleAPI.auth['login']!(username, password) as { success?: boolean; user?: { role?: string } }
     if (result.success && result.user?.role) {
       setCurrentRole(result.user.role)
     }
     return result
   },
   getSession: async () => {
-    const session = await runtimeRoleAPI.auth.getSession() as { user?: { role?: string } } | null
+    const session = await runtimeRoleAPI.auth['getSession']!() as { user?: { role?: string } } | null
     setCurrentRole(session?.user?.role)
     return session
   },
   setSession: async (session: { user?: { role?: string } }) => {
-    const result = await runtimeRoleAPI.auth.setSession(session) as { success?: boolean }
+    const result = await runtimeRoleAPI.auth['setSession']!(session) as { success?: boolean }
     if (result.success !== false) {
       setCurrentRole(session.user?.role)
     }
     return result
   },
   clearSession: async () => {
-    const result = await runtimeRoleAPI.auth.clearSession() as { success?: boolean }
+    const result = await runtimeRoleAPI.auth['clearSession']!() as { success?: boolean }
     if (result.success !== false) {
       setCurrentRole('AUDITOR')
     }

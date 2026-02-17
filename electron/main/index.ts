@@ -147,7 +147,7 @@ async function bootstrap(): Promise<void> {
                 'Content-Security-Policy': [
                     VITE_DEV_SERVER_URL
                         ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws:; object-src 'none'; frame-src 'none'"
-                        : "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; frame-src 'none'"
+                        : "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; frame-src 'none'"
                 ]
             }
         })
@@ -226,19 +226,24 @@ app.on('before-quit', () => {
     closeDatabase()
 })
 
-    // Handle uncaught exceptions
-    // NOTE: Semicolons are critical here — without them, ASI does NOT
-    // insert a semicolon before `(process…)`, causing the previous
-    // expression to chain incorrectly.
-    ; (process as unknown as NodeJS.EventEmitter).on('uncaughtException', (error: Error) => {
-        log.error('Uncaught Exception:', error)
-        sendDbError(error.message || 'Unexpected error')
-    })
+let shutdownScheduled = false
+function scheduleGracefulShutdown(): void {
+    if (shutdownScheduled) {return}
+    shutdownScheduled = true
+    setTimeout(() => {
+        log.warn('Shutting down after critical error...')
+        app.quit()
+    }, 3000)
+}
 
-    ; (process as unknown as NodeJS.EventEmitter).on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
-        log.error('Unhandled Rejection at:', promise, 'reason:', reason)
-        sendDbError(reason instanceof Error ? reason.message : 'Unhandled promise rejection')
-    })
+process.on('uncaughtException', (error: Error) => {
+    log.error('Uncaught Exception:', error)
+    sendDbError(error.message || 'Unexpected error')
+    scheduleGracefulShutdown()
+})
 
-
-
+process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
+    log.error('Unhandled Rejection at:', promise, 'reason:', reason)
+    sendDbError(reason instanceof Error ? reason.message : 'Unhandled promise rejection')
+    scheduleGracefulShutdown()
+})

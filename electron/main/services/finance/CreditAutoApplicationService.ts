@@ -312,7 +312,7 @@ class CreditAllocator implements ICreditAllocator {
       if (totalApplied > 0) {
         const journalService = new DoubleEntryJournalService(db)
         journalService.createJournalEntrySync({
-          entry_date: new Date().toISOString().split('T')[0],
+          entry_date: new Date().toISOString().split('T')[0] ?? '',
           entry_type: 'CREDIT_APPLICATION',
           description: `Credit auto-applied for student #${studentId}: ${totalApplied.toFixed(2)} KES to ${allocations.length} invoice(s)`,
           created_by_user_id: userId,

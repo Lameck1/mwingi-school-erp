@@ -203,7 +203,7 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
         }
     }
 
-    protected applyFilters(filters: unknown, conditions: string[], params: unknown[]): void {
+    protected override applyFilters(filters: unknown, conditions: string[], params: unknown[]): void {
         const f = filters as InventoryFilters
         if (f.category_id) {
             conditions.push('category_id = ?')

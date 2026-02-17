@@ -32,7 +32,7 @@ export function getEncryptionKey(): string {
             
             if (safeStorage.isEncryptionAvailable()) {
                 const encryptedKey = safeStorage.encryptString(newKey)
-                fs.writeFileSync(keyPath, encryptedKey)
+                fs.writeFileSync(keyPath, encryptedKey, { mode: 0o600 })
                 return newKey
             } else {
                 throw new Error('Encryption not available on this device.')

@@ -38,6 +38,7 @@ import { registerReportSchedulerHandlers } from './reports/scheduler-handlers'
 import { registerSettingsHandlers } from './settings/settings-handlers'
 import { registerStaffHandlers } from './staff/staff-handlers'
 import { registerStudentHandlers } from './student/student-handlers'
+import { registerSystemHandlers } from './system/system-handlers'
 import { registerTransactionsHandlers } from './transactions/transactions-handlers'
 import { registerApprovalHandlers } from './workflow/approval-handlers'
 
@@ -82,7 +83,8 @@ const IPC_HANDLER_REGISTRARS: ReadonlyArray<() => void> = [
     registerCbcOperationsHandlers,
     registerFinanceApprovalHandlers,
     registerFinancialReportsHandlers,
-    registerPeriodLockingHandlers
+    registerPeriodLockingHandlers,
+    registerSystemHandlers
 ]
 
 export function registerAllIpcHandlers(): void {

@@ -88,11 +88,11 @@ function seedSchoolSettings(db: Database): void {
 }
 
 function seedAdminUser(db: Database): void {
-  if (process.env.SEED_DEFAULT_ADMIN !== 'true' && process.env.SEED_DEFAULT_ADMIN !== '1') {
+  if (process.env['SEED_DEFAULT_ADMIN'] !== 'true' && process.env['SEED_DEFAULT_ADMIN'] !== '1') {
     return
   }
 
-  const passwordHash = process.env.SEED_DEFAULT_ADMIN_PASSWORD_HASH
+  const passwordHash = process.env['SEED_DEFAULT_ADMIN_PASSWORD_HASH']
   if (!passwordHash) {
     throw new Error('SEED_DEFAULT_ADMIN_PASSWORD_HASH must be set when seeding the default admin account.')
   }

@@ -280,6 +280,7 @@ function detectClashes(
             for (let nextIndex = index + 1; nextIndex < subjectIds.length; nextIndex += 1) {
                 const firstSubjectId = subjectIds[index]
                 const secondSubjectId = subjectIds[nextIndex]
+                if (firstSubjectId === undefined || secondSubjectId === undefined) { continue }
                 const firstSlot = slotMap.get(firstSubjectId)
                 const secondSlot = slotMap.get(secondSubjectId)
 
@@ -334,9 +335,9 @@ function getScheduleDateRange(startDate: string, endDate: string): string[] {
 
 function buildSchedulerSlots(subjects: Array<{ id: number; name: string }>, totalStudents: number, dateRange: string[]): SchedulerSlot[] {
     const venues = [
-        { ...VENUE_TEMPLATE[0], capacity: Math.max(150, totalStudents) },
-        { ...VENUE_TEMPLATE[1], capacity: 60 },
-        { ...VENUE_TEMPLATE[2], capacity: 60 }
+        { ...VENUE_TEMPLATE[0]!, capacity: Math.max(150, totalStudents) },
+        { ...VENUE_TEMPLATE[1]!, capacity: 60 },
+        { ...VENUE_TEMPLATE[2]!, capacity: 60 }
     ]
     const slots: SchedulerSlot[] = []
     let slotId = 1
@@ -349,6 +350,7 @@ function buildSchedulerSlots(subjects: Array<{ id: number; name: string }>, tota
             }
             const subject = subjects[subjectIndex]
             const venue = venues[subjectIndex % venues.length]
+            if (!subject || !venue) { continue }
             slots.push({
                 id: slotId,
                 subject_id: subject.id,

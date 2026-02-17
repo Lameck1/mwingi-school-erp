@@ -42,11 +42,13 @@ function createInvoice(
         }
         const left = normalizeItems(a)
         const right = normalizeItems(b)
-        return left.every((item, index) =>
-            item.fee_category_id === right[index].fee_category_id &&
-            item.amount === right[index].amount &&
-            item.description === right[index].description
-        )
+        return left.every((item, index) => {
+            const other = right[index]
+            if (!other) { return false }
+            return item.fee_category_id === other.fee_category_id &&
+                item.amount === other.amount &&
+                item.description === other.description
+        })
     }
 
     return db.transaction(() => {

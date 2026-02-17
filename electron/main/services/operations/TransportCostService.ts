@@ -268,7 +268,7 @@ export class TransportCostService {
     if (params.gl_account_code) {
       const journalService = new DoubleEntryJournalService(this.db);
       journalService.createJournalEntrySync({
-        entry_date: new Date().toISOString().split('T')[0],
+        entry_date: new Date().toISOString().split('T')[0] ?? '',
         entry_type: 'TRANSPORT_EXPENSE',
         description: `Transport Expense: ${params.description || params.expense_type} (Route: ${route.route_name})`,
         created_by_user_id: params.recorded_by,

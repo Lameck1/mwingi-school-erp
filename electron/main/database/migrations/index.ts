@@ -112,4 +112,13 @@ export function runMigrations(db: Database.Database): void {
             db.exec('PRAGMA foreign_keys = ON')
         }
     }
+
+    // Verify FK integrity after all migrations
+    const fkViolations = db.prepare('PRAGMA foreign_key_check').all() as { table: string; rowid: number; parent: string; fkid: number }[]
+    if (fkViolations.length > 0) {
+        console.warn(`[WARNING] ${fkViolations.length} foreign key violation(s) detected after migrations:`)
+        for (const v of fkViolations.slice(0, 20)) {
+            console.warn(`  table=${v.table} rowid=${v.rowid} parent=${v.parent} fkid=${v.fkid}`)
+        }
+    }
 }

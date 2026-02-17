@@ -24,7 +24,7 @@ export class SMSService {
     }
 
     private buildAfricasTalkingResult(data: Record<string, unknown>): NotificationResult {
-        const recipients = (data.SMSMessageData as { Recipients?: Array<{ status?: string; messageId?: string }> } | undefined)?.Recipients
+        const recipients = (data['SMSMessageData'] as { Recipients?: Array<{ status?: string; messageId?: string }> } | undefined)?.Recipients
         const firstRecipient = recipients?.[0]
         if (firstRecipient?.status === 'Success') {
             return {

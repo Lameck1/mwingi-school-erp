@@ -383,7 +383,7 @@ export class HireService {
                 // Create GL journal entry: Debit Cash/Bank, Credit Hire Income
                 const journalService = new DoubleEntryJournalService(this.db)
                 journalService.createJournalEntrySync({
-                    entry_date: data.payment_date || new Date().toISOString().split('T')[0],
+                    entry_date: data.payment_date || (new Date().toISOString().split('T')[0] ?? ''),
                     entry_type: 'INCOME',
                     description: `Hire income: ${booking.asset_name} - ${receiptNumber}`,
                     created_by_user_id: userId,

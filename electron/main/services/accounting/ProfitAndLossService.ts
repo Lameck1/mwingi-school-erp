@@ -192,21 +192,21 @@ export class ProfitAndLossService {
       const code = account.account_code;
       
       if (code === '4010') {
-        categories['Tuition Fees'] += account.balance;
+        categories['Tuition Fees'] = (categories['Tuition Fees'] ?? 0) + account.balance;
       } else if (code === '4020') {
-        categories['Boarding Fees'] += account.balance;
+        categories['Boarding Fees'] = (categories['Boarding Fees'] ?? 0) + account.balance;
       } else if (code === '4030') {
-        categories['Transport Fees'] += account.balance;
+        categories['Transport Fees'] = (categories['Transport Fees'] ?? 0) + account.balance;
       } else if (code === '4040') {
-        categories['Activity Fees'] += account.balance;
+        categories['Activity Fees'] = (categories['Activity Fees'] ?? 0) + account.balance;
       } else if (code === '4050') {
-        categories['Exam Fees'] += account.balance;
+        categories['Exam Fees'] = (categories['Exam Fees'] ?? 0) + account.balance;
       } else if (code === '4100') {
-        categories['Government Grants'] += account.balance;
+        categories['Government Grants'] = (categories['Government Grants'] ?? 0) + account.balance;
       } else if (code === '4200') {
-        categories['Donations'] += account.balance;
+        categories['Donations'] = (categories['Donations'] ?? 0) + account.balance;
       } else {
-        categories['Other Income'] += account.balance;
+        categories['Other Income'] = (categories['Other Income'] ?? 0) + account.balance;
       }
     }
 
@@ -238,7 +238,7 @@ export class ProfitAndLossService {
 
     for (const account of expenseAccounts) {
       const category = this.resolveExpenseCategory(account.account_code)
-      categories[category] += account.balance
+      categories[category] = (categories[category] ?? 0) + account.balance
     }
 
     return Object.entries(categories)

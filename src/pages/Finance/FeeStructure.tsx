@@ -60,7 +60,7 @@ export default function FeeStructure() {
                 setTerms(termList)
                 const currentTerm = await globalThis.electronAPI.getCurrentTerm()
                 if (currentTerm) {setSelectedTerm(currentTerm.id.toString())}
-                else if (termList.length > 0) {setSelectedTerm(termList[0].id.toString())}
+                else if (termList.length > 0 && termList[0]) {setSelectedTerm(termList[0].id.toString())}
             }
         } catch (error) {
             console.error(error)
@@ -187,7 +187,7 @@ export default function FeeStructure() {
                     const [streamId, studentType, categoryId] = key.split('-')
                     data.push({
                         stream_id: Number(streamId),
-                        student_type: studentType,
+                        student_type: studentType ?? '',
                         fee_category_id: Number(categoryId),
                         // Convert shillings from UI back to cents for DB storage
                         amount: shillingsToCents(amount),

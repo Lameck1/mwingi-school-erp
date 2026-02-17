@@ -138,7 +138,11 @@ function registerSessionHandlers(db: ReturnType<typeof getDatabase>): void {
         return { success: true }
     })
 
-    safeHandleRaw('auth:clearSession', async (): Promise<{ success: boolean }> => {
+    safeHandleRaw('auth:clearSession', async (): Promise<{ success: boolean; error?: string }> => {
+        const existingSession = await getSession()
+        if (!existingSession?.user?.id) {
+            return { success: false, error: 'No active session to clear' }
+        }
         await clearSession()
         return { success: true }
     })

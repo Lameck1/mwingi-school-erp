@@ -102,8 +102,8 @@ export class NotificationService {
 
             // Email config still read from school_settings (not migrated yet)
             const settings = this.db.prepare('SELECT * FROM school_settings WHERE id = 1').get() as Record<string, string> | undefined
-            if (settings?.email_provider_config) {
-                const emailConfig: EmailProviderConfig = JSON.parse(settings.email_provider_config)
+            if (settings?.['email_provider_config']) {
+                const emailConfig: EmailProviderConfig = JSON.parse(settings['email_provider_config'])
                 this.emailService = new EmailService(emailConfig)
             }
             this.isConfigLoaded = true

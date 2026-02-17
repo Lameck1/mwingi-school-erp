@@ -59,12 +59,12 @@ export default function StudentCostAnalysis() {
 
     // Chart Data
     const pieData = costData ? [
-        { name: 'Tuition', value: costData.breakdown.tuition_share },
-        { name: 'Boarding', value: costData.breakdown.boarding_share },
-        { name: 'Transport', value: costData.breakdown.transport_share },
-        { name: 'Activity', value: costData.breakdown.activity_share },
-        { name: 'Admin', value: costData.breakdown.admin_share }
-    ].filter(d => d.value > 0) : []
+        { name: 'Tuition', value: costData.breakdown['tuition_share'] },
+        { name: 'Boarding', value: costData.breakdown['boarding_share'] },
+        { name: 'Transport', value: costData.breakdown['transport_share'] },
+        { name: 'Activity', value: costData.breakdown['activity_share'] },
+        { name: 'Admin', value: costData.breakdown['admin_share'] }
+    ].filter(d => (d.value ?? 0) > 0) : []
 
     const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8']
 
@@ -129,7 +129,7 @@ export default function StudentCostAnalysis() {
                                     <tr key={item.name}>
                                         <td className="py-3">{item.name}</td>
                                         <td className="py-3 text-right">{formatCurrencyFromCents(item.value)}</td>
-                                        <td className="py-3 text-right">{((item.value / costData.total_cost) * 100).toFixed(1)}%</td>
+                                        <td className="py-3 text-right">{(((item.value ?? 0) / costData.total_cost) * 100).toFixed(1)}%</td>
                                     </tr>
                                 ))}
                             </tbody>

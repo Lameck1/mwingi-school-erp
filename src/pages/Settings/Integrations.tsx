@@ -171,7 +171,7 @@ export default function IntegrationsSettings() {
                                 />
                                 <button
                                     type="button"
-                                    onClick={() => setShowKeys(p => ({ ...p, sms: !p.sms }))}
+                                    onClick={() => setShowKeys(p => ({ ...p, sms: !p['sms'] }))}
                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/40 hover:text-foreground transition-colors"
                                     aria-label={showKeys['sms'] ? 'Hide SMS API key' : 'Show SMS API key'}
                                 >
@@ -269,7 +269,7 @@ export default function IntegrationsSettings() {
                                 />
                                 <button
                                     type="button"
-                                    onClick={() => setShowKeys(p => ({ ...p, smtp: !p.smtp }))}
+                                    onClick={() => setShowKeys(p => ({ ...p, smtp: !p['smtp'] }))}
                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/40 hover:text-foreground transition-colors"
                                     aria-label={showKeys['smtp'] ? 'Hide SMTP password' : 'Show SMTP password'}
                                 >

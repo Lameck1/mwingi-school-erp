@@ -365,7 +365,7 @@ class ScholarshipAllocator implements IScholarshipAllocator {
       // GL journal entry: Debit Scholarship Expense, Credit Student Receivable
       const journalService = new DoubleEntryJournalService(db)
       journalService.createJournalEntrySync({
-        entry_date: allocationData.effective_date || new Date().toISOString().split('T')[0],
+        entry_date: allocationData.effective_date || (new Date().toISOString().split('T')[0] ?? ''),
         entry_type: 'SCHOLARSHIP',
         description: `Scholarship allocation: ${scholarship.name} to student #${allocationData.student_id}`,
         created_by_user_id: userId,

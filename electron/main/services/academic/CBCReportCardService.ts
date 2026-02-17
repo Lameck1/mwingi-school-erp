@@ -200,7 +200,7 @@ export class CBCReportCardService {
       streamId,
       exam.academic_year_id,
       exam.term_id,
-      studentAverage.avg_score
+      studentAverage!.avg_score
     ) as ClassPositionResult | undefined
 
     return (classPosition?.position ?? 0) + 1

@@ -383,7 +383,7 @@ export class ExamAnalysisService {
     }
     const sorted = [...scores].sort((a, b) => a - b)
     const mid = Math.floor(sorted.length / 2)
-    return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+    return sorted.length % 2 === 1 ? (sorted[mid] ?? 0) : ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2
   }
 
   private calculateMode(scores: number[]): number {
@@ -392,12 +392,12 @@ export class ExamAnalysisService {
     }
     const frequency: { [key: number]: number } = {}
     let maxFreq = 0
-    let mode = scores[0]
+    let mode = scores[0] ?? 0
 
     for (const score of scores) {
-      frequency[score] = (frequency[score] || 0) + 1
-      if (frequency[score] > maxFreq) {
-        maxFreq = frequency[score]
+      frequency[score] = (frequency[score] ?? 0) + 1
+      if ((frequency[score] ?? 0) > maxFreq) {
+        maxFreq = frequency[score] ?? 0
         mode = score
       }
     }

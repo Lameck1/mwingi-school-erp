@@ -13,7 +13,7 @@ export function getDefaultPeriodId(periods: FinancialPeriod[]): number | null {
     if (periods.length === 0) {
         return null
     }
-    return periods[0].id
+    return periods[0]?.id ?? null
 }
 
 export function canRunDepreciation(userId: number | undefined, periodId: number | null): DepreciationPrecheck {

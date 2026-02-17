@@ -231,7 +231,7 @@ export class OpeningBalanceService {
       return;
     }
 
-    const entryDate = new Date().toISOString().split('T')[0];
+    const entryDate = new Date().toISOString().split('T')[0] ?? '';
     if (balance.balance_type === 'DEBIT') {
       void this.journalService.createJournalEntry({
         entry_date: entryDate,

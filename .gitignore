@@ -144,6 +144,11 @@ test-results/
 playwright-report/
 junit.xml
 
+# Sensitive key material
+*.key
+*.pem
+userData/
+
 # Mac OS
 .DS_Store
 

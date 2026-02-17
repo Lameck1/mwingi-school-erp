@@ -47,7 +47,7 @@ export default function Promotions() {
             const data = await globalThis.electronAPI.getAcademicYears()
             setAcademicYears(data)
             // Default to next academic year if available
-            if (data.length > 1) {
+            if (data.length > 1 && data[0]) {
                 setToAcademicYear(data[0].id)
             }
         } catch (error) {
@@ -59,7 +59,7 @@ export default function Promotions() {
         try {
             const data = await globalThis.electronAPI.getTermsByYear(toAcademicYear)
             setTerms(data)
-            if (data.length > 0) {
+            if (data.length > 0 && data[0]) {
                 setToTerm(data[0].id)
             }
         } catch (error) {

@@ -128,7 +128,7 @@ export class GrantTrackingService {
             // Create Journal Entry for grant receipt
             const journalService = new DoubleEntryJournalService(this.db)
             journalService.createJournalEntrySync({
-                entry_date: data.date_received || new Date().toISOString().split('T')[0],
+                entry_date: data.date_received || (new Date().toISOString().split('T')[0] ?? ''),
                 entry_type: 'RECEIPT',
                 description: `Grant receipt: ${data.grant_name} (Grant #${grantId})`,
                 created_by_user_id: userId,

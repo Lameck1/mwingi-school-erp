@@ -70,7 +70,7 @@ const firstString = (...values: unknown[]): string | undefined => {
   return undefined
 }
 
-const todayIsoDate = (): string => new Date().toISOString().split('T')[0]
+const todayIsoDate = (): string => new Date().toISOString().split('T')[0] ?? ''
 
 export const normalizeScholarshipData = (data: ScholarshipData | LegacyScholarshipData): ScholarshipData => {
   const legacy = data as LegacyScholarshipData

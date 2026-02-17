@@ -306,7 +306,7 @@ class LedgerReconciler implements ILedgerReconciler {
   async reconcileStudentLedger(studentId: number, periodStart: string, periodEnd: string): Promise<ReconciliationResult> {
     // Get ledger balance
     const ledgerEntries = await this.ledgerGen.generateStudentLedger(studentId, periodStart, periodEnd)
-    const ledgerBalance = ledgerEntries.length > 0 ? ledgerEntries[ledgerEntries.length - 1].balance : 0
+    const ledgerBalance = ledgerEntries.length > 0 ? (ledgerEntries[ledgerEntries.length - 1]?.balance ?? 0) : 0
 
     // Get invoice balance
     const invoices = await this.repo.getInvoicesForPeriod(studentId, periodStart, periodEnd)
@@ -441,9 +441,9 @@ export class StudentLedgerService
    * Get student's current balance
    */
   async getStudentCurrentBalance(studentId: number): Promise<number> {
-    const today = new Date().toISOString().split('T')[0]
+    const today = new Date().toISOString().split('T')[0] ?? ''
     const entries = await this.ledgerGenerator.generateStudentLedger(studentId, '1900-01-01', today)
-    return entries.length > 0 ? entries[entries.length - 1].balance : 0
+    return entries.length > 0 ? (entries[entries.length - 1]?.balance ?? 0) : 0
   }
 
   /**

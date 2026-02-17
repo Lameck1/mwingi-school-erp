@@ -4,7 +4,8 @@ export function getSectionTitle(pathname: string): string {
     if (pathname === '/') {
         return 'Overview'
     }
-    const [firstSegment] = pathname.substring(1).split('/')
+    const segments = pathname.substring(1).split('/')
+    const firstSegment = segments[0] ?? ''
     return firstSegment.replace('-', ' ')
 }
 
