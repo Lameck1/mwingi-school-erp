@@ -17,6 +17,8 @@ import { up as addVoidReversalTypeUp } from './incremental/1012_add_void_reversa
 import { up as financialPeriodStatusUp } from './incremental/1013_financial_period_status.js'
 import { up as remediationSchemaFixesUp } from './incremental/1014_remediation_schema_fixes.js'
 import { up as seedMissingSystemAccountsUp } from './incremental/1015_seed_missing_system_accounts.js'
+import { up as migrateSmsCredentialsUp } from './incremental/1016_migrate_sms_credentials.js'
+import { up as dataRetentionPolicyUp } from './incremental/1017_data_retention_policy.js'
 
 import type * as Database from 'better-sqlite3'
 
@@ -62,6 +64,8 @@ const migrations: Migration[] = [
     { name: '1013_financial_period_status', fn: financialPeriodStatusUp },
     { name: '1014_remediation_schema_fixes', fn: remediationSchemaFixesUp },
     { name: '1015_seed_missing_system_accounts', fn: seedMissingSystemAccountsUp },
+    { name: '1016_migrate_sms_credentials', fn: migrateSmsCredentialsUp },
+    { name: '1017_data_retention_policy', fn: dataRetentionPolicyUp },
 ]
 
 /**
@@ -80,36 +84,32 @@ export function runMigrations(db: Database.Database): void {
     const applied = db.prepare('SELECT name FROM migrations').all() as { name: string }[]
     const appliedNames = new Set(applied.map(m => m.name))
 
-    // Disable foreign-key enforcement for the entire migration run.
-    // This MUST happen outside any transaction (PRAGMA is a no-op inside one).
-    // Migrations that recreate tables (e.g. to alter CHECK constraints) need
-    // this so DROP TABLE / INSERT-SELECT cycles aren't blocked by FK refs.
-    db.exec('PRAGMA foreign_keys = OFF')
+    for (const m of migrations) {
+        if (appliedNames.has(m.name)) { continue }
 
-    try {
-        for (const m of migrations) {
-            if (appliedNames.has(m.name)) { continue }
+        console.warn(`Running migration: ${m.name}`)
+        const savepointName = `migration_${m.name.replaceAll(/\W/g, '_')}`
 
-            console.warn(`Running migration: ${m.name}`)
-            const savepointName = `migration_${m.name.replaceAll(/\W/g, '_')}`
-
-            try {
-                db.exec(`SAVEPOINT ${savepointName}`)
-                m.fn(db)
-                db.prepare('INSERT INTO migrations (name) VALUES (?)').run(m.name)
-                db.exec(`RELEASE SAVEPOINT ${savepointName}`)
-                console.warn(`  ✓ Applied: ${m.name}`)
-            } catch (err) {
-                db.exec(`ROLLBACK TO SAVEPOINT ${savepointName}`)
-                db.exec(`RELEASE SAVEPOINT ${savepointName}`)
-                console.error(`  ✗ Migration failed: ${m.name}`, err)
-                throw new Error(
-                    `Migration "${m.name}" failed. Database rolled back to pre-migration state. ` +
-                    `Cause: ${err instanceof Error ? err.message : String(err)}`
-                )
-            }
+        // Disable FK enforcement per-migration so DROP/recreate cycles work,
+        // but re-enable immediately after to catch orphaned records early.
+        // PRAGMA must happen outside any transaction to take effect.
+        db.exec('PRAGMA foreign_keys = OFF')
+        try {
+            db.exec(`SAVEPOINT ${savepointName}`)
+            m.fn(db)
+            db.prepare('INSERT INTO migrations (name) VALUES (?)').run(m.name)
+            db.exec(`RELEASE SAVEPOINT ${savepointName}`)
+            console.warn(`  ✓ Applied: ${m.name}`)
+        } catch (err) {
+            db.exec(`ROLLBACK TO SAVEPOINT ${savepointName}`)
+            db.exec(`RELEASE SAVEPOINT ${savepointName}`)
+            console.error(`  ✗ Migration failed: ${m.name}`, err)
+            throw new Error(
+                `Migration "${m.name}" failed. Database rolled back to pre-migration state. ` +
+                `Cause: ${err instanceof Error ? err.message : String(err)}`
+            )
+        } finally {
+            db.exec('PRAGMA foreign_keys = ON')
         }
-    } finally {
-        db.exec('PRAGMA foreign_keys = ON')
     }
 }

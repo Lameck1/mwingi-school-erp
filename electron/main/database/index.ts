@@ -33,7 +33,10 @@ async function loadDatabaseClass(): Promise<typeof Database> {
         new DatabaseClass(':memory:').close()
         return DatabaseClass
     } catch (error) {
-        console.warn('Native cipher module failed to load or bind. Falling back to standard better-sqlite3.', error)
+        if (app.isPackaged) {
+            throw new Error('Database encryption module failed to load in production. Cannot proceed without encryption.')
+        }
+        console.warn('Native cipher module failed to load or bind. Falling back to standard better-sqlite3 (dev only).', error)
         const standardModule = await import('better-sqlite3')
         return standardModule.default
     }
