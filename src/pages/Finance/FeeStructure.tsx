@@ -43,24 +43,28 @@ export default function FeeStructure() {
 
     const loadInitialData = useCallback(async () => {
         try {
-            const [y, s, c] = await Promise.all([
+            const [yearsRes, streamsRes, catsRes] = await Promise.all([
                 globalThis.electronAPI.getAcademicYears(),
                 globalThis.electronAPI.getStreams(),
                 globalThis.electronAPI.getFeeCategories()
             ])
-            setYears(y)
-            setStreams(s)
-            setCategories(c)
+            if (Array.isArray(yearsRes)) { setYears(yearsRes) }
+            if (Array.isArray(streamsRes)) { setStreams(streamsRes) }
+            if (Array.isArray(catsRes)) { setCategories(catsRes) }
 
-            // Auto-select current year/term if possible
             const currentYear = await globalThis.electronAPI.getCurrentAcademicYear()
-            if (currentYear) {
+            if (currentYear && !('success' in currentYear)) {
                 setSelectedYear(currentYear.id.toString())
                 const termList = await globalThis.electronAPI.getTermsByYear(currentYear.id)
-                setTerms(termList)
-                const currentTerm = await globalThis.electronAPI.getCurrentTerm()
-                if (currentTerm) {setSelectedTerm(currentTerm.id.toString())}
-                else if (termList.length > 0 && termList[0]) {setSelectedTerm(termList[0].id.toString())}
+                if (Array.isArray(termList)) {
+                    setTerms(termList)
+                    const currentTerm = await globalThis.electronAPI.getCurrentTerm()
+                    if (currentTerm && !('success' in currentTerm)) {
+                        setSelectedTerm(currentTerm.id.toString())
+                    } else if (termList.length > 0 && termList[0]) {
+                        setSelectedTerm(termList[0].id.toString())
+                    }
+                }
             }
         } catch (error) {
             console.error(error)
@@ -79,21 +83,21 @@ export default function FeeStructure() {
             setLoading(true)
             try {
                 const data = await globalThis.electronAPI.getFeeStructure(Number(selectedYear), Number(selectedTerm))
-                const map: Record<string, number> = {}
-                data.forEach((item: FeeStructureItem) => {
-                    // Handle both FeeStructure and FeeStructureItem formats
-                    const streamId = item.stream_id || item.streamId
-                    const studentType = item.student_type || item.studentType
-                    const categoryId = item.fee_category_id || item.feeCategoryId || item.fee_category_id
-                    const amount = item.amount
+                if (Array.isArray(data)) {
+                    const map: Record<string, number> = {}
+                    data.forEach((item: FeeStructureItem) => {
+                        const streamId = item.stream_id || item.streamId
+                        const studentType = item.student_type || item.studentType
+                        const categoryId = item.fee_category_id || item.feeCategoryId
+                        const amount = item.amount
 
-                    if (streamId && studentType && categoryId && amount !== undefined) {
-                        const key = `${streamId}-${studentType}-${categoryId}`
-                        // Convert cents from DB to shillings for UI display
-                        map[key] = centsToShillings(amount)
-                    }
-                })
-                setStructure(map)
+                        if (streamId && studentType && categoryId && amount !== undefined) {
+                            const key = `${streamId}-${studentType}-${categoryId}`
+                            map[key] = centsToShillings(amount)
+                        }
+                    })
+                    setStructure(map)
+                }
             } catch (error) {
                 console.error(error)
                 showToast('Failed to load fee structure', 'error')
@@ -208,13 +212,15 @@ export default function FeeStructure() {
     }
 
     const handleCreateCategory = async () => {
-        if (!newCategoryName.trim()) {return}
+        if (!newCategoryName.trim()) { return }
         try {
             await globalThis.electronAPI.createFeeCategory(newCategoryName, '')
             setNewCategoryName('')
             setShowNewCategory(false)
-            const c = await globalThis.electronAPI.getFeeCategories()
-            setCategories(c)
+            const cats = await globalThis.electronAPI.getFeeCategories()
+            if (Array.isArray(cats)) {
+                setCategories(cats)
+            }
             showToast('Category created', 'success')
         } catch (error) {
             console.error(error)
@@ -281,14 +287,19 @@ export default function FeeStructure() {
                         <label htmlFor="field-220" className="block text-[10px] font-bold text-foreground/40 uppercase tracking-widest mb-1.5 ml-1">Academic Year</label>
                         <select id="field-220"
                             value={selectedYear}
-                            onChange={e => {
+                            onChange={async e => {
+                                const yearId = Number(e.target.value)
                                 setSelectedYear(e.target.value)
-                                globalThis.electronAPI
-                                    .getTermsByYear(Number(e.target.value))
-                                    .then(terms => setTerms(terms))
-                                    .catch((error) => {
-                                        console.error('Failed to load terms:', error)
-                                    })
+                                if (!yearId) { return }
+
+                                try {
+                                    const terms = await globalThis.electronAPI.getTermsByYear(yearId)
+                                    if (Array.isArray(terms)) {
+                                        setTerms(terms)
+                                    }
+                                } catch (error) {
+                                    console.error('Failed to load terms:', error)
+                                }
                             }}
                             className="input w-full border-border/20 focus:border-primary/50 transition-all font-medium py-2.5"
                         >

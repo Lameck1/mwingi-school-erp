@@ -175,6 +175,29 @@ class AgedReceivablesRepository {
     return result?.transaction_date || null
   }
 
+  async getStudentLastPaymentsBatch(studentIds: number[]): Promise<Map<number, string>> {
+    if (studentIds.length === 0) {
+      return new Map()
+    }
+
+    const placeholders = studentIds.map(() => '?').join(',')
+    const results = this.db
+      .prepare(
+        `
+      SELECT student_id, MAX(transaction_date) as transaction_date
+      FROM ledger_transaction
+      WHERE student_id IN (${placeholders})
+        AND UPPER(COALESCE(transaction_type, '')) IN (${studentCollectionTransactionTypesSql})
+      GROUP BY student_id
+    `
+      )
+      .all(...studentIds) as Array<{ student_id: number; transaction_date: string }>
+
+    const map = new Map<number, string>()
+    results.forEach((r) => map.set(r.student_id, r.transaction_date))
+    return map
+  }
+
   async recordCollectionAction(action: CollectionAction): Promise<number> {
     const result = this.db
       .prepare(
@@ -278,10 +301,14 @@ class AgingCalculator implements IAgingCalculator {
     const buckets = this.createBuckets()
     const studentBucketMap = new Map<number, BucketKey>()
 
+    // Batch lookup last payment dates to avoid N+1 queries
+    const studentIds = Array.from(new Set(invoices.map(inv => inv.student_id)));
+    const lastPaymentDates = await this.repo.getStudentLastPaymentsBatch(studentIds);
+
     for (const invoice of invoices) {
       const daysOverdue = Math.ceil(invoice.days_overdue || 0)
       const bucketKey = this.resolveBucketKey(daysOverdue)
-      const lastPaymentDate = await this.repo.getStudentLastPaymentDate(invoice.student_id)
+      const lastPaymentDate = lastPaymentDates.get(invoice.student_id);
       const bucket = buckets[bucketKey]
       const existingBucket = studentBucketMap.get(invoice.student_id)
 
@@ -525,8 +552,7 @@ class CollectionsAnalyzer implements ICollectionsAnalyzer {
 // ============================================================================
 
 export class AgedReceivablesService
-  implements IAgingCalculator, IPriorityDeterminer, ICollectionReminder, ICollectionsAnalyzer
-{
+  implements IAgingCalculator, IPriorityDeterminer, ICollectionReminder, ICollectionsAnalyzer {
   private readonly agingCalculator: AgingCalculator
   private readonly priorityDeterminer: PriorityDeterminer
   private readonly reminderGenerator: CollectionReminderGenerator

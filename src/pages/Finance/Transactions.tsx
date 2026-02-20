@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 import { useToast } from '../../contexts/ToastContext'
 import { type Transaction, type TransactionCategory } from '../../types/electron-api/FinanceAPI'
+import { normalizeFilters } from '../../utils/filters'
 import { formatCurrencyFromCents, formatDate } from '../../utils/format'
 
 
@@ -24,7 +25,9 @@ export default function Transactions() {
     const loadCategories = useCallback(async () => {
         try {
             const allCats = await globalThis.electronAPI.getTransactionCategories()
-            setCategories(allCats)
+            if (Array.isArray(allCats)) {
+                setCategories(allCats)
+            }
         } catch {
             // Non-critical — filter will just show "All"
         }
@@ -33,12 +36,14 @@ export default function Transactions() {
     const loadTransactions = useCallback(async () => {
         setLoading(true)
         try {
-            const filterParams: Record<string, unknown> = {}
-            if (appliedFilter.startDate) {filterParams['startDate'] = appliedFilter.startDate}
-            if (appliedFilter.endDate) {filterParams['endDate'] = appliedFilter.endDate}
-            if (appliedFilter.category_id) {filterParams['type'] = appliedFilter.category_id}
-            const results = await globalThis.electronAPI.getTransactions(filterParams)
-            setTransactions(results)
+            const filters: Record<string, unknown> = {}
+            if (appliedFilter.startDate) { filters['startDate'] = appliedFilter.startDate }
+            if (appliedFilter.endDate) { filters['endDate'] = appliedFilter.endDate }
+            if (appliedFilter.category_id) { filters['categoryId'] = Number(appliedFilter.category_id) }
+            const data = await globalThis.electronAPI.getTransactions(normalizeFilters(filters))
+            if (Array.isArray(data)) {
+                setTransactions(data)
+            }
         } catch (error) {
             console.error('Failed to load transactions:', error)
             showToast('Failed to synchronize transaction ledger', 'error')
@@ -48,7 +53,7 @@ export default function Transactions() {
     }, [appliedFilter, showToast])
 
     useEffect(() => {
-        loadCategories().catch(() => {})
+        loadCategories().catch(() => { })
     }, [loadCategories])
 
     useEffect(() => {
@@ -179,7 +184,7 @@ export default function Transactions() {
                         >
                             <option value="">All Revenue/Expense Vectors</option>
                             {categories.map(cat => (
-                                <option key={cat.id} value={cat.category_type}>{cat.category_name}</option>
+                                <option key={cat.id} value={cat.id}>{cat.category_name}</option>
                             ))}
                         </select>
                     </div>

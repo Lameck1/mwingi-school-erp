@@ -1,6 +1,7 @@
 
 import { getDatabase } from '../../database';
-import { DoubleEntryJournalService, type JournalEntryData } from '../accounting/DoubleEntryJournalService';
+import { DoubleEntryJournalService, type JournalEntryData, type JournalEntryLineData } from '../accounting/DoubleEntryJournalService';
+import { SystemAccounts } from '../accounting/SystemAccounts';
 
 import type Database from 'better-sqlite3';
 
@@ -137,7 +138,7 @@ export class PayrollJournalService {
               description: `Gross salary - ${record.department}`
             },
             {
-              gl_account_code: '2100', // Salary Payable
+              gl_account_code: SystemAccounts.SALARY_PAYABLE,
               debit_amount: 0,
               credit_amount: record.total_gross,
               description: 'Salary accrued'
@@ -205,31 +206,63 @@ export class PayrollJournalService {
         };
       }
 
-      // Create credit lines for each deduction type
+      // Create credit lines for each deduction type (Employee portions)
       const creditLines = deductions.map((ded) => ({
         gl_account_code: this.getDeductionAccountCode(ded.deduction_name),
         debit_amount: 0,
         credit_amount: ded.total_amount,
-        description: ded.deduction_name
+        description: `${ded.deduction_name} (Employee portion)`
       }));
 
-      // Calculate total deductions
+      // Calculate and add Employer matching portions for NSSF and Housing Levy
+      const employerContributionLines: JournalEntryLineData[] = [];
+
+      for (const ded of deductions) {
+        const normalized = ded.deduction_name.toUpperCase();
+        let expenseAccount = '';
+
+        if (normalized.includes('NSSF')) {
+          expenseAccount = SystemAccounts.EMPLOYER_NSSF_EXPENSE;
+        } else if (normalized.includes('HOUSING')) {
+          expenseAccount = SystemAccounts.EMPLOYER_HOUSING_LEVY_EXPENSE;
+        }
+
+        if (expenseAccount) {
+          // Debit: Employer Expense
+          employerContributionLines.push({
+            gl_account_code: expenseAccount,
+            debit_amount: ded.total_amount,
+            credit_amount: 0,
+            description: `${ded.deduction_name} (Employer matching portion)`
+          });
+          // Credit: Statutory Payable (Same account as employee portion)
+          employerContributionLines.push({
+            gl_account_code: this.getDeductionAccountCode(ded.deduction_name),
+            debit_amount: 0,
+            credit_amount: ded.total_amount,
+            description: `${ded.deduction_name} (Employer matching portion)`
+          });
+        }
+      }
+
+      // Calculate total employee deductions
       const totalDeductions = deductions.reduce((sum, d) => sum + d.total_amount, 0);
 
-      // Create journal entry
+      // Create journal entry with both employee and employer portions
       const journalData: JournalEntryData = {
         entry_date: period.end_date,
         entry_type: 'SALARY_PAYMENT',
-        description: `Statutory deductions for ${period.period_name}`,
+        description: `Statutory deductions & employer contributions for ${period.period_name}`,
         created_by_user_id: userId,
         lines: [
           {
-            gl_account_code: '2100', // Salary Payable
+            gl_account_code: SystemAccounts.SALARY_PAYABLE,
             debit_amount: totalDeductions,
             credit_amount: 0,
-            description: 'Deductions from salary payable'
+            description: 'Deductions from salary payable (Employee portion)'
           },
-          ...creditLines
+          ...creditLines,
+          ...employerContributionLines
         ]
       };
 
@@ -293,7 +326,7 @@ export class PayrollJournalService {
         created_by_user_id: userId,
         lines: [
           {
-            gl_account_code: '2100', // Salary Payable
+            gl_account_code: SystemAccounts.SALARY_PAYABLE,
             debit_amount: totals.total_net,
             credit_amount: 0,
             description: 'Salary payment'
@@ -387,9 +420,9 @@ export class PayrollJournalService {
     const normalizedDept = (department || '').toLowerCase();
 
     if (normalizedDept.includes('teaching') || normalizedDept.includes('academic')) {
-      return '5010'; // Salaries - Teaching Staff
+      return SystemAccounts.SALARY_EXPENSE_ACADEMIC;
     } else {
-      return '5020'; // Salaries - Non-Teaching Staff
+      return SystemAccounts.SALARY_EXPENSE_ADMIN;
     }
   }
 
@@ -397,15 +430,15 @@ export class PayrollJournalService {
     const normalized = deductionName.toUpperCase();
 
     if (normalized.includes('PAYE') || normalized.includes('TAX')) {
-      return '2110'; // PAYE Payable
+      return SystemAccounts.PAYE_PAYABLE;
     } else if (normalized.includes('NSSF')) {
-      return '2120'; // NSSF Payable
+      return SystemAccounts.NSSF_PAYABLE;
     } else if (normalized.includes('NHIF') || normalized.includes('SHIF')) {
-      return '2130'; // NHIF/SHIF Payable
+      return SystemAccounts.NHIF_PAYABLE;
     } else if (normalized.includes('HOUSING')) {
-      return '2140'; // Housing Levy Payable
+      return SystemAccounts.HOUSING_LEVY_PAYABLE;
     } else {
-      return '2100'; // Default to Salary Payable
+      return SystemAccounts.SALARY_PAYABLE;
     }
   }
 }

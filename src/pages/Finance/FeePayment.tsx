@@ -19,11 +19,20 @@ export default function FeePayment() {
 
     const loadStudent = useCallback(async (studentId: number) => {
         try {
-            const student = await globalThis.electronAPI.getStudentById(studentId)
+            const studentRes = await globalThis.electronAPI.getStudentById(studentId)
             const balance = await globalThis.electronAPI.getStudentBalance(studentId)
             const studentPayments = await globalThis.electronAPI.getPaymentsByStudent(studentId)
-            setSelectedStudent({ ...student, balance })
-            setPayments(studentPayments)
+
+            if (studentRes && !('success' in studentRes)) {
+                // We're casting here because the component adds a 'balance' property for internal state
+                setSelectedStudent({ ...studentRes, balance })
+            }
+
+            if (Array.isArray(studentPayments)) {
+                setPayments(studentPayments)
+            } else if (studentPayments && 'success' in studentPayments && studentPayments.success === false) {
+                console.warn('Failed to load student payments:', studentPayments.error)
+            }
         } catch (error) {
             console.error('Failed to load student:', error)
         }

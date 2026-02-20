@@ -7,6 +7,7 @@ import { StatCard } from '../../components/patterns/StatCard'
 import { Modal } from '../../components/ui/Modal'
 import { useToast } from '../../contexts/ToastContext'
 import { type Invoice, type InvoiceItem } from '../../types/electron-api/FinanceAPI'
+import { normalizeFilters } from '../../utils/filters'
 import { formatCurrencyFromCents, formatDate } from '../../utils/format'
 import { printCurrentView } from '../../utils/print'
 
@@ -32,8 +33,10 @@ export default function Invoices() {
 
     const loadInvoices = useCallback(async () => {
         try {
-            const data = await globalThis.electronAPI.getInvoices()
-            setInvoices(data)
+            const data = await globalThis.electronAPI.getInvoices(normalizeFilters({}))
+            if (Array.isArray(data)) {
+                setInvoices(data)
+            }
         } catch (error) {
             console.error('Failed to load invoices:', error)
             showToast('Failed to load invoices', 'error')
@@ -49,8 +52,10 @@ export default function Invoices() {
     const viewInvoice = async (invoice: Invoice) => {
         try {
             const items = await globalThis.electronAPI.getInvoiceItems(invoice.id)
-            setInvoiceItems(items)
-            setSelectedInvoice(invoice)
+            if (Array.isArray(items)) {
+                setInvoiceItems(items)
+                setSelectedInvoice(invoice)
+            }
         } catch (error) {
             console.error('Failed to load invoice items:', error)
         }

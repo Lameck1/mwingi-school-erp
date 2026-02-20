@@ -30,8 +30,10 @@ export default function RecordExpense() {
 
     const loadCategories = useCallback(async () => {
         try {
-            const allCats = await globalThis.electronAPI.getTransactionCategories()
-            setCategories(allCats.filter((c: TransactionCategory) => c.category_type === 'EXPENSE'))
+            const categories = await globalThis.electronAPI.getTransactionCategories()
+            if (Array.isArray(categories)) {
+                setCategories(categories.filter((c: TransactionCategory) => c.category_type === 'EXPENSE'))
+            }
         } catch (error) {
             console.error('Failed to load categories:', error)
             showToast('Failed to load categories', 'error')
@@ -43,7 +45,7 @@ export default function RecordExpense() {
     }, [loadCategories])
 
     const handleCreateCategory = async () => {
-        if (!newCategory.trim()) {return}
+        if (!newCategory.trim()) { return }
         try {
             setLoading(true)
             await globalThis.electronAPI.createTransactionCategory(newCategory, 'EXPENSE')
@@ -74,7 +76,7 @@ export default function RecordExpense() {
         try {
             await globalThis.electronAPI.createTransaction({
                 transaction_date: formData.transaction_date,
-                transaction_type: 'EXPENSE',
+                transaction_type: formData.transaction_type,
                 amount: shillingsToCents(formData.amount), // Whole currency units
                 category_id: Number.parseInt(formData.category_id, 10),
                 payment_method: formData.payment_method,

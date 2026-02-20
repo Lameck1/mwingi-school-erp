@@ -1,5 +1,6 @@
 import { getDatabase } from '../../database'
 import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
+import { SystemAccounts } from '../accounting/SystemAccounts'
 
 export interface HireClient {
     id: number
@@ -389,13 +390,13 @@ export class HireService {
                     created_by_user_id: userId,
                     lines: [
                         {
-                            gl_account_code: '1010',
+                            gl_account_code: SystemAccounts.CASH,
                             debit_amount: amount,
                             credit_amount: 0,
                             description: 'Cash received for asset hire'
                         },
                         {
-                            gl_account_code: '4200',
+                            gl_account_code: SystemAccounts.HIRE_REVENUE,
                             debit_amount: 0,
                             credit_amount: amount,
                             description: 'Hire income revenue'

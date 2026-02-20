@@ -362,25 +362,25 @@ class ScholarshipAllocator implements IScholarshipAllocator {
         UPDATE student SET credit_balance = COALESCE(credit_balance, 0) + ? WHERE id = ?
       `).run(allocationData.amount_allocated, allocationData.student_id)
 
-      // GL journal entry: Debit Scholarship Expense, Credit Student Receivable
+      // GL journal entry: Debit Scholarship Expense, Credit Scholarship Liability
       const journalService = new DoubleEntryJournalService(db)
       journalService.createJournalEntrySync({
         entry_date: allocationData.effective_date || (new Date().toISOString().split('T')[0] ?? ''),
-        entry_type: 'SCHOLARSHIP',
+        entry_type: 'SCHOLARSHIP_ALLOCATION',
         description: `Scholarship allocation: ${scholarship.name} to student #${allocationData.student_id}`,
         created_by_user_id: userId,
         lines: [
           {
-            gl_account_code: '5400',
+            gl_account_code: SystemAccounts.SCHOLARSHIP_EXPENSE,
             debit_amount: allocationData.amount_allocated,
             credit_amount: 0,
             description: 'Scholarship expense'
           },
           {
-            gl_account_code: '1300',
+            gl_account_code: SystemAccounts.SCHOLARSHIP_LIABILITY,
             debit_amount: 0,
             credit_amount: allocationData.amount_allocated,
-            description: 'Student accounts receivable reduction'
+            description: 'Scholarship funds liability'
           }
         ]
       })
@@ -584,48 +584,115 @@ export class ScholarshipService
     return this.db.prepare(baseQuery).all() as Scholarship[]
   }
 
-  async revokeScholarship(params: { allocationId?: number; allocation_id?: number; reason?: string; userId?: number; user_id?: number }): Promise<{
-    success: boolean
-    error?: string
-    message?: string
+  async revokeScholarship(params: {
+    allocationId?: number;
+    allocation_id?: number;
+    reason?: string;
+    userId?: number;
+    user_id?: number;
+  }): Promise<{
+    success: boolean;
+    error?: string;
+    message?: string;
   }> {
-    const allocationId = params.allocationId ?? params.allocation_id
-    const reason = params.reason || ''
+    const allocationId = params.allocationId ?? params.allocation_id;
+    const reason = params.reason || '';
+    const userId = params.userId ?? params.user_id;
 
     if (!allocationId) {
-      return { success: false, error: 'Allocation ID is required' }
+      return { success: false, error: 'Allocation ID is required' };
     }
 
     if (!reason) {
-      return { success: false, error: 'Revocation reason is required' }
+      return { success: false, error: 'Revocation reason is required' };
     }
 
-    const allocation = this.db
-      .prepare('SELECT * FROM student_scholarship WHERE id = ?')
-      .get(allocationId) as StudentScholarship | undefined
-
-    if (!allocation) {
-      return { success: false, error: 'Allocation not found' }
+    if (!userId) {
+      return { success: false, error: 'User ID is required for audit' };
     }
 
-    if (allocation.status === 'REVOKED') {
-      return { success: false, error: 'Allocation already revoked' }
+    try {
+      const transaction = this.db.transaction(() => {
+        const allocation = this.db
+          .prepare('SELECT * FROM student_scholarship WHERE id = ?')
+          .get(allocationId) as StudentScholarship | undefined;
+
+        if (!allocation) {
+          throw new Error('Allocation not found');
+        }
+
+        if (allocation.status === 'REVOKED') {
+          throw new Error('Allocation already revoked');
+        }
+
+        const remainingBalance = allocation.amount_allocated - allocation.amount_utilized;
+
+        // 1. Mark status as REVOKED
+        this.db
+          .prepare(`UPDATE student_scholarship SET status = 'REVOKED', allocation_notes = COALESCE(allocation_notes, '') || ? WHERE id = ?`)
+          .run(`\n[REVOKED: ${reason}]`, allocationId);
+
+        // 2. Return unutilized funds to scholarship pool
+        this.db
+          .prepare(`
+            UPDATE scholarship
+            SET allocated_amount = allocated_amount - ?,
+                available_amount = available_amount + ?
+            WHERE id = ?
+          `)
+          .run(remainingBalance, remainingBalance, allocation.scholarship_id);
+
+        // 3. Deduct from student credit balance (Sub-ledger)
+        if (remainingBalance > 0) {
+          this.db
+            .prepare(`UPDATE student SET credit_balance = COALESCE(credit_balance, 0) - ? WHERE id = ?`)
+            .run(remainingBalance, allocation.student_id);
+
+          this.db
+            .prepare(`
+              INSERT INTO credit_transaction (student_id, amount, transaction_type, notes, created_at)
+              VALUES (?, ?, 'CREDIT_REFUNDED', ?, CURRENT_TIMESTAMP)
+            `)
+            .run(
+              allocation.student_id,
+              remainingBalance,
+              `Scholarship revoked: allocation #${allocationId}. Reason: ${reason}`
+            );
+
+          // 4. Reverse Journal Entry (General Ledger)
+          // Original: Debit Expense, Credit Liability
+          // Reverse: Debit Liability, Credit Expense
+          this.journalService.createJournalEntrySync({
+            entry_date: new Date().toISOString().split('T')[0] ?? '',
+            entry_type: 'ADJUSTMENT',
+            description: `Reversal of scholarship allocation #${allocationId} due to revocation`,
+            created_by_user_id: userId,
+            lines: [
+              {
+                gl_account_code: SystemAccounts.SCHOLARSHIP_LIABILITY,
+                debit_amount: remainingBalance,
+                credit_amount: 0,
+                description: 'Reverse scholarship liability'
+              },
+              {
+                gl_account_code: SystemAccounts.SCHOLARSHIP_EXPENSE,
+                debit_amount: 0,
+                credit_amount: remainingBalance,
+                description: 'Reverse scholarship expense'
+              }
+            ]
+          });
+        }
+
+        logAudit(userId, 'REVOKE', 'student_scholarship', allocationId, null, { reason });
+
+        return { success: true, message: 'Scholarship allocation revoked and balances adjusted' };
+      });
+
+      return transaction();
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
     }
-
-    this.db
-      .prepare(`UPDATE student_scholarship SET status = 'REVOKED', notes = ? WHERE id = ?`)
-      .run(reason, allocationId)
-
-    this.db
-      .prepare(`
-        UPDATE scholarship
-        SET allocated_amount = allocated_amount - ?,
-            available_amount = available_amount + ?
-        WHERE id = ?
-      `)
-      .run(allocation.amount_allocated, allocation.amount_allocated, allocation.scholarship_id)
-
-    return { success: true, message: 'Scholarship allocation revoked' }
   }
 
   /**
@@ -671,6 +738,13 @@ export class ScholarshipService
           WHERE id = ?
         `).run(amountToApply, new Date().toISOString(), invoiceId)
 
+        // Update student credit balance
+        db.prepare(`
+          UPDATE student
+          SET credit_balance = COALESCE(credit_balance, 0) - ?
+          WHERE id = ?
+        `).run(amountToApply, allocation.student_id)
+
 
         logAudit(
           userId,
@@ -682,20 +756,20 @@ export class ScholarshipService
         )
 
         // Create Journal Entry for Scholarship Application
-        // Debit: Scholarship Expense (Contra-Revenue)
+        // Debit: Scholarship Liability (Releasing the funds)
         // Credit: Accounts Receivable (Reducing what student owes)
         this.journalService.createJournalEntrySync({
-          entry_date: new Date().toISOString(),
+          entry_date: new Date().toISOString().split('T')[0] ?? '',
           entry_type: 'SCHOLARSHIP_APPLICATION',
           description: `Scholarship applied to invoice #${invoiceId}`,
           student_id: allocation.student_id,
           created_by_user_id: userId,
           lines: [
             {
-              gl_account_code: SystemAccounts.SCHOLARSHIP_EXPENSE,
+              gl_account_code: SystemAccounts.SCHOLARSHIP_LIABILITY,
               debit_amount: amountToApply,
               credit_amount: 0,
-              description: `Scholarship Expense - Allocation #${studentScholarshipId}`
+              description: `Release scholarship liability - Allocation #${studentScholarshipId}`
             },
             {
               gl_account_code: SystemAccounts.ACCOUNTS_RECEIVABLE,

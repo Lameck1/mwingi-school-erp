@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto'
 
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
+import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
+import { SystemAccounts } from '../accounting/SystemAccounts'
 
 import type {
   GenerateProRatedInvoiceInput,
@@ -168,13 +170,14 @@ class ProRateCalculator implements IProRateCalculator {
     const daysInTerm = Math.ceil((termEnd.getTime() - termStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
     const daysEnrolled = Math.ceil((termEnd.getTime() - enrollment.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
-    // Calculate pro-rated amount
+    // Phase 3: High Precision Daily Rate
+    const dailyRateCents = (fullAmount / daysInTerm)
+    const proRatedAmount = Math.round(dailyRateCents * daysEnrolled)
     const discountPercentage = ((daysInTerm - daysEnrolled) / daysInTerm) * 100
-    const proRatedAmount = fullAmount * (daysEnrolled / daysInTerm)
 
     return {
       full_amount: fullAmount,
-      pro_rated_amount: Math.round(proRatedAmount), // Round to integer cents
+      pro_rated_amount: proRatedAmount, // Round to integer cents
       discount_percentage: Math.round(discountPercentage * 100) / 100,
       days_in_term: daysInTerm,
       days_enrolled: daysEnrolled,
@@ -230,7 +233,7 @@ class ProRatedInvoiceGenerator implements IProRatedInvoiceGenerator {
     private readonly invoiceRepo: ProRatedInvoiceRepository,
     private readonly calculator: ProRateCalculator,
     private readonly validator: TermDateValidator
-  ) {}
+  ) { }
 
   private async loadTemplateAndTermDates(
     templateInvoiceId: number
@@ -472,6 +475,23 @@ export class FeeProrationService implements IProRateCalculator, ITermDateValidat
       `).run(data.studentId, termId, termId, invoiceNumber, proratedAmount, proratedAmount, proratedAmount, template.amount, prorationType, new Date().toISOString(), data.userId)
 
       const invoiceId = invoiceResult.lastInsertRowid
+
+      // GL journal entry: Debit Accounts Receivable, Credit Revenue
+      const journalService = new DoubleEntryJournalService(db)
+      const journalResult = journalService.recordInvoiceSync(
+        data.studentId,
+        [{
+          gl_account_code: SystemAccounts.TUITION_REVENUE,
+          amount: proratedAmount,
+          description: `Pro-rated tuition fee (${discountPercentage.toFixed(1)}% discount)`
+        }],
+        new Date().toISOString().split('T')[0] ?? '',
+        data.userId
+      )
+
+      if (!journalResult.success) {
+        throw new Error(journalResult.error || 'Failed to sync revenue to General Ledger')
+      }
 
       // Record proration log
       db.prepare(`

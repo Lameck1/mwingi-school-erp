@@ -7,6 +7,7 @@ import {
   buildFeeInvoicePaidAmountSql
 } from '../../utils/feeInvoiceSql'
 import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
+import { SystemAccounts } from '../accounting/SystemAccounts'
 
 import type Database from 'better-sqlite3'
 
@@ -207,8 +208,8 @@ class FIFOAllocationStrategy implements ICreditAllocationStrategy {
   determineAllocationOrder(invoices: OutstandingInvoice[]): OutstandingInvoice[] {
     return [...invoices].sort((a, b) => {
       // First priority: overdue invoices
-      if (a.days_overdue > 0 && b.days_overdue <= 0) {return -1}
-      if (b.days_overdue > 0 && a.days_overdue <= 0) {return 1}
+      if (a.days_overdue > 0 && b.days_overdue <= 0) { return -1 }
+      if (b.days_overdue > 0 && a.days_overdue <= 0) { return 1 }
 
       // Second priority: by due date (oldest first)
       return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
@@ -263,11 +264,12 @@ class CreditAllocator implements ICreditAllocator {
 
       // Allocate credits
       let remainingCredit = creditBalance
+      let totalApplied = 0
       const allocations: AllocationResult['allocations'] = []
 
       const transaction = db.transaction(() => {
         for (const invoice of sortedInvoices) {
-          if (remainingCredit <= 0) {break}
+          if (remainingCredit <= 0) { break }
 
           const amountToApply = Math.min(remainingCredit, invoice.balance)
 
@@ -302,36 +304,39 @@ class CreditAllocator implements ICreditAllocator {
             { amount_paid: invoice.amount_paid + amountToApply }
           )
         }
+
+        totalApplied = creditBalance - remainingCredit
+
+        // GL journal entry: Debit Accounts Receivable, Credit Student Credit
+        // MOVED INSIDE TRANSACTION for atomicity
+        if (totalApplied > 0) {
+          const journalService = new DoubleEntryJournalService(db)
+          journalService.createJournalEntrySync({
+            entry_date: new Date().toISOString().split('T')[0] ?? '',
+            entry_type: 'CREDIT_APPLICATION',
+            description: `Credit auto-applied for student #${studentId}: ${totalApplied.toFixed(2)} KES to ${allocations.length} invoice(s)`,
+            created_by_user_id: userId,
+            lines: [
+              {
+                gl_account_code: SystemAccounts.ACCOUNTS_RECEIVABLE,
+                debit_amount: 0, // Inverting logic: Credits normally reduce AR balance (Credit asset)
+                credit_amount: totalApplied,
+                description: 'Accounts receivable - credit applied'
+              },
+              {
+                gl_account_code: SystemAccounts.STUDENT_CREDIT_BALANCE,
+                debit_amount: totalApplied, // Debit liability to reduce it
+                credit_amount: 0,
+                description: 'Student credit balance applied'
+              }
+            ]
+          })
+        }
       })
 
       transaction()
 
-      const totalApplied = creditBalance - remainingCredit
-
-      // GL journal entry: Debit Accounts Receivable, Credit Student Credit
-      if (totalApplied > 0) {
-        const journalService = new DoubleEntryJournalService(db)
-        journalService.createJournalEntrySync({
-          entry_date: new Date().toISOString().split('T')[0] ?? '',
-          entry_type: 'CREDIT_APPLICATION',
-          description: `Credit auto-applied for student #${studentId}: ${totalApplied.toFixed(2)} KES to ${allocations.length} invoice(s)`,
-          created_by_user_id: userId,
-          lines: [
-            {
-              gl_account_code: '1300',
-              debit_amount: totalApplied,
-              credit_amount: 0,
-              description: 'Accounts receivable - credit applied'
-            },
-            {
-              gl_account_code: '2100',
-              debit_amount: 0,
-              credit_amount: totalApplied,
-              description: 'Student credit balance applied'
-            }
-          ]
-        })
-      }
+      totalApplied = creditBalance - remainingCredit
 
       // Overall audit log
       logAudit(
@@ -358,7 +363,7 @@ class CreditAllocator implements ICreditAllocator {
 }
 
 class CreditBalanceTracker implements ICreditBalanceTracker {
-  constructor(private readonly creditRepo: CreditRepository) {}
+  constructor(private readonly creditRepo: CreditRepository) { }
 
   async getStudentCreditBalance(studentId: number): Promise<number> {
     return this.creditRepo.getStudentCreditBalance(studentId)
@@ -533,6 +538,37 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
           )
         }
 
+        const totalApplied = creditBalance - remainingCredit
+
+        // GL journal entry: Debit Student Credit, Credit Accounts Receivable
+        if (totalApplied > 0) {
+          const journalService = new DoubleEntryJournalService(this.db)
+          const journalResult = journalService.createJournalEntrySync({
+            entry_date: new Date().toISOString().split('T')[0] ?? '',
+            entry_type: 'CREDIT_APPLICATION',
+            description: `Credit auto-applied for student #${studentId}: ${totalApplied.toFixed(2)} KES to ${applicationsCount} invoice(s)`,
+            created_by_user_id: userId || 0,
+            lines: [
+              {
+                gl_account_code: SystemAccounts.ACCOUNTS_RECEIVABLE,
+                debit_amount: 0,
+                credit_amount: totalApplied,
+                description: 'Accounts receivable - credit applied'
+              },
+              {
+                gl_account_code: SystemAccounts.STUDENT_CREDIT_BALANCE,
+                debit_amount: totalApplied,
+                credit_amount: 0,
+                description: 'Student credit balance applied'
+              }
+            ]
+          })
+
+          if (!journalResult.success) {
+            throw new Error(journalResult.error || 'Failed to create journal entry for credit application')
+          }
+        }
+
         return { remainingCredit, applicationsCount }
       })
 
@@ -642,7 +678,7 @@ export class CreditAutoApplicationService implements ICreditAllocator, ICreditBa
       FROM credit_transaction
       WHERE student_id = ?`
     ).get(studentId) as { total: number } | undefined
-    
+
     return result?.total || 0
   }
 

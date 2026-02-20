@@ -61,7 +61,7 @@ class NEMISDataRepository {
   }
   async extractStudentData(filters?: NEMISFilters): Promise<NEMISStudent[]> {
     const db = this.db
-    
+
     let query = `
       SELECT 
         s.id,
@@ -150,18 +150,18 @@ class NEMISDataRepository {
 
   async generateNEMISReport(startDate?: string, endDate?: string): Promise<NEMISReport> {
     const db = this.db
-    
+
     const studentCount = db.prepare(`
       SELECT COUNT(*) as count FROM student WHERE is_active = 1
     `).get() as { count: number }
-    
+
     const enrollmentData = db.prepare(`
       SELECT COUNT(*) as count FROM enrollment
     `).get() as { count: number }
-    
+
     const financialData = await this.extractFinancialData()
     const schoolData = await this.extractSchoolData()
-    
+
     return {
       timestamp: new Date().toISOString(),
       school: schoolData,
@@ -274,7 +274,7 @@ class NEMISExportRepository {
 // ============================================================================
 
 class NEMISDataExtractor implements INEMISDataExtractor {
-  constructor(private readonly dataRepo: NEMISDataRepository) {}
+  constructor(private readonly dataRepo: NEMISDataRepository) { }
 
   async extractStudentData(filters?: NEMISFilters): Promise<NEMISStudent[]> {
     return this.dataRepo.extractStudentData(filters)
@@ -339,11 +339,11 @@ class NEMISValidator implements INEMISValidator {
 
 class NEMISFormatter implements INEMISFormatter {
   formatToCSV(data: Record<string, unknown>[], _exportType: NEMISExportType): string {
-    if (data.length === 0) {return ''}
+    if (data.length === 0) { return '' }
 
     // Get column headers
     const firstRow = data[0]
-    if (!firstRow) {return ''}
+    if (!firstRow) { return '' }
     const headers = Object.keys(firstRow)
     let csv = headers.join(',') + '\n'
 
@@ -352,7 +352,7 @@ class NEMISFormatter implements INEMISFormatter {
       const values = headers.map(header => {
         const value = row[header]
         // Escape commas and quotes in values
-        if (value === null || value === undefined) {return ''}
+        if (value === null || value === undefined) { return '' }
         const stringValue = String(value)
         if (stringValue.includes(',') || stringValue.includes('"')) {
           return `"${stringValue.replaceAll('"', '""')}"`
@@ -381,7 +381,7 @@ class NEMISExportManager implements INEMISExportManager {
     private readonly validator: NEMISValidator,
     private readonly formatter: NEMISFormatter,
     private readonly exportRepo: NEMISExportRepository
-  ) {}
+  ) { }
 
   private toRecordArray<T extends object>(items: T[]): Record<string, unknown>[] {
     return items as Record<string, unknown>[]
@@ -422,11 +422,9 @@ class NEMISExportManager implements INEMISExportManager {
       }
     }
 
-    if (exportType !== 'STUDENTS') {
-      return null
-    }
-
-    for (const student of data as NEMISStudent[]) {
+    // For STUDENTS type, we perform additional schema validation
+    const studentData = data as unknown as NEMISStudent[]
+    for (const student of studentData) {
       const validation = this.validator.validateStudentData(student)
       if (!validation.valid) {
         return {
@@ -501,9 +499,9 @@ class NEMISExportManager implements INEMISExportManager {
 // FACADE SERVICE (Composition, DIP)
 // ============================================================================
 
-export class NEMISExportService 
+export class NEMISExportService
   implements INEMISDataExtractor, INEMISValidator, INEMISFormatter, INEMISExportManager {
-  
+
   private readonly db: Database.Database
   private readonly extractor: NEMISDataExtractor
   private readonly validator: NEMISValidator

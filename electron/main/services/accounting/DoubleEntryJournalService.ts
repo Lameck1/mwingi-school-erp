@@ -26,6 +26,7 @@ export interface JournalEntryData {
   description: string;
   student_id?: number;
   staff_id?: number;
+  supplier_id?: number;
   term_id?: number;
   created_by_user_id: number;
   lines: JournalEntryLineData[];
@@ -52,15 +53,6 @@ export interface JournalEntry {
   lines: JournalEntryLine[];
 }
 
-type RecordPaymentArgs = [
-  studentId: number,
-  amount: number,
-  paymentMethod: string,
-  paymentReference: string,
-  paymentDate: string,
-  userId: number,
-  sourceLedgerTxnId?: number
-];
 
 type JournalWriteResult = { success: boolean; error?: string; message?: string; entry_id?: number };
 
@@ -167,6 +159,28 @@ export class DoubleEntryJournalService {
     };
   }
 
+  private validatePeriodLock(entryDate: string): { message?: string; valid: boolean } {
+    if (!this.tableExists('accounting_period')) {
+      return { valid: true };
+    }
+
+    const closedPeriod = this.db.prepare(`
+      SELECT period_name FROM accounting_period
+      WHERE start_date <= ? AND end_date >= ?
+        AND status IN ('CLOSED', 'LOCKED')
+      LIMIT 1
+    `).get(entryDate, entryDate) as { period_name: string } | undefined;
+
+    if (closedPeriod) {
+      return {
+        valid: false,
+        message: `Cannot record transaction for ${entryDate}. Accounting period '${closedPeriod.period_name}' is closed/locked.`
+      };
+    }
+
+    return { valid: true };
+  }
+
   private validateBalancing(lines: JournalEntryLineData[]): { message?: string; totalCredits: number; totalDebits: number; valid: boolean } {
     const totalDebits = lines.reduce((sum, line) => sum + line.debit_amount, 0);
     const totalCredits = lines.reduce((sum, line) => sum + line.credit_amount, 0);
@@ -238,10 +252,10 @@ export class DoubleEntryJournalService {
       const headerResult = supportsSourceLedgerLink ? this.db.prepare(`
           INSERT INTO journal_entry (
             entry_ref, entry_date, entry_type, description,
-            student_id, staff_id, term_id,
+            student_id, staff_id, supplier_id, term_id,
             requires_approval, approval_status,
             created_by_user_id, source_ledger_txn_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
         entryRef,
         data.entry_date,
@@ -249,6 +263,7 @@ export class DoubleEntryJournalService {
         data.description,
         data.student_id || null,
         data.staff_id || null,
+        data.supplier_id || null,
         data.term_id || null,
         requiresApproval ? 1 : 0,
         requiresApproval ? 'PENDING' : 'APPROVED',
@@ -324,6 +339,11 @@ export class DoubleEntryJournalService {
         return { success: false, error: accountValidation.message || 'Invalid GL account' };
       }
 
+      const periodValidation = this.validatePeriodLock(data.entry_date);
+      if (!periodValidation.valid) {
+        return { success: false, error: periodValidation.message || 'Accounting period is locked' };
+      }
+
       // Check if approval required
       const requiresApproval = data.requires_approval || this.checkApprovalRequiredSync(data);
 
@@ -358,14 +378,30 @@ export class DoubleEntryJournalService {
 
   /**
    * Creates a payment journal entry (Student pays fee)
-   * Debit: Bank/Cash
+   * Debit: Bank/Cash/Credit Balance
    * Credit: Student Receivable
    */
   recordPaymentSync(
-    ...[studentId, amount, paymentMethod, paymentReference, paymentDate, userId, sourceLedgerTxnId]: RecordPaymentArgs
+    studentId: number,
+    amount: number,
+    paymentMethod: string,
+    paymentReference: string,
+    paymentDate: string,
+    userId: number,
+    sourceLedgerTxnId?: number,
+    debitAccountOverride?: string
   ): JournalWriteResult {
-    // Determine cash/bank account
-    const cashAccountCode = paymentMethod === 'CASH' ? SystemAccounts.CASH : SystemAccounts.BANK;
+    // Determine debit account (Asset/Liability to reduce)
+    let debitAccountCode: string;
+    if (debitAccountOverride) {
+      debitAccountCode = debitAccountOverride;
+    } else if (paymentMethod === 'CREDIT') {
+      debitAccountCode = SystemAccounts.STUDENT_CREDIT_BALANCE;
+    } else if (paymentMethod === 'BANK_TRANSFER' || paymentMethod === 'MPESA' || paymentMethod === 'CHEQUE') {
+      debitAccountCode = SystemAccounts.BANK;
+    } else {
+      debitAccountCode = SystemAccounts.CASH;
+    }
 
     const journalData: JournalEntryData = {
       entry_date: paymentDate,
@@ -376,10 +412,10 @@ export class DoubleEntryJournalService {
       source_ledger_txn_id: sourceLedgerTxnId,
       lines: [
         {
-          gl_account_code: cashAccountCode,
+          gl_account_code: debitAccountCode,
           debit_amount: amount,
           credit_amount: 0,
-          description: 'Payment received'
+          description: 'Payment received/applied'
         },
         {
           gl_account_code: SystemAccounts.ACCOUNTS_RECEIVABLE, // Accounts Receivable - Students
@@ -394,9 +430,16 @@ export class DoubleEntryJournalService {
   }
 
   async recordPayment(
-    ...args: RecordPaymentArgs
+    studentId: number,
+    amount: number,
+    paymentMethod: string,
+    paymentReference: string,
+    paymentDate: string,
+    userId: number,
+    sourceLedgerTxnId?: number,
+    debitAccountOverride?: string
   ): Promise<JournalWriteResult> {
-    return this.recordPaymentSync(...args);
+    return this.recordPaymentSync(studentId, amount, paymentMethod, paymentReference, paymentDate, userId, sourceLedgerTxnId, debitAccountOverride);
   }
 
   /**

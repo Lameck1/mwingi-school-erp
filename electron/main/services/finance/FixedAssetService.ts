@@ -1,5 +1,6 @@
 import { logAudit } from '../../database/utils/audit'
 import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
+import { SystemAccounts } from '../accounting/SystemAccounts'
 import { BaseService } from '../base/BaseService'
 
 export interface FixedAsset {
@@ -33,6 +34,7 @@ export interface CreateAssetData {
     category_id: number
     acquisition_date: string
     acquisition_cost: number
+    accumulated_depreciation?: number
     asset_code?: string
     description?: string
     serial_number?: string
@@ -87,10 +89,10 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
 
     protected validateCreate(data: CreateAssetData): string[] | null {
         const errors: string[] = []
-        if (!data.asset_name) {errors.push('Asset name is required')}
-        if (!data.category_id) {errors.push('Category is required')}
-        if (!data.acquisition_date) {errors.push('Acquisition date is required')}
-        if (data.acquisition_cost <= 0) {errors.push('Acquisition cost must be greater than zero')}
+        if (!data.asset_name) { errors.push('Asset name is required') }
+        if (!data.category_id) { errors.push('Category is required') }
+        if (!data.acquisition_date) { errors.push('Acquisition date is required') }
+        if (data.acquisition_cost <= 0) { errors.push('Acquisition cost must be greater than zero') }
         return errors.length > 0 ? errors : null
     }
 
@@ -105,34 +107,70 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
         }
 
         try {
-            const result = this.executeCreateWithUser(data, userId)
-            const id = result.lastInsertRowid as number
-            logAudit(userId, 'CREATE', this.getTableName(), id, null, data)
+            return this.db.transaction(() => {
+                const result = this.executeCreateWithUser(data, userId)
+                const id = result.lastInsertRowid as number
 
-            // GL journal entry: Debit Fixed Asset, Credit Cash/AP
-            const journalService = new DoubleEntryJournalService(this.db)
-            journalService.createJournalEntrySync({
-                entry_date: new Date().toISOString().split('T')[0] ?? '',
-                entry_type: 'ASSET_ACQUISITION',
-                description: `Acquisition: ${data.asset_name} (${data.asset_code})`,
-                created_by_user_id: userId,
-                lines: [
-                    {
-                        gl_account_code: '1200',
-                        debit_amount: data.acquisition_cost,
-                        credit_amount: 0,
-                        description: 'Fixed asset'
-                    },
-                    {
-                        gl_account_code: '1100',
-                        debit_amount: 0,
-                        credit_amount: data.acquisition_cost,
-                        description: 'Cash/AP'
+                const journalService = new DoubleEntryJournalService(this.db)
+                const accDep = data.accumulated_depreciation || 0
+
+                // 1. Primary Acquisition Entry: Debit Asset, Credit Bank/Cash/AP for FULL COST
+                const acquisitionResult = journalService.createJournalEntrySync({
+                    entry_date: data.acquisition_date,
+                    entry_type: 'ASSET_ACQUISITION',
+                    description: `Acquisition: ${data.asset_name}${data.asset_code ? ' (' + data.asset_code + ')' : ''}`,
+                    created_by_user_id: userId,
+                    lines: [
+                        {
+                            gl_account_code: SystemAccounts.FIXED_ASSET,
+                            debit_amount: data.acquisition_cost,
+                            credit_amount: 0,
+                            description: 'Fixed asset'
+                        },
+                        {
+                            gl_account_code: SystemAccounts.BANK, // Defaulting for simplicity
+                            debit_amount: 0,
+                            credit_amount: data.acquisition_cost,
+                            description: 'Asset acquisition'
+                        }
+                    ]
+                })
+
+                if (!acquisitionResult.success) {
+                    throw new Error(acquisitionResult.error || 'Failed to create acquisition journal entry')
+                }
+
+                // 2. Legacy Catch-up Entry: If there's accumulated depreciation, offset it via RETAINED_EARNINGS
+                if (accDep > 0) {
+                    const legacyResult = journalService.createJournalEntrySync({
+                        entry_date: data.acquisition_date,
+                        entry_type: 'ADJUSTMENT',
+                        description: `Legacy Accumulated Depreciation: ${data.asset_name}`,
+                        created_by_user_id: userId,
+                        lines: [
+                            {
+                                gl_account_code: SystemAccounts.RETAINED_EARNINGS,
+                                debit_amount: accDep,
+                                credit_amount: 0,
+                                description: 'Historical depreciation adjustment'
+                            },
+                            {
+                                gl_account_code: SystemAccounts.ACCUMULATED_DEPRECIATION,
+                                debit_amount: 0,
+                                credit_amount: accDep,
+                                description: 'Accumulated depreciation'
+                            }
+                        ]
+                    })
+
+                    if (!legacyResult.success) {
+                        throw new Error(legacyResult.error || 'Failed to create legacy depreciation adjustment')
                     }
-                ]
-            })
+                }
 
-            return { success: true, id }
+                logAudit(userId, 'CREATE', this.getTableName(), id, null, data)
+                return { success: true, id }
+            })()
         } catch (error) {
             return {
                 success: false,
@@ -149,6 +187,8 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
 
     private executeCreateWithUser(data: CreateAssetData, userId: number): { lastInsertRowid: number | bigint } {
         const assetCode = data.asset_code || `AST-${Date.now().toString().slice(-6)}`
+        const accDep = data.accumulated_depreciation || 0
+        const currentValue = data.acquisition_cost - accDep
 
         return this.db.prepare(`
             INSERT INTO fixed_asset (
@@ -156,11 +196,11 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
                 location, acquisition_date, acquisition_cost, current_value, 
                 accumulated_depreciation, status, supplier_id, warranty_expiry,
                 created_by_user_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'ACTIVE', ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?)
         `).run(
             assetCode, data.asset_name, data.category_id, data.description || null,
             data.serial_number || null, data.location || null, data.acquisition_date,
-            data.acquisition_cost, data.acquisition_cost,
+            data.acquisition_cost, currentValue, accDep,
             data.supplier_id || null, data.warranty_expiry || null,
             userId
         )
@@ -218,30 +258,30 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
 
     async runDepreciation(assetId: number, periodId: number, userId: number): Promise<{ success: boolean; error?: string }> {
         const asset = await this.findById(assetId)
-        if (!asset) {return { success: false, error: 'Asset not found' }}
-        if (asset.current_value <= 0) {return { success: false, error: 'Asset already fully depreciated' }}
+        if (!asset) { return { success: false, error: 'Asset not found' } }
+        if (asset.current_value <= 0) { return { success: false, error: 'Asset already fully depreciated' } }
 
         const category = this.db.prepare(`
             SELECT depreciation_method, useful_life_years, depreciation_rate
             FROM asset_category
             WHERE id = ?
         `).get(asset.category_id) as { depreciation_method: 'STRAIGHT_LINE' | 'DECLINING_BALANCE' | 'NONE'; useful_life_years: number; depreciation_rate: number | null } | undefined
-        if (!category) {return { success: false, error: 'Asset category not found' }}
+        if (!category) { return { success: false, error: 'Asset category not found' } }
 
         const period = this.db.prepare(`
-            SELECT id, is_locked
+            SELECT id, is_locked, start_date, end_date
             FROM financial_period
             WHERE id = ?
-        `).get(periodId) as { id: number; is_locked: number } | undefined
-        if (!period) {return { success: false, error: 'Financial period not found' }}
-        if (period.is_locked) {return { success: false, error: 'Financial period is locked' }}
+        `).get(periodId) as { id: number; is_locked: number; start_date: string; end_date: string } | undefined
+        if (!period) { return { success: false, error: 'Financial period not found' } }
+        if (period.is_locked) { return { success: false, error: 'Financial period is locked' } }
 
         const existing = this.db.prepare(`
             SELECT id
             FROM asset_depreciation
             WHERE asset_id = ? AND financial_period_id = ?
         `).get(assetId, periodId) as { id: number } | undefined
-        if (existing) {return { success: false, error: 'Depreciation already posted for this period' }}
+        if (existing) { return { success: false, error: 'Depreciation already posted for this period' } }
 
         if (category.depreciation_method === 'NONE') {
             return { success: false, error: 'Selected asset category is non-depreciable' }
@@ -254,10 +294,23 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
             return { success: false, error: 'Invalid depreciation setup for asset category' }
         }
 
-        const depreciationAmount = category.depreciation_method === 'DECLINING_BALANCE'
-            ? Math.round(asset.current_value * categoryRate)
-            : Math.round(asset.acquisition_cost * categoryRate)
-        if (depreciationAmount <= 0) {return { success: false, error: 'Calculated depreciation amount is zero' }}
+        // Calculate proration based on period duration (days)
+        const startDate = new Date(period.start_date)
+        const endDate = new Date(period.end_date)
+        const daysInPeriod = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1)
+        const prorationFactor = daysInPeriod / 365
+
+        // Phase 3: Precision Depreciation with Floor/Capping and Period Proration
+        let depreciationAmount = category.depreciation_method === 'DECLINING_BALANCE'
+            ? Math.round(asset.current_value * categoryRate * prorationFactor)
+            : Math.round(asset.acquisition_cost * categoryRate * prorationFactor)
+
+        // Ensure we don't over-depreciate (never go below 0)
+        if (depreciationAmount > asset.current_value) {
+            depreciationAmount = asset.current_value
+        }
+
+        if (depreciationAmount <= 0) { return { success: false, error: 'Calculated depreciation amount is zero' } }
 
         const newAccumulated = asset.accumulated_depreciation + depreciationAmount
         const newValue = Math.max(0, asset.current_value - depreciationAmount)
@@ -285,13 +338,13 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
                 created_by_user_id: userId,
                 lines: [
                     {
-                        gl_account_code: '5300',
+                        gl_account_code: SystemAccounts.DEPRECIATION_EXPENSE,
                         debit_amount: depreciationAmount,
                         credit_amount: 0,
                         description: 'Depreciation expense'
                     },
                     {
-                        gl_account_code: '1520',
+                        gl_account_code: SystemAccounts.ACCUMULATED_DEPRECIATION,
                         debit_amount: 0,
                         credit_amount: depreciationAmount,
                         description: 'Accumulated depreciation'
