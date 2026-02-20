@@ -1,6 +1,7 @@
-
 import { randomUUID } from 'node:crypto'
 
+import { InvoiceValidator } from './InvoiceValidator'
+import { PaymentTransactionRepository, VoidAuditRepository } from './PaymentRepositories'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 import {
@@ -13,238 +14,26 @@ import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalServi
 
 import type {
   ApprovalQueueItem,
-  Invoice,
   IPaymentQueryService,
-  IPaymentValidator,
   IPaymentVoidProcessor,
   PaymentData,
   PaymentResult,
   PaymentTransaction,
-  ValidationResult,
   VoidPaymentData,
   VoidedTransaction
 } from './PaymentService.types'
 import type Database from 'better-sqlite3'
 
+export { InvoiceValidator, PaymentTransactionRepository, VoidAuditRepository }
+
 const normalizeInvoiceStatus = (status: string | null | undefined): string => (status ?? 'PENDING').toUpperCase()
 
-interface VoidAuditRecordData {
-  transactionId: number
-  studentId: number
-  amount: number
-  description: string
-  voidReason: string
-  voidedBy: number
-  recoveryMethod?: string
-}
 
 
 // ============================================================================
 // REPOSITORY LAYER (SRP)
 // ============================================================================
 
-export class PaymentTransactionRepository {
-  private readonly db: Database.Database
-
-  constructor(db?: Database.Database) {
-    this.db = db || getDatabase()
-  }
-
-  async createTransaction(data: PaymentData): Promise<number> {
-    const db = this.db
-    const transactionRef = `TXN-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8)}`
-    const result = db.prepare(`
-      INSERT INTO ledger_transaction (
-        transaction_ref, student_id, transaction_type, amount, debit_credit,
-        transaction_date, description,
-        payment_method, payment_reference, recorded_by_user_id, category_id, term_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      transactionRef,
-      data.student_id,
-      'FEE_PAYMENT',
-      data.amount,
-      'CREDIT',
-      data.transaction_date,
-      data.description || `Payment received: ${data.payment_reference}`,
-      data.payment_method,
-      data.payment_reference,
-      data.recorded_by_user_id,
-      1, // default category; callers should resolve properly
-      data.term_id
-    )
-    return result.lastInsertRowid as number
-  }
-
-  async createReversal(studentId: number, originalAmount: number, voidReason: string, voidedBy: number, categoryId: number): Promise<number> {
-    const db = this.db
-    const reversalRef = `VOID-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8)}`
-    const result = db.prepare(`
-      INSERT INTO ledger_transaction (
-        transaction_ref, student_id, transaction_type, amount, debit_credit,
-        transaction_date, description,
-        payment_method, payment_reference, recorded_by_user_id, category_id,
-        is_voided, voided_reason
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      reversalRef,
-      studentId,
-      'REFUND',
-      -originalAmount,
-      'DEBIT',
-      new Date().toISOString().split('T')[0],
-      `Void of transaction: ${voidReason}`,
-      'CASH',
-      `VOID_REF_${studentId}_${Date.now()}`,
-      voidedBy,
-      categoryId,
-      1,
-      voidReason
-    )
-    return result.lastInsertRowid as number
-  }
-
-  async getTransaction(id: number): Promise<PaymentTransaction | null> {
-    const db = this.db
-    return db.prepare(`SELECT * FROM ledger_transaction WHERE id = ?`).get(id) as PaymentTransaction | null
-  }
-
-  async getStudentHistory(studentId: number, limit: number): Promise<PaymentTransaction[]> {
-    const db = this.db
-    return db.prepare(`
-      SELECT * FROM ledger_transaction
-      WHERE student_id = ?
-        AND transaction_type = 'FEE_PAYMENT'
-        AND is_voided = 0
-      ORDER BY transaction_date DESC, created_at DESC
-      LIMIT ?
-    `).all(studentId, limit) as PaymentTransaction[]
-  }
-
-  async updateStudentBalance(studentId: number, newBalance: number): Promise<void> {
-    const db = this.db
-    db.prepare(`UPDATE student SET credit_balance = ? WHERE id = ?`).run(newBalance, studentId)
-  }
-
-  async getStudentBalance(studentId: number): Promise<number> {
-    const db = this.db
-    const result = db.prepare(`SELECT credit_balance FROM student WHERE id = ?`).get(studentId) as { credit_balance: number } | undefined
-    return result?.credit_balance || 0
-  }
-
-  async getStudentById(studentId: number): Promise<{ id: number; credit_balance: number } | null> {
-    const db = this.db
-    return db.prepare(`SELECT id, credit_balance FROM student WHERE id = ?`).get(studentId) as { id: number; credit_balance: number } | null
-  }
-}
-
-// ============================================================================
-// VOID AUDIT REPOSITORY (SRP)
-// ============================================================================
-
-export class VoidAuditRepository {
-  private readonly db: Database.Database
-
-  constructor(db?: Database.Database) {
-    this.db = db || getDatabase()
-  }
-
-  async recordVoid(data: VoidAuditRecordData): Promise<number> {
-    const db = this.db
-    const result = db.prepare(`
-      INSERT INTO void_audit (
-        transaction_id, transaction_type, original_amount, student_id, description,
-        void_reason, voided_by, voided_at, recovered_method, recovered_by, recovered_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      data.transactionId,
-      'PAYMENT',
-      data.amount,
-      data.studentId,
-      data.description,
-      data.voidReason,
-      data.voidedBy,
-      new Date().toISOString(),
-      data.recoveryMethod || null,
-      null,
-      null
-    )
-    return result.lastInsertRowid as number
-  }
-
-  async getVoidReport(startDate: string, endDate: string): Promise<VoidedTransaction[]> {
-    const db = this.db
-    return db.prepare(`
-      SELECT va.*, u.first_name, u.last_name, s.admission_number, s.first_name as student_first_name
-      FROM void_audit va
-      LEFT JOIN user u ON va.voided_by = u.id
-      LEFT JOIN student s ON va.student_id = s.id
-      WHERE va.voided_at >= ? AND va.voided_at <= ?
-      ORDER BY va.voided_at DESC
-    `).all(startDate, endDate) as VoidedTransaction[]
-  }
-}
-
-// ============================================================================
-// INVOICE VALIDATOR (SRP)
-// ============================================================================
-
-export class InvoiceValidator implements IPaymentValidator {
-  private readonly db: Database.Database
-  private readonly invoiceOutstandingBalanceSql: string
-  private readonly invoiceOutstandingStatusPredicate: string
-
-  constructor(db?: Database.Database) {
-    this.db = db || getDatabase()
-    this.invoiceOutstandingBalanceSql = buildFeeInvoiceOutstandingBalanceSql(this.db, 'fi')
-    this.invoiceOutstandingStatusPredicate = buildFeeInvoiceOutstandingStatusPredicate(this.db, 'fi')
-  }
-
-  validatePaymentAgainstInvoices(studentId: number, amount: number): ValidationResult {
-    const db = this.db
-
-    try {
-      const invoices = db.prepare(`
-        SELECT
-          fi.*,
-          ${this.invoiceOutstandingBalanceSql} as outstanding_balance
-        FROM fee_invoice fi
-        WHERE fi.student_id = ?
-          AND ${this.invoiceOutstandingStatusPredicate}
-          AND (${this.invoiceOutstandingBalanceSql}) > 0
-        ORDER BY COALESCE(fi.due_date, fi.invoice_date, substr(fi.created_at, 1, 10)) ASC
-      `).all(studentId) as Array<Invoice & { outstanding_balance: number }>
-
-      if (invoices.length === 0) {
-        return {
-          valid: true,
-          message: 'No outstanding invoices for this student',
-          invoices: []
-        }
-      }
-
-      const totalOutstanding = invoices.reduce((sum, inv) => {
-        return sum + Math.max(inv.outstanding_balance || 0, 0)
-      }, 0)
-
-      if (amount > totalOutstanding) {
-        return {
-          valid: true,
-          message: `Payment exceeds outstanding balance. Overpayment will be credited.`,
-          invoices
-        }
-      }
-
-      return {
-        valid: true,
-        message: `Payment applied to ${invoices.length} outstanding invoice(s)`,
-        invoices
-      }
-    } catch (error) {
-      throw new Error(`Failed to validate payment: ${(error as Error).message}`)
-    }
-  }
-}
 
 // ============================================================================
 // PAYMENT PROCESSOR (SRP)
@@ -486,7 +275,8 @@ export class PaymentProcessor {
     if (data.invoice_id) {
       remainingAmount = this.applyPaymentToSpecificInvoice(transactionId, data.invoice_id, data.amount)
     } else {
-      remainingAmount = this.applyPaymentAcrossOutstandingInvoices(transactionId, data.student_id, data.amount)
+      // Phase 3: Priority Allocation
+      remainingAmount = this.applyPaymentAcrossOutstandingInvoicesPriority(transactionId, data.student_id, data.amount)
     }
 
     if (remainingAmount > 0) {
@@ -505,6 +295,50 @@ export class PaymentProcessor {
         `Overpayment from transaction #${transactionId}`
       )
     }
+  }
+
+  private applyPaymentAcrossOutstandingInvoicesPriority(transactionId: number, studentId: number, paymentAmount: number): number {
+    let remainingAmount = paymentAmount
+    const pendingInvoices = this.db.prepare(`
+      SELECT
+        fi.id,
+        fc.priority as category_priority,
+        ${this.invoiceOutstandingBalanceSql} as outstanding_balance
+      FROM fee_invoice fi
+      LEFT JOIN fee_category fc ON fi.category_id = fc.id
+      WHERE fi.student_id = ?
+        AND ${this.invoiceOutstandingStatusPredicate}
+        AND (${this.invoiceOutstandingBalanceSql}) > 0
+      ORDER BY 
+        COALESCE(fc.priority, 99) ASC,
+        COALESCE(fi.invoice_date, fi.due_date) ASC,
+        fi.id ASC
+    `).all(studentId) as Array<{ id: number; outstanding_balance: number }>
+
+    const updateInvoiceStatement = this.db.prepare(`
+      UPDATE fee_invoice
+      SET amount_paid = COALESCE(amount_paid, 0) + ?,
+          status = CASE
+            WHEN COALESCE(amount_paid, 0) + ? >= (${this.invoiceAmountSqlForUpdate}) THEN 'PAID'
+            WHEN COALESCE(amount_paid, 0) + ? <= 0 THEN 'PENDING'
+            ELSE 'PARTIAL'
+          END
+      WHERE id = ?
+    `)
+
+    for (const invoice of pendingInvoices) {
+      if (remainingAmount <= 0) { break }
+
+      const outstanding = Math.max(0, invoice.outstanding_balance || 0)
+      if (outstanding <= 0) { continue }
+      const appliedAmount = Math.min(remainingAmount, outstanding)
+
+      updateInvoiceStatement.run(appliedAmount, appliedAmount, appliedAmount, invoice.id)
+      this.recordPaymentAllocation(transactionId, invoice.id, appliedAmount)
+      remainingAmount -= appliedAmount
+    }
+
+    return remainingAmount
   }
 
   private logPaymentAudit(data: PaymentData, transactionId: number, transactionRef: string, receiptNumber: string): void {
@@ -659,7 +493,7 @@ export class VoidProcessor implements IPaymentVoidProcessor {
     )
   }
 
-  private voidLinkedJournalEntries(transactionId: number, data: VoidPaymentData): void {
+  private async voidLinkedJournalEntries(transactionId: number, data: VoidPaymentData): Promise<void> {
     if (!this.hasSourceLedgerColumn()) {
       return
     }
@@ -675,35 +509,20 @@ export class VoidProcessor implements IPaymentVoidProcessor {
       return
     }
 
-    const updateLinkedEntry = this.db.prepare(`
-      UPDATE journal_entry
-      SET
-        is_voided = 1,
-        voided_reason = ?,
-        voided_by_user_id = ?,
-        voided_at = CURRENT_TIMESTAMP,
-        approval_status = CASE WHEN approval_status = 'PENDING' THEN 'REJECTED' ELSE approval_status END
-      WHERE id = ?
-        AND is_voided = 0
-    `)
-
+    const journalService = new DoubleEntryJournalService(this.db)
     for (const entry of linkedEntries) {
-      updateLinkedEntry.run(
+      // Use the canonical service to ensure reversing entries are created
+      await journalService.voidJournalEntry(
+        entry.id,
         `Payment void #${transactionId}: ${data.void_reason}`,
-        data.voided_by,
-        entry.id
+        data.voided_by
       )
-
-      logAudit(data.voided_by, 'VOID', 'journal_entry', entry.id, null, {
-        source_ledger_txn_id: transactionId,
-        void_reason: data.void_reason
-      })
     }
   }
 
   async voidPayment(data: VoidPaymentData): Promise<PaymentResult> {
     try {
-      const run = this.db.transaction(() => {
+      const transactionResult = this.db.transaction(async () => {
         const transaction = this.db.prepare(`
           SELECT * FROM ledger_transaction
           WHERE id = ? AND is_voided = 0
@@ -716,7 +535,6 @@ export class VoidProcessor implements IPaymentVoidProcessor {
           }
         }
 
-        // Resolve category for reversal entry
         const categoryId = transaction.category_id || 1
 
         const reversalId = this.createReversalTransaction(transaction, data, categoryId)
@@ -724,7 +542,8 @@ export class VoidProcessor implements IPaymentVoidProcessor {
         this.recordVoidAudit(transaction, data)
         const creditedAmount = this.reversePaymentAllocations(transaction)
         this.reverseStudentCredit(transaction.student_id, creditedAmount, transaction.id)
-        this.voidLinkedJournalEntries(transaction.id, data)
+
+        await this.voidLinkedJournalEntries(transaction.id, data)
 
         logAudit(data.voided_by, 'VOID', 'ledger_transaction', reversalId, null,
           { original_transaction_id: data.transaction_id, void_reason: data.void_reason })
@@ -736,7 +555,7 @@ export class VoidProcessor implements IPaymentVoidProcessor {
         }
       })
 
-      return run()
+      return await transactionResult()
     } catch (error) {
       throw new Error(`Failed to void payment: ${(error as Error).message}`)
     }
@@ -744,6 +563,11 @@ export class VoidProcessor implements IPaymentVoidProcessor {
 
   private createReversalTransaction(transaction: PaymentTransaction, data: VoidPaymentData, categoryId: number): number {
     const reversalRef = `VOID-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8)}`
+
+    // Phase 3: Dynamic Payment Method for Refunds
+    const paymentMethod = transaction.payment_method || 'CASH'
+    const paymentRef = `VOID_REF_${transaction.student_id}_${Date.now()}`
+
     const result = this.db.prepare(`
       INSERT INTO ledger_transaction (
         transaction_ref, student_id, transaction_type, amount, debit_credit,
@@ -752,11 +576,19 @@ export class VoidProcessor implements IPaymentVoidProcessor {
         is_voided, voided_reason
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      reversalRef, transaction.student_id, 'REFUND', transaction.amount, 'DEBIT',
+      reversalRef,
+      transaction.student_id,
+      'REFUND',
+      transaction.amount,
+      'DEBIT',
       new Date().toISOString().split('T')[0],
       `Void of transaction #${data.transaction_id}: ${data.void_reason}`,
-      'CASH', `VOID_REF_${transaction.student_id}_${Date.now()}`,
-      data.voided_by, categoryId, 0, data.void_reason
+      paymentMethod,
+      paymentRef,
+      data.voided_by,
+      categoryId,
+      0,
+      data.void_reason
     )
     return result.lastInsertRowid as number
   }

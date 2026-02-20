@@ -126,16 +126,8 @@
     },
     "mac": {
       "icon": "assets/icon.png",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ],
-      "category": "public.app-category.education"
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
     },
     "linux": {
       "icon": "assets/icon.png",

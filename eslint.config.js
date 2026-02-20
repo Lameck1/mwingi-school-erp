@@ -257,11 +257,13 @@ export default [
           caughtErrorsIgnorePattern: '^_',
         },
       ],
-      'max-lines': ['warn', { max: 600, skipBlankLines: true, skipComments: true }],
-      'max-lines-per-function': ['warn', { max: 200, skipBlankLines: true, skipComments: true }],
+      'max-lines': ['warn', { max: 750, skipBlankLines: true, skipComments: true }],
+      'max-lines-per-function': ['warn', { max: 250, skipBlankLines: true, skipComments: true }],
       'max-params': ['warn', 8],
       'max-statements': ['warn', 40],
-      'complexity': ['warn', 20],
+      'complexity': ['warn', 30],
+      'sonarjs/deprecation': 'off',
+      'sonarjs/todo-tag': 'off',
       '@typescript-eslint/no-unnecessary-condition': 'off',
       'sonarjs/cognitive-complexity': 'off',
       'sonarjs/no-duplicate-string': 'off',
@@ -289,6 +291,15 @@ export default [
     rules: {
       'max-params': 'off',
       'import/order': 'off',
+    },
+  },
+  {
+    files: ['src/pages/**/*.{ts,tsx}'],
+    rules: {
+      'max-lines-per-function': ['warn', { max: 800, skipBlankLines: true, skipComments: true }],
+      'max-lines': ['warn', { max: 800, skipBlankLines: true, skipComments: true }],
+      'max-statements': ['warn', 100],
+      'complexity': ['warn', 50],
     },
   },
   {

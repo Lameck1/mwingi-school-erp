@@ -30,34 +30,24 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
     override componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
         this.setState({ errorInfo })
-        
+
         // Log to console in development
         console.error('ErrorBoundary caught:', error, errorInfo)
-        
-        // Report to main process for logging
-        const runtime = globalThis as unknown as {
-            electronAPI?: {
-                system?: {
-                    logError?: (payload: {
-                        error: string
-                        stack?: string
-                        componentStack?: string | null
-                        timestamp: string
-                    }) => Promise<unknown>
-                }
-            }
-        }
 
-        const logErrorFn = runtime.electronAPI?.system?.logError
+        // Report to main process for logging
+        const api = window.electronAPI
+
+        const logErrorFn = api.system.logError
         if (typeof logErrorFn === 'function') {
+            // eslint-disable-next-line promise/no-promise-in-callback
             void logErrorFn({
                 error: error.message,
                 stack: error.stack,
                 componentStack: errorInfo.componentStack,
                 timestamp: new Date().toISOString()
-            })
+            }).catch(e => console.error('Failed to log error to main process:', e))
         }
-        
+
         // Call custom error handler if provided
         this.props.onError?.(error, errorInfo)
     }
@@ -81,7 +71,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             if (this.props.fallback) {
                 return <>{this.props.fallback}</>
             }
-            
+
             return (
                 <div className="flex flex-col items-center justify-center min-h-[400px] p-8 text-center">
                     <div className="text-red-600 mb-4">
@@ -94,9 +84,9 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                         Something went wrong
                     </h2>
                     <p className="text-muted-foreground dark:text-muted-foreground mb-4 max-w-md">
-                        {this.state.error?.message || 'An unexpected error occurred'}
+                        {this.state.error ? this.state.error.message : 'An unexpected error occurred'}
                     </p>
-                    
+
                     <div className="flex gap-3 justify-center">
                         <button
                             onClick={this.handleReset}
@@ -105,7 +95,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                         >
                             {this.retryCount >= this.maxRetries ? 'Max Retries Reached' : `Try Again (${this.retryCount}/${this.maxRetries})`}
                         </button>
-                        
+
                         {this.retryCount >= this.maxRetries && (
                             <button
                                 onClick={this.handleReload}
@@ -115,12 +105,12 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                             </button>
                         )}
                     </div>
-                    
-                    {process.env['NODE_ENV'] === 'development' && this.state.errorInfo && (
+
+                    {import.meta.env.DEV && this.state.errorInfo && (
                         <details className="mt-4 text-left text-xs text-gray-500 max-w-2xl">
                             <summary className="cursor-pointer hover:text-gray-700">Error Details (Development)</summary>
                             <pre className="mt-2 p-2 bg-gray-100 rounded overflow-auto">
-                                {this.state.error?.stack}\n\n{this.state.errorInfo.componentStack}
+                                {this.state.error ? this.state.error.stack : ''}\n\n{this.state.errorInfo.componentStack}
                             </pre>
                         </details>
                     )}

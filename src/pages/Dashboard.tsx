@@ -45,21 +45,28 @@ export default function Dashboard() {
                     globalThis.electronAPI.getAuditLog(6)
                 ])
 
-                setDashboardData(data)
-                setFeeCategories(categoryData)
-                setRecentActivities(logs)
+                // Handle potential IPC error objects instead of data
+                const isIpcError = (val: unknown): val is { success: false; error?: string } =>
+                    !!val && typeof val === 'object' && !Array.isArray(val) && 'success' in val && (val as { success: boolean }).success === false
+
+                const safeDashboardData = isIpcError(data) ? null : data
+                const safeFeeCategories = Array.isArray(categoryData) ? categoryData : []
+                const safeRecentActivities = Array.isArray(logs) ? logs : []
+                const safeFeeData = Array.isArray(feeData) ? feeData : []
+
+                setDashboardData(safeDashboardData)
+                setFeeCategories(safeFeeCategories)
+                setRecentActivities(safeRecentActivities)
 
                 const monthlyData: Record<string, number> = {}
-                if (Array.isArray(feeData)) {
-                    feeData.forEach((item: FeeCollectionItem) => {
-                        const date = new Date(item.payment_date)
-                        if (Number.isNaN(date.getTime())) {return} // Skip invalid dates
+                safeFeeData.forEach((item: FeeCollectionItem) => {
+                    const date = new Date(item.payment_date)
+                    if (Number.isNaN(date.getTime())) { return } // Skip invalid dates
 
-                        const month = date.toLocaleDateString('en-US', { month: 'short' })
-                        const amount = Number(item.amount) || 0
-                        monthlyData[month] = (monthlyData[month] || 0) + amount
-                    })
-                }
+                    const month = date.toLocaleDateString('en-US', { month: 'short' })
+                    const amount = Number(item.amount) || 0
+                    monthlyData[month] = (monthlyData[month] || 0) + amount
+                })
 
                 setFeeCollectionData(
                     Object.entries(monthlyData).map(([month, total]) => ({ month, total }))
