@@ -364,6 +364,30 @@ export class OpeningBalanceService {
             userId
           );
 
+          // Create Journal Entry for GL Opening Balance
+          if (balance.debit_amount > 0 || balance.credit_amount > 0) {
+            this.journalService.createJournalEntrySync({
+              entry_date: new Date().toISOString().split('T')[0] ?? '',
+              entry_type: 'OPENING_BALANCE',
+              description: `Opening balance import: ${account.account_name} (${account.account_code})`,
+              created_by_user_id: userId,
+              lines: [
+                {
+                  gl_account_code: account.account_code,
+                  debit_amount: balance.debit_amount,
+                  credit_amount: balance.credit_amount,
+                  description: 'Opening balance'
+                },
+                {
+                  gl_account_code: '3020', // Opening Balance Equity / Retained Earnings
+                  debit_amount: balance.credit_amount, // Reverse of the above to balance
+                  credit_amount: balance.debit_amount,
+                  description: 'Opening balance equity offset'
+                }
+              ]
+            });
+          }
+
           importedCount++;
         }
 

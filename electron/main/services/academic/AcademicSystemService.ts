@@ -409,4 +409,31 @@ export class AcademicSystemService {
 
         logAudit(userId, 'PROCESS_RESULTS', 'report_card_summary', 0, null, { examId })
     }
+
+    // ==================== Certificates & Emails ====================
+    async generateCertificate(data: CertificatePayload): Promise<{ success: boolean; message: string }> {
+        // TODO: Implement actual certificate generation logic (PDF generation)
+        console.warn('generateCertificate not fully implemented', data)
+        return { success: true, message: 'Certificate generation simulated' }
+    }
+
+    async emailParents(data: EmailParentsPayload): Promise<{ success: boolean; message: string }> {
+        // TODO: Implement actual email sending logic
+        console.warn('emailParents not fully implemented', data)
+        return { success: true, message: 'Email sending simulated' }
+    }
+}
+
+export interface CertificatePayload {
+    studentId: number
+    studentName: string
+    awardCategory: string
+    academicYearId: number
+    improvementPercentage: number
+}
+
+export interface EmailParentsPayload {
+    students: Array<{ student_id: number; student_name: string; improvement_percentage: number }>
+    awardCategory: string
+    templateType: string
 }

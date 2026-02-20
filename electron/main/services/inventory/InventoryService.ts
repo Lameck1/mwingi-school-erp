@@ -304,6 +304,7 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
                     entry_type: jeType,
                     description: `Stock ${type}: ${item.item_name} (Qty: ${Math.abs(change)})`,
                     created_by_user_id: userId,
+                    supplier_id: item.supplier_id ?? undefined,
                     lines: [
                         {
                             gl_account_code: debitCode,

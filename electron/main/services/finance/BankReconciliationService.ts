@@ -58,7 +58,7 @@ export interface CreateBankAccountData {
 
 export class BankReconciliationService {
     private get db() { return getDatabase() }
-    private static readonly AMOUNT_TOLERANCE_CENTS = 100
+    private static readonly AMOUNT_TOLERANCE_CENTS = 0
     private static readonly DATE_TOLERANCE_DAYS = 7
     private static readonly ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
 
@@ -92,11 +92,11 @@ export class BankReconciliationService {
     async createBankAccount(data: CreateBankAccountData): Promise<{ success: boolean; id?: number; errors?: string[] }> {
         const errors: string[] = []
 
-        if (!data.account_name.trim()) {errors.push('Account name is required')}
-        if (!data.account_number.trim()) {errors.push('Account number is required')}
-        if (!data.bank_name.trim()) {errors.push('Bank name is required')}
+        if (!data.account_name.trim()) { errors.push('Account name is required') }
+        if (!data.account_number.trim()) { errors.push('Account number is required') }
+        if (!data.bank_name.trim()) { errors.push('Bank name is required') }
 
-        if (errors.length > 0) {return { success: false, errors }}
+        if (errors.length > 0) { return { success: false, errors } }
 
         try {
             const result = this.db.prepare(`
@@ -146,7 +146,7 @@ export class BankReconciliationService {
       WHERE bs.id = ?
     `).get(statementId) as BankStatement | null
 
-        if (!statement) {return null}
+        if (!statement) { return null }
 
         const lines = this.db.prepare(`
       SELECT * FROM bank_statement_line WHERE bank_statement_id = ? ORDER BY transaction_date, id

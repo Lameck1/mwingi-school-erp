@@ -268,15 +268,21 @@ export class BudgetEnforcementService {
   private calculateSpentAmount(
     glAccountCode: string,
     fiscalYear: number,
-    _department: string | null
+    department: string | null
   ): number {
-    // Get fiscal year start/end dates
-    const fiscalYearStart = `${fiscalYear}-01-01`;
-    const fiscalYearEnd = `${fiscalYear}-12-31`;
+    // 1. Resolve period boundaries (Decouple from hardcoded Jan-Dec)
+    const period = this.db.prepare(`
+      SELECT MIN(start_date) as start_date, MAX(end_date) as end_date
+      FROM accounting_period
+      WHERE period_name LIKE ? OR (strftime('%Y', start_date) = ?)
+    `).get(`%${fiscalYear}%`, String(fiscalYear)) as { start_date: string | null; end_date: string | null } | undefined;
 
-    // Sum debit amounts for expense accounts (spending)
-    const result = this.db.prepare(`
-      SELECT COALESCE(SUM(jel.debit_amount), 0) as spent
+    const startDate = period?.start_date || `${fiscalYear}-01-01`;
+    const endDate = period?.end_date || `${fiscalYear}-12-31`;
+
+    // 2. Build Query with Departmental filtering
+    let query = `
+      SELECT COALESCE(SUM(jel.debit_amount - jel.credit_amount), 0) as spent
       FROM journal_entry_line jel
       JOIN journal_entry je ON je.id = jel.journal_entry_id
       JOIN gl_account ga ON ga.id = jel.gl_account_id
@@ -284,7 +290,18 @@ export class BudgetEnforcementService {
         AND je.entry_date BETWEEN ? AND ?
         AND je.is_posted = 1
         AND je.is_voided = 0
-    `).get(glAccountCode, fiscalYearStart, fiscalYearEnd) as {
+    `;
+
+    const params: (string | number)[] = [glAccountCode, startDate, endDate];
+
+    if (department) {
+      query += ` AND je.department = ?`;
+      params.push(department);
+    } else {
+      query += ` AND je.department IS NULL`;
+    }
+
+    const result = this.db.prepare(query).get(...params) as {
       spent: number;
     } | undefined;
 
@@ -378,7 +395,7 @@ export class BudgetEnforcementService {
       overall_utilization_percentage: 0,
     };
 
-    summary.overall_utilization_percentage = 
+    summary.overall_utilization_percentage =
       (summary.total_spent / summary.total_allocated) * 100;
 
     return {

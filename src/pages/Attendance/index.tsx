@@ -99,30 +99,48 @@ export default function Attendance() {
     const loadStreams = async () => {
         try {
             const data = await globalThis.electronAPI.getStreams()
-            setStreams(data)
+            if (!Array.isArray(data) && data && 'success' in data && data.success === false) {
+                console.warn('IPC Error loading streams:', data.error)
+                setStreams([])
+                return
+            }
+            setStreams(Array.isArray(data) ? data : [])
         } catch (error) {
             console.error('Failed to load streams:', error)
         }
     }
 
     const loadStudents = useCallback(async () => {
-        if (!currentAcademicYear || !currentTerm) {return}
+        if (!selectedStream || selectedStream <= 0) {return}
+        if (!currentAcademicYear || !currentTerm) { return }
         setLoading(true)
         try {
             // Get enrolled students
             const enrolled = await globalThis.electronAPI.getStudentsForAttendance(
                 selectedStream, currentAcademicYear.id, currentTerm.id
             )
+            if (!Array.isArray(enrolled) && enrolled && 'success' in enrolled && enrolled.success === false) {
+                throw new Error(enrolled.error || 'Failed to load students')
+            }
 
             // Get existing attendance for this date
             const existing = await globalThis.electronAPI.getAttendanceByDate(
-                selectedStream, selectedDate, currentAcademicYear.id, currentTerm.id
+                Number(selectedStream),
+                selectedDate,
+                currentAcademicYear.id,
+                currentTerm.id
             )
+            if (!Array.isArray(existing) && existing && 'success' in existing && existing.success === false) {
+                throw new Error(existing.error || 'Failed to load attendance history')
+            }
+
+            const enrolledArr = Array.isArray(enrolled) ? enrolled : []
+            const existingArr = Array.isArray(existing) ? existing : []
 
             // Map students with their existing status or default to PRESENT
-            const existingMap = new Map(existing.map((e) => [e.student_id, e]))
+            const existingMap = new Map(existingArr.map((e) => [e.student_id, e]))
 
-            setStudents(enrolled.map((s) => {
+            setStudents(enrolledArr.map((s) => {
                 const ex = existingMap.get(s.student_id)
                 return {
                     student_id: s.student_id,
@@ -134,7 +152,7 @@ export default function Attendance() {
             }))
 
             // Update summary
-            updateSummary(enrolled.map((s) => {
+            updateSummary(enrolledArr.map((s) => {
                 const ex = existingMap.get(s.student_id)
                 return ex?.status || 'PRESENT'
             }))
@@ -174,7 +192,7 @@ export default function Attendance() {
     }
 
     const handleSave = async () => {
-        if (!currentAcademicYear || !currentTerm || !user) {return}
+        if (!currentAcademicYear || !currentTerm || !user) { return }
 
         setSaving(true)
         try {

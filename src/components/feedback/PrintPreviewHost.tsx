@@ -38,6 +38,15 @@ export function PrintPreviewHost() {
                             <Printer className="w-4 h-4" />
                             <span>Print Document</span>
                         </button>
+                        {preview.onDownload && (
+                            <button
+                                onClick={preview.onDownload}
+                                className="btn btn-primary flex items-center gap-2 px-5"
+                            >
+                                <span className="w-4 h-4">⬇</span>
+                                <span>Download PDF</span>
+                            </button>
+                        )}
                         <button
                             onClick={handleClose}
                             className="btn btn-secondary flex items-center gap-2 px-5"
@@ -47,13 +56,23 @@ export function PrintPreviewHost() {
                         </button>
                     </div>
                     <div className="border border-border/30 rounded-xl overflow-hidden bg-card">
-                        <iframe
-                            ref={frameRef}
-                            title={preview.title}
-                            srcDoc={preview.html}
-                            sandbox="allow-same-origin allow-modals allow-scripts"
-                            className="w-full h-[72vh] bg-card"
-                        />
+                        {preview.pdfUrl ? (
+                            <iframe
+                                ref={frameRef}
+                                title={preview.title}
+                                src={preview.pdfUrl}
+                                type="application/pdf"
+                                className="w-full h-[72vh] bg-card"
+                            />
+                        ) : (
+                            <iframe
+                                ref={frameRef}
+                                title={preview.title}
+                                srcDoc={preview.html}
+                                sandbox="allow-same-origin allow-modals allow-scripts"
+                                className="w-full h-[72vh] bg-card"
+                            />
+                        )}
                     </div>
                 </div>
             ) : null}

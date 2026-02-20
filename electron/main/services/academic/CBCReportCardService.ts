@@ -80,34 +80,46 @@ export class CBCReportCardService {
   }
 
   private getSubjectGradesOrThrow(examId: number, studentId: number): SubjectGradeResult[] {
+    const exam = this.getExamOrThrow(examId)
+
+    // We fetch ALL results for this student in this term to build a progressive report
     const subjects = this.db.prepare(`
       SELECT
         s.id as subject_id,
         s.name as subject_name,
-        er.score as marks,
+        MAX(CASE WHEN e.exam_name LIKE 'CAT 1%' THEN er.score END) as cat1,
+        MAX(CASE WHEN e.exam_name LIKE 'CAT 2%' THEN er.score END) as cat2,
+        MAX(CASE WHEN e.exam_name LIKE 'Mid Term%' THEN er.score END) as mid,
+        MAX(CASE WHEN e.exam_name LIKE 'End Term%' THEN er.score END) as final,
+        ROUND(AVG(er.score), 1) as marks,
         CASE
-          WHEN er.score >= 90 THEN 'EE1'
-          WHEN er.score >= 75 THEN 'EE2'
-          WHEN er.score >= 58 THEN 'ME1'
-          WHEN er.score >= 41 THEN 'ME2'
-          WHEN er.score >= 31 THEN 'AE1'
-          WHEN er.score >= 21 THEN 'AE2'
-          WHEN er.score >= 11 THEN 'BE1'
+          WHEN AVG(er.score) >= 90 THEN 'EE1'
+          WHEN AVG(er.score) >= 75 THEN 'EE2'
+          WHEN AVG(er.score) >= 58 THEN 'ME1'
+          WHEN AVG(er.score) >= 41 THEN 'ME2'
+          WHEN AVG(er.score) >= 31 THEN 'AE1'
+          WHEN AVG(er.score) >= 21 THEN 'AE2'
+          WHEN AVG(er.score) >= 11 THEN 'BE1'
           ELSE 'BE2'
         END as grade,
-        ROUND(er.score, 1) as percentage,
-        COALESCE(er.teacher_remarks, '') as teacher_comment,
+        ROUND(AVG(er.score), 1) as percentage,
+        COALESCE(MAX(er.teacher_remarks), '') as teacher_comment,
         CASE
-          WHEN er.score >= 75 THEN 'Exceeding Expectation'
-          WHEN er.score >= 41 THEN 'Meeting Expectation'
-          WHEN er.score >= 21 THEN 'Approaching Expectation'
-          ELSE 'Below Expectation'
+          WHEN AVG(er.score) >= 75 THEN 'Exceeding Expectations'
+          WHEN AVG(er.score) >= 41 THEN 'Meeting Expectations'
+          WHEN AVG(er.score) >= 21 THEN 'Approaching Expectations'
+          ELSE 'Below Expectations'
         END as competency_level
-      FROM exam_result er
-      JOIN subject s ON er.subject_id = s.id
-      WHERE er.exam_id = ? AND er.student_id = ?
+      FROM subject s
+      LEFT JOIN exam_result er ON er.subject_id = s.id AND er.student_id = ?
+      LEFT JOIN exam e ON er.exam_id = e.id AND e.term_id = ?
+      JOIN subject_allocation sa ON sa.subject_id = s.id
+      JOIN enrollment en ON en.student_id = ? AND sa.stream_id = en.stream_id
+      WHERE en.term_id = ?
+      GROUP BY s.id, s.name
+      HAVING marks IS NOT NULL
       ORDER BY s.name
-    `).all(examId, studentId) as SubjectGradeResult[]
+    `).all(studentId, exam.term_id, studentId, exam.term_id) as SubjectGradeResult[]
 
     if (subjects.length === 0) {
       throw new Error('No exam results found for this student')
@@ -128,6 +140,40 @@ export class CBCReportCardService {
       overallGrade,
       totalPoints,
       averagePoints
+    }
+  }
+
+  private getPositions(examId: number, studentId: number): { position_in_class: number; position_in_stream: number } {
+    try {
+      const exam = this.getExamOrThrow(examId)
+
+      // Calculate total marks for each student in the same stream/term
+      const streamRankings = this.db.prepare(`
+        WITH StudentMarks AS (
+          SELECT 
+            er.student_id,
+            SUM(er.score) as term_total
+          FROM exam_result er
+          JOIN exam e ON er.exam_id = e.id
+          JOIN enrollment en ON er.student_id = en.student_id AND en.term_id = e.term_id
+          WHERE e.term_id = ? AND en.stream_id = (SELECT stream_id FROM enrollment WHERE student_id = ? AND term_id = ?)
+          GROUP BY er.student_id
+        )
+        SELECT student_id, RANK() OVER (ORDER BY term_total DESC) as rank
+        FROM StudentMarks
+      `).all(exam.term_id, studentId, exam.term_id) as Array<{ student_id: number; rank: number }>
+
+      const streamPosition = streamRankings.find(r => r.student_id === studentId)?.rank || 0
+
+      // Calculate total marks for each student in the same class/term (all streams of same level)
+      // For now, if class level not available, we use stream as class
+      return {
+        position_in_class: streamPosition, // Simplified for now
+        position_in_stream: streamPosition
+      }
+    } catch (error) {
+      console.error('Failed to calculate positions:', error)
+      return { position_in_class: 0, position_in_stream: 0 }
     }
   }
 
@@ -330,7 +376,7 @@ export class CBCReportCardService {
       const { totalMarks, averageMarks, overallGrade, totalPoints, averagePoints } = this.calculatePerformance(subjects)
       const learningAreas = this.getLearningAreas()
       const { daysPresent, daysAbsent, attendancePercentage } = this.getAttendanceMetrics(studentId, exam.academic_year_id, exam.term_id)
-      const classPosition = this.getClassPosition(exam, streamId, studentId, examId)
+      const positions = this.getPositions(examId, studentId)
       const qrCodeToken = this.generateQRToken(studentId, examId)
       const now = new Date().toISOString()
       const reportCardId = this.insertReportCardRecord({
@@ -341,7 +387,7 @@ export class CBCReportCardService {
         overallGrade,
         totalMarks,
         averageMarks,
-        classPosition,
+        classPosition: positions.position_in_class,
         daysPresent,
         daysAbsent,
         attendancePercentage,
@@ -364,8 +410,8 @@ export class CBCReportCardService {
         overall_grade: overallGrade,
         total_points: totalPoints,
         average_points: averagePoints,
-        position_in_class: classPosition,
-        position_in_stream: classPosition,
+        position_in_class: positions.position_in_class,
+        position_in_stream: positions.position_in_stream,
         learning_areas: this.mapLearningAreas(learningAreas),
         days_present: daysPresent,
         days_absent: daysAbsent,
@@ -464,22 +510,22 @@ export class CBCReportCardService {
    * Private helper methods — CBC/CBE grading scale
    */
   private getGrade(score: number): string {
-    if (score >= 90) {return 'EE1'}
-    if (score >= 75) {return 'EE2'}
-    if (score >= 58) {return 'ME1'}
-    if (score >= 41) {return 'ME2'}
-    if (score >= 31) {return 'AE1'}
-    if (score >= 21) {return 'AE2'}
-    if (score >= 11) {return 'BE1'}
+    if (score >= 90) { return 'EE1' }
+    if (score >= 75) { return 'EE2' }
+    if (score >= 58) { return 'ME1' }
+    if (score >= 41) { return 'ME2' }
+    if (score >= 31) { return 'AE1' }
+    if (score >= 21) { return 'AE2' }
+    if (score >= 11) { return 'BE1' }
     return 'BE2'
   }
 
   private getPoints(grade: string): number {
     const pointsMap: Record<string, number> = {
-      'EE1': 4.0, 'EE2': 3.5,
-      'ME1': 3.0, 'ME2': 2.5,
-      'AE1': 2.0, 'AE2': 1.5,
-      'BE1': 1.0, 'BE2': 0.5,
+      'EE1': 4.0, 'EE2': 4.0,
+      'ME1': 3.0, 'ME2': 3.0,
+      'AE1': 2.0, 'AE2': 2.0,
+      'BE1': 1.0, 'BE2': 1.0,
     }
     return pointsMap[grade] ?? 0
   }
@@ -564,6 +610,10 @@ export class CBCReportCardService {
     return subjects.map((subject) => ({
       subject_id: subject.subject_id,
       subject_name: subject.subject_name || 'Unknown',
+      cat1: subject.cat1,
+      cat2: subject.cat2,
+      mid: subject.mid,
+      final: subject.final,
       marks: subject.marks,
       grade: subject.grade,
       points: this.getPoints(subject.grade),

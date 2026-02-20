@@ -8,6 +8,10 @@ export interface StudentReportCard {
   subjects: {
     subject_id: number
     subject_name: string
+    cat1?: number
+    cat2?: number
+    mid?: number
+    final?: number
     marks: number
     grade: string
     points: number
@@ -73,6 +77,10 @@ export interface TermResult {
 export interface SubjectGradeResult {
   subject_id: number
   subject_name: string
+  cat1?: number
+  cat2?: number
+  mid?: number
+  final?: number
   marks: number
   grade: string
   percentage: number
@@ -121,6 +129,10 @@ export interface ReportCardRecord {
 export interface ReportCardSubjectRecord {
   subject_name?: string
   subject_id: number
+  cat1?: number
+  cat2?: number
+  mid?: number
+  final?: number
   marks: number
   grade: string
   percentage: number

@@ -138,12 +138,12 @@ export class ProfitAndLossService {
       prior,
       variance: {
         revenue_variance: revenueVariance,
-        revenue_variance_percent: prior.total_revenue > 0 
-          ? (revenueVariance / prior.total_revenue) * 100 
+        revenue_variance_percent: prior.total_revenue > 0
+          ? (revenueVariance / prior.total_revenue) * 100
           : 0,
         expense_variance: expenseVariance,
-        expense_variance_percent: prior.total_expenses > 0 
-          ? (expenseVariance / prior.total_expenses) * 100 
+        expense_variance_percent: prior.total_expenses > 0
+          ? (expenseVariance / prior.total_expenses) * 100
           : 0,
         net_profit_variance: netProfitVariance,
         net_profit_variance_percent: prior.net_profit === 0
@@ -190,20 +190,20 @@ export class ProfitAndLossService {
 
     for (const account of revenueAccounts) {
       const code = account.account_code;
-      
-      if (code === '4010') {
+
+      if (code.startsWith('401')) {
         categories['Tuition Fees'] = (categories['Tuition Fees'] ?? 0) + account.balance;
-      } else if (code === '4020') {
+      } else if (code.startsWith('402')) {
         categories['Boarding Fees'] = (categories['Boarding Fees'] ?? 0) + account.balance;
-      } else if (code === '4030') {
+      } else if (code.startsWith('403')) {
         categories['Transport Fees'] = (categories['Transport Fees'] ?? 0) + account.balance;
-      } else if (code === '4040') {
+      } else if (code.startsWith('404')) {
         categories['Activity Fees'] = (categories['Activity Fees'] ?? 0) + account.balance;
-      } else if (code === '4050') {
+      } else if (code.startsWith('405')) {
         categories['Exam Fees'] = (categories['Exam Fees'] ?? 0) + account.balance;
-      } else if (code === '4100') {
+      } else if (code.startsWith('41')) {
         categories['Government Grants'] = (categories['Government Grants'] ?? 0) + account.balance;
-      } else if (code === '4200') {
+      } else if (code.startsWith('42')) {
         categories['Donations'] = (categories['Donations'] ?? 0) + account.balance;
       } else {
         categories['Other Income'] = (categories['Other Income'] ?? 0) + account.balance;

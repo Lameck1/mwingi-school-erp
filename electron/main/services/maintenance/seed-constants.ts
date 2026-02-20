@@ -72,3 +72,55 @@ export const FEE_MAP_SHILLINGS: Partial<Record<string, { DAY: [number, number, n
     G8: { DAY: [7000, 3500, 1500], BOARDER: [7000, 5000, 7500] },
     G9: { DAY: [7000, 3500, 1500], BOARDER: [7000, 5000, 7500] }
 }
+
+export const CBC_SUBJECTS: ReadonlyArray<{ code: string; name: string; isCompulsory: boolean; levels: string[] }> = [
+    // BABY, PP1 & PP2
+    { code: 'ENV_ACT', name: 'Environmental Activities', isCompulsory: true, levels: ['BABY', 'PP1', 'PP2'] },
+    { code: 'LANG_ACT', name: 'Language Activities', isCompulsory: true, levels: ['BABY', 'PP1', 'PP2'] },
+    { code: 'MATH_ACT', name: 'Mathematical Activities', isCompulsory: true, levels: ['BABY', 'PP1', 'PP2'] },
+    { code: 'PSYCH_ACT', name: 'Psychomotor and Creative Activities', isCompulsory: true, levels: ['BABY', 'PP1', 'PP2'] },
+    { code: 'REL_ACT', name: 'Religious Education Activities', isCompulsory: true, levels: ['BABY', 'PP1', 'PP2'] },
+
+    // Grade 1, 2, 3
+    { code: 'LIT', name: 'Literacy', isCompulsory: true, levels: ['G1', 'G2', 'G3'] },
+    { code: 'ENG_L', name: 'English Language Activities', isCompulsory: true, levels: ['G1', 'G2', 'G3'] },
+    { code: 'KISW_L', name: 'Kiswahili Language Activities', isCompulsory: true, levels: ['G1', 'G2', 'G3'] },
+    { code: 'MATH_L', name: 'Mathematical Activities', isCompulsory: true, levels: ['G1', 'G2', 'G3'] },
+    { code: 'ENV_L', name: 'Environmental Activities', isCompulsory: true, levels: ['G1', 'G2', 'G3'] },
+    { code: 'HYG_N', name: 'Hygiene and Nutrition Activities', isCompulsory: true, levels: ['G1', 'G2', 'G3'] },
+    { code: 'REL_L', name: 'Religious Education Activities', isCompulsory: true, levels: ['G1', 'G2', 'G3'] },
+    { code: 'MOV_C', name: 'Movement and Creative Activities', isCompulsory: true, levels: ['G1', 'G2', 'G3'] },
+
+    // Grade 4, 5, 6
+    { code: 'ENG_U', name: 'English', isCompulsory: true, levels: ['G4', 'G5', 'G6'] },
+    { code: 'KISW_U', name: 'Kiswahili', isCompulsory: true, levels: ['G4', 'G5', 'G6'] },
+    { code: 'MATH_U', name: 'Mathematics', isCompulsory: true, levels: ['G4', 'G5', 'G6'] },
+    { code: 'SCI_U', name: 'Science and Technology', isCompulsory: true, levels: ['G4', 'G5', 'G6'] },
+    { code: 'SOC_U', name: 'Social Studies', isCompulsory: true, levels: ['G4', 'G5', 'G6'] },
+    { code: 'AGRI_U', name: 'Agriculture', isCompulsory: true, levels: ['G4', 'G5', 'G6'] },
+    { code: 'HOME_U', name: 'Home Science', isCompulsory: true, levels: ['G4', 'G5', 'G6'] },
+    { code: 'REL_U', name: 'Religious Education', isCompulsory: true, levels: ['G4', 'G5', 'G6'] },
+    { code: 'ART_U', name: 'Creative Arts', isCompulsory: true, levels: ['G4', 'G5', 'G6'] },
+    { code: 'PE_U', name: 'Physical and Health Education', isCompulsory: true, levels: ['G4', 'G5', 'G6'] },
+
+    // Grade 7, 8, 9 (Junior Secondary)
+    { code: 'MATH_J', name: 'Mathematics', isCompulsory: true, levels: ['G7', 'G8', 'G9'] },
+    { code: 'ENG_J', name: 'English', isCompulsory: true, levels: ['G7', 'G8', 'G9'] },
+    { code: 'KISW_J', name: 'Kiswahili', isCompulsory: true, levels: ['G7', 'G8', 'G9'] },
+    { code: 'INTEG_S', name: 'Integrated Science', isCompulsory: true, levels: ['G7', 'G8', 'G9'] },
+    { code: 'HEALTH_E', name: 'Health Education', isCompulsory: true, levels: ['G7', 'G8', 'G9'] },
+    { code: 'PRE_TECH', name: 'Pre-Technical and Pre-Career Education', isCompulsory: true, levels: ['G7', 'G8', 'G9'] },
+    { code: 'SOC_J', name: 'Social Studies', isCompulsory: true, levels: ['G7', 'G8', 'G9'] },
+    { code: 'AGRI_J', name: 'Agriculture', isCompulsory: true, levels: ['G7', 'G8', 'G9'] },
+    { code: 'REL_J', name: 'Religious Education', isCompulsory: true, levels: ['G7', 'G8', 'G9'] },
+    { code: 'PE_J', name: 'Sports and Physical Education', isCompulsory: true, levels: ['G7', 'G8', 'G9'] },
+    { code: 'LIFE_S', name: 'Life Skills Education', isCompulsory: true, levels: ['G7', 'G8', 'G9'] },
+    { code: 'BUS_S', name: 'Business Studies', isCompulsory: true, levels: ['G7', 'G8', 'G9'] }
+]
+
+export const EXAM_TYPES: ReadonlyArray<{ name: string; suffix: string }> = [
+    { name: 'CAT 1', suffix: 'C1' },
+    { name: 'CAT 2', suffix: 'C2' },
+    { name: 'Mid-Term Exam', suffix: 'MT' },
+    { name: 'End of Term Exam', suffix: 'ET' }
+]

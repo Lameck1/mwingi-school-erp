@@ -8,6 +8,8 @@ import {
     STAFF_SPECS,
     STUDENT_FIRST_NAMES,
     STUDENT_LAST_NAMES,
+    CBC_SUBJECTS,
+    EXAM_TYPES,
 } from './maintenance/seed-constants'
 
 import type { AcademicPeriod, FeeCategory, FeeStructureResult, Stream, TransactionCategory } from './maintenance/seed-constants'
@@ -17,14 +19,18 @@ export class SystemMaintenanceService {
 
     async resetAndSeed2026(userId: number): Promise<{ success: boolean; error?: string }> {
         const db = getDatabase()
+        let period: AcademicPeriod | undefined // Declare period here
 
         try {
             db.pragma('foreign_keys = OFF')
             db.transaction(() => {
-                this.runResetTransaction(db, userId)
+                period = this.runResetTransaction(db, userId)
             })()
             await this.currencyNormalization.normalize(userId)
             await this.seedJournalEntries(db, userId)
+            if (period) { // Ensure period is defined before using it
+                this.seedExaminationData(db, period, userId)
+            }
             return { success: true }
         } catch (error) {
             console.error('Data reset failed:', error)
@@ -38,7 +44,7 @@ export class SystemMaintenanceService {
         return this.currencyNormalization.normalize(userId)
     }
 
-    private runResetTransaction(db: ReturnType<typeof getDatabase>, userId: number): void {
+    private runResetTransaction(db: ReturnType<typeof getDatabase>, userId: number): AcademicPeriod {
         this.clearResetTables(db)
         this.seedCoreReferenceData(db)
 
@@ -58,6 +64,8 @@ export class SystemMaintenanceService {
             INSERT INTO audit_log (user_id, action_type, table_name, record_id, new_values)
             VALUES (?, 'SYSTEM_RESET', 'DATABASE', 0, 'Full Institutional Seeding for 2026 Done')
         `).run(userId)
+
+        return period
     }
 
     private clearResetTables(db: ReturnType<typeof getDatabase>): void {
@@ -80,6 +88,28 @@ export class SystemMaintenanceService {
             INSERT INTO fee_category (category_name, description) VALUES
             ('Tuition', 'Tuition fees'), ('Feeding', 'Meals/Feeding fees'), ('Maintenance', 'School maintenance'),
             ('Boarding', 'Boarding fees for boarders');
+
+            INSERT INTO grading_scale (curriculum, grade, min_score, max_score, points, remarks) VALUES
+            ('CBC', 'EE1', 90, 100, 4, 'Exceeding Expectations'),
+            ('CBC', 'EE2', 75, 89, 4, 'Exceeding Expectations'),
+            ('CBC', 'ME1', 58, 74, 3, 'Meeting Expectations'),
+            ('CBC', 'ME2', 41, 57, 3, 'Meeting Expectations'),
+            ('CBC', 'AE1', 31, 40, 2, 'Approaching Expectations'),
+            ('CBC', 'AE2', 21, 30, 2, 'Approaching Expectations'),
+            ('CBC', 'BE1', 11, 20, 1, 'Below Expectations'),
+            ('CBC', 'BE2', 1, 10, 1, 'Below Expectations'),
+            ('8-4-4', 'A', 80, 100, 12, 'Plain'),
+            ('8-4-4', 'A-', 75, 79, 11, 'Minus'),
+            ('8-4-4', 'B+', 70, 74, 10, 'Plus'),
+            ('8-4-4', 'B', 65, 69, 9, 'Plain'),
+            ('8-4-4', 'B-', 60, 64, 8, 'Minus'),
+            ('8-4-4', 'C+', 55, 59, 7, 'Plus'),
+            ('8-4-4', 'C', 50, 54, 6, 'Plain'),
+            ('8-4-4', 'C-', 45, 49, 5, 'Minus'),
+            ('8-4-4', 'D+', 40, 44, 4, 'Plus'),
+            ('8-4-4', 'D', 35, 39, 3, 'Plain'),
+            ('8-4-4', 'D-', 30, 34, 2, 'Minus'),
+            ('8-4-4', 'E', 0, 29, 1, 'Plain');
         `)
     }
 
@@ -254,6 +284,134 @@ export class SystemMaintenanceService {
                     { gl_account_code: '1020', debit_amount: 0, credit_amount: exp.amount, description: 'Payment from bank' }
                 ]
             })
+        }
+    }
+
+    async seedExamsOnly(userId: number): Promise<{ success: boolean; error?: string }> {
+        const db = getDatabase()
+        try {
+            const periodRow = db.prepare('SELECT academic_year_id as yearId, id as termId FROM term WHERE is_current = 1 LIMIT 1').get() as AcademicPeriod | undefined
+            if (!periodRow) {
+                return { success: false, error: 'No current academic period found. Please initialize the calendar first.' }
+            }
+
+            db.transaction(() => {
+                this.seedExaminationData(db, periodRow, userId)
+            })()
+            return { success: true }
+        } catch (error) {
+            console.error('Standalone exam seeding failed:', error)
+            return { success: false, error: error instanceof Error ? error.message : 'Seeding failed' }
+        }
+    }
+
+    private seedExaminationData(db: ReturnType<typeof getDatabase>, period: AcademicPeriod, userId: number): void {
+        // 1. Seed Subjects
+        const subjectInsert = db.prepare(`
+            INSERT OR IGNORE INTO subject (code, name, curriculum, is_compulsory)
+            VALUES (?, ?, ? , ?)
+        `)
+        for (const s of CBC_SUBJECTS) {
+            subjectInsert.run(s.code, s.name, 'CBC', s.isCompulsory ? 1 : 0)
+        }
+
+        const subjects = db.prepare('SELECT id, name, code FROM subject WHERE is_active = 1').all() as Array<{ id: number; name: string; code: string }>
+        const streams = db.prepare('SELECT id, stream_code FROM stream WHERE is_active = 1').all() as Array<{ id: number; stream_code: string }>
+        const teacher = db.prepare('SELECT id FROM staff WHERE staff_number = ?').get('ST-002') as { id: number } | undefined
+
+        // 2. Seed Subject Allocations
+        if (teacher) {
+            const allocationInsert = db.prepare(`
+                INSERT OR IGNORE INTO subject_allocation (academic_year_id, term_id, stream_id, subject_id, teacher_id)
+                VALUES (?, ?, ?, ?, ?)
+            `)
+            for (const stream of streams) {
+                const levelSubjects = CBC_SUBJECTS.filter(s => s.levels.includes(stream.stream_code))
+                const levelSubjectCodes = new Set(levelSubjects.map(s => s.code))
+
+                for (const subject of subjects) {
+                    if (levelSubjectCodes.has(subject.code)) {
+                        allocationInsert.run(period.yearId, period.termId, stream.id, subject.id, teacher.id)
+                    }
+                }
+            }
+        }
+
+        const students = db.prepare(`
+            SELECT e.student_id, st.stream_code, e.stream_id
+            FROM enrollment e 
+            JOIN stream st ON e.stream_id = st.id
+            WHERE e.term_id = ? AND e.status = 'ACTIVE'
+        `).all(period.termId) as Array<{ student_id: number; stream_code: string; stream_id: number }>
+
+        if (subjects.length === 0 || students.length === 0) {
+            console.warn('No subjects or students found to seed exam results.')
+            return
+        }
+
+        // 3. Seed Exams
+        const examInsert = db.prepare(`
+            INSERT INTO exam (exam_name, academic_year_id, term_id, start_date, is_active)
+            VALUES (?, ?, ?, ?, 1)
+        `)
+
+        const academicExamInsert = db.prepare(`
+            INSERT INTO academic_exam (name, academic_year_id, term_id, exam_type, is_active)
+            VALUES (?, ?, ?, ?, 1)
+        `)
+
+        for (const type of EXAM_TYPES) {
+            const examId = examInsert.run(`${type.name} - ${period.termId}`, period.yearId, period.termId, '2026-02-15').lastInsertRowid as number
+
+            // Also seed relevant academic_exam table
+            try {
+                academicExamInsert.run(`${type.name}`, period.yearId, period.termId, type.suffix)
+            } catch {
+                // Ignore if table doesn't exist or other error
+            }
+
+            // 4. Seed Exam Results
+            this.seedStudentResults(db, examId, students, subjects, period, userId)
+        }
+    }
+
+    private seedStudentResults(
+        db: ReturnType<typeof getDatabase>,
+        examId: number,
+        students: Array<{ student_id: number; stream_code: string; stream_id: number }>,
+        subjects: Array<{ id: number; name: string; code: string }>,
+        period: AcademicPeriod,
+        userId: number
+    ): void {
+        const resultInsert = db.prepare(`
+            INSERT OR IGNORE INTO exam_result (exam_id, student_id, subject_id, score, competency_level, teacher_remarks, entered_by_user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `)
+
+        for (const student of students) {
+            // Find subjects allocated to this student's stream
+            const allocatedSubjects = db.prepare(`
+                SELECT subject_id FROM subject_allocation 
+                WHERE academic_year_id = ? AND term_id = ? AND stream_id = ?
+            `).all(period.yearId, period.termId, student.stream_id) as Array<{ subject_id: number }>
+
+            for (const { subject_id } of allocatedSubjects) {
+                const subject = subjects.find(s => s.id === subject_id)
+                if (!subject) { continue }
+
+                const score = 20 + Math.floor(Math.random() * 81) // 20-100
+                let level = 8
+                let remarks = 'Below Expectations'
+                if (score >= 90) { level = 1; remarks = 'Exceeding Expectations' }
+                else if (score >= 75) { level = 2; remarks = 'Exceeding Expectations' }
+                else if (score >= 58) { level = 3; remarks = 'Meeting Expectations' }
+                else if (score >= 41) { level = 4; remarks = 'Meeting Expectations' }
+                else if (score >= 31) { level = 5; remarks = 'Approaching Expectations' }
+                else if (score >= 21) { level = 6; remarks = 'Approaching Expectations' }
+                else if (score >= 11) { level = 7; }
+
+                resultInsert.run(examId, student.student_id, subject.id, score, level, `${remarks} in ${subject.name}`, userId)
+            }
         }
     }
 }
