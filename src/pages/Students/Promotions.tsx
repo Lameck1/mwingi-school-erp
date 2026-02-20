@@ -36,7 +36,11 @@ export default function Promotions() {
     const loadStreams = useCallback(async () => {
         try {
             const data = await globalThis.electronAPI.getPromotionStreams()
-            setStreams(data)
+            if (Array.isArray(data)) {
+                setStreams(data)
+            } else if (data && 'success' in data && data.success === false) {
+                console.error('Failed to load streams:', data.error)
+            }
         } catch (error) {
             reportRuntimeError(error, { area: 'Students.Promotions', action: 'loadStreams' }, 'Failed to load streams')
         }
@@ -45,10 +49,14 @@ export default function Promotions() {
     const loadAcademicYears = useCallback(async () => {
         try {
             const data = await globalThis.electronAPI.getAcademicYears()
-            setAcademicYears(data)
-            // Default to next academic year if available
-            if (data.length > 1 && data[0]) {
-                setToAcademicYear(data[0].id)
+            if (Array.isArray(data)) {
+                setAcademicYears(data)
+                // Default to next academic year if available
+                if (data.length > 1 && data[0]) {
+                    setToAcademicYear(data[0].id)
+                }
+            } else if (data && 'success' in data && data.success === false) {
+                console.error('Failed to load academic years:', data.error)
             }
         } catch (error) {
             reportRuntimeError(error, { area: 'Students.Promotions', action: 'loadAcademicYears' }, 'Failed to load academic years')
@@ -56,11 +64,16 @@ export default function Promotions() {
     }, [])
 
     const loadTerms = useCallback(async () => {
+        if (!toAcademicYear) { return }
         try {
             const data = await globalThis.electronAPI.getTermsByYear(toAcademicYear)
-            setTerms(data)
-            if (data.length > 0 && data[0]) {
-                setToTerm(data[0].id)
+            if (Array.isArray(data)) {
+                setTerms(data)
+                if (data.length > 0 && data[0]) {
+                    setToTerm(data[0].id)
+                }
+            } else if (data && 'success' in data && data.success === false) {
+                console.error('Failed to load terms:', data.error)
             }
         } catch (error) {
             reportRuntimeError(error, { area: 'Students.Promotions', action: 'loadTerms' }, 'Failed to load terms')
@@ -79,11 +92,15 @@ export default function Promotions() {
     }, [toAcademicYear, loadTerms])
 
     const loadStudents = useCallback(async () => {
-        if (!currentAcademicYear) {return}
+        if (!currentAcademicYear) { return }
         setLoading(true)
         try {
             const data = await globalThis.electronAPI.getStudentsForPromotion(fromStream, currentAcademicYear.id)
-            setStudents(data)
+            if (Array.isArray(data)) {
+                setStudents(data)
+            } else if (data && 'success' in data && data.success === false) {
+                console.error('Failed to load students for promotion:', data.error)
+            }
             setSelectedStudents([])
         } catch (error) {
             reportRuntimeError(error, { area: 'Students.Promotions', action: 'loadStudents' }, 'Failed to load students')
@@ -95,7 +112,7 @@ export default function Promotions() {
     const suggestNextStream = useCallback(async () => {
         try {
             const next = await globalThis.electronAPI.getNextStream(fromStream)
-            if (next) {
+            if (next && !('success' in next)) {
                 setToStream(next.id)
             }
         } catch (error) {
@@ -131,7 +148,7 @@ export default function Promotions() {
     }
 
     const handlePromote = () => {
-        if (!currentAcademicYear || !user) {return}
+        if (!currentAcademicYear || !user) { return }
         if (selectedStudents.length === 0) {
             showToast('Please select students to promote', 'warning')
             return
@@ -145,7 +162,7 @@ export default function Promotions() {
     }
 
     const executePromotion = async () => {
-        if (!currentAcademicYear || !user) {return}
+        if (!currentAcademicYear || !user) { return }
 
         setConfirmingPromotion(false)
         setLastPromotionFeedback(null)
@@ -188,7 +205,7 @@ export default function Promotions() {
     }
 
     const renderPromotionFeedback = () => {
-        if (!lastPromotionFeedback) {return null}
+        if (!lastPromotionFeedback) { return null }
 
         const hasFailures = lastPromotionFeedback.failed > 0
         const borderTone = hasFailures ? 'border-amber-500/30' : 'border-emerald-500/30'

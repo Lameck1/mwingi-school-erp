@@ -28,7 +28,10 @@ export default function MessageTemplates() {
         setLoading(true)
         try {
             const data = await globalThis.electronAPI.getNotificationTemplates()
-            setTemplates(data)
+            if (!Array.isArray(data) && data && 'success' in data && data.success === false) {
+                throw new Error(data.error || 'Failed to load templates')
+            }
+            setTemplates(Array.isArray(data) ? data : [])
         } catch (error) {
             console.error('Failed to load templates:', error)
             showToast('Failed to load message templates', 'error')
@@ -42,7 +45,7 @@ export default function MessageTemplates() {
     }, [loadTemplates])
 
     const handleSaveTemplate = async () => {
-        if (!user) {return}
+        if (!user) { return }
         if (!editingTemplate.template_name || !editingTemplate.body) {
             showToast('Name and body are required', 'error')
             return
@@ -96,7 +99,7 @@ export default function MessageTemplates() {
 
         return (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {templates.map(template => (
+                {(Array.isArray(templates) ? templates : []).map(template => (
                     <div key={template.id} className="premium-card group relative hover:border-primary/30 transition-all duration-300">
                         <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button className="p-2 rounded-lg bg-secondary/80 hover:bg-primary/20 text-foreground hover:text-primary transition-all" type="button" aria-label={`Preview ${template.template_name}`}>
@@ -130,7 +133,7 @@ export default function MessageTemplates() {
                         </div>
 
                         <div className="mt-4 flex flex-wrap gap-1.5">
-                            {template.variables.map(v => (
+                            {(Array.isArray(template.variables) ? template.variables : []).map(v => (
                                 <span key={v} className="text-[9px] font-mono bg-primary/5 text-primary px-2 py-0.5 rounded-md border border-primary/10">
                                     {`{{${v}}}`}
                                 </span>

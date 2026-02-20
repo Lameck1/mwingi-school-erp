@@ -23,7 +23,9 @@ export default function StudentCostAnalysis() {
     const loadStudents = useCallback(async () => {
         try {
             const data = await globalThis.electronAPI.getStudents({ is_active: true })
-            setStudents(data)
+            if (Array.isArray(data)) {
+                setStudents(data)
+            }
         } catch (error) {
             console.error(error)
         }
@@ -93,23 +95,23 @@ export default function StudentCostAnalysis() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Key Metrics */}
                     <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <StatCard 
-                            label="Total Cost Per Term" 
-                            value={formatCurrencyFromCents(costData.total_cost)} 
-                            icon={DollarSign} 
-                            color="text-red-500" 
+                        <StatCard
+                            label="Total Cost Per Term"
+                            value={formatCurrencyFromCents(costData.total_cost)}
+                            icon={DollarSign}
+                            color="text-red-500"
                         />
-                        <StatCard 
-                            label="Revenue (Fees)" 
-                            value={formatCurrencyFromCents(costVsRevenue?.revenue || 0)} 
-                            icon={DollarSign} 
-                            color="text-green-500" 
+                        <StatCard
+                            label="Revenue (Fees)"
+                            value={formatCurrencyFromCents(costVsRevenue?.revenue || 0)}
+                            icon={DollarSign}
+                            color="text-green-500"
                         />
-                        <StatCard 
-                            label="Subsidy / Deficit" 
-                            value={formatCurrencyFromCents((costVsRevenue?.revenue || 0) - costData.total_cost)} 
-                            icon={TrendingUp} 
-                            color={(costVsRevenue?.revenue || 0) - costData.total_cost >= 0 ? "text-green-500" : "text-red-500"} 
+                        <StatCard
+                            label="Subsidy / Deficit"
+                            value={formatCurrencyFromCents((costVsRevenue?.revenue || 0) - costData.total_cost)}
+                            icon={TrendingUp}
+                            color={(costVsRevenue?.revenue || 0) - costData.total_cost >= 0 ? "text-green-500" : "text-red-500"}
                         />
                     </div>
 

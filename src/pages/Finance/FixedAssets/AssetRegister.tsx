@@ -7,7 +7,7 @@ import { PageHeader } from '../../../components/patterns/PageHeader'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../contexts/ToastContext'
 import { useAuthStore } from '../../../stores'
-import { type FixedAsset, type CreateAssetData } from '../../../types/electron-api/FixedAssetAPI'
+import { type FixedAsset, type CreateAssetData, type AssetCategory } from '../../../types/electron-api/FixedAssetAPI'
 import { formatCurrencyFromCents, formatDate, shillingsToCents } from '../../../utils/format'
 
 export default function AssetRegister() {
@@ -22,19 +22,13 @@ export default function AssetRegister() {
         category_id: 0,
         acquisition_date: new Date().toISOString().slice(0, 10),
         acquisition_cost: 0,
+        accumulated_depreciation: 0,
         description: '',
         serial_number: '',
         location: ''
     })
 
-    // Mock categories for now - typically fetched from API
-    // In a real implementation, we'd have a getCategories endpoint
-    const categories = [
-        { id: 1, name: 'Furniture & Fittings' },
-        { id: 2, name: 'Computer Equipment' },
-        { id: 3, name: 'Vehicles' },
-        { id: 4, name: 'Land & Buildings' }
-    ]
+    const [categories, setCategories] = useState<{ id: number; name: string }[]>([])
 
     const loadAssets = useCallback(async (searchQuery: string) => {
         setLoading(true)
@@ -48,9 +42,20 @@ export default function AssetRegister() {
         }
     }, [])
 
+    const loadCategories = useCallback(async () => {
+        try {
+            const data = await globalThis.electronAPI.getAssetCategories()
+            setCategories(data.map((c: AssetCategory) => ({ id: c.id, name: c.category_name })))
+        } catch (error) {
+            console.error('Failed to load asset categories', error)
+            showToast('Failed to load asset categories', 'error')
+        }
+    }, [showToast])
+
     useEffect(() => {
         loadAssets('').catch((err: unknown) => console.error('Failed to load assets', err))
-    }, [loadAssets])
+        loadCategories().catch((err: unknown) => console.error('Failed to load categories', err))
+    }, [loadAssets, loadCategories])
 
     const handleCreate = async (e: React.SyntheticEvent) => {
         e.preventDefault()
@@ -61,7 +66,8 @@ export default function AssetRegister() {
         try {
             const result = await globalThis.electronAPI.createAsset({
                 ...createForm,
-                acquisition_cost: shillingsToCents(createForm.acquisition_cost), // Whole currency units -> cents
+                acquisition_cost: shillingsToCents(createForm.acquisition_cost),
+                accumulated_depreciation: shillingsToCents(createForm.accumulated_depreciation || 0),
             }, user.id)
 
             if (result.success) {
@@ -71,13 +77,15 @@ export default function AssetRegister() {
                     category_id: 0,
                     acquisition_date: new Date().toISOString().slice(0, 10),
                     acquisition_cost: 0,
+                    accumulated_depreciation: 0,
                     description: '',
                     serial_number: '',
                     location: ''
                 })
                 loadAssets(search).catch((err: unknown) => console.error('Failed to reload assets', err))
             } else {
-                alert('Failed to create asset: ' + result.errors?.join(', '))
+                const errorMessage = result.error || result.errors?.join(', ') || 'Unknown error'
+                alert('Failed to create asset: ' + errorMessage)
             }
         } catch {
             alert('Error creating asset')
@@ -219,15 +227,28 @@ export default function AssetRegister() {
                             />
                         </div>
                         <div className="space-y-2">
-                            <label htmlFor="field-222" className="label">Location</label>
-                            <input id="field-222"
-                                type="text"
-                                value={createForm.location || ''}
-                                onChange={(e) => setCreateForm(prev => ({ ...prev, location: e.target.value }))}
+                            <label htmlFor="field-acc-dep" className="label">Accumulated Depreciation (Ksh)</label>
+                            <input id="field-acc-dep"
+                                type="number"
+                                value={createForm.accumulated_depreciation || ''}
+                                onChange={(e) => setCreateForm(prev => ({ ...prev, accumulated_depreciation: Number(e.target.value) }))}
                                 className="input"
-                                placeholder="e.g. Computer Lab"
+                                placeholder="For legacy assets"
+                                min="0"
+                                aria-label="Accumulated depreciation"
                             />
                         </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label htmlFor="field-222" className="label">Location</label>
+                        <input id="field-222"
+                            type="text"
+                            value={createForm.location || ''}
+                            onChange={(e) => setCreateForm(prev => ({ ...prev, location: e.target.value }))}
+                            className="input"
+                            placeholder="e.g. Computer Lab"
+                        />
                     </div>
                     <div className="space-y-2">
                         <label htmlFor="field-233" className="label">Serial Number</label>

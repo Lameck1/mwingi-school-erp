@@ -59,7 +59,9 @@ export default function ScheduledReports({ embedded = false }: ScheduledReportsP
         setLoading(true)
         try {
             const data = await globalThis.electronAPI.getScheduledReports()
-            setSchedules(data)
+            if (Array.isArray(data)) {
+                setSchedules(data)
+            }
         } catch (error) {
             console.error('Failed to load schedules:', error)
         } finally {
@@ -68,7 +70,7 @@ export default function ScheduledReports({ embedded = false }: ScheduledReportsP
     }
 
     const handleSave = async () => {
-        if (!user) {return}
+        if (!user) { return }
         if (!editingSchedule.report_name) {
             alert('Report name is required')
             return
@@ -91,7 +93,7 @@ export default function ScheduledReports({ embedded = false }: ScheduledReportsP
     }
 
     const handleDelete = async (id: number) => {
-        if (!confirm('Are you sure you want to delete this schedule?')) {return}
+        if (!confirm('Are you sure you want to delete this schedule?')) { return }
 
         try {
             await globalThis.electronAPI.deleteScheduledReport(id, user!.id)
@@ -110,7 +112,7 @@ export default function ScheduledReports({ embedded = false }: ScheduledReportsP
     }
 
     const addRecipient = () => {
-        if (!recipientInput?.includes('@')) {return}
+        if (!recipientInput?.includes('@')) { return }
         const current = getRecipients()
         setEditingSchedule({
             ...editingSchedule,
@@ -295,12 +297,12 @@ export default function ScheduledReports({ embedded = false }: ScheduledReportsP
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <label htmlFor="scheduled-report-frequency" className="text-sm font-bold text-foreground/60">Frequency</label>
-                        <select
-                            id="scheduled-report-frequency"
-                            value={editingSchedule.schedule_type}
-                            onChange={(e) => setEditingSchedule({ ...editingSchedule, schedule_type: e.target.value as ScheduledReport['schedule_type'] })}
-                            className="input w-full"
-                        >
+                            <select
+                                id="scheduled-report-frequency"
+                                value={editingSchedule.schedule_type}
+                                onChange={(e) => setEditingSchedule({ ...editingSchedule, schedule_type: e.target.value as ScheduledReport['schedule_type'] })}
+                                className="input w-full"
+                            >
                                 <option value="DAILY">Daily</option>
                                 <option value="WEEKLY">Weekly</option>
                                 <option value="MONTHLY">Monthly</option>

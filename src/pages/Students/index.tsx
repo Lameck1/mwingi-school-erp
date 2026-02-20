@@ -12,6 +12,7 @@ import { useToast } from '../../contexts/ToastContext'
 import { useAppStore } from '../../stores'
 import { type Stream } from '../../types/electron-api/AcademicAPI'
 import { type Student } from '../../types/electron-api/StudentAPI'
+import { normalizeFilters } from '../../utils/filters'
 import { formatCurrencyFromCents } from '../../utils/format'
 import { printDocument } from '../../utils/print'
 
@@ -40,11 +41,15 @@ export default function Students() {
     const loadStudents = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await globalThis.electronAPI.getStudents({
+            const data = await globalThis.electronAPI.getStudents(normalizeFilters({
                 ...filters,
                 search: searchRef.current || undefined
-            })
-            setStudents(data)
+            }))
+            if (Array.isArray(data)) {
+                setStudents(data)
+            } else if (data && 'success' in data && data.success === false) {
+                showToast(data.error, 'error')
+            }
         } catch (error) {
             console.error('Failed to load students:', error)
             showToast('Failed to load students', 'error')
@@ -56,7 +61,11 @@ export default function Students() {
     const loadData = useCallback(async () => {
         try {
             const streamsData = await globalThis.electronAPI.getStreams()
-            setStreams(streamsData)
+            if (Array.isArray(streamsData)) {
+                setStreams(streamsData)
+            } else if (streamsData && 'success' in streamsData && streamsData.success === false) {
+                showToast(streamsData.error, 'error')
+            }
             await loadStudents()
         } catch (error) {
             console.error('Failed to load data:', error)
@@ -101,7 +110,7 @@ export default function Students() {
         setPrintingId(student.id)
         try {
             const result = await globalThis.electronAPI.getStudentLedgerReport(student.id)
-            if (result && !result.error) {
+            if (result && !('success' in result)) { // Narrowing IPCResult to data
                 printDocument({
                     title: `Statement - ${student.first_name} ${student.last_name}`,
                     template: 'statement',
@@ -235,141 +244,141 @@ export default function Students() {
                 if (viewMode === 'list') {
                     return (
                         <div className="card animate-slide-up no-scrollbar">
-                    <div className="overflow-x-auto -mx-2">
-                        <table className="w-full text-left">
-                            <thead>
-                                <tr className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 border-b border-border/20">
-                                    <th className="px-4 py-4">Student Identity</th>
-                                    <th className="px-4 py-4">Academic Placement</th>
-                                    <th className="px-4 py-4 text-right">Balance Due</th>
-                                    <th className="px-4 py-4">Status</th>
-                                    <th className="px-4 py-4 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/20">
-                                {paginatedStudents.map((student) => (
-                                    <tr key={student.id} className="group hover:bg-accent/20 transition-colors">
-                                        <td className="px-4 py-5">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shadow-inner group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
-                                                    {student.first_name?.charAt(0)}
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-foreground group-hover:text-primary transition-colors">
-                                                        {student.first_name} {student.last_name}
+                            <div className="overflow-x-auto -mx-2">
+                                <table className="w-full text-left">
+                                    <thead>
+                                        <tr className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 border-b border-border/20">
+                                            <th className="px-4 py-4">Student Identity</th>
+                                            <th className="px-4 py-4">Academic Placement</th>
+                                            <th className="px-4 py-4 text-right">Balance Due</th>
+                                            <th className="px-4 py-4">Status</th>
+                                            <th className="px-4 py-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border/20">
+                                        {paginatedStudents.map((student) => (
+                                            <tr key={student.id} className="group hover:bg-accent/20 transition-colors">
+                                                <td className="px-4 py-5">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shadow-inner group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
+                                                            {student.first_name?.charAt(0)}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-foreground group-hover:text-primary transition-colors">
+                                                                {student.first_name} {student.last_name}
+                                                            </p>
+                                                            <p className="text-[10px] font-mono text-foreground/40 uppercase tracking-widest">
+                                                                ADM: {student.admission_number}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-5">
+                                                    <p className="font-bold text-foreground">{student.first_name} {student.last_name}</p>
+                                                    <p className="text-[10px] text-foreground/40 font-mono">{student.admission_number}</p>
+                                                </td>
+                                                <td className="px-4 py-5 text-right">
+                                                    <p className={`text-xs font-bold ${(student.balance || 0) > 0 ? 'text-amber-600 dark:text-amber-500' : 'text-emerald-500'}`}>
+                                                        {formatCurrencyFromCents(student.balance || 0)}
                                                     </p>
-                                                    <p className="text-[10px] font-mono text-foreground/40 uppercase tracking-widest">
-                                                        ADM: {student.admission_number}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-5">
-                                            <p className="font-bold text-foreground">{student.first_name} {student.last_name}</p>
-                                            <p className="text-[10px] text-foreground/40 font-mono">{student.admission_number}</p>
-                                        </td>
-                                        <td className="px-4 py-5 text-right">
-                                            <p className={`text-xs font-bold ${(student.balance || 0) > 0 ? 'text-amber-600 dark:text-amber-500' : 'text-emerald-500'}`}>
-                                                {formatCurrencyFromCents(student.balance || 0)}
-                                            </p>
-                                        </td>
-                                        <td className="px-4 py-5">
-                                            <span className={`text-[9px] font-bold tracking-widest uppercase px-3 py-1 rounded-full border ${student.is_active
-                                                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                                : 'bg-red-500/10 border-red-500/20 text-red-400'
-                                                }`}>
-                                                {student.is_active ? 'Active' : 'Disabled'}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-5">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <button
-                                                    onClick={() => navigate(`/fee-payment?student=${student.id}`)}
-                                                    className="p-2 bg-secondary/50 hover:bg-primary/20 text-primary rounded-lg transition-all"
-                                                    title="Collect Fees"
-                                                    aria-label={`Collect fees for ${student.first_name} ${student.last_name}`}
-                                                >
-                                                    <Wallet className="w-4 h-4" aria-hidden="true" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handlePrintStatement(student)}
-                                                    className="p-2 bg-secondary/50 hover:bg-accent/20 text-foreground/40 hover:text-foreground rounded-lg transition-all"
-                                                    title="Print Statement"
-                                                    disabled={printingId === student.id}
-                                                    aria-label={`Print statement for ${student.first_name} ${student.last_name}`}
-                                                >
-                                                    {printingId === student.id ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Printer className="w-4 h-4" aria-hidden="true" />}
-                                                </button>
-                                                <button
-                                                    onClick={() => navigate(`/students/${student.id}`)}
-                                                    className="p-2 bg-secondary/50 hover:bg-accent/20 text-foreground/40 hover:text-foreground rounded-lg transition-all"
-                                                    title="Edit Profile"
-                                                    aria-label={`Edit profile for ${student.first_name} ${student.last_name}`}
-                                                >
-                                                    <Edit className="w-4 h-4" aria-hidden="true" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                                                </td>
+                                                <td className="px-4 py-5">
+                                                    <span className={`text-[9px] font-bold tracking-widest uppercase px-3 py-1 rounded-full border ${student.is_active
+                                                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                                        : 'bg-red-500/10 border-red-500/20 text-red-400'
+                                                        }`}>
+                                                        {student.is_active ? 'Active' : 'Disabled'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-5">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button
+                                                            onClick={() => navigate(`/fee-payment?student=${student.id}`)}
+                                                            className="p-2 bg-secondary/50 hover:bg-primary/20 text-primary rounded-lg transition-all"
+                                                            title="Collect Fees"
+                                                            aria-label={`Collect fees for ${student.first_name} ${student.last_name}`}
+                                                        >
+                                                            <Wallet className="w-4 h-4" aria-hidden="true" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handlePrintStatement(student)}
+                                                            className="p-2 bg-secondary/50 hover:bg-accent/20 text-foreground/40 hover:text-foreground rounded-lg transition-all"
+                                                            title="Print Statement"
+                                                            disabled={printingId === student.id}
+                                                            aria-label={`Print statement for ${student.first_name} ${student.last_name}`}
+                                                        >
+                                                            {printingId === student.id ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Printer className="w-4 h-4" aria-hidden="true" />}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => navigate(`/students/${student.id}`)}
+                                                            className="p-2 bg-secondary/50 hover:bg-accent/20 text-foreground/40 hover:text-foreground rounded-lg transition-all"
+                                                            title="Edit Profile"
+                                                            aria-label={`Edit profile for ${student.first_name} ${student.last_name}`}
+                                                        >
+                                                            <Edit className="w-4 h-4" aria-hidden="true" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     )
                 }
 
                 return (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {paginatedStudents.map((student) => (
-                        <div key={student.id} className="card group hover:-translate-y-1 transition-all duration-300">
-                            <div className="flex items-start justify-between mb-4">
-                                <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center text-foreground font-bold text-lg shadow-inner group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
-                                    {student.first_name[0]}{student.last_name[0]}
-                                </div>
-                                <span className={`text-[9px] font-bold tracking-widest uppercase px-2 py-1 rounded-md border ${student.student_type === 'BOARDER'
-                                    ? 'bg-purple-500/10 border-purple-500/20 text-purple-400'
-                                    : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-                                    }`}>
-                                    {student.student_type}
-                                </span>
-                            </div>
-
-                            <h3 className="font-bold text-foreground mb-1 truncate group-hover:text-primary transition-colors">
-                                {student.first_name} {student.last_name}
-                            </h3>
-                            <p className="text-[10px] font-mono text-foreground/40 uppercase tracking-widest mb-4">ADM: {student.admission_number}</p>
-
-                            <div className="space-y-3 pt-4 border-t border-border/40">
-                                <div className="flex justify-between items-center text-[11px]">
-                                    <span className="text-foreground/40 font-bold uppercase tracking-tighter">Placement</span>
-                                    <span className="text-foreground font-bold">{student.stream_name || '-'}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-[11px]">
-                                    <span className="text-foreground/40 font-bold uppercase tracking-tighter">Outstanding</span>
-                                    <span className={`font-bold ${(student.balance || 0) > 0 ? 'text-orange-400' : 'text-emerald-400'}`}>
-                                        {formatCurrencyFromCents(student.balance || 0)}
+                        {paginatedStudents.map((student) => (
+                            <div key={student.id} className="card group hover:-translate-y-1 transition-all duration-300">
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center text-foreground font-bold text-lg shadow-inner group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
+                                        {student.first_name[0]}{student.last_name[0]}
+                                    </div>
+                                    <span className={`text-[9px] font-bold tracking-widest uppercase px-2 py-1 rounded-md border ${student.student_type === 'BOARDER'
+                                        ? 'bg-purple-500/10 border-purple-500/20 text-purple-400'
+                                        : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                                        }`}>
+                                        {student.student_type}
                                     </span>
                                 </div>
-                            </div>
 
-                            <div className="flex items-center gap-2 mt-6">
-                                <button
-                                    onClick={() => navigate(`/students/${student.id}`)}
-                                    className="flex-1 py-2 bg-secondary/50 hover:bg-secondary/80 text-foreground text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all duration-300"
-                                >
-                                    Profile
-                                </button>
-                                <button
-                                    onClick={() => navigate(`/fee-payment?student=${student.id}`)}
-                                    className="flex-1 py-2 bg-primary/10 hover:bg-primary text-primary hover:text-primary-foreground text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all duration-300"
-                                >
-                                    Pay
-                                </button>
+                                <h3 className="font-bold text-foreground mb-1 truncate group-hover:text-primary transition-colors">
+                                    {student.first_name} {student.last_name}
+                                </h3>
+                                <p className="text-[10px] font-mono text-foreground/40 uppercase tracking-widest mb-4">ADM: {student.admission_number}</p>
+
+                                <div className="space-y-3 pt-4 border-t border-border/40">
+                                    <div className="flex justify-between items-center text-[11px]">
+                                        <span className="text-foreground/40 font-bold uppercase tracking-tighter">Placement</span>
+                                        <span className="text-foreground font-bold">{student.stream_name || '-'}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-[11px]">
+                                        <span className="text-foreground/40 font-bold uppercase tracking-tighter">Outstanding</span>
+                                        <span className={`font-bold ${(student.balance || 0) > 0 ? 'text-orange-400' : 'text-emerald-400'}`}>
+                                            {formatCurrencyFromCents(student.balance || 0)}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 mt-6">
+                                    <button
+                                        onClick={() => navigate(`/students/${student.id}`)}
+                                        className="flex-1 py-2 bg-secondary/50 hover:bg-secondary/80 text-foreground text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all duration-300"
+                                    >
+                                        Profile
+                                    </button>
+                                    <button
+                                        onClick={() => navigate(`/fee-payment?student=${student.id}`)}
+                                        className="flex-1 py-2 bg-primary/10 hover:bg-primary text-primary hover:text-primary-foreground text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all duration-300"
+                                    >
+                                        Pay
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
                 )
             })()}
 

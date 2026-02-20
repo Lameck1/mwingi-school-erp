@@ -44,14 +44,19 @@ export default function Login() {
                 // Load app data in background; don't block login
                 void (async () => {
                     try {
-                        const [settings, academicYear, currentTerm] = await Promise.all([
-                            globalThis.electronAPI.getSettings(),
-                            globalThis.electronAPI.getCurrentAcademicYear(),
-                            globalThis.electronAPI.getCurrentTerm(),
-                        ])
-                        if (settings) {setSchoolSettings(settings)}
-                        if (academicYear) {setCurrentAcademicYear(academicYear)}
-                        if (currentTerm) {setCurrentTerm(currentTerm)}
+                        const settingsRes = await globalThis.electronAPI.getSettings()
+                        const yearRes = await globalThis.electronAPI.getCurrentAcademicYear()
+                        const termRes = await globalThis.electronAPI.getCurrentTerm()
+
+                        if (settingsRes && !('success' in settingsRes)) {
+                            setSchoolSettings(settingsRes)
+                        }
+                        if (yearRes && !('success' in yearRes)) {
+                            setCurrentAcademicYear(yearRes)
+                        }
+                        if (termRes && !('success' in termRes)) {
+                            setCurrentTerm(termRes)
+                        }
                     } catch (err) {
                         console.error('Post-login bootstrap failed:', err)
                     }

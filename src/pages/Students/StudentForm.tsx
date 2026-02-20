@@ -1,5 +1,5 @@
-import { ArrowLeft, Save, Loader2, User, Shield, Phone, Mail, MapPin, Calendar, Heart } from 'lucide-react'
-import React, { useEffect, useState } from 'react'
+import { ArrowLeft, Save, Loader2, User, Shield, Phone, Mail, MapPin, Calendar, Heart, Camera, Trash2, Upload } from 'lucide-react'
+import React, { useEffect, useState, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
@@ -17,6 +17,9 @@ export default function StudentForm() {
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
+    const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null)
+    const [pendingPhoto, setPendingPhoto] = useState<string | null>(null)
+    const photoInputRef = useRef<HTMLInputElement>(null)
 
     const [formData, setFormData] = useState({
         admission_number: '',
@@ -41,11 +44,17 @@ export default function StudentForm() {
             setLoading(true)
             try {
                 const streamsData = await globalThis.electronAPI.getStreams()
-                setStreams(streamsData)
+                if (!Array.isArray(streamsData) && streamsData && 'success' in streamsData && streamsData.success === false) {
+                    throw new Error(streamsData.error || 'Failed to load streams')
+                }
+                setStreams(Array.isArray(streamsData) ? streamsData : [])
 
                 if (id) {
-                    const student = await globalThis.electronAPI.getStudentById(Number.parseInt(id, 10))
-                    if (student) {
+                    const result = await globalThis.electronAPI.getStudentById(Number.parseInt(id, 10))
+                    if (result && !('success' in result)) {
+                        const student = result
+                        const dataUrl = await globalThis.electronAPI.getStudentPhotoDataUrl(Number.parseInt(id, 10))
+                        setPhotoDataUrl(dataUrl)
                         const studentWithExtendedFields = student as typeof student & {
                             guardian_relationship?: string | null
                             notes?: string | null
@@ -67,6 +76,8 @@ export default function StudentForm() {
                             guardian_relationship: studentWithExtendedFields.guardian_relationship || '',
                             notes: studentWithExtendedFields.notes || ''
                         })
+                    } else if (result && 'success' in result && result.success === false) {
+                        setError(result.error)
                     }
                 }
             } catch (error) {
@@ -84,6 +95,62 @@ export default function StudentForm() {
         setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }))
     }
 
+    const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) {return}
+
+        if (file.size > 5 * 1024 * 1024) {
+            setError('Image file size exceeds 5MB limit')
+            return
+        }
+
+        const reader = new FileReader()
+        reader.onload = async () => {
+            const base64 = reader.result as string
+            if (isEdit && id) {
+                setSaving(true)
+                try {
+                    const result = await globalThis.electronAPI.uploadStudentPhoto(Number.parseInt(id, 10), base64)
+                    if (result.success) {
+                        setPhotoDataUrl(base64)
+                    } else {
+                        setError(result.error || 'Failed to upload photo')
+                    }
+                } catch {
+                    setError('Photo upload failed')
+                } finally {
+                    setSaving(false)
+                }
+            } else {
+                setPendingPhoto(base64)
+                setPhotoDataUrl(base64)
+            }
+        }
+        reader.readAsDataURL(file)
+    }
+
+    const handleRemovePhoto = async () => {
+        if (!confirm('Are you sure you want to remove the student photo?')) {return}
+        if (isEdit && id) {
+            setSaving(true)
+            try {
+                const result = await globalThis.electronAPI.removeStudentPhoto(Number.parseInt(id, 10))
+                if (result.success) {
+                    setPhotoDataUrl(null)
+                } else {
+                    setError(result.error || 'Failed to remove photo')
+                }
+            } catch {
+                setError('Remove photo failed')
+            } finally {
+                setSaving(false)
+            }
+        } else {
+            setPendingPhoto(null)
+            setPhotoDataUrl(null)
+        }
+    }
+
     const handleSubmit = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         setError('')
@@ -95,7 +162,7 @@ export default function StudentForm() {
                 ...formData,
                 stream_id: Number.isFinite(parsedStreamId) ? parsedStreamId : undefined
             }
-            type StudentMutationResult = { success: boolean; error?: string }
+            type StudentMutationResult = { success: boolean; error?: string; id?: number }
             let mutationResult: StudentMutationResult
 
             if (isEdit && id) {
@@ -111,7 +178,11 @@ export default function StudentForm() {
                 mutationResult = await globalThis.electronAPI.createStudent(
                     studentPayload,
                     user.id
-                ) as StudentMutationResult
+                ) as StudentMutationResult & { id?: number }
+
+                if (mutationResult.success && mutationResult.id && pendingPhoto) {
+                    await globalThis.electronAPI.uploadStudentPhoto(mutationResult.id, pendingPhoto)
+                }
             }
 
             if (!mutationResult.success) {
@@ -294,7 +365,56 @@ export default function StudentForm() {
                 {/* Right Column: Actions & Meta */}
                 <div className="space-y-8">
                     <div className="card animate-slide-up delay-200">
-                        <div className="flex items-center gap-3 mb-6">
+                        <div className="flex flex-col items-center gap-6 mb-8">
+                            <div className="relative group">
+                                <div className="w-40 h-40 rounded-3xl bg-secondary/30 border-2 border-dashed border-border/40 flex items-center justify-center overflow-hidden transition-all group-hover:border-primary/40 relative shadow-inner">
+                                    {photoDataUrl ? (
+                                        <img src={photoDataUrl} alt="Student" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="flex flex-col items-center gap-2 opacity-20">
+                                            <Camera className="w-12 h-12" />
+                                            <span className="text-[8px] font-bold uppercase tracking-widest">No Photo</span>
+                                        </div>
+                                    )}
+                                    {saving && (
+                                        <div className="absolute inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center">
+                                            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                                        </div>
+                                    )}
+                                </div>
+                                <input
+                                    type="file"
+                                    ref={photoInputRef}
+                                    onChange={handlePhotoSelect}
+                                    accept="image/*"
+                                    className="hidden"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => photoInputRef.current?.click()}
+                                    className="absolute -bottom-2 -right-2 p-3 bg-primary text-primary-foreground rounded-2xl shadow-xl hover:scale-110 active:scale-95 transition-all border-4 border-background"
+                                    title="Upload Photo"
+                                >
+                                    <Upload className="w-4 h-4" />
+                                </button>
+                            </div>
+                            <div className="text-center">
+                                <h3 className="text-sm font-bold text-foreground">Student Identification Photo</h3>
+                                <p className="text-[10px] text-foreground/40 mt-1 font-medium">Capture or upload a clear frontal portrait</p>
+                                {photoDataUrl && (
+                                    <button
+                                        type="button"
+                                        onClick={handleRemovePhoto}
+                                        className="mt-3 text-[10px] font-bold text-destructive hover:text-destructive/80 transition-colors flex items-center gap-1 mx-auto"
+                                    >
+                                        <Trash2 className="w-3 h-3" />
+                                        Remove Photo
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 mb-6 pt-6 border-t border-border/10">
                             <Shield className="w-5 h-5 text-primary" />
                             <h2 className="text-lg font-bold text-foreground">Record Status</h2>
                         </div>

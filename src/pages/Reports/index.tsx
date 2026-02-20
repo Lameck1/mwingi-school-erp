@@ -89,8 +89,10 @@ export default function Reports() {
             })
 
             // Load financial summary
-            const summary = await globalThis.electronAPI.getTransactionSummary(dateRange.start, dateRange.end)
-            setFinancialSummary(summary || { totalIncome: 0, totalExpense: 0, netBalance: 0 })
+            const summary = await window.electronAPI.getTransactionSummary(dateRange.start, dateRange.end)
+            if (summary && !('success' in summary)) {
+                setFinancialSummary(summary)
+            }
 
             // Load fee collection data
             const feeData = await globalThis.electronAPI.getFeeCollectionReport(dateRange.start, dateRange.end)

@@ -10,7 +10,9 @@ export interface PrintOptions {
 
 export interface PrintPreviewData {
   title: string
-  html: string
+  html?: string
+  pdfUrl?: string
+  onDownload?: () => void
 }
 
 type PrintPreviewListener = (preview: PrintPreviewData | null) => void
@@ -37,6 +39,21 @@ export function closePrintPreview(): void {
 
 function openPrintPreview(preview: PrintPreviewData): void {
   notifyPreviewListeners(preview)
+}
+
+export function previewPDF(title: string, pdfUrl: string): void {
+  openPrintPreview({
+    title,
+    pdfUrl
+  })
+}
+
+export function previewHTML(title: string, html: string, onDownload?: () => void): void {
+  openPrintPreview({
+    title,
+    html,
+    onDownload
+  })
 }
 
 function getHeadStylesHtml(): string {

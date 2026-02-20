@@ -1,5 +1,5 @@
-import { Save, Loader2, School, Calendar, CreditCard, Globe, MessageSquare, Plus, CheckCircle2, Database, AlertTriangle } from 'lucide-react'
-import { useEffect, useState, useCallback } from 'react'
+import { Save, Loader2, School, Calendar, CreditCard, Globe, MessageSquare, Plus, CheckCircle2, Database, AlertTriangle, Image as ImageIcon, Trash2, Upload } from 'lucide-react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 
 import IntegrationsSettings from './Integrations'
 import MessageTemplates from './MessageTemplates'
@@ -40,6 +40,72 @@ export default function Settings() {
         mpesa_paybill: ''
     })
 
+    const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null)
+    const logoInputRef = useRef<HTMLInputElement>(null)
+
+    const loadLogo = useCallback(async () => {
+        try {
+            const dataUrl = await globalThis.electronAPI.getLogoDataUrl()
+            setLogoDataUrl(dataUrl)
+        } catch (error) {
+            console.error('Failed to load logo:', error)
+        }
+    }, [])
+
+    useEffect(() => {
+        loadLogo().catch(console.error)
+    }, [loadLogo])
+
+    const handleLogoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) {return}
+
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('Image file size exceeds 5MB limit', 'error')
+            return
+        }
+
+        const reader = new FileReader()
+        reader.onload = async () => {
+            const base64 = reader.result as string
+            setSaving(true)
+            try {
+                const result = await globalThis.electronAPI.uploadLogo(base64)
+                if (result.success) {
+                    setLogoDataUrl(base64)
+                    showToast('School logo updated successfully', 'success')
+                } else {
+                    showToast(result.error || 'Failed to upload logo', 'error')
+                }
+            } catch (error) {
+                showToast('Logo upload failed', 'error')
+                console.error(error)
+            } finally {
+                setSaving(false)
+            }
+        }
+        reader.readAsDataURL(file)
+    }
+
+    const handleRemoveLogo = async () => {
+        if (!confirm('Are you sure you want to remove the school logo?')) {return}
+        setSaving(true)
+        try {
+            const result = await globalThis.electronAPI.removeLogo()
+            if (result.success) {
+                setLogoDataUrl(null)
+                showToast('School logo removed', 'success')
+            } else {
+                showToast(result.error || 'Failed to remove logo', 'error')
+            }
+        } catch (error) {
+            showToast('Remove logo failed', 'error')
+            console.error(error)
+        } finally {
+            setSaving(false)
+        }
+    }
+
     useEffect(() => {
         if (schoolSettings) {
             setFormData({
@@ -60,7 +126,9 @@ export default function Settings() {
         setLoadingYears(true)
         try {
             const years = await globalThis.electronAPI.getAcademicYears()
-            setAcademicYears(years)
+            if (Array.isArray(years)) {
+                setAcademicYears(years)
+            }
         } catch {
             showToast('Failed to load academic cycles', 'error')
         } finally {
@@ -229,6 +297,54 @@ export default function Settings() {
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="md:col-span-2 flex flex-col sm:flex-row items-center gap-6 p-6 bg-secondary/10 rounded-3xl border border-border/20">
+                                    <div className="relative group">
+                                        <div className="w-32 h-32 rounded-2xl bg-background border-2 border-dashed border-border/40 flex items-center justify-center overflow-hidden transition-all group-hover:border-primary/40 relative">
+                                            {logoDataUrl ? (
+                                                <img src={logoDataUrl} alt="Logo" className="w-full h-full object-contain p-2" />
+                                            ) : (
+                                                <ImageIcon className="w-12 h-12 text-foreground/5" />
+                                            )}
+                                            {saving && (
+                                                <div className="absolute inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center">
+                                                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 space-y-3">
+                                        <h3 className="text-sm font-bold text-foreground">School Logo</h3>
+                                        <p className="text-xs text-foreground/40 leading-relaxed font-medium"> This logo will appear on official report cards, invoices, and other generated documents. Recommended: Clear PNG with transparent background. Max 5MB. </p>
+                                        <div className="flex flex-wrap gap-2">
+                                            <input
+                                                type="file"
+                                                ref={logoInputRef}
+                                                onChange={handleLogoSelect}
+                                                accept="image/*"
+                                                className="hidden"
+                                            />
+                                            <button
+                                                onClick={() => logoInputRef.current?.click()}
+                                                disabled={saving}
+                                                className="btn btn-secondary px-4 py-2 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2"
+                                            >
+                                                <Upload className="w-3 h-3" />
+                                                {logoDataUrl ? 'Change Logo' : 'Upload Logo'}
+                                            </button>
+                                            {logoDataUrl && (
+                                                <button
+                                                    onClick={handleRemoveLogo}
+                                                    disabled={saving}
+                                                    className="btn hover:bg-destructive/10 text-destructive px-4 py-2 text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 border border-destructive/20"
+                                                >
+                                                    <Trash2 className="w-3 h-3" />
+                                                    Remove
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div className="md:col-span-2 space-y-2">
                                     <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="school_name">Official School Name *</label>
                                     <input id="school_name" type="text" value={formData.school_name}
@@ -386,6 +502,42 @@ export default function Settings() {
                                         <span>Normalize Currency Values</span>
                                     </button>
                                 </div>
+                                <div className="p-4 md:p-8 bg-secondary/5 rounded-3xl border border-border/20 relative overflow-hidden mb-6">
+                                    <div className="absolute top-0 right-0 p-8 opacity-5">
+                                        <Calendar className="w-32 h-32 text-primary" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-primary flex items-center gap-2 mb-2">
+                                        <Calendar className="w-5 h-5" />
+                                        Hydrate Examination Data
+                                    </h3>
+                                    <p className="text-sm text-foreground/60 font-medium leading-relaxed max-w-2xl mb-8">
+                                        Populate the current academic term with professional-grade CBC subjects, scheduled exams, and realistic student performance scores.
+                                        This is ideal for testing report cards, merit lists, and academic analytics.
+                                    </p>
+                                    <button
+                                        onClick={async () => {
+                                            setSaving(true)
+                                            try {
+                                                const result = await globalThis.electronAPI.seedExams()
+                                                if (result.success) {
+                                                    showToast('Examination data seeded successfully!', 'success')
+                                                    setTimeout(() => globalThis.location.reload(), 600)
+                                                } else {
+                                                    showToast(result.error || 'Seeding failed', 'error')
+                                                }
+                                            } catch {
+                                                showToast('Critical seeding failure', 'error')
+                                            } finally {
+                                                setSaving(false)
+                                            }
+                                        }}
+                                        disabled={saving}
+                                        className="btn bg-primary hover:bg-primary/90 text-white flex items-center gap-3 py-4 px-10 text-sm font-bold shadow-xl shadow-primary/10 transition-all hover:-translate-y-1 active:scale-95 disabled:opacity-50"
+                                    >
+                                        {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+                                        <span>Seed Examination Data (CBC)</span>
+                                    </button>
+                                </div>
                                 <div className="p-4 md:p-8 bg-destructive/5 rounded-3xl border border-destructive/20 relative overflow-hidden">
                                     <div className="absolute top-0 right-0 p-8 opacity-5">
                                         <AlertTriangle className="w-32 h-32 text-destructive" />
@@ -448,7 +600,8 @@ export default function Settings() {
                                                 '20 Fresh Student Profiles',
                                                 'Standardized 2026 Fee Structures',
                                                 'Opening Inventory Balances',
-                                                'Sample Staff & Departmental Roster'
+                                                'Sample Staff & Departmental Roster',
+                                                'CBC Subjects & Examination Scores'
                                             ].map((item) => (
                                                 <li key={item} className="flex items-center gap-2 text-sm font-medium text-foreground/60">
                                                     <CheckCircle2 className="w-4 h-4 text-emerald-500/60" />
