@@ -12,14 +12,23 @@ jobs:
     
     strategy:
       matrix:
-        os: [windows-latest]
-        # mac/linux targets are declared in package.json build config but not yet CI-tested.
-        # To enable: os: [ubuntu-latest, windows-latest, macos-latest]
-        # Requires: native dependency builds (better-sqlite3) and platform-specific testing.
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        
+    env:
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        
+      - name: Validate Code Signing Secrets (Release Only)
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          if [ -z "$CSC_LINK" ]; then echo "Error: CSC_LINK secret is missing for release build."; exit 1; fi
+          if [ -z "$CSC_KEY_PASSWORD" ]; then echo "Error: CSC_KEY_PASSWORD secret is missing for release build."; exit 1; fi
+
         
       - name: Setup Node.js
         uses: actions/setup-node@v4

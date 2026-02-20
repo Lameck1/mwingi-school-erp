@@ -10,6 +10,8 @@ export interface AuditLogEntry {
   user_name?: string
 }
 
+type IPCResult<T> = T | { success: false; error: string; errors?: string[] };
+
 export interface AuditAPI {
-  getAuditLog: (limit?: number) => Promise<AuditLogEntry[]>
+  getAuditLog: (limit?: number) => Promise<IPCResult<AuditLogEntry[]>>
 }

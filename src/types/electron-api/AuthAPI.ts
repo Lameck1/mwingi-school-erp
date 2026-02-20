@@ -3,7 +3,7 @@ export interface User {
   username: string
   full_name: string
   email: string
-  role: 'ADMIN' | 'ACCOUNTS_CLERK' | 'AUDITOR'
+  role: 'ADMIN' | 'ACCOUNTS_CLERK' | 'AUDITOR' | 'PRINCIPAL' | 'DEPUTY_PRINCIPAL' | 'TEACHER'
   is_active: boolean
   last_login: string
   created_at: string

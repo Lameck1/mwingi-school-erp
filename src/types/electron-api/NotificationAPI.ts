@@ -32,6 +32,8 @@ export interface CommunicationLog {
     sent_by_name?: string
 }
 
+type IPCResult<T> = T | { success: false; error: string; errors?: string[] };
+
 export interface NotificationAPI {
     reloadNotificationConfig: () => Promise<boolean>
     sendNotification: (request: NotificationRequest, userId: number) => Promise<NotificationResult>
@@ -44,9 +46,9 @@ export interface NotificationAPI {
         class_name: string
         balance: number
     }>, userId: number) => Promise<{ sent: number; failed: number; errors: string[] }>
-    getNotificationTemplates: () => Promise<MessageTemplate[]>
+    getNotificationTemplates: () => Promise<IPCResult<MessageTemplate[]>>
     createNotificationTemplate: (template: Omit<MessageTemplate, 'id' | 'variables' | 'is_active'>, userId: number) => Promise<{ success: boolean; id?: number; errors?: string[] }>
-    getDefaultTemplates: () => Promise<MessageTemplate[]>
+    getDefaultTemplates: () => Promise<IPCResult<MessageTemplate[]>>
     getNotificationHistory: (filters?: {
         recipientType?: string
         recipientId?: number
@@ -54,5 +56,5 @@ export interface NotificationAPI {
         status?: string
         startDate?: string
         endDate?: string
-    }) => Promise<CommunicationLog[]>
+    }) => Promise<IPCResult<CommunicationLog[]>>
 }

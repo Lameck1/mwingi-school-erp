@@ -18,6 +18,9 @@ export interface SettingsAPI {
   getSettings: () => Promise<SchoolSettings>
   getSchoolSettings: () => Promise<SchoolSettings>
   updateSettings: (data: Partial<SchoolSettings>) => Promise<{ success: boolean }>
+  uploadLogo: (dataUrl: string) => Promise<{ success: boolean; filePath?: string; error?: string }>
+  removeLogo: () => Promise<{ success: boolean; error?: string }>
+  getLogoDataUrl: () => Promise<string | null>
 
   // Secure Config (Phase 3)
   getSecureConfig(key: string): Promise<string | null>
@@ -25,4 +28,5 @@ export interface SettingsAPI {
   getAllConfigs(): Promise<Record<string, string>>
   resetAndSeedDatabase(userId: number): Promise<{ success: boolean; error?: string; message?: string }>
   normalizeCurrencyScale(userId: number): Promise<{ success: boolean; error?: string; message?: string }>
+  seedExams(): Promise<{ success: boolean; error?: string }>
 }

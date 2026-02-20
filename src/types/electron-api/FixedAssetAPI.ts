@@ -19,6 +19,7 @@ export interface CreateAssetData {
     category_id: number
     acquisition_date: string
     acquisition_cost: number
+    accumulated_depreciation?: number
     asset_code?: string
     description?: string
     serial_number?: string
@@ -54,7 +55,7 @@ export interface FixedAssetAPI {
     getFinancialPeriods: () => Promise<FinancialPeriod[]>
     getAssets: (filters?: AssetFilters) => Promise<FixedAsset[]>
     getAsset: (id: number) => Promise<FixedAsset | null>
-    createAsset: (data: CreateAssetData, userId: number) => Promise<{ success: boolean; id: number; errors?: string[] }>
+    createAsset: (data: CreateAssetData, userId: number) => Promise<{ success: boolean; id?: number; error?: string; errors?: string[] }>
     updateAsset: (id: number, data: Partial<CreateAssetData> & { status?: string }, userId: number) => Promise<{ success: boolean; errors?: string[] }>
     runDepreciation: (assetId: number, periodId: number, userId: number) => Promise<{ success: boolean; error?: string }>
 }

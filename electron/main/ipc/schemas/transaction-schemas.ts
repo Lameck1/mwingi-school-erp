@@ -19,3 +19,15 @@ export const TransactionCreateCategorySchema = z.tuple([
     z.string().min(1),
     z.enum(['INCOME', 'EXPENSE']),
 ])
+
+export const TransactionFiltersSchema = z.object({
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    type: z.string().optional(),
+    categoryId: z.number().optional()
+}).optional()
+
+export const TransactionSummaryInputSchema = z.tuple([
+    z.string().min(10), // startDate YYYY-MM-DD
+    z.string().min(10)  // endDate YYYY-MM-DD
+])

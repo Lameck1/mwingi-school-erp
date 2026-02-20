@@ -128,52 +128,54 @@ export interface PromotionBatchResult {
   failureDetails?: PromotionBatchFailure[]
 }
 
+type IPCResult<T> = T | { success: false; error: string; errors?: string[] };
+
 export interface AcademicAPI {
   // Academic Year & Terms
-  getAcademicYears: () => Promise<AcademicYear[]>
-  getCurrentAcademicYear: () => Promise<AcademicYear>
+  getAcademicYears: () => Promise<IPCResult<AcademicYear[]>>
+  getCurrentAcademicYear: () => Promise<IPCResult<AcademicYear>>
   createAcademicYear: (_data: Partial<AcademicYear>) => Promise<{ success: boolean; id: number }>
   activateAcademicYear: (id: number) => Promise<{ success: boolean }>
-  getTermsByYear: (_yearId: number) => Promise<Term[]>
-  getCurrentTerm: () => Promise<Term>
+  getTermsByYear: (_yearId: number) => Promise<IPCResult<Term[]>>
+  getCurrentTerm: () => Promise<IPCResult<Term>>
 
   // Streams
-  getStreams: () => Promise<Stream[]>
+  getStreams: () => Promise<IPCResult<Stream[]>>
 
   // Academic System (New)
-  getAcademicSubjects: () => Promise<AcademicSubject[]>
-  getAcademicSubjectsAdmin: () => Promise<AcademicSubject[]>
+  getAcademicSubjects: () => Promise<IPCResult<AcademicSubject[]>>
+  getAcademicSubjectsAdmin: () => Promise<IPCResult<AcademicSubject[]>>
   createAcademicSubject: (data: Partial<AcademicSubject>, userId: number) => Promise<{ success: boolean; id: number }>
   updateAcademicSubject: (id: number, data: Partial<AcademicSubject>, userId: number) => Promise<{ success: boolean }>
   setAcademicSubjectActive: (id: number, isActive: boolean, userId: number) => Promise<{ success: boolean }>
-  getAcademicExams: (academicYearId: number, termId: number) => Promise<AcademicExam[]>
+  getAcademicExams: (academicYearId: number, termId: number) => Promise<IPCResult<AcademicExam[]>>
   createAcademicExam: (data: unknown, userId: number) => Promise<void>
   deleteAcademicExam: (id: number, userId: number) => Promise<void>
   allocateTeacher: (data: unknown, userId: number) => Promise<void>
-  getTeacherAllocations: (academicYearId: number, termId: number, streamId?: number) => Promise<TeacherAllocation[]>
+  getTeacherAllocations: (academicYearId: number, termId: number, streamId?: number) => Promise<IPCResult<TeacherAllocation[]>>
   deleteTeacherAllocation: (allocationId: number, userId: number) => Promise<void>
   saveAcademicResults: (examId: number, results: AcademicResult[], userId: number) => Promise<void>
-  getAcademicResults: (examId: number, subjectId: number, streamId: number, userId: number) => Promise<AcademicResult[]>
+  getAcademicResults: (examId: number, subjectId: number, streamId: number, userId: number) => Promise<IPCResult<AcademicResult[]>>
 
   processAcademicResults: (examId: number, userId: number) => Promise<void>
 
   // Promotions
-  getPromotionStreams: () => Promise<Stream[]>
-  getNextStream: (currentStreamId: number) => Promise<Stream | null>
+  getPromotionStreams: () => Promise<IPCResult<Stream[]>>
+  getNextStream: (currentStreamId: number) => Promise<IPCResult<Stream | null>>
 
 
-  getStudentsForPromotion: (streamId: number, academicYearId: number) => Promise<PromotionStudent[]>
+  getStudentsForPromotion: (streamId: number, academicYearId: number) => Promise<IPCResult<PromotionStudent[]>>
   batchPromoteStudents: (studentIds: number[], fromStreamId: number, toStreamId: number, currentYearId: number, nextYearId: number, nextTermId: number, userId: number) => Promise<PromotionBatchResult>
 
   // Merit Lists & Analysis
-  generateMeritList: (options: { academicYearId: number; termId: number; streamId: number }) => Promise<MeritListResult['rankings']>;
-  generateClassMeritList: (examId: number, streamId: number) => Promise<MeritListResult>;
-  getSubjectMeritList: (filters: { examId: number; subjectId: number; streamId: number }) => Promise<SubjectMeritListRow[]>;
-  getPerformanceImprovement: (studentId: number) => Promise<PerformanceImprovement[]>;
+  generateMeritList: (options: { academicYearId: number; termId: number; streamId: number }) => Promise<IPCResult<MeritListResult['rankings']>>;
+  generateClassMeritList: (examId: number, streamId: number) => Promise<IPCResult<MeritListResult>>;
+  getSubjectMeritList: (filters: { examId: number; subjectId: number; streamId: number }) => Promise<IPCResult<SubjectMeritListRow[]>>;
+  getPerformanceImprovement: (studentId: number) => Promise<IPCResult<PerformanceImprovement[]>>;
 
   // Awards
-  getAwards: (filters?: { academicYearId?: number; termId?: number; status?: string }) => Promise<StudentAward[]>
-  getAwardCategories: () => Promise<AwardCategory[]>
+  getAwards: (filters?: { academicYearId?: number; termId?: number; status?: string }) => Promise<IPCResult<StudentAward[]>>
+  getAwardCategories: () => Promise<IPCResult<AwardCategory[]>>
   awardStudent: (data: { studentId: number; categoryId: number; academicYearId: number; termId?: number; userId?: number; userRole?: string; remarks?: string }) => Promise<{ id: number | bigint; status: string; approval_status: string; auto_approved: boolean }>
   approveAward: (data: { awardId: number; userId?: number }) => Promise<void>
   rejectAward: (data: { awardId: number; userId?: number; reason: string }) => Promise<void>
@@ -181,20 +183,20 @@ export interface AcademicAPI {
   getPendingAwardsCount: () => Promise<number>
 
   // Analytics
-  getExams: (filters: { academicYearId?: number; termId?: number }) => Promise<{ id: number; name: string }[]>
-  getPerformanceSummary: (filters: { examId: number; streamId: number }) => Promise<PerformanceSummary>
-  getGradeDistribution: (filters: { examId: number; streamId: number }) => Promise<GradeDistribution[]>
-  getSubjectPerformance: (filters: { examId: number; streamId: number }) => Promise<SubjectPerformance[]>
-  getStrugglingStudents: (filters: { examId: number; streamId: number; threshold: number }) => Promise<StrugglingStudent[]>
-  getTermComparison: (filters: { examId: number; streamId: number }) => Promise<TermComparison[]>
-  getSubjectDifficulty: (filters: { examId: number; subjectId: number; streamId: number }) => Promise<SubjectDifficulty>
+  getExams: (filters: { academicYearId?: number; termId?: number }) => Promise<IPCResult<{ id: number; name: string }[]>>
+  getPerformanceSummary: (filters: { examId: number; streamId: number }) => Promise<IPCResult<PerformanceSummary>>
+  getGradeDistribution: (filters: { examId: number; streamId: number }) => Promise<IPCResult<GradeDistribution[]>>
+  getSubjectPerformance: (filters: { examId: number; streamId: number }) => Promise<IPCResult<SubjectPerformance[]>>
+  getStrugglingStudents: (filters: { examId: number; streamId: number; threshold: number }) => Promise<IPCResult<StrugglingStudent[]>>
+  getTermComparison: (filters: { examId: number; streamId: number }) => Promise<IPCResult<TermComparison[]>>
+  getSubjectDifficulty: (filters: { examId: number; subjectId: number; streamId: number }) => Promise<IPCResult<SubjectDifficulty>>
 
   // Timetable
-  getVenues: () => Promise<unknown[]>
-  generateExamTimetable: (config: unknown) => Promise<unknown>
-  detectExamClashes: (filters: { examId: number }) => Promise<unknown[]>
+  getVenues: () => Promise<IPCResult<unknown[]>>
+  generateExamTimetable: (config: unknown) => Promise<IPCResult<unknown>>
+  detectExamClashes: (filters: { examId: number }) => Promise<IPCResult<unknown[]>>
   exportExamTimetableToPDF: (data: unknown) => Promise<{ success: boolean; filePath?: string; error?: string }>
-  getMostImprovedStudents: (filters: { academicYearId: number; currentTermId: number; comparisonTermId: number; streamId?: number; minimumImprovement: number }) => Promise<ImprovedStudent[]>
+  getMostImprovedStudents: (filters: { academicYearId: number; currentTermId: number; comparisonTermId: number; streamId?: number; minimumImprovement: number }) => Promise<IPCResult<ImprovedStudent[]>>
   generateCertificate: (data: { studentId: number; studentName: string; awardCategory: string; academicYearId: number; improvementPercentage: number }) => Promise<{ success: boolean; filePath?: string }>
   emailParents: (data: { students: ImprovedStudent[]; awardCategory: string; templateType: string }, userId: number) => Promise<{ success: boolean; sent: number; failed: number; errors: string[] }>
 
@@ -203,8 +205,6 @@ export interface AcademicAPI {
   emailReportCards: (data: { exam_id: number; stream_id: number; template_id: string; include_sms: boolean }) => Promise<{ success: boolean; sent: number; failed: number }>;
   mergeReportCards: (data: { exam_id: number; stream_id: number; output_path: string }) => Promise<{ success: boolean; message?: string; filePath?: string; failed?: number }>;
   downloadReportCards: (data: { exam_id: number; stream_id: number; merge: boolean }) => Promise<{ success: boolean; filePath?: string; files?: string[]; fileRecords?: Array<{ studentId: number; filePath: string }>; failed?: number; message?: string }>;
-  openReportCardFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
-
   // General Export
   exportToPDF: (data: { html?: string; content?: string; filename?: string; title?: string }) => Promise<{ success: boolean; filePath?: string; error?: string }>;
 }

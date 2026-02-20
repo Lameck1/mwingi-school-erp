@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'ACCOUNTS_CLERK' | 'AUDITOR'
+export type UserRole = 'ADMIN' | 'ACCOUNTS_CLERK' | 'AUDITOR' | 'PRINCIPAL' | 'DEPUTY_PRINCIPAL' | 'TEACHER'
 
 export interface User {
   id: number;
@@ -10,6 +10,11 @@ export interface User {
   last_login: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface AuthSession {
+  user: User;
+  lastActivity: number;
 }
 
 export interface CreateUserData {

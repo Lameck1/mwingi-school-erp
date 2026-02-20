@@ -21,6 +21,7 @@ export interface Student {
   student_type: 'BOARDER' | 'DAY_SCHOLAR'
   admission_date: string
   is_active: boolean
+  photo_path?: string | null
   created_at: string
   updated_at: string
   // Calculated fields
@@ -62,17 +63,22 @@ export interface AttendanceEntry {
   notes?: string
 }
 
+type IPCResult<T> = T | { success: false; error: string; errors?: string[] };
+
 export interface StudentAPI {
-  getStudents(filters?: StudentFilters): Promise<Student[]>
-  getStudentById(id: number): Promise<Student>
+  getStudents(filters?: StudentFilters): Promise<IPCResult<Student[]>>
+  getStudentById(id: number): Promise<IPCResult<Student>>
   createStudent(data: Partial<Student>, userId?: number): Promise<{ success: boolean; id: number; invoiceGenerated?: boolean; invoiceNumber?: string; invoiceError?: string }>
   updateStudent(id: number, data: Partial<Student>): Promise<{ success: boolean }>
+  uploadStudentPhoto(studentId: number, dataUrl: string): Promise<{ success: boolean; filePath?: string; error?: string }>
+  removeStudentPhoto(studentId: number): Promise<{ success: boolean; error?: string }>
+  getStudentPhotoDataUrl(studentId: number): Promise<string | null>
   getStudentBalance(studentId: number): Promise<number>
   purgeStudent(id: number, reason?: string): Promise<{ success: boolean; message?: string; error?: string }>
   // Attendance
-  getStudentsForAttendance(streamId: number, yearId: number, termId: number): Promise<AttendanceStudent[]>
-  getAttendanceByDate(streamId: number, date: string, yearId: number, termId: number): Promise<AttendanceRecord[]>
+  getStudentsForAttendance(streamId: number, yearId: number, termId: number): Promise<IPCResult<AttendanceStudent[]>>
+  getAttendanceByDate(streamId: number, date: string, yearId: number, termId: number): Promise<IPCResult<AttendanceRecord[]>>
   markAttendance(entries: AttendanceEntry[], streamId: number, date: string, yearId: number, termId: number, userId: number): Promise<{ success: boolean; marked: number; errors?: string[] }>
   // Reports
-  getStudentsForReportCards(streamId: number, yearId: number, termId: number): Promise<ReportCardStudentEntry[]>
+  getStudentsForReportCards(streamId: number, yearId: number, termId: number): Promise<IPCResult<ReportCardStudentEntry[]>>
 }

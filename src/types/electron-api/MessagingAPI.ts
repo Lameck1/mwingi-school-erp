@@ -43,13 +43,12 @@ export interface EmailSendOptions {
     userId?: number;
 }
 
+type IPCResult<T> = T | { success: false; error: string; errors?: string[] };
+
 export interface MessagingAPI {
-    getMessageTemplates: () => Promise<MessageTemplate[]>;
+    getMessageTemplates: () => Promise<IPCResult<MessageTemplate[]>>;
     saveMessageTemplate: (template: Partial<MessageTemplate>) => Promise<{ success: boolean; id?: number }>;
-    // deleteTemplate is NOT in preload, removing or keeping if used internally? Preload has saveMessageTemplate.
-    // Preload does NOT have deleteTemplate.
     sendSMS: (options: SMSSendOptions) => Promise<{ success: boolean; messageId?: string; error?: string }>;
     sendEmail: (options: EmailSendOptions) => Promise<{ success: boolean; messageId?: string; error?: string }>;
-    getMessageLogs: (limit?: number) => Promise<MessageLog[]>;
-    // getCommunicationLogs is NOT in preload. Preload only has getMessageLogs.
+    getMessageLogs: (limit?: number) => Promise<IPCResult<MessageLog[]>>;
 }

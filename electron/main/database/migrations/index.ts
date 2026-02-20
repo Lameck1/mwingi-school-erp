@@ -19,6 +19,11 @@ import { up as remediationSchemaFixesUp } from './incremental/1014_remediation_s
 import { up as seedMissingSystemAccountsUp } from './incremental/1015_seed_missing_system_accounts.js'
 import { up as migrateSmsCredentialsUp } from './incremental/1016_migrate_sms_credentials.js'
 import { up as dataRetentionPolicyUp } from './incremental/1017_data_retention_policy.js'
+import { up as seedAssetCategoriesUp } from './incremental/1018_seed_asset_categories.js'
+import { up as seedFixedAssetGLUp } from './incremental/1019_seed_fixed_asset_gl_accounts.js'
+import { up as addSupplierIdToJournalUp } from './incremental/1020_add_supplier_id_to_journal.js'
+import { up as accountingPeriodsUp } from './incremental/1021_accounting_periods.js'
+import { up as expandJournalTypesUp } from './incremental/1022_expand_journal_entry_types.js'
 
 import type * as Database from 'better-sqlite3'
 
@@ -66,6 +71,11 @@ const migrations: Migration[] = [
     { name: '1015_seed_missing_system_accounts', fn: seedMissingSystemAccountsUp },
     { name: '1016_migrate_sms_credentials', fn: migrateSmsCredentialsUp },
     { name: '1017_data_retention_policy', fn: dataRetentionPolicyUp },
+    { name: '1018_seed_asset_categories', fn: seedAssetCategoriesUp },
+    { name: '1019_seed_fixed_asset_gl_accounts', fn: seedFixedAssetGLUp },
+    { name: '1020_add_supplier_id_to_journal', fn: addSupplierIdToJournalUp },
+    { name: '1021_accounting_periods', fn: accountingPeriodsUp },
+    { name: '1022_expand_journal_entry_types', fn: expandJournalTypesUp },
 ]
 
 /**
