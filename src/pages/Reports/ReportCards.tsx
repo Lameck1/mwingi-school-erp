@@ -1,5 +1,5 @@
 import {
-    FileText, Users, Download, Loader2, Eye
+    FileText, Users, Loader2, Eye, Printer
 } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 
@@ -8,6 +8,7 @@ import { StatCard } from '../../components/patterns/StatCard'
 import { Modal } from '../../components/ui/Modal'
 import { Select } from '../../components/ui/Select'
 import { useAppStore } from '../../stores'
+import { generateReportCardHTML } from '../../utils/reportCardGenerator'
 
 import type { Stream } from '../../types/electron-api/AcademicAPI'
 import type { ReportCardData, ReportCardStudentEntry } from '../../types/electron-api/ReportsAPI'
@@ -24,31 +25,34 @@ export default function ReportCards() {
 
     const [showPreview, setShowPreview] = useState(false)
     const [previewData, setPreviewData] = useState<ReportCardData | null>(null)
+    // Reserved for future PDF preview URL state
     const [nextTermDate, setNextTermDate] = useState<string>('')
 
     useEffect(() => {
         void loadStreams()
     }, [])
 
-
-
     const loadStreams = async () => {
         try {
             const data = await globalThis.electronAPI.getStreams()
-            setStreams(data)
+            if (Array.isArray(data)) {
+                setStreams(data)
+            }
         } catch (error) {
             console.error('Failed to load streams:', error)
         }
     }
 
     const loadStudents = useCallback(async () => {
-        if (!currentAcademicYear || !currentTerm) {return}
+        if (!currentAcademicYear || !currentTerm) { return }
         setLoading(true)
         try {
             const data = await globalThis.electronAPI.getStudentsForReportCards(
                 selectedStream, currentAcademicYear.id, currentTerm.id
             )
-            setStudents(data)
+            if (Array.isArray(data)) {
+                setStudents(data)
+            }
         } catch (error) {
             console.error('Failed to load students:', error)
         } finally {
@@ -62,16 +66,19 @@ export default function ReportCards() {
         }
     }, [selectedStream, currentAcademicYear, currentTerm, loadStudents])
 
-    const handlePreview = async (studentId: number) => {
-        if (!currentAcademicYear || !currentTerm) {return}
+
+    const handleViewStudent = async (studentId: number) => {
+        if (!currentAcademicYear || !currentTerm) { return }
         setGenerating(true)
         try {
-            const data = await globalThis.electronAPI.generateReportCard(
+            const result = await globalThis.electronAPI.generateReportCard(
                 studentId, currentAcademicYear.id, currentTerm.id
             )
-            if (data) {
-                setPreviewData(data)
+            if (result && !('success' in result)) {
+                setPreviewData(result)
                 setShowPreview(true)
+            } else if (result && 'success' in result && result.success === false) {
+                alert(result.error)
             } else {
                 alert('No report card data available for this student')
             }
@@ -82,145 +89,27 @@ export default function ReportCards() {
         }
     }
 
-    const handleDownloadPDF = async () => {
-        if (!previewData) {return}
+    const handlePrintPreview = async () => {
+        if (!previewData) { return }
+        try {
+            const htmlContent = generateReportCardHTML(previewData, nextTermDate)
+            const { previewHTML } = await import('../../utils/print')
 
-        const { default: jsPDF } = await import('jspdf')
-        const doc = new jsPDF()
-        const pageWidth = doc.internal.pageSize.getWidth()
-        let y = 20
-
-        // Header
-        doc.setFontSize(16)
-        doc.setFont('helvetica', 'bold')
-        doc.text('MWINGI ADVENTIST SCHOOL', pageWidth / 2, y, { align: 'center' })
-        y += 8
-        doc.setFontSize(10)
-        doc.setFont('helvetica', 'normal')
-        doc.text('P.O. Box 123, Mwingi, Kenya | Tel: +254 700 000 000', pageWidth / 2, y, { align: 'center' })
-        y += 6
-        doc.text('Email: info@mwingiadventist.ac.ke | Website: www.mwingiadventist.ac.ke', pageWidth / 2, y, { align: 'center' })
-        y += 12
-
-        // Report Card Title
-        doc.setFontSize(14)
-        doc.setFont('helvetica', 'bold')
-        doc.text('STUDENT REPORT CARD', pageWidth / 2, y, { align: 'center' })
-        y += 10
-
-        // Student Info
-        doc.setFontSize(10)
-        doc.setFont('helvetica', 'normal')
-        doc.text(`Name: ${previewData.student.first_name} ${previewData.student.last_name}`, 15, y)
-        doc.text(`Adm No: ${previewData.student.admission_number}`, 120, y)
-        y += 6
-        doc.text(`Class: ${previewData.student.stream_name}`, 15, y)
-        doc.text(`Term: ${previewData.term}`, 120, y)
-        y += 6
-        doc.text(`Academic Year: ${previewData.academic_year}`, 15, y)
-        y += 10
-
-        // Grades Table
-        if (previewData.grades.length > 0) {
-            doc.setFont('helvetica', 'bold')
-            doc.text('SUBJECT PERFORMANCE', 15, y)
-            y += 6
-
-            // Table Headers
-            doc.setFillColor(45, 55, 72)
-            doc.rect(15, y, pageWidth - 30, 8, 'F')
-            doc.setTextColor(255, 255, 255)
-            doc.setFontSize(8)
-            const headers = ['Subject', 'CAT1', 'CAT2', 'Mid', 'Final', 'Avg', 'Grade', 'Remarks']
-            const colWidths = [40, 15, 15, 15, 15, 15, 15, 50]
-            let x = 17
-            headers.forEach((h, i) => {
-                doc.text(h, x, y + 5.5)
-                x += colWidths[i] ?? 0
-            })
-            y += 10
-            doc.setTextColor(0, 0, 0)
-
-            // Table Rows
-            doc.setFont('helvetica', 'normal')
-            previewData.grades.forEach((grade, idx) => {
-                if (idx % 2 === 0) {
-                    doc.setFillColor(248, 250, 252)
-                    doc.rect(15, y - 1, pageWidth - 30, 7, 'F')
-                }
-                x = 17
-                const row = [
-                    grade.subject_name.substring(0, 15),
-                    grade.cat1?.toString() || '-',
-                    grade.cat2?.toString() || '-',
-                    grade.midterm?.toString() || '-',
-                    grade.final_exam?.toString() || '-',
-                    grade.average.toString(),
-                    grade.grade_letter,
-                    grade.remarks
-                ]
-                row.forEach((cell, i) => {
-                    doc.text(cell, x, y + 3)
-                    x += colWidths[i] ?? 0
+            const onDownload = () => {
+                globalThis.electronAPI.reports.downloadReportCardPDF(
+                    htmlContent,
+                    `report-card-${previewData.student.admission_number}.pdf`
+                ).catch((err: unknown) => {
+                    console.error('Failed to download PDF:', err)
+                    alert('Failed to download PDF')
                 })
-                y += 7
-            })
+            }
+
+            previewHTML(`Report Card - ${previewData.student.admission_number}`, htmlContent, onDownload)
+        } catch (error) {
+            console.error('Failed to preview report card:', error)
+            alert('Failed to preview report card')
         }
-
-        y += 10
-
-        // Summary
-        doc.setFont('helvetica', 'bold')
-        doc.text('SUMMARY', 15, y)
-        y += 6
-        doc.setFont('helvetica', 'normal')
-        doc.text(`Total Marks: ${previewData.summary.total_marks}`, 15, y)
-        doc.text(`Average: ${previewData.summary.average}%`, 70, y)
-        doc.text(`Grade: ${previewData.summary.grade}`, 120, y)
-        y += 10
-
-        // Attendance
-        doc.setFont('helvetica', 'bold')
-        doc.text('ATTENDANCE', 15, y)
-        y += 6
-        doc.setFont('helvetica', 'normal')
-        doc.text(`Days Present: ${previewData.attendance.present}/${previewData.attendance.total_days}`, 15, y)
-        doc.text(`Attendance Rate: ${previewData.attendance.attendance_rate}%`, 80, y)
-        y += 10
-
-        // Remarks
-        doc.setFont('helvetica', 'normal')
-        doc.text(previewData.summary.teacher_remarks, 15, y, { maxWidth: pageWidth - 30 })
-        y += 15
-
-        // Grading Legend
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(9)
-        doc.text('GRADING LEGEND', 15, y)
-        y += 6
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(8)
-        doc.text('A: 80 - 100 (Excellent)  |  B: 70 - 79 (Very Good)  |  C: 60 - 69 (Good)  |  D: 50 - 59 (Fair)  |  E: 0 - 49 (Improve)', 15, y)
-        y += 15
-
-        // Signatures
-        const sigY = y + 20
-        doc.setDrawColor(200, 200, 200)
-        doc.line(15, sigY, 70, sigY)
-        doc.line(pageWidth - 70, sigY, pageWidth - 15, sigY)
-
-        doc.setFont('helvetica', 'bold')
-        doc.text('Class Teacher Signature', 15, sigY + 5)
-        doc.text('Principal Signature', pageWidth - 70, sigY + 5)
-
-        // Next Term Date
-        if (nextTermDate) {
-            y = sigY + 15
-            doc.setFont('helvetica', 'bold')
-            doc.text(`NEXT TERM BEGINS ON: ${new Date(nextTermDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()}`, pageWidth / 2, y, { align: 'center' })
-        }
-
-        doc.save(`report-card-${previewData.student.admission_number}.pdf`)
     }
 
     return (
@@ -303,7 +192,7 @@ export default function ReportCards() {
                                         <p className="text-xs text-foreground/50 font-mono">{student.admission_number}</p>
                                     </div>
                                     <button
-                                        onClick={() => handlePreview(student.student_id)}
+                                        onClick={() => handleViewStudent(student.student_id)}
                                         disabled={generating}
                                         className="btn btn-secondary text-sm flex items-center gap-1"
                                     >
@@ -317,15 +206,22 @@ export default function ReportCards() {
                 })()}
             </div>
 
-            {/* Preview Modal */}
+            {/* View Student Modal (HTML Summary) */}
             <Modal
                 isOpen={showPreview}
                 onClose={() => setShowPreview(false)}
-                title="Report Card Preview"
+                title="Student Report Card Summary"
             >
                 {previewData && (
                     <div className="space-y-6">
                         <div className="text-center pb-4 border-b border-border/20">
+                            {previewData.student.photo && (
+                                <img
+                                    src={previewData.student.photo}
+                                    alt="Student"
+                                    className="w-24 h-24 rounded-full mx-auto mb-3 object-cover border border-border/30"
+                                />
+                            )}
                             <h2 className="text-xl font-bold text-foreground">{previewData.student.first_name} {previewData.student.last_name}</h2>
                             <p className="text-sm text-foreground/50">{previewData.student.admission_number} • {previewData.student.stream_name}</p>
                             <p className="text-xs text-foreground/40">{previewData.term} - {previewData.academic_year}</p>
@@ -356,22 +252,31 @@ export default function ReportCards() {
                             <p className="text-center text-foreground/40 py-4">No grades recorded yet</p>
                         )}
 
-                        <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="grid grid-cols-2 gap-4 text-sm border-t border-border/20 pt-4">
                             <div className="p-3 bg-secondary/30 rounded-lg">
-                                <p className="text-foreground/50 text-xs">Average</p>
-                                <p className="text-xl font-bold text-foreground">{previewData.summary.average}%</p>
+                                <p className="text-foreground/50 text-xs uppercase font-bold">Performance</p>
+                                <div className="flex justify-between items-end mt-1">
+                                    <div>
+                                        <span className="text-2xl font-bold text-foreground">{previewData.summary.average}%</span>
+                                        <span className="text-sm text-foreground/50 ml-1">Mean</span>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-2xl font-bold text-primary">{previewData.summary.grade}</span>
+                                        <span className="text-sm text-foreground/50 ml-1">Grade</span>
+                                    </div>
+                                </div>
                             </div>
                             <div className="p-3 bg-secondary/30 rounded-lg">
-                                <p className="text-foreground/50 text-xs">Attendance</p>
-                                <p className="text-xl font-bold text-foreground">{previewData.attendance.attendance_rate}%</p>
+                                <p className="text-foreground/50 text-xs uppercase font-bold">Attendance</p>
+                                <p className="text-2xl font-bold text-foreground mt-1">{previewData.attendance.attendance_rate}%</p>
                             </div>
                         </div>
 
-                        <div className="flex justify-end gap-3 pt-4">
+                        <div className="flex justify-end gap-3 pt-4 border-t border-border/10">
                             <button onClick={() => setShowPreview(false)} className="btn btn-secondary">Close</button>
-                            <button onClick={handleDownloadPDF} className="btn btn-primary flex items-center gap-2">
-                                <Download className="w-4 h-4" />
-                                Download PDF
+                            <button onClick={handlePrintPreview} className="btn btn-primary flex items-center gap-2">
+                                <Printer className="w-4 h-4" />
+                                Preview / Print PDF
                             </button>
                         </div>
                     </div>

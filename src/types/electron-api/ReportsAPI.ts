@@ -79,6 +79,15 @@ export interface ReportCardData {
     first_name: string
     last_name: string
     stream_name: string
+    photo?: string | null
+  }
+  school?: {
+    name: string
+    motto: string
+    logo: string | null
+    address?: string
+    email?: string
+    phone?: string
   }
   academic_year: string
   term: string
@@ -108,45 +117,13 @@ export interface ReportCardData {
     teacher_remarks: string
     principal_remarks: string
   }
-}
-
-export interface ReportsAPI {
-  getFeeCollectionReport: (_startDate: string, _endDate: string) => Promise<FeeCollectionItem[]>
-  getDefaulters: (_termId?: number) => Promise<DefaulterItem[]>
-  getStudentLedgerReport: (studentId: number) => Promise<{ student?: Record<string, unknown>; ledger: Record<string, unknown>[]; openingBalance: number; closingBalance: number; error?: string }>
-  getDashboardData: () => Promise<{
-    totalStudents: number
-    totalStaff: number
-    feeCollected: number
-    outstandingBalance: number
-  }>
-  getFeeCategoryBreakdown: () => Promise<{ name: string; value: number }[]>
-  getRevenueByCategory: (startDate: string, endDate: string) => Promise<{ name: string; value: number }[]>
-  getExpenseByCategory: (startDate: string, endDate: string) => Promise<{ name: string; value: number }[]>
-  getDailyCollection: (date: string) => Promise<Array<{
-    admission_number: string
-    student_name: string
-    stream_name?: string
-    amount: number
-    payment_method: string
-    payment_reference?: string
-    date?: string
-    description?: string
-  }>>
-  getStudentsForReportCards: (streamId: number, academicYearId: number, termId: number) => Promise<ReportCardStudentEntry[]>
-  generateReportCard: (studentId: number, yearId: number, termId: number) => Promise<ReportCardData | null>
-
-  // Financial Reports
-  getProfitAndLoss: (startDate: string, endDate: string) => Promise<{ success: boolean; data: ProfitAndLossReport; error?: string }>
-  getBalanceSheet: (asOfDate: string) => Promise<{ success: boolean; data: BalanceSheetReport; error?: string }>
-  getTrialBalance: (startDate: string, endDate: string) => Promise<{ success: boolean; data: TrialBalanceReport; error?: string }>
-  getComparativeProfitAndLoss: (currentStart: string, currentEnd: string, priorStart: string, priorEnd: string) => Promise<{ success: boolean; data: ProfitAndLossReport; error?: string }>
-
-  // Scheduled Reports
-  getScheduledReports: () => Promise<ScheduledReport[]>
-  createScheduledReport: (data: Partial<ScheduledReport>, userId: number) => Promise<{ success: boolean; id?: number; errors?: string[] }>
-  updateScheduledReport: (id: number, data: Partial<ScheduledReport>, userId: number) => Promise<{ success: boolean; errors?: string[] }>
-  deleteScheduledReport: (id: number, userId: number) => Promise<{ success: boolean; errors?: string[] }>
+  rankings: {
+    cat1: number | null
+    cat2: number | null
+    midterm: number | null
+    final_exam: number | null
+    average: number | null
+  }
 }
 
 export interface ScheduledReport {
@@ -162,4 +139,46 @@ export interface ScheduledReport {
   export_format: 'PDF' | 'EXCEL' | 'CSV'
   is_active: boolean
   last_run_at: string | null
+}
+
+type IPCResult<T> = T | { success: false; error: string; errors?: string[] };
+
+export interface ReportsAPI {
+  getFeeCollectionReport: (_startDate: string, _endDate: string) => Promise<IPCResult<FeeCollectionItem[]>>
+  getDefaulters: (_termId?: number) => Promise<IPCResult<DefaulterItem[]>>
+  getStudentLedgerReport: (studentId: number) => Promise<IPCResult<{ student?: Record<string, unknown>; ledger: Record<string, unknown>[]; openingBalance: number; closingBalance: number; error?: string }>>
+  getDashboardData: () => Promise<IPCResult<{
+    totalStudents: number
+    totalStaff: number
+    feeCollected: number
+    outstandingBalance: number
+  }>>
+  getFeeCategoryBreakdown: () => Promise<IPCResult<{ name: string; value: number }[]>>
+  getRevenueByCategory: (startDate: string, endDate: string) => Promise<IPCResult<{ name: string; value: number }[]>>
+  getExpenseByCategory: (startDate: string, endDate: string) => Promise<IPCResult<{ name: string; value: number }[]>>
+  getDailyCollection: (date: string) => Promise<IPCResult<Array<{
+    admission_number: string
+    student_name: string
+    stream_name?: string
+    amount: number
+    payment_method: string
+    payment_reference?: string
+    date?: string
+    description?: string
+  }>>>
+  getStudentsForReportCards: (streamId: number, academicYearId: number, termId: number) => Promise<IPCResult<ReportCardStudentEntry[]>>
+  generateReportCard: (studentId: number, yearId: number, termId: number) => Promise<IPCResult<ReportCardData | null>>
+
+  // Financial Reports
+  getProfitAndLoss: (startDate: string, endDate: string) => Promise<{ success: boolean; data: ProfitAndLossReport; error?: string }>
+  getBalanceSheet: (asOfDate: string) => Promise<{ success: boolean; data: BalanceSheetReport; error?: string }>
+  getTrialBalance: (startDate: string, endDate: string) => Promise<{ success: boolean; data: TrialBalanceReport; error?: string }>
+  getComparativeProfitAndLoss: (currentStart: string, currentEnd: string, priorStart: string, priorEnd: string) => Promise<{ success: boolean; data: ProfitAndLossReport; error?: string }>
+
+  // Scheduled Reports
+  getScheduledReports: () => Promise<IPCResult<ScheduledReport[]>>
+  createScheduledReport: (data: Partial<ScheduledReport>, userId: number) => Promise<{ success: boolean; id?: number; errors?: string[] }>
+  updateScheduledReport: (id: number, data: Partial<ScheduledReport>, userId: number) => Promise<{ success: boolean; errors?: string[] }>
+  deleteScheduledReport: (id: number, userId: number) => Promise<{ success: boolean; errors?: string[] }>
+  downloadReportCardPDF: (html: string, filename?: string) => Promise<IPCResult<{ filePath: string }>>
 }

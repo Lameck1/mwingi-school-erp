@@ -74,5 +74,6 @@ export function createReportsAPI() {
     createScheduledReport: (data: ScheduledReportData, userId: number) => ipcRenderer.invoke('scheduler:create', data, userId),
     updateScheduledReport: (id: number, data: Partial<ScheduledReportData>, userId: number) => ipcRenderer.invoke('scheduler:update', id, data, userId),
     deleteScheduledReport: (id: number, userId: number) => ipcRenderer.invoke('scheduler:delete', id, userId),
+    downloadReportCardPDF: (html: string, filename?: string) => ipcRenderer.invoke('reportcard:download-pdf', html, filename),
   }
 }
