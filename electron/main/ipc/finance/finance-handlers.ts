@@ -5,14 +5,16 @@ import { registerCreditHandlers, registerProrationHandlers, registerScholarshipH
 import { getDatabase } from '../../database'
 import { container } from '../../services/base/ServiceContainer'
 import { CashFlowService } from '../../services/finance/CashFlowService'
-import { safeHandleRawWithRole, ROLES } from '../ipc-result'
+import { ROLES } from '../ipc-result'
+import { CashFlowTuple, ForecastSchema } from '../schemas/finance-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 const registerCashFlowHandlers = (): void => {
-    safeHandleRawWithRole('finance:getCashFlow', ROLES.STAFF, (_event, startDate: string, endDate: string) => {
+    validatedHandlerMulti('finance:getCashFlow', ROLES.STAFF, CashFlowTuple, (_event, [startDate, endDate]) => {
         return CashFlowService.getCashFlowStatement(startDate, endDate)
     })
 
-    safeHandleRawWithRole('finance:getForecast', ROLES.STAFF, (_event, months: number) => {
+    validatedHandler('finance:getForecast', ROLES.STAFF, ForecastSchema, (_event, months) => {
         return CashFlowService.getForecast(months)
     })
 }

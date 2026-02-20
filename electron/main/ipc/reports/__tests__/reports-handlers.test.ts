@@ -5,8 +5,12 @@ type IpcHandler = (event: unknown, ...args: unknown[]) => Promise<unknown>
 
 let db: Database.Database
 const handlerMap = new Map<string, IpcHandler>()
-let sessionUserId = 9
-let sessionRole = 'TEACHER'
+const { sessionData } = vi.hoisted(() => ({
+  sessionData: {
+    userId: 9,
+    role: 'TEACHER'
+  }
+}))
 
 const nemisServiceMock = {
   extractStudentData: vi.fn(async () => []),
@@ -17,24 +21,20 @@ const nemisServiceMock = {
   validateStudentData: vi.fn(() => ({ valid: true })),
 }
 
-vi.mock('keytar', () => ({
-  default: {
-    getPassword: vi.fn(async () => JSON.stringify({
-      user: {
-        id: sessionUserId,
-        username: 'session-user',
-        role: sessionRole,
-        full_name: 'Session User',
-        email: null,
-        is_active: 1,
-        last_login: null,
-        created_at: '2026-01-01'
-      },
-      lastActivity: Date.now()
-    })),
-    setPassword: vi.fn().mockResolvedValue(null),
-    deletePassword: vi.fn().mockResolvedValue(true),
-  }
+vi.mock('../../../security/session', () => ({
+  getSession: vi.fn(async () => ({
+    user: {
+      id: sessionData.userId,
+      username: 'session-user',
+      role: sessionData.role,
+      full_name: 'Session User',
+      email: null,
+      is_active: 1,
+      last_login: null,
+      created_at: '2026-01-01T00:00:00'
+    },
+    lastActivity: Date.now()
+  }))
 }))
 
 vi.mock('../../../electron-env', () => ({
@@ -66,8 +66,8 @@ import { registerReportsHandlers } from '../reports-handlers'
 describe('reports IPC handlers', () => {
   beforeEach(() => {
     handlerMap.clear()
-    sessionUserId = 9
-    sessionRole = 'TEACHER'
+    sessionData.userId = 9
+    sessionData.role = 'TEACHER'
     nemisServiceMock.createExport.mockClear()
     db = new Database(':memory:')
     db.exec(`
@@ -183,7 +183,7 @@ describe('reports IPC handlers', () => {
   })
 
   it('reports:createNEMISExport rejects renderer actor mismatch', async () => {
-    sessionRole = 'PRINCIPAL'
+    sessionData.role = 'PRINCIPAL'
     const handler = handlerMap.get('reports:createNEMISExport')
     expect(handler).toBeDefined()
 

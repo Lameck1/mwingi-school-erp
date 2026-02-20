@@ -1,10 +1,12 @@
+import { z } from 'zod'
+
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 import { container } from '../../services/base/ServiceContainer'
 import { REPORT_EXPENSE_TRANSACTION_TYPES, REPORT_INCOME_TRANSACTION_TYPES, asSqlInList } from '../../utils/financeTransactionTypes'
 import { validateAmount, sanitizeString, validatePastOrTodayDate } from '../../utils/validation'
-import { safeHandleRawWithRole, ROLES } from '../ipc-result'
-import { TransactionCreateSchema, TransactionCreateCategorySchema } from '../schemas/transaction-schemas'
+import { ROLES } from '../ipc-result'
+import { TransactionCreateSchema, TransactionCreateCategorySchema, TransactionFiltersSchema, TransactionSummaryInputSchema } from '../schemas/transaction-schemas'
 import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 interface TransactionData {
@@ -20,11 +22,6 @@ interface TransactionData {
     budget_department?: string | null
 }
 
-interface TransactionFilters {
-    startDate?: string
-    endDate?: string
-    type?: string
-}
 
 async function createTransaction(
     db: ReturnType<typeof getDatabase>,
@@ -90,51 +87,51 @@ async function createTransaction(
 
     try {
         return db.transaction(() => {
-        const stmt = db.prepare(`INSERT INTO ledger_transaction (
+            const stmt = db.prepare(`INSERT INTO ledger_transaction (
             transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit,
             payment_method, payment_reference, description, recorded_by_user_id
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 
-        const result = stmt.run(
-            txnRef, transactionDate, data.transaction_type, data.category_id,
-            amountCents, debitCredit, data.payment_method, paymentRef,
-            description, userId
-        )
+            const result = stmt.run(
+                txnRef, transactionDate, data.transaction_type, data.category_id,
+                amountCents, debitCredit, data.payment_method, paymentRef,
+                description, userId
+            )
 
-        logAudit(userId, 'CREATE', 'ledger_transaction', result.lastInsertRowid as number, null, { ...data, amount: amountCents })
+            logAudit(userId, 'CREATE', 'ledger_transaction', result.lastInsertRowid as number, null, { ...data, amount: amountCents })
 
-        const journalService = container.resolve('DoubleEntryJournalService')
+            const journalService = container.resolve('DoubleEntryJournalService')
 
-        const cashCode = data.payment_method === 'CASH' ? '1010' : '1020'
-        let debitCode: string
-        let creditCode: string
-        let entryType: string
+            const cashCode = data.payment_method === 'CASH' ? '1010' : '1020'
+            let debitCode: string
+            let creditCode: string
+            let entryType: string
 
-        if (data.transaction_type === 'EXPENSE') {
-            debitCode = category?.gl_account_code || '5900'
-            creditCode = cashCode
-            entryType = 'EXPENSE'
-        } else {
-            debitCode = cashCode
-            creditCode = category?.gl_account_code || '4300'
-            entryType = 'INCOME'
-        }
+            if (data.transaction_type === 'EXPENSE') {
+                debitCode = category?.gl_account_code || '5900'
+                creditCode = cashCode
+                entryType = 'EXPENSE'
+            } else {
+                debitCode = cashCode
+                creditCode = category?.gl_account_code || '4300'
+                entryType = 'INCOME'
+            }
 
-        const journalResult = journalService.createJournalEntrySync({
-            entry_date: transactionDate,
-            entry_type: entryType,
-            description: sanitizeString(data.description) || `${data.transaction_type} transaction`,
-            created_by_user_id: userId,
-            lines: [
-                { gl_account_code: debitCode, debit_amount: amountCents, credit_amount: 0, description: `Debit: ${data.transaction_type}` },
-                { gl_account_code: creditCode, debit_amount: 0, credit_amount: amountCents, description: `Credit: ${data.transaction_type}` }
-            ]
-        })
-        if (!journalResult.success) {
-            throw new Error(journalResult.error || 'Failed to create journal entry')
-        }
+            const journalResult = journalService.createJournalEntrySync({
+                entry_date: transactionDate,
+                entry_type: entryType,
+                description: sanitizeString(data.description) || `${data.transaction_type} transaction`,
+                created_by_user_id: userId,
+                lines: [
+                    { gl_account_code: debitCode, debit_amount: amountCents, credit_amount: 0, description: `Debit: ${data.transaction_type}` },
+                    { gl_account_code: creditCode, debit_amount: 0, credit_amount: amountCents, description: `Credit: ${data.transaction_type}` }
+                ]
+            })
+            if (!journalResult.success) {
+                throw new Error(journalResult.error || 'Failed to create journal entry')
+            }
 
-        return { success: true, id: result.lastInsertRowid }
+            return { success: true, id: result.lastInsertRowid }
         })()
     } catch (error) {
         return { success: false, error: (error as Error).message }
@@ -146,7 +143,8 @@ export function registerTransactionsHandlers(): void {
     const incomeTypesSql = asSqlInList(REPORT_INCOME_TRANSACTION_TYPES)
     const expenseTypesSql = asSqlInList(REPORT_EXPENSE_TRANSACTION_TYPES)
 
-    safeHandleRawWithRole('transaction:getCategories', ROLES.STAFF, () => {
+
+    validatedHandler('transaction:getCategories', ROLES.STAFF, z.void(), () => {
         return db.prepare('SELECT * FROM transaction_category WHERE is_active = 1 ORDER BY category_name').all()
     })
 
@@ -161,7 +159,7 @@ export function registerTransactionsHandlers(): void {
         return createTransaction(db, data, actor.id)
     })
 
-    safeHandleRawWithRole('transaction:getAll', ROLES.FINANCE, (_event, filters?: TransactionFilters) => {
+    validatedHandler('transaction:getAll', ROLES.FINANCE, TransactionFiltersSchema, (_event, filters) => {
         let query = `SELECT t.*, c.category_name, u.full_name as recorded_by 
                      FROM ledger_transaction t
                      LEFT JOIN transaction_category c ON t.category_id = c.id
@@ -178,12 +176,16 @@ export function registerTransactionsHandlers(): void {
             query += ` AND t.transaction_type = ?`
             params.push(filters.type)
         }
+        if (filters?.categoryId) {
+            query += ` AND t.category_id = ?`
+            params.push(filters.categoryId)
+        }
 
         query += ` ORDER BY t.transaction_date DESC`
         return db.prepare(query).all(...params)
     })
 
-    safeHandleRawWithRole('transaction:getSummary', ROLES.FINANCE, (_event, startDate: string, endDate: string) => {
+    validatedHandlerMulti('transaction:getSummary', ROLES.FINANCE, TransactionSummaryInputSchema, (_event, [startDate, endDate], _actor) => {
         const income = db.prepare(`
             SELECT COALESCE(SUM(amount), 0) as total 
             FROM ledger_transaction 

@@ -1,14 +1,11 @@
+import { z } from 'zod';
+
 import { container } from '../../services/base/ServiceContainer';
-import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result';
+import { ROLES } from '../ipc-result';
+import { RunReconciliationTuple } from '../schemas/finance-schemas';
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler';
 
 import type { ReconciliationService } from '../../services/accounting/ReconciliationService';
-
-/**
- * Reconciliation IPC Handlers
- * 
- * Provides frontend access to:
- * - Reconciliation checks and reports
- */
 
 export function registerReconciliationAndBudgetHandlers(): void {
   const reconciliationService = container.resolve('ReconciliationService');
@@ -16,32 +13,31 @@ export function registerReconciliationAndBudgetHandlers(): void {
 }
 
 function registerReconciliationHandlers(reconciliationService: ReconciliationService): void {
-  safeHandleRawWithRole(
+  validatedHandlerMulti(
     'reconciliation:runAll',
     ROLES.FINANCE,
-    async (event, legacyUserId?: number) => {
-      const actor = resolveActorId(event, legacyUserId);
-      if (!actor.success) {
-        return { success: false, error: actor.error };
+    RunReconciliationTuple,
+    async (event, [legacyUserId], actor) => {
+      if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+        throw new Error("Unauthorized: renderer user mismatch")
       }
-      return await reconciliationService.runAllChecks(actor.actorId);
+      return await reconciliationService.runAllChecks(actor.id);
     }
   );
 
-  safeHandleRawWithRole(
+  validatedHandler(
     'reconciliation:getHistory',
     ROLES.STAFF,
-    async (_event, limit: number = 30) => {
-      return await reconciliationService.getReconciliationHistory(limit);
+    z.number().int().optional(), // limit
+    async (_event, limit) => {
+      return await reconciliationService.getReconciliationHistory(limit || 30);
     }
   );
 
-  /**
-   * Get latest reconciliation summary
-   */
-  safeHandleRawWithRole(
+  validatedHandler(
     'reconciliation:getLatest',
     ROLES.STAFF,
+    z.void(),
     async () => {
       return await reconciliationService.getLatestReconciliationSummary();
     }

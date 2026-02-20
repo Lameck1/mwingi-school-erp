@@ -28,7 +28,7 @@ vi.mock('keytar', () => ({
         email: null,
         is_active: 1,
         last_login: null,
-        created_at: '2026-01-01'
+        created_at: '2026-01-01T00:00:00'
       },
       lastActivity: Date.now()
     })),
@@ -63,10 +63,24 @@ describe('notification IPC handlers', () => {
     registerNotificationHandlers()
   })
 
+  function attachActor(event: any) {
+    event.__ipcActor = {
+      id: sessionUserId,
+      role: sessionRole,
+      username: 'session-user',
+      full_name: 'Session User',
+      email: null,
+      is_active: 1,
+      created_at: '2026-01-01T00:00:00'
+    };
+  }
+
   it('notifications:send rejects renderer actor mismatch', async () => {
     const handler = handlerMap.get('notifications:send')
     expect(handler).toBeDefined()
-    const result = await handler!({}, { channel: 'EMAIL' }, 3) as { success: boolean; error?: string }
+    const event = {};
+    attachActor(event);
+    const result = await handler!(event, { channel: 'EMAIL' }, 3) as { success: boolean; error?: string }
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('renderer user mismatch')

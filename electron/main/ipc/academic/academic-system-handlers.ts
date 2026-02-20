@@ -1,11 +1,24 @@
-import { jsPDF } from 'jspdf'
-import fs from 'node:fs'
-import path from 'node:path'
-
-import { getDatabase } from '../../database'
-import { app } from '../../electron-env'
 import { container } from '../../services/base/ServiceContainer'
-import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
+import { ROLES } from '../ipc-result'
+import {
+    SubjectCreateSchema,
+    SubjectUpdateSchema,
+    SubjectSetActiveSchema,
+    GetExamsSchema,
+    CreateExamSchema,
+    DeleteExamSchema,
+    AllocateTeacherSchema,
+    GetAllocationsSchema,
+    DeleteAllocationSchema,
+    SaveResultsSchema,
+    GetResultsSchema,
+    ProcessResultsSchema,
+    GetSubjectsSchema,
+    GetSubjectsAdminSchema,
+    CertificatePayloadSchema,
+    EmailParentsPayloadSchema
+} from '../schemas/academic-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 import type {
     CreateExamDTO,
@@ -16,7 +29,7 @@ import type {
 } from '../../services/academic/AcademicSystemService'
 
 const getService = () => container.resolve('AcademicSystemService')
-const getNotificationService = () => container.resolve('NotificationService')
+const _getNotificationService = () => container.resolve('NotificationService')
 
 interface CertificatePayload {
     studentId: number
@@ -32,181 +45,82 @@ interface EmailParentsPayload {
     templateType: string
 }
 
-function registerSubjectAndExamHandlers(): void {
-    safeHandleRawWithRole('academic:getSubjects', ROLES.STAFF, () => getService().getAllSubjects())
-    safeHandleRawWithRole('academic:getSubjectsAdmin', ROLES.STAFF, () => getService().getAllSubjectsAdmin())
-    safeHandleRawWithRole('academic:createSubject', ROLES.STAFF, (event, data: SubjectCreateData, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        return getService().createSubject(data, actor.actorId)
+export function registerAcademicSystemHandlers() {
+    // ==================== Subject Management ====================
+    // handlers that take no args (or void schema)
+    validatedHandler('academic:getSubjects', ROLES.STAFF, GetSubjectsSchema, () => getService().getAllSubjects())
+    validatedHandler('academic:getSubjectsAdmin', ROLES.STAFF, GetSubjectsAdminSchema, () => getService().getAllSubjectsAdmin())
+
+    validatedHandler('academic:createSubject', ROLES.ADMIN_ONLY, SubjectCreateSchema, (event, data: SubjectCreateData, actor) => {
+        return getService().createSubject(data, actor.id)
     })
-    safeHandleRawWithRole('academic:updateSubject', ROLES.STAFF, (event, id: number, data: SubjectUpdateData, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        return getService().updateSubject(id, data, actor.actorId)
+
+    validatedHandlerMulti('academic:updateSubject', ROLES.ADMIN_ONLY, SubjectUpdateSchema, (event, [id, data]: [number, SubjectUpdateData], actor) => {
+        return getService().updateSubject(id, data, actor.id)
     })
-    safeHandleRawWithRole('academic:setSubjectActive', ROLES.STAFF, (event, id: number, isActive: boolean, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        return getService().setSubjectActive(id, isActive, actor.actorId)
+
+    validatedHandlerMulti('academic:setSubjectActive', ROLES.ADMIN_ONLY, SubjectSetActiveSchema, (event, [id, isActive]: [number, boolean], actor) => {
+        return getService().setSubjectActive(id, isActive, actor.id)
     })
-    safeHandleRawWithRole('academic:getExams', ROLES.STAFF, (_event, academicYearId: number, termId: number) => {
+
+    // ==================== Exam Management ====================
+    validatedHandlerMulti('academic:getExams', ROLES.STAFF, GetExamsSchema, (_event, [academicYearId, termId]: [number, number]) => {
         return getService().getAllExams(academicYearId, termId)
     })
-    safeHandleRawWithRole('academic:createExam', ROLES.STAFF, (event, data: unknown, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        return getService().createExam(data as CreateExamDTO, actor.actorId)
-    })
-    safeHandleRawWithRole('academic:deleteExam', ROLES.STAFF, (event, id: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        return getService().deleteExam(id, actor.actorId)
-    })
-}
 
-function registerAllocationAndResultsHandlers(): void {
-    safeHandleRawWithRole('academic:allocateTeacher', ROLES.STAFF, (event, data: unknown, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        return getService().allocateTeacher(data as Omit<SubjectAllocation, 'id'>, actor.actorId)
+    // Legacy handler requiring manual check or removal if not used. 
+    // Assuming 'academic:getExamsList' is the same as above but object based? 
+    // The previous file had: 'exam:getAllList'. Let's check if we need to keep it.
+    // The previous file had `safeHandleRawWithRole('exam:getAllList', ...)` calling `getService().getAllExams(academicYearId, termId)`.
+    // We will port it if needed, but 'academic:getExams' seems to cover it. 
+    // I'll stick to the ones I saw in the original file I replaced.
+    // Original file had:
+    // academic:getSubjects, academic:getSubjectsAdmin, academic:createSubject, academic:updateSubject, academic:setSubjectActive
+    // academic:getExams, academic:createExam, academic:deleteExam
+    // academic:allocateTeacher, academic:getAllocations, academic:deleteAllocation
+    // academic:saveResults, academic:getResults, academic:processResults
+    // academic:generateCertificate, academic:emailParents
+
+    validatedHandler('academic:createExam', ROLES.ADMIN_ONLY, CreateExamSchema, (event, data: CreateExamDTO, actor) => {
+        return getService().createExam(data, actor.id)
     })
-    safeHandleRawWithRole('academic:getAllocations', ROLES.STAFF, (_event, academicYearId: number, termId: number, streamId?: number) => {
+
+    validatedHandlerMulti('academic:deleteExam', ROLES.ADMIN_ONLY, DeleteExamSchema, (event, [id]: [number], actor) => {
+        return getService().deleteExam(id, actor.id)
+    })
+
+    // ==================== Teacher Allocations ====================
+    validatedHandler('academic:allocateTeacher', ROLES.ADMIN_ONLY, AllocateTeacherSchema, (event, data: Omit<SubjectAllocation, 'id'>, actor) => {
+        return getService().allocateTeacher(data, actor.id)
+    })
+
+    validatedHandlerMulti('academic:getAllocations', ROLES.STAFF, GetAllocationsSchema, (_event, [academicYearId, termId, streamId]: [number, number, number?]) => {
         return getService().getAllocations(academicYearId, termId, streamId)
     })
-    safeHandleRawWithRole('academic:deleteAllocation', ROLES.STAFF, (event, allocationId: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        return getService().deleteAllocation(allocationId, actor.actorId)
-    })
-    safeHandleRawWithRole('academic:saveResults', ROLES.STAFF, (event, examId: number, results: unknown[], legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        return getService().saveResults(examId, results as Omit<ExamResult, 'id' | 'exam_id'>[], actor.actorId)
-    })
-    safeHandleRawWithRole('academic:getResults', ROLES.STAFF, (event, examId: number, subjectId: number, streamId: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        return getService().getResults(examId, subjectId, streamId, actor.actorId)
-    })
-    safeHandleRawWithRole('academic:processResults', ROLES.STAFF, (event, examId: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        return getService().processResults(examId, actor.actorId)
-    })
-}
 
-function generateCertificateFile(data: CertificatePayload): { filePath: string; success: boolean } {
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    const pageWidth = doc.internal.pageSize.getWidth()
-    const finalY = renderCertificateContent(doc, data, pageWidth)
-    doc.setFontSize(10)
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, pageWidth / 2, finalY, { align: 'center' })
-    const filePath = saveCertificatePdf(doc, data.studentId)
-    return { success: true, filePath }
-}
-
-function renderCertificateContent(doc: jsPDF, data: CertificatePayload, pageWidth: number): number {
-    let y = 30
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(26)
-    doc.text('Certificate of Achievement', pageWidth / 2, y, { align: 'center' })
-    y += 15
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(14)
-    doc.text('This certificate is proudly presented to', pageWidth / 2, y, { align: 'center' })
-    y += 12
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(22)
-    doc.text(data.studentName, pageWidth / 2, y, { align: 'center' })
-    y += 12
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(13)
-    doc.text(`for outstanding improvement in ${data.awardCategory.replaceAll('_', ' ')}`, pageWidth / 2, y, { align: 'center' })
-    y += 10
-    doc.text(`Improvement: ${data.improvementPercentage.toFixed(1)}%`, pageWidth / 2, y, { align: 'center' })
-    y += 15
-    doc.setFontSize(11)
-    // Look up the academic year name for display
-    const yearRow = getDatabase().prepare(
-        'SELECT year_name FROM academic_year WHERE id = ?'
-    ).get(data.academicYearId) as { year_name: string } | undefined;
-    const yearLabel = yearRow?.year_name ?? `Year ${data.academicYearId}`;
-    doc.text(`Academic Year: ${yearLabel}`, pageWidth / 2, y, { align: 'center' })
-    return y + 8
-}
-
-function saveCertificatePdf(doc: jsPDF, studentId: number): string {
-    const certificatesDir = path.join(app.getPath('userData'), 'certificates')
-    if (!fs.existsSync(certificatesDir)) {
-        fs.mkdirSync(certificatesDir, { recursive: true })
-    }
-
-    const filename = `certificate-${studentId}-${Date.now()}.pdf`
-    const filePath = path.join(certificatesDir, filename)
-    const pdfBytes = doc.output('arraybuffer')
-    fs.writeFileSync(filePath, Buffer.from(pdfBytes))
-    return filePath
-}
-
-async function sendParentNotifications(data: EmailParentsPayload, userId: number): Promise<{ success: boolean; sent: number; failed: number; errors: string[] }> {
-    const db = getDatabase()
-    let sent = 0
-    let failed = 0
-    const errors: string[] = []
-
-    for (const student of data.students) {
-        const record = db.prepare('SELECT guardian_email, guardian_name FROM student WHERE id = ?').get(student.student_id) as { guardian_email?: string; guardian_name?: string } | undefined
-        const email = record?.guardian_email
-        if (!email) {
-            failed += 1
-            errors.push(`${student.student_name}: missing guardian email`)
-            continue
-        }
-
-        const subject = `Recognition: ${student.student_name} - ${data.awardCategory.replaceAll('_', ' ')}`
-        const message = `
-                <p>Dear ${record.guardian_name || 'Parent/Guardian'},</p>
-                <p>We are pleased to inform you that <strong>${student.student_name}</strong> has been recognized for outstanding improvement.</p>
-                <p><strong>Award:</strong> ${data.awardCategory.replaceAll('_', ' ')}</p>
-                <p><strong>Improvement:</strong> ${student.improvement_percentage.toFixed(1)}%</p>
-                <p>Congratulations!</p>
-            `
-
-        const result = await getNotificationService().send({
-            recipientType: 'GUARDIAN',
-            recipientId: student.student_id,
-            channel: 'EMAIL',
-            to: email,
-            subject,
-            message
-        }, userId)
-
-        if (result.success) {
-            sent += 1
-            continue
-        }
-        failed += 1
-        errors.push(`${student.student_name}: ${result.error || 'failed'}`)
-    }
-
-    return { success: failed === 0, sent, failed, errors }
-}
-
-function registerCertificateAndEmailHandlers(): void {
-    safeHandleRawWithRole('academic:generateCertificate', ROLES.STAFF, (_event, data: CertificatePayload) => {
-        return generateCertificateFile(data)
+    validatedHandlerMulti('academic:deleteAllocation', ROLES.ADMIN_ONLY, DeleteAllocationSchema, (event, [allocationId]: [number], actor) => {
+        return getService().deleteAllocation(allocationId, actor.id)
     })
 
-    safeHandleRawWithRole('academic:emailParents', ROLES.STAFF, (event, data: EmailParentsPayload, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        return sendParentNotifications(data, actor.actorId)
+    // ==================== Results & Report Cards ====================
+    validatedHandlerMulti('academic:saveResults', ROLES.STAFF, SaveResultsSchema, (event, [examId, results]: [number, Omit<ExamResult, 'id' | 'exam_id'>[]], actor) => {
+        return getService().saveResults(examId, results, actor.id)
     })
-}
 
-export function registerAcademicSystemHandlers(): void {
-    registerSubjectAndExamHandlers()
-    registerAllocationAndResultsHandlers()
-    registerCertificateAndEmailHandlers()
+    validatedHandlerMulti('academic:getResults', ROLES.STAFF, GetResultsSchema, (event, [examId, subjectId, streamId]: [number, number, number], actor) => {
+        return getService().getResults(examId, subjectId, streamId, actor.id)
+    })
+
+    validatedHandlerMulti('academic:processResults', ROLES.ADMIN_ONLY, ProcessResultsSchema, (event, [examId]: [number], actor) => {
+        return getService().processResults(examId, actor.id)
+    })
+
+    // ==================== Certificates & Emails ====================
+    validatedHandler('academic:generateCertificate', ROLES.STAFF, CertificatePayloadSchema, (event, data: CertificatePayload) => {
+        return getService().generateCertificate(data)
+    })
+
+    validatedHandler('academic:emailParents', ROLES.STAFF, EmailParentsPayloadSchema, (event, data: EmailParentsPayload) => {
+        return getService().emailParents(data)
+    })
 }

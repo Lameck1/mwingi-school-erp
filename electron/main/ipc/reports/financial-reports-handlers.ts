@@ -1,118 +1,99 @@
-import { container } from '../../services/base/ServiceContainer';
-import { ROLES, safeHandleRawWithRole } from '../ipc-result';
+import { z } from 'zod'
 
-import type { DoubleEntryJournalService } from '../../services/accounting/DoubleEntryJournalService';
-import type { OpeningBalanceService } from '../../services/accounting/OpeningBalanceService';
-import type { ProfitAndLossService } from '../../services/accounting/ProfitAndLossService';
+import { container } from '../../services/base/ServiceContainer'
+import { ROLES } from '../ipc-result'
+import {
+  ReportAsOfDateSchema, ReportDateRangeSchema, StudentLedgerSchema
+} from '../schemas/reports-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
-type ReportResponse<T> = { data: T; success: true } | { error: string; success: false };
-
-function success<T>(data: T): ReportResponse<T> {
-  return { success: true, data };
+interface IJournalService {
+  getBalanceSheet(asOf: string): Promise<unknown>
+  getTrialBalance(start: string, end: string): Promise<unknown>
 }
-
-function failure(error: string): ReportResponse<never> {
-  return { success: false, error };
+interface IProfitAndLossService {
+  generateProfitAndLoss(start: string, end: string): Promise<unknown>
+  generateComparativeProfitAndLoss(cStart: string, cEnd: string, pStart: string, pEnd: string): Promise<unknown>
+  getRevenueBreakdown(start: string, end: string): Promise<unknown>
+  getExpenseBreakdown(start: string, end: string): Promise<unknown>
 }
-
-function registerBalanceSheetHandlers(journalService: DoubleEntryJournalService): void {
-  safeHandleRawWithRole('reports:getBalanceSheet', ROLES.FINANCE, async (_event, asOfDate: string) => {
-    try {
-      return success(await journalService.getBalanceSheet(asOfDate));
-    } catch (error) {
-      return failure(`Failed to generate balance sheet: ${(error as Error).message}`);
-    }
-  });
+interface IOpeningBalanceService {
+  getStudentLedger(studentId: number, yearId: number, start: string, end: string): Promise<unknown>
 }
-
-function registerProfitAndLossHandlers(plService: ProfitAndLossService): void {
-  safeHandleRawWithRole('reports:getProfitAndLoss', ROLES.FINANCE, async (_event, startDate: string, endDate: string) => {
-    try {
-      return success(await plService.generateProfitAndLoss(startDate, endDate));
-    } catch (error) {
-      return failure(`Failed to generate P&L: ${(error as Error).message}`);
-    }
-  });
-
-  safeHandleRawWithRole(
-    'reports:getComparativeProfitAndLoss',
-    ROLES.FINANCE,
-    async (
-      _event,
-      currentStart: string,
-      currentEnd: string,
-      priorStart: string,
-      priorEnd: string
-    ) => {
-      try {
-        return success(await plService.generateComparativeProfitAndLoss(currentStart, currentEnd, priorStart, priorEnd));
-      } catch (error) {
-        return failure(`Failed to generate comparative P&L: ${(error as Error).message}`);
-      }
-    }
-  );
-
-  safeHandleRawWithRole('reports:getRevenueBreakdown', ROLES.FINANCE, async (_event, startDate: string, endDate: string) => {
-    try {
-      return success(await plService.getRevenueBreakdown(startDate, endDate));
-    } catch (error) {
-      return failure(`Failed to get revenue breakdown: ${(error as Error).message}`);
-    }
-  });
-
-  safeHandleRawWithRole('reports:getExpenseBreakdown', ROLES.FINANCE, async (_event, startDate: string, endDate: string) => {
-    try {
-      return success(await plService.getExpenseBreakdown(startDate, endDate));
-    } catch (error) {
-      return failure(`Failed to get expense breakdown: ${(error as Error).message}`);
-    }
-  });
-}
-
-function registerTrialBalanceAndLedgerHandlers(journalService: DoubleEntryJournalService, obService: OpeningBalanceService): void {
-  safeHandleRawWithRole('reports:getTrialBalance', ROLES.FINANCE, async (_event, startDate: string, endDate: string) => {
-    try {
-      return success(await journalService.getTrialBalance(startDate, endDate));
-    } catch (error) {
-      return failure(`Failed to generate trial balance: ${(error as Error).message}`);
-    }
-  });
-
-  safeHandleRawWithRole(
-    'reports:getStudentLedger',
-    ROLES.FINANCE,
-    async (
-      _event,
-      studentId: number,
-      academicYearId: number,
-      startDate: string,
-      endDate: string
-    ) => {
-      try {
-        return success(await obService.getStudentLedger(studentId, academicYearId, startDate, endDate));
-      } catch (error) {
-        return failure(`Failed to generate student ledger: ${(error as Error).message}`);
-      }
-    }
-  );
-}
-
-/**
- * IPC Handlers for Financial Reports
- * Refactored: wrapped in registration function to prevent side-effects at import time
- *
- * Provides access to:
- * - Balance Sheet
- * - Profit & Loss Statement
- * - Trial Balance
- * - General Ledger
- */
 
 export function registerFinancialReportsHandlers(): void {
-  const journalService = container.resolve('DoubleEntryJournalService');
-  const plService = container.resolve('ProfitAndLossService');
-  const obService = container.resolve('OpeningBalanceService');
-  registerBalanceSheetHandlers(journalService);
-  registerProfitAndLossHandlers(plService);
-  registerTrialBalanceAndLedgerHandlers(journalService, obService);
+  const journalService = container.resolve('DoubleEntryJournalService') as IJournalService
+  const plService = container.resolve('ProfitAndLossService') as IProfitAndLossService
+  const obService = container.resolve('OpeningBalanceService') as IOpeningBalanceService
+
+  registerBalanceSheetHandlers(journalService)
+  registerProfitAndLossHandlers(plService)
+  registerTrialBalanceAndLedgerHandlers(journalService, obService)
+}
+
+function registerBalanceSheetHandlers(journalService: IJournalService): void {
+  validatedHandler('reports:getBalanceSheet', ROLES.FINANCE, ReportAsOfDateSchema, async (_event, asOfDate) => {
+    try {
+      return { success: true, data: await journalService.getBalanceSheet(asOfDate) }
+    } catch (error) {
+      throw new Error(`Failed to generate balance sheet: ${(error as Error).message}`)
+    }
+  })
+}
+
+function registerProfitAndLossHandlers(plService: IProfitAndLossService): void {
+  validatedHandlerMulti('reports:getProfitAndLoss', ROLES.FINANCE, ReportDateRangeSchema, async (_event, [startDate, endDate]) => {
+    try {
+      return { success: true, data: await plService.generateProfitAndLoss(startDate, endDate) }
+    } catch (error) {
+      throw new Error(`Failed to generate P&L: ${(error as Error).message}`)
+    }
+  })
+
+  validatedHandlerMulti(
+    'reports:getComparativeProfitAndLoss',
+    ROLES.FINANCE,
+    z.tuple([z.string(), z.string(), z.string(), z.string()]),
+    async (_event, [currentStart, currentEnd, priorStart, priorEnd]) => {
+      try {
+        return { success: true, data: await plService.generateComparativeProfitAndLoss(currentStart, currentEnd, priorStart, priorEnd) }
+      } catch (error) {
+        throw new Error(`Failed to generate comparative P&L: ${(error as Error).message}`)
+      }
+    }
+  )
+
+  validatedHandlerMulti('reports:getRevenueBreakdown', ROLES.FINANCE, ReportDateRangeSchema, async (_event, [startDate, endDate]) => {
+    try {
+      return { success: true, data: await plService.getRevenueBreakdown(startDate, endDate) }
+    } catch (error) {
+      throw new Error(`Failed to get revenue breakdown: ${(error as Error).message}`)
+    }
+  })
+
+  validatedHandlerMulti('reports:getExpenseBreakdown', ROLES.FINANCE, ReportDateRangeSchema, async (_event, [startDate, endDate]) => {
+    try {
+      return { success: true, data: await plService.getExpenseBreakdown(startDate, endDate) }
+    } catch (error) {
+      throw new Error(`Failed to get expense breakdown: ${(error as Error).message}`)
+    }
+  })
+}
+
+function registerTrialBalanceAndLedgerHandlers(journalService: IJournalService, obService: IOpeningBalanceService): void {
+  validatedHandlerMulti('reports:getTrialBalance', ROLES.FINANCE, ReportDateRangeSchema, async (_event, [startDate, endDate]) => {
+    try {
+      return { success: true, data: await journalService.getTrialBalance(startDate, endDate) }
+    } catch (error) {
+      throw new Error(`Failed to generate trial balance: ${(error as Error).message}`)
+    }
+  })
+
+  validatedHandlerMulti('reports:getStudentLedger', ROLES.FINANCE, StudentLedgerSchema, async (_event, [studentId, yearId, start, end]) => {
+    try {
+      return { success: true, data: await obService.getStudentLedger(studentId, yearId, start, end) }
+    } catch (error) {
+      throw new Error(`Failed to generate student ledger: ${(error as Error).message}`)
+    }
+  })
 }

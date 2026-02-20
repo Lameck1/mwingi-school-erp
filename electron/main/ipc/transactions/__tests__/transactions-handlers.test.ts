@@ -1,3 +1,7 @@
+// Utility to attach session actor to event
+function attachActor(event: any) {
+  event.__ipcActor = { id: 1, username: 'admin', role: 'ADMIN' };
+}
 import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -13,14 +17,14 @@ const journalServiceMock = {
 vi.mock('keytar', () => ({
   default: {
     getPassword: vi.fn().mockResolvedValue(JSON.stringify({
-      user: { id: 1, username: 'admin', role: 'ADMIN', full_name: 'Admin', email: 'a@t.com', is_active: 1, last_login: null, created_at: '2026-01-01' },
+      user: { id: 1, username: 'admin', role: 'ADMIN', full_name: 'Admin', email: 'a@t.com', is_active: 1, last_login: null, created_at: '2026-01-01T00:00:00' },
       lastActivity: Date.now()
     })),
     setPassword: vi.fn().mockResolvedValue(null),
     deletePassword: vi.fn().mockResolvedValue(true)
   },
   getPassword: vi.fn().mockResolvedValue(JSON.stringify({
-    user: { id: 1, username: 'admin', role: 'ADMIN', full_name: 'Admin', email: 'a@t.com', is_active: 1, last_login: null, created_at: '2026-01-01' },
+    user: { id: 1, username: 'admin', role: 'ADMIN', full_name: 'Admin', email: 'a@t.com', is_active: 1, last_login: null, created_at: '2026-01-01T00:00:00' },
     lastActivity: Date.now()
   })),
   setPassword: vi.fn().mockResolvedValue(null),
@@ -106,8 +110,10 @@ describe('transactions IPC handlers', () => {
     expect(handler).toBeDefined()
     const today = new Date().toISOString().slice(0, 10)
 
+    const event = {};
+    attachActor(event);
     const result = await handler!(
-      {},
+      event,
       {
         transaction_date: today,
         transaction_type: 'INCOME',
@@ -124,8 +130,10 @@ describe('transactions IPC handlers', () => {
 
   it('transaction:create rejects invalid transaction date format', async () => {
     const handler = handlerMap.get('transaction:create')!
+    const event = {};
+    attachActor(event);
     const result = await handler(
-      {},
+      event,
       {
         transaction_date: '01/02/2026',
         transaction_type: 'INCOME',
@@ -143,8 +151,10 @@ describe('transactions IPC handlers', () => {
   it('transaction:create rejects future transaction date', async () => {
     const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
     const handler = handlerMap.get('transaction:create')!
+    const event = {};
+    attachActor(event);
     const result = await handler(
-      {},
+      event,
       {
         transaction_date: tomorrow,
         transaction_type: 'INCOME',
@@ -164,8 +174,10 @@ describe('transactions IPC handlers', () => {
     const today = new Date().toISOString().slice(0, 10)
 
     const handler = handlerMap.get('transaction:create')!
+    const event = {};
+    attachActor(event);
     const result = await handler(
-      {},
+      event,
       {
         transaction_date: today,
         transaction_type: 'INCOME',
@@ -187,8 +199,10 @@ describe('transactions IPC handlers', () => {
   it('transaction:create persists on successful journal posting', async () => {
     const today = new Date().toISOString().slice(0, 10)
     const handler = handlerMap.get('transaction:create')!
+    const event = {};
+    attachActor(event);
     const result = await handler(
-      {},
+      event,
       {
         transaction_date: today,
         transaction_type: 'INCOME',

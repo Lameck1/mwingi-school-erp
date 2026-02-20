@@ -1,43 +1,44 @@
+// period-handlers.ts
+
 import { getDatabase } from '../../database'
 import { PeriodLockingService } from '../../services/finance/PeriodLockingService'
-import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
+import { ROLES } from '../ipc-result'
+import { PeriodStatusSchema, DateStringSchema, PeriodProcessTuple } from '../schemas/finance-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 export function registerPeriodLockingHandlers(): void {
     const service = new PeriodLockingService(getDatabase())
 
-    safeHandleRawWithRole('period:getAll', ROLES.STAFF, (_event, status?: string) => {
+    validatedHandler('period:getAll', ROLES.STAFF, PeriodStatusSchema, (_event, status) => {
         return service.getAllPeriods(status)
     })
 
-    safeHandleRawWithRole('period:getForDate', ROLES.STAFF, (_event, date: string) => {
+    validatedHandler('period:getForDate', ROLES.STAFF, DateStringSchema, (_event, date) => {
         return service.getPeriodForDate(date)
     })
 
-    safeHandleRawWithRole('period:isTransactionAllowed', ROLES.STAFF, (_event, transactionDate: string) => {
+    validatedHandler('period:isTransactionAllowed', ROLES.STAFF, DateStringSchema, (_event, transactionDate) => {
         return service.isTransactionAllowed(transactionDate)
     })
 
-    safeHandleRawWithRole('period:lock', ROLES.FINANCE, (event, periodId: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
+    validatedHandlerMulti('period:lock', ROLES.FINANCE, PeriodProcessTuple, (event, [periodId, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
         }
-        return service.lockPeriod(periodId, actor.actorId)
+        return service.lockPeriod(periodId, actor.id)
     })
 
-    safeHandleRawWithRole('period:unlock', ROLES.MANAGEMENT, (event, periodId: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
+    validatedHandlerMulti('period:unlock', ROLES.MANAGEMENT, PeriodProcessTuple, (event, [periodId, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
         }
-        return service.unlockPeriod(periodId, actor.actorId)
+        return service.unlockPeriod(periodId, actor.id)
     })
 
-    safeHandleRawWithRole('period:close', ROLES.MANAGEMENT, (event, periodId: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
+    validatedHandlerMulti('period:close', ROLES.MANAGEMENT, PeriodProcessTuple, (event, [periodId, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
         }
-        return service.closePeriod(periodId, actor.actorId)
+        return service.closePeriod(periodId, actor.id)
     })
 }

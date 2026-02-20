@@ -36,7 +36,7 @@ vi.mock('keytar', () => ({
         email: null,
         is_active: 1,
         last_login: null,
-        created_at: '2026-01-01'
+        created_at: '2026-01-01T00:00:00'
       },
       lastActivity: Date.now()
     })),
@@ -70,9 +70,23 @@ describe('hire handlers', () => {
     registerHireHandlers()
   })
 
+  function attachActor(event: any) {
+    event.__ipcActor = {
+      id: sessionUserId,
+      role: sessionRole,
+      username: 'session-user',
+      full_name: 'Session User',
+      email: null,
+      is_active: 1,
+      created_at: '2026-01-01T00:00:00'
+    };
+  }
+
   it('hire:createBooking rejects invalid hire date format', async () => {
     const handler = handlerMap.get('hire:createBooking')!
-    const result = await handler({}, {
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, {
       asset_id: 1,
       client_id: 2,
       hire_date: '02/01/2026',
@@ -85,7 +99,9 @@ describe('hire handlers', () => {
 
   it('hire:createBooking rejects return date earlier than hire date', async () => {
     const handler = handlerMap.get('hire:createBooking')!
-    const result = await handler({}, {
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, {
       asset_id: 1,
       client_id: 2,
       hire_date: '2026-02-10',
@@ -99,7 +115,9 @@ describe('hire handlers', () => {
 
   it('hire:createBooking rejects non-positive amount', async () => {
     const handler = handlerMap.get('hire:createBooking')!
-    const result = await handler({}, {
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, {
       asset_id: 1,
       client_id: 2,
       hire_date: '2026-02-10',
@@ -112,6 +130,8 @@ describe('hire handlers', () => {
 
   it('hire:createBooking passes valid payload to service', async () => {
     const handler = handlerMap.get('hire:createBooking')!
+    const event = {};
+    attachActor(event);
     const payload = {
       asset_id: 1,
       client_id: 2,
@@ -119,14 +139,16 @@ describe('hire handlers', () => {
       return_date: '2026-02-11',
       total_amount: 5000
     }
-    const result = await handler({}, payload, 7) as { success: boolean }
+    const result = await handler(event, payload, 7) as { success: boolean }
     expect(result.success).toBe(true)
     expect(hireServiceMock.createBooking).toHaveBeenCalledWith(payload, 7)
   })
 
   it('hire:updateBookingStatus rejects unknown status values', async () => {
     const handler = handlerMap.get('hire:updateBookingStatus')!
-    const result = await handler({}, 10, 'ARCHIVED') as { success: boolean; error?: string }
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, 10, 'ARCHIVED') as { success: boolean; error?: string }
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('Invalid booking status')
@@ -135,7 +157,9 @@ describe('hire handlers', () => {
 
   it('hire:createBooking rejects renderer actor mismatch', async () => {
     const handler = handlerMap.get('hire:createBooking')!
-    const result = await handler({}, {
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, {
       asset_id: 1,
       client_id: 2,
       hire_date: '2026-02-10',

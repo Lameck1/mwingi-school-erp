@@ -1,24 +1,35 @@
 import { container } from '../../services/base/ServiceContainer';
-import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result';
-
-import type { OpeningBalanceImport, StudentOpeningBalance } from '../../services/accounting/OpeningBalanceService';
+import { ROLES } from '../ipc-result';
+import { ImportStudentBalanceTuple, ImportGLBalanceTuple } from '../schemas/finance-schemas';
+import { validatedHandlerMulti } from '../validated-handler';
 
 const getService = () => container.resolve('OpeningBalanceService');
 
 export function registerOpeningBalanceHandlers() {
-  safeHandleRawWithRole('opening-balance:import-student', ROLES.FINANCE, async (event, balances: StudentOpeningBalance[], academicYearId: number, importSource: string, legacyUserId?: number) => {
-    const actor = resolveActorId(event, legacyUserId);
-    if (!actor.success) {
-      return { success: false, error: actor.error };
+  validatedHandlerMulti('opening-balance:import-student', ROLES.FINANCE, ImportStudentBalanceTuple, async (event, [balances, academicYearId, importSource, legacyUserId], actor) => {
+    if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+      throw new Error("Unauthorized: renderer user mismatch")
     }
-    return await getService().importStudentOpeningBalances(balances, academicYearId, importSource, actor.actorId);
+    const enrichedBalances = balances.map(b => ({
+      ...b,
+      admission_number: b.admission_number ?? '',
+      student_name: b.student_name ?? '',
+      description: b.description ?? ''
+    }))
+    return await getService().importStudentOpeningBalances(enrichedBalances, academicYearId, importSource, actor.id);
   });
 
-  safeHandleRawWithRole('opening-balance:import-gl', ROLES.FINANCE, async (event, balances: OpeningBalanceImport[], legacyUserId?: number) => {
-    const actor = resolveActorId(event, legacyUserId);
-    if (!actor.success) {
-      return { success: false, error: actor.error };
+  validatedHandlerMulti('opening-balance:import-gl', ROLES.FINANCE, ImportGLBalanceTuple, async (event, [balances, legacyUserId], actor) => {
+    if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+      throw new Error("Unauthorized: renderer user mismatch")
     }
-    return await getService().importGLOpeningBalances(balances, actor.actorId);
+    // internal fields injection
+    const enrichedBalances = balances.map(b => ({
+      ...b,
+      imported_from: 'MANUAL', // or 'EXCEL' etc? Manual implied here
+      imported_by_user_id: actor.id,
+      description: b.description ?? ''
+    }))
+    return await getService().importGLOpeningBalances(enrichedBalances, actor.id);
   });
 }

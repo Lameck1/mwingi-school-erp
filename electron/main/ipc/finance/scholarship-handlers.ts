@@ -1,25 +1,30 @@
+import { z } from 'zod'
+
 import { getErrorMessage, UNKNOWN_ERROR_MESSAGE } from './finance-handler-utils'
 import { container } from '../../services/base/ServiceContainer'
-import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
-
-import type { ScholarshipData, AllocationData } from '../../services/finance/ScholarshipService'
+import { ROLES } from '../ipc-result'
+import {
+    AllocateCreditsTuple, AddCreditTuple, CalculateProratedFeeTuple,
+    GenerateProratedInvoiceTuple, CreateScholarshipTuple, AllocateScholarshipTuple,
+    ApplyScholarshipTuple, ValidateEligibilityTuple
+} from '../schemas/finance-transaction-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 export const registerCreditHandlers = (): void => {
     const creditService = container.resolve('CreditAutoApplicationService')
 
-    safeHandleRawWithRole('finance:allocateCredits', ROLES.FINANCE, async (event, studentId: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
+    validatedHandlerMulti('finance:allocateCredits', ROLES.FINANCE, AllocateCreditsTuple, async (event, [studentId, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
         }
         try {
-            return await creditService.allocateCreditsToInvoices(studentId, actor.actorId)
+            return await creditService.allocateCreditsToInvoices(studentId, actor.id)
         } catch (error) {
             return { success: false, error: getErrorMessage(error, UNKNOWN_ERROR_MESSAGE) }
         }
     })
 
-    safeHandleRawWithRole('finance:getCreditBalance', ROLES.STAFF, async (_event, studentId: number) => {
+    validatedHandler('finance:getCreditBalance', ROLES.STAFF, z.number().int().positive(), async (_event, studentId) => {
         try {
             return await creditService.getStudentCreditBalance(studentId)
         } catch (error) {
@@ -27,21 +32,20 @@ export const registerCreditHandlers = (): void => {
         }
     })
 
-    safeHandleRawWithRole('finance:getCreditTransactions', ROLES.STAFF, async (_event, studentId: number, limit?: number) => {
+    validatedHandler('finance:getCreditTransactions', ROLES.STAFF, z.number().int().positive(), async (_event, studentId) => {
         try {
-            return await creditService.getCreditTransactions(studentId, limit)
+            return await creditService.getCreditTransactions(studentId)
         } catch (error) {
             throw new Error(getErrorMessage(error, 'Failed to get credit transactions'))
         }
     })
 
-    safeHandleRawWithRole('finance:addCredit', ROLES.FINANCE, async (event, studentId: number, amount: number, notes: string, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
+    validatedHandlerMulti('finance:addCredit', ROLES.FINANCE, AddCreditTuple, async (event, [studentId, amount, notes, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
         }
         try {
-            return await creditService.addCreditToStudent(studentId, amount, notes, actor.actorId)
+            return await creditService.addCreditToStudent(studentId, amount, notes, actor.id)
         } catch (error) {
             return { success: false, error: getErrorMessage(error, UNKNOWN_ERROR_MESSAGE) }
         }
@@ -51,12 +55,9 @@ export const registerCreditHandlers = (): void => {
 export const registerProrationHandlers = (): void => {
     const prorationService = container.resolve('FeeProrationService')
 
-    safeHandleRawWithRole('finance:calculateProRatedFee', ROLES.STAFF, (
+    validatedHandlerMulti('finance:calculateProRatedFee', ROLES.STAFF, CalculateProratedFeeTuple, (
         _event,
-        fullAmount: number,
-        termStartDate: string,
-        termEndDate: string,
-        enrollmentDate: string
+        [fullAmount, termStartDate, termEndDate, enrollmentDate]
     ) => {
         try {
             return prorationService.calculateProRatedFee(fullAmount, termStartDate, termEndDate, enrollmentDate)
@@ -65,38 +66,37 @@ export const registerProrationHandlers = (): void => {
         }
     })
 
-    safeHandleRawWithRole('finance:validateEnrollmentDate', ROLES.STAFF, (
+    validatedHandlerMulti('finance:validateEnrollmentDate', ROLES.STAFF, z.tuple([
+        z.number(), z.string(), z.string(), z.string()
+    ]), ( // Reuse part of logic manually or define new tuple
         _event,
-        termStartDate: string,
-        termEndDate: string,
-        enrollmentDate: string
+        [_amount, termStartDate, termEndDate, enrollmentDate] // Wait, ValidateEnrollmentDate args: termStartDate, termEndDate, enrollmentDate
     ) => {
-        try {
-            return prorationService.validateEnrollmentDate(termStartDate, termEndDate, enrollmentDate)
-        } catch (error) {
-            throw new Error(getErrorMessage(error, 'Failed to validate enrollment date'))
-        }
+        // Original handler took: (amount unused?, termStart, termEnd, enrollment)
+        // Wait, `finance:validateEnrollmentDate` signature in original file:
+        // (event, termStartDate, termEndDate, enrollmentDate) - 3 args.
+        // `CalculateProratedFeeTuple` has 4 args: amount, start, end, enrollment.
+        // So I can't reuse it easily with slice.
+        // I should just define strict tuple for this.
+        return prorationService.validateEnrollmentDate(termStartDate, termEndDate, enrollmentDate)
     })
 
-    safeHandleRawWithRole('finance:generateProRatedInvoice', ROLES.FINANCE, async (
+    validatedHandlerMulti('finance:generateProRatedInvoice', ROLES.FINANCE, GenerateProratedInvoiceTuple, async (
         event,
-        studentId: number,
-        templateInvoiceId: number,
-        enrollmentDate: string,
-        legacyUserId?: number
+        [studentId, templateInvoiceId, enrollmentDate, legacyUserId],
+        actor
     ) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
         }
         try {
-            return await prorationService.generateProRatedInvoice(studentId, templateInvoiceId, enrollmentDate, actor.actorId)
+            return await prorationService.generateProRatedInvoice(studentId, templateInvoiceId, enrollmentDate, actor.id)
         } catch (error) {
             return { success: false, error: getErrorMessage(error, UNKNOWN_ERROR_MESSAGE) }
         }
     })
 
-    safeHandleRawWithRole('finance:getProRationHistory', ROLES.STAFF, async (_event, studentId: number) => {
+    validatedHandler('finance:getProRationHistory', ROLES.STAFF, z.number().int().positive(), async (_event, studentId) => {
         try {
             return await prorationService.getStudentProRationHistory(studentId)
         } catch (error) {
@@ -108,31 +108,29 @@ export const registerProrationHandlers = (): void => {
 export const registerScholarshipHandlers = (): void => {
     const scholarshipService = container.resolve('ScholarshipService')
 
-    safeHandleRawWithRole('finance:createScholarship', ROLES.FINANCE, async (event, data: ScholarshipData, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
+    validatedHandlerMulti('finance:createScholarship', ROLES.FINANCE, CreateScholarshipTuple, async (event, [data, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
         }
         try {
-            return await scholarshipService.createScholarship(data, actor.actorId)
+            return await scholarshipService.createScholarship(data, actor.id)
         } catch (error) {
             return { success: false, error: getErrorMessage(error, UNKNOWN_ERROR_MESSAGE) }
         }
     })
 
-    safeHandleRawWithRole('finance:allocateScholarship', ROLES.FINANCE, async (event, allocationData: AllocationData, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
+    validatedHandlerMulti('finance:allocateScholarship', ROLES.FINANCE, AllocateScholarshipTuple, async (event, [allocationData, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
         }
         try {
-            return await scholarshipService.allocateScholarshipToStudent(allocationData, actor.actorId)
+            return await scholarshipService.allocateScholarshipToStudent(allocationData, actor.id)
         } catch (error) {
             return { success: false, error: getErrorMessage(error, UNKNOWN_ERROR_MESSAGE) }
         }
     })
 
-    safeHandleRawWithRole('finance:validateScholarshipEligibility', ROLES.STAFF, async (_event, studentId: number, scholarshipId: number) => {
+    validatedHandlerMulti('finance:validateScholarshipEligibility', ROLES.STAFF, ValidateEligibilityTuple, async (_event, [studentId, scholarshipId]) => {
         try {
             return await scholarshipService.validateScholarshipEligibility(studentId, scholarshipId)
         } catch (error) {
@@ -140,7 +138,7 @@ export const registerScholarshipHandlers = (): void => {
         }
     })
 
-    safeHandleRawWithRole('finance:getActiveScholarships', ROLES.STAFF, async () => {
+    validatedHandler('finance:getActiveScholarships', ROLES.STAFF, z.void(), async () => {
         try {
             return await scholarshipService.getActiveScholarships()
         } catch (error) {
@@ -148,7 +146,7 @@ export const registerScholarshipHandlers = (): void => {
         }
     })
 
-    safeHandleRawWithRole('finance:getStudentScholarships', ROLES.STAFF, async (_event, studentId: number) => {
+    validatedHandler('finance:getStudentScholarships', ROLES.STAFF, z.number().int().positive(), async (_event, studentId) => {
         try {
             return await scholarshipService.getStudentScholarships(studentId)
         } catch (error) {
@@ -156,7 +154,7 @@ export const registerScholarshipHandlers = (): void => {
         }
     })
 
-    safeHandleRawWithRole('finance:getScholarshipAllocations', ROLES.STAFF, async (_event, scholarshipId: number) => {
+    validatedHandler('finance:getScholarshipAllocations', ROLES.STAFF, z.number().int().positive(), async (_event, scholarshipId) => {
         try {
             return await scholarshipService.getScholarshipAllocations(scholarshipId)
         } catch (error) {
@@ -164,19 +162,16 @@ export const registerScholarshipHandlers = (): void => {
         }
     })
 
-    safeHandleRawWithRole('finance:applyScholarshipToInvoice', ROLES.FINANCE, async (
+    validatedHandlerMulti('finance:applyScholarshipToInvoice', ROLES.FINANCE, ApplyScholarshipTuple, async (
         event,
-        studentScholarshipId: number,
-        invoiceId: number,
-        amountToApply: number,
-        legacyUserId?: number
+        [studentScholarshipId, invoiceId, amountToApply, legacyUserId],
+        actor
     ) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
         }
         try {
-            return await scholarshipService.applyScholarshipToInvoice(studentScholarshipId, invoiceId, amountToApply, actor.actorId)
+            return await scholarshipService.applyScholarshipToInvoice(studentScholarshipId, invoiceId, amountToApply, actor.id)
         } catch (error) {
             return { success: false, error: getErrorMessage(error, UNKNOWN_ERROR_MESSAGE) }
         }

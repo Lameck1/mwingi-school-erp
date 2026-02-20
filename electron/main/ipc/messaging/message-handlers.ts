@@ -1,27 +1,31 @@
 import { container } from '../../services/base/ServiceContainer';
 import { MessageService } from '../../services/MessageService';
-import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result';
+import { ROLES } from '../ipc-result';
+import {
+    MessageGetTemplatesSchema,
+    MessageSaveTemplateSchema,
+    MessageSendSmsSchema,
+    MessageSendEmailSchema,
+    MessageGetLogsSchema
+} from '../schemas/message-schemas';
+import { validatedHandler } from '../validated-handler';
 
 const svc = () => new MessageService();
 
 export function registerMessageHandlers(): void {
-    safeHandleRawWithRole('message:getTemplates', ROLES.STAFF, () => {
+    validatedHandler('message:getTemplates', ROLES.STAFF, MessageGetTemplatesSchema, () => {
         return svc().getTemplates();
     });
 
-    safeHandleRawWithRole('message:saveTemplate', ROLES.MANAGEMENT, (_event, template: Parameters<MessageService['saveTemplate']>[0]) => {
+    validatedHandler('message:saveTemplate', ROLES.MANAGEMENT, MessageSaveTemplateSchema, (_event, template) => {
         return svc().saveTemplate(template);
     });
 
-    safeHandleRawWithRole('message:sendSms', ROLES.STAFF, (_event, options: Parameters<MessageService['sendSms']>[0]) => {
-        return svc().sendSms(options);
+    validatedHandler('message:sendSms', ROLES.STAFF, MessageSendSmsSchema, (_event, options, actor) => {
+        return svc().sendSms({ ...options, userId: actor.id });
     });
 
-    safeHandleRawWithRole('message:sendEmail', ROLES.STAFF, async (event, options: { to: string; subject: string; body: string; recipientId?: number; recipientType?: string; userId?: number }) => {
-        const actor = resolveActorId(event, options.userId);
-        if (!actor.success) {
-            return actor;
-        }
+    validatedHandler('message:sendEmail', ROLES.STAFF, MessageSendEmailSchema, async (event, options, actor) => {
         const service = container.resolve('NotificationService');
         const recipientType = (options.recipientType ?? 'GUARDIAN') as 'STUDENT' | 'STAFF' | 'GUARDIAN';
         return await service.send({
@@ -31,10 +35,10 @@ export function registerMessageHandlers(): void {
             to: options.to,
             subject: options.subject,
             message: options.body
-        }, actor.actorId);
+        }, actor.id);
     });
 
-    safeHandleRawWithRole('message:getLogs', ROLES.STAFF, (_event, limit: number = 50) => {
-        return svc().getLogs(limit);
+    validatedHandler('message:getLogs', ROLES.STAFF, MessageGetLogsSchema, (_event, [limit]) => {
+        return svc().getLogs(limit || 50);
     });
 }

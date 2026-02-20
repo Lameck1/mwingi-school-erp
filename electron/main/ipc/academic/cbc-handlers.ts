@@ -1,5 +1,15 @@
+import { z } from 'zod'
+
 import { container } from '../../services/base/ServiceContainer'
-import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
+import { ROLES } from '../ipc-result'
+import {
+    CbcLinkFeeSchema,
+    CbcRecordExpenseSchema,
+    CbcGetProfitabilitySchema,
+    CbcRecordParticipationSchema,
+    CbcGetParticipationSchema
+} from '../schemas/academic-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 import type { CBCStrandService } from '../../services/cbc/CBCStrandService'
 
@@ -10,75 +20,40 @@ export function registerCBCHandlers() {
     const cbcService = container.resolve('CBCStrandService')
 
     // Get all strands
-    safeHandleRawWithRole('cbc:getStrands', ROLES.STAFF, () => {
-        try {
-            return { success: true, data: cbcService.getAllStrands() }
-        } catch (error) {
-            return { success: false, error: (error as Error).message }
-        }
+    validatedHandler('cbc:getStrands', ROLES.STAFF, z.undefined(), () => {
+        return { success: true, data: cbcService.getAllStrands() }
     })
 
     // Get active strands
-    safeHandleRawWithRole('cbc:getActiveStrands', ROLES.STAFF, () => {
-        try {
-            return { success: true, data: cbcService.getActiveStrands() }
-        } catch (error) {
-            return { success: false, error: (error as Error).message }
-        }
+    validatedHandler('cbc:getActiveStrands', ROLES.STAFF, z.undefined(), () => {
+        return { success: true, data: cbcService.getActiveStrands() }
     })
 
     // Link fee category to strand
-    safeHandleRawWithRole(
-        'cbc:linkFeeCategory',
-        ROLES.FINANCE,
-        (event, feeCategoryId: number, strandId: number, allocationPercentage: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
-        }
-        try {
-            const id = cbcService.linkFeeCategoryToStrand(feeCategoryId, strandId, allocationPercentage, actor.actorId)
-            return { success: true, data: id }
-        } catch (error) {
-            return { success: false, error: (error as Error).message }
-        }
+    validatedHandlerMulti('cbc:linkFeeCategory', ROLES.FINANCE, CbcLinkFeeSchema, (event, [feeCategoryId, strandId, allocationPercentage]: [number, number, number, number?], actor) => {
+        const id = cbcService.linkFeeCategoryToStrand(feeCategoryId, strandId, allocationPercentage, actor.id)
+        return { success: true, data: id }
     })
 
     // Record strand expense
-    safeHandleRawWithRole('cbc:recordExpense', ROLES.FINANCE, (_event, data: StrandExpenseInput) => {
-        try {
-            const id = cbcService.recordStrandExpense(data)
-            return { success: true, data: id }
-        } catch (error) {
-            return { success: false, error: (error as Error).message }
-        }
+    validatedHandler('cbc:recordExpense', ROLES.FINANCE, CbcRecordExpenseSchema, (_event, data: StrandExpenseInput) => {
+        const id = cbcService.recordStrandExpense(data)
+        return { success: true, data: id }
     })
 
     // Get profitability report
-    safeHandleRawWithRole('cbc:getProfitabilityReport', ROLES.STAFF, (_event, fiscalYear: number, term?: number) => {
-        try {
-            return { success: true, data: cbcService.getStrandProfitability(fiscalYear, term) }
-        } catch (error) {
-            return { success: false, error: (error as Error).message }
-        }
+    validatedHandlerMulti('cbc:getProfitabilityReport', ROLES.STAFF, CbcGetProfitabilitySchema, (_event, [fiscalYear, term]: [number, number?]) => {
+        return { success: true, data: cbcService.getStrandProfitability(fiscalYear, term) }
     })
 
     // Record participation
-    safeHandleRawWithRole('cbc:recordParticipation', ROLES.STAFF, (_event, data: StudentParticipationInput) => {
-        try {
-            const id = cbcService.recordStudentParticipation(data)
-            return { success: true, data: id }
-        } catch (error) {
-            return { success: false, error: (error as Error).message }
-        }
+    validatedHandler('cbc:recordParticipation', ROLES.STAFF, CbcRecordParticipationSchema, (_event, data: StudentParticipationInput) => {
+        const id = cbcService.recordStudentParticipation(data)
+        return { success: true, data: id }
     })
 
     // Get student participation
-    safeHandleRawWithRole('cbc:getStudentParticipations', ROLES.STAFF, (_event, studentId: number) => {
-        try {
-            return { success: true, data: cbcService.getStudentParticipations(studentId) }
-        } catch (error) {
-            return { success: false, error: (error as Error).message }
-        }
+    validatedHandlerMulti('cbc:getStudentParticipations', ROLES.STAFF, CbcGetParticipationSchema, (_event, [studentId]: [number]) => {
+        return { success: true, data: cbcService.getStudentParticipations(studentId) }
     })
 }

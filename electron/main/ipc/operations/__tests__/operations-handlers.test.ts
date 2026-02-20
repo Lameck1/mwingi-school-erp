@@ -5,6 +5,7 @@ type IpcHandler = (event: unknown, ...args: unknown[]) => Promise<unknown>
 const handlerMap = new Map<string, IpcHandler>()
 let sessionUserId = 14
 let sessionRole = 'ACCOUNTS_CLERK'
+const validIsoDate = new Date().toISOString();
 
 const boardingServiceMock = {
   getAllFacilities: vi.fn(() => []),
@@ -34,7 +35,7 @@ vi.mock('keytar', () => ({
         email: null,
         is_active: 1,
         last_login: null,
-        created_at: '2026-01-01'
+        created_at: validIsoDate
       },
       lastActivity: Date.now()
     })),

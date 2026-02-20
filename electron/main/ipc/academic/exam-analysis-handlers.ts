@@ -1,29 +1,34 @@
 import { container } from '../../services/base/ServiceContainer';
-import { ROLES, safeHandleRawWithRole } from '../ipc-result';
+import { ROLES } from '../ipc-result';
+import {
+  ExamAnalysisSubjectSchema,
+  ExamAnalysisResultSchema,
+  ExamAnalysisTeacherSchema,
+  ExamAnalysisStudentSchema,
+  ExamAnalysisStrugglingSchema
+} from '../schemas/academic-schemas';
+import { validatedHandlerMulti } from '../validated-handler';
 
 const getService = () => container.resolve('ExamAnalysisService');
 
 export function registerExamAnalysisHandlers() {
-  safeHandleRawWithRole('exam-analysis:getSubjectAnalysis', ROLES.STAFF, (_event, subjectId: number, examId: number) => {
+  validatedHandlerMulti('exam-analysis:getSubjectAnalysis', ROLES.STAFF, ExamAnalysisSubjectSchema, (_event, [subjectId, examId]: [number, number]) => {
     return getService().getSubjectAnalysis(examId, subjectId);
   });
 
-  safeHandleRawWithRole('exam-analysis:analyzeAllSubjects', ROLES.STAFF, (_event, examId: number) => {
+  validatedHandlerMulti('exam-analysis:analyzeAllSubjects', ROLES.STAFF, ExamAnalysisResultSchema, (_event, [examId]: [number]) => {
     return getService().analyzeAllSubjects(examId);
   });
 
-  safeHandleRawWithRole(
-    'exam-analysis:getTeacherPerf',
-    ROLES.STAFF,
-    (_event, teacherId: number, academicYearId: number, termId: number) => {
+  validatedHandlerMulti('exam-analysis:getTeacherPerf', ROLES.STAFF, ExamAnalysisTeacherSchema, (_event, [teacherId, academicYearId, termId]: [number, number, number]) => {
     return getService().getTeacherPerformance(teacherId, academicYearId, termId);
   });
 
-  safeHandleRawWithRole('exam-analysis:getStudentPerf', ROLES.STAFF, (_event, studentId: number, examId: number) => {
+  validatedHandlerMulti('exam-analysis:getStudentPerf', ROLES.STAFF, ExamAnalysisStudentSchema, (_event, [studentId, examId]: [number, number]) => {
     return getService().getStudentPerformance(studentId, examId);
   });
 
-  safeHandleRawWithRole('exam-analysis:getStruggling', ROLES.STAFF, (_event, examId: number, threshold?: number) => {
+  validatedHandlerMulti('exam-analysis:getStruggling', ROLES.STAFF, ExamAnalysisStrugglingSchema, (_event, [examId, threshold]: [number, number?]) => {
     return getService().getStrugglingStudents(examId, threshold ?? 50);
   });
 }

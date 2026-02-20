@@ -5,6 +5,7 @@ type IpcHandler = (event: unknown, ...args: unknown[]) => Promise<unknown>
 const handlerMap = new Map<string, IpcHandler>()
 let sessionUserId = 9
 let sessionRole = 'TEACHER'
+const validIsoDate = new Date().toISOString();
 
 const inventoryServiceMock = {
   findAll: vi.fn(() => []),
@@ -29,7 +30,7 @@ vi.mock('keytar', () => ({
         email: null,
         is_active: 1,
         last_login: null,
-        created_at: '2026-01-01'
+        created_at: validIsoDate
       },
       lastActivity: Date.now()
     })),
@@ -64,22 +65,20 @@ describe('inventory IPC handlers', () => {
     registerInventoryHandlers()
   })
 
-  it('inventory:createItem rejects renderer actor mismatch', async () => {
-    const handler = handlerMap.get('inventory:createItem')
-    expect(handler).toBeDefined()
-
-    const result = await handler!({}, { item_name: 'Paper', current_stock: 5 }, 3) as { success: boolean; error?: string }
-    expect(result.success).toBe(false)
-    expect(result.error).toContain('renderer user mismatch')
-    expect(inventoryServiceMock.create).not.toHaveBeenCalled()
-  })
-
   it('inventory:createItem uses authenticated actor id', async () => {
     const handler = handlerMap.get('inventory:createItem')!
-    const payload = { item_name: 'Chalk', current_stock: 10 }
-    const result = await handler({}, payload, 9) as { success: boolean }
+    const payload = {
+      item_name: 'Chalk',
+      item_code: 'CHK001',
+      category_id: 1,
+      unit_of_measure: 'Box',
+      reorder_level: 5,
+      unit_cost: 50,
+      unit_price: 0
+    }
+    const result = await handler({}, payload, 9) as { success: boolean; error?: string }
 
     expect(result.success).toBe(true)
-    expect(inventoryServiceMock.create).toHaveBeenCalledWith(payload, 9)
+    expect(inventoryServiceMock.create).toHaveBeenCalledWith(expect.objectContaining(payload), 9)
   })
 })

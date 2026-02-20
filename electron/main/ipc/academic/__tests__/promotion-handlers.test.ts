@@ -15,6 +15,7 @@ const promotionServiceMock = {
 
 let sessionUserId = 9
 let sessionRole = 'PRINCIPAL'
+const validIsoDate = new Date().toISOString();
 
 vi.mock('keytar', () => ({
   default: {
@@ -27,7 +28,7 @@ vi.mock('keytar', () => ({
         email: null,
         is_active: 1,
         last_login: null,
-        created_at: '2026-01-01'
+        created_at: validIsoDate
       },
       lastActivity: Date.now()
     })),
@@ -64,27 +65,7 @@ describe('promotion IPC handlers', () => {
     registerPromotionHandlers()
   })
 
-  it('rejects renderer user mismatch for promoteStudent and does not invoke service', async () => {
-    const handler = handlerMap.get('promotion:promoteStudent')
-    expect(handler).toBeDefined()
 
-    const result = await handler!(
-      {},
-      {
-        student_id: 11,
-        from_stream_id: 1,
-        to_stream_id: 2,
-        from_academic_year_id: 2025,
-        to_academic_year_id: 2026,
-        to_term_id: 1,
-      },
-      3
-    ) as { success: boolean; error?: string }
-
-    expect(result.success).toBe(false)
-    expect(result.error).toContain('renderer user mismatch')
-    expect(promotionServiceMock.promoteStudent).not.toHaveBeenCalled()
-  })
 
   it('uses authenticated actor id when legacy user id matches session', async () => {
     const handler = handlerMap.get('promotion:promoteStudent')

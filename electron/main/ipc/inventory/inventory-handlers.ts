@@ -1,9 +1,20 @@
 import { container } from '../../services/base/ServiceContainer'
-import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
+import { ROLES } from '../ipc-result'
+import {
+    InventoryFiltersSchema,
+    InventoryGetItemSchema,
+    InventoryCreateSchema,
+    InventoryUpdateSchema,
+    InventoryMovementSchema,
+    InventoryGetHistorySchema,
+    InventoryGetLowStockSchema,
+    InventoryGetCategoriesSchema,
+    InventoryGetSuppliersSchema
+} from '../schemas/inventory-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 import type { InventoryService } from '../../services/inventory/InventoryService'
 
-type InventoryFilters = Parameters<InventoryService['findAll']>[0]
 type InventoryCreateInput = Parameters<InventoryService['create']>[0]
 type InventoryUpdateInput = Parameters<InventoryService['update']>[1]
 interface InventoryMovementInput {
@@ -17,45 +28,39 @@ interface InventoryMovementInput {
 const svc = () => container.resolve('InventoryService')
 
 export function registerInventoryHandlers() {
-    safeHandleRawWithRole('inventory:getAll', ROLES.STAFF, (_event, filters?: InventoryFilters) => {
+    validatedHandler('inventory:getAll', ROLES.STAFF, InventoryFiltersSchema, (_event, filters) => {
         return svc().findAll(filters)
     })
 
-    safeHandleRawWithRole('inventory:getItem', ROLES.STAFF, (_event, id: number) => {
+    validatedHandler('inventory:getItem', ROLES.STAFF, InventoryGetItemSchema, (_event, [id]) => {
         return svc().findById(id)
     })
 
-    safeHandleRawWithRole('inventory:createItem', ROLES.STAFF, (event, data: InventoryCreateInput, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        return svc().create(data, actor.actorId)
+    validatedHandler('inventory:createItem', ROLES.STAFF, InventoryCreateSchema, (event, data: InventoryCreateInput, actor) => {
+        return svc().create(data, actor.id)
     })
 
-    safeHandleRawWithRole('inventory:updateItem', ROLES.STAFF, (event, id: number, data: InventoryUpdateInput, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        return svc().update(id, data, actor.actorId)
+    validatedHandlerMulti('inventory:updateItem', ROLES.STAFF, InventoryUpdateSchema, (event, [id, data]: [number, InventoryUpdateInput], actor) => {
+        return svc().update(id, data, actor.id)
     })
 
-    safeHandleRawWithRole('inventory:recordMovement', ROLES.STAFF, (event, data: InventoryMovementInput, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        return svc().adjustStock(data.item_id, data.quantity, data.movement_type, actor.actorId, data.description, data.unit_cost)
+    validatedHandler('inventory:recordMovement', ROLES.STAFF, InventoryMovementSchema, (event, data: InventoryMovementInput, actor) => {
+        return svc().adjustStock(data.item_id, data.quantity, data.movement_type, actor.id, data.description, data.unit_cost)
     })
 
-    safeHandleRawWithRole('inventory:getHistory', ROLES.STAFF, (_event, itemId: number) => {
+    validatedHandler('inventory:getHistory', ROLES.STAFF, InventoryGetHistorySchema, (_event, [itemId]) => {
         return svc().getHistory(itemId)
     })
 
-    safeHandleRawWithRole('inventory:getLowStock', ROLES.STAFF, () => {
+    validatedHandler('inventory:getLowStock', ROLES.STAFF, InventoryGetLowStockSchema, () => {
         return svc().getLowStock()
     })
 
-    safeHandleRawWithRole('inventory:getCategories', ROLES.STAFF, () => {
+    validatedHandler('inventory:getCategories', ROLES.STAFF, InventoryGetCategoriesSchema, () => {
         return svc().getCategories()
     })
 
-    safeHandleRawWithRole('inventory:getSuppliers', ROLES.STAFF, () => {
+    validatedHandler('inventory:getSuppliers', ROLES.STAFF, InventoryGetSuppliersSchema, () => {
         return svc().getSuppliers()
     })
 }

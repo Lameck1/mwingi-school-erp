@@ -2,8 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type IpcHandler = (event: unknown, ...args: unknown[]) => Promise<unknown>
 const handlerMap = new Map<string, IpcHandler>()
-let sessionUserId = 9
-let sessionRole = 'ACCOUNTS_CLERK'
+const { sessionData } = vi.hoisted(() => ({
+  sessionData: {
+    userId: 9,
+    role: 'ACCOUNTS_CLERK'
+  }
+}))
 
 const journalServiceMock = {
   getBalanceSheet: vi.fn(async () => ({ assets: [], liabilities: [], equity: [] })),
@@ -19,24 +23,20 @@ const openingBalanceServiceMock = {
   getStudentLedger: vi.fn(async () => ({ opening_balance: 0, transactions: [], closing_balance: 0 })),
 }
 
-vi.mock('keytar', () => ({
-  default: {
-    getPassword: vi.fn(async () => JSON.stringify({
-      user: {
-        id: sessionUserId,
-        username: 'session-user',
-        role: sessionRole,
-        full_name: 'Session User',
-        email: null,
-        is_active: 1,
-        last_login: null,
-        created_at: '2026-01-01'
-      },
-      lastActivity: Date.now()
-    })),
-    setPassword: vi.fn().mockResolvedValue(null),
-    deletePassword: vi.fn().mockResolvedValue(true),
-  }
+vi.mock('../../../security/session', () => ({
+  getSession: vi.fn(async () => ({
+    user: {
+      id: sessionData.userId,
+      username: 'session-user',
+      role: sessionData.role,
+      full_name: 'Session User',
+      email: null,
+      is_active: 1,
+      last_login: null,
+      created_at: '2026-01-01T00:00:00'
+    },
+    lastActivity: Date.now()
+  }))
 }))
 
 vi.mock('../../../electron-env', () => ({
@@ -70,8 +70,8 @@ import { registerFinancialReportsHandlers } from '../financial-reports-handlers'
 describe('financial reports IPC handlers', () => {
   beforeEach(() => {
     handlerMap.clear()
-    sessionUserId = 9
-    sessionRole = 'ACCOUNTS_CLERK'
+    sessionData.userId = 9
+    sessionData.role = 'ACCOUNTS_CLERK'
     journalServiceMock.getBalanceSheet.mockReset()
     journalServiceMock.getTrialBalance.mockReset()
     plServiceMock.generateProfitAndLoss.mockReset()
@@ -91,12 +91,26 @@ describe('financial reports IPC handlers', () => {
     registerFinancialReportsHandlers()
   })
 
+  function attachActor(event: any) {
+    event.__ipcActor = {
+      id: sessionData.userId,
+      role: sessionData.role,
+      username: 'session-user',
+      full_name: 'Session User',
+      email: null,
+      is_active: 1,
+      created_at: '2026-01-01T00:00:00'
+    };
+  }
+
   it('reports:getBalanceSheet returns standardized failure contract with error field', async () => {
     journalServiceMock.getBalanceSheet.mockRejectedValueOnce(new Error('db unavailable'))
 
     const handler = handlerMap.get('reports:getBalanceSheet')
     expect(handler).toBeDefined()
-    const result = await handler!({}, '2026-02-13') as { success: boolean; error?: string; message?: string }
+    const event = {};
+    attachActor(event);
+    const result = await handler!(event, '2026-02-13') as { success: boolean; error?: string; message?: string }
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('Failed to generate balance sheet')
@@ -107,7 +121,9 @@ describe('financial reports IPC handlers', () => {
     const handler = handlerMap.get('reports:getTrialBalance')
     expect(handler).toBeDefined()
 
-    const result = await handler!({}, '2026-01-01', '2026-01-31') as {
+    const event = {};
+    attachActor(event);
+    const result = await handler!(event, '2026-01-01', '2026-01-31') as {
       success: boolean
       data?: { rows: unknown[] }
     }
@@ -120,13 +136,15 @@ describe('financial reports IPC handlers', () => {
     const handler = handlerMap.get('reports:getStudentLedger')
     expect(handler).toBeDefined()
 
-    const result = await handler!({}, 11, 2026, '2026-01-01', '2026-03-31') as { success: boolean }
+    const event = {};
+    attachActor(event);
+    const result = await handler!(event, 11, 2026, '2026-01-01', '2026-03-31') as { success: boolean }
     expect(result.success).toBe(true)
     expect(openingBalanceServiceMock.getStudentLedger).toHaveBeenCalledWith(11, 2026, '2026-01-01', '2026-03-31')
   })
 
   it('reports:getProfitAndLoss enforces finance-role access', async () => {
-    sessionRole = 'TEACHER'
+    sessionData.role = 'TEACHER'
     const handler = handlerMap.get('reports:getProfitAndLoss')
     expect(handler).toBeDefined()
     const result = await handler!({}, '2026-01-01', '2026-01-31') as { success: boolean; error?: string }

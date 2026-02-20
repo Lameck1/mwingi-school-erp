@@ -40,14 +40,20 @@ export function validatedHandler<TSchema extends ZodType>(
         try {
             // 1. Authenticate
             const session = await getSession()
-            if (!session?.user?.role) {
-                return { success: false, error: 'Unauthorized: no active session' }
+            const isPublic = allowedRoles.includes('PUBLIC')
+
+            if (!isPublic) {
+                if (!session?.user?.role) {
+                    return { success: false, error: 'Unauthorized: no active session' }
+                }
+                // empty array = ALL_AUTHENTICATED
+                if (allowedRoles.length > 0 && !allowedRoles.includes(session.user.role)) {
+                    return { success: false, error: `Unauthorized: role '${session.user.role}' cannot access '${channel}'` }
+                }
             }
-            if (!allowedRoles.includes(session.user.role)) {
-                return { success: false, error: `Unauthorized: role '${session.user.role}' cannot access '${channel}'` }
-            }
-            const actorId = Number(session.user.id)
-            if (!Number.isInteger(actorId) || actorId <= 0) {
+
+            const actorId = session?.user?.id ? Number(session.user.id) : 0
+            if (!isPublic && (!Number.isInteger(actorId) || actorId <= 0)) {
                 return { success: false, error: 'Unauthorized: invalid session actor' }
             }
 
@@ -59,7 +65,7 @@ export function validatedHandler<TSchema extends ZodType>(
             }
 
             // 3. Execute handler with validated data
-            const actor: IpcActor = { id: actorId, role: session.user.role }
+            const actor: IpcActor = { id: actorId, role: session?.user?.role || 'PUBLIC' }
             return await handler(event, parseResult.data, actor)
         } catch (error) {
             return { success: false, error: getErrorMessage(error, `${channel} failed`) }
@@ -94,14 +100,19 @@ export function validatedHandlerMulti<TSchema extends ZodType>(
     ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
         try {
             const session = await getSession()
-            if (!session?.user?.role) {
-                return { success: false, error: 'Unauthorized: no active session' }
+            const isPublic = allowedRoles.includes('PUBLIC')
+
+            if (!isPublic) {
+                if (!session?.user?.role) {
+                    return { success: false, error: 'Unauthorized: no active session' }
+                }
+                if (allowedRoles.length > 0 && !allowedRoles.includes(session.user.role)) {
+                    return { success: false, error: `Unauthorized: role '${session.user.role}' cannot access '${channel}'` }
+                }
             }
-            if (!allowedRoles.includes(session.user.role)) {
-                return { success: false, error: `Unauthorized: role '${session.user.role}' cannot access '${channel}'` }
-            }
-            const actorId = Number(session.user.id)
-            if (!Number.isInteger(actorId) || actorId <= 0) {
+
+            const actorId = session?.user?.id ? Number(session.user.id) : 0
+            if (!isPublic && (!Number.isInteger(actorId) || actorId <= 0)) {
                 return { success: false, error: 'Unauthorized: invalid session actor' }
             }
 
@@ -111,7 +122,7 @@ export function validatedHandlerMulti<TSchema extends ZodType>(
                 return { success: false, error: `Validation failed: ${messages.join('; ')}` }
             }
 
-            const actor: IpcActor = { id: actorId, role: session.user.role }
+            const actor: IpcActor = { id: actorId, role: session?.user?.role || 'PUBLIC' }
             return await handler(event, parseResult.data, actor)
         } catch (error) {
             return { success: false, error: getErrorMessage(error, `${channel} failed`) }

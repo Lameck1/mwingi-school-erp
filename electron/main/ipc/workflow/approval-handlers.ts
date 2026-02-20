@@ -1,69 +1,61 @@
+import { z } from 'zod'
+
 import { container } from '../../services/base/ServiceContainer'
-import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
+import { ROLES } from '../ipc-result'
+import { ApprovalFilterSchema } from '../schemas/workflow-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 const getService = () => container.resolve('ApprovalService')
 
 export function registerApprovalHandlers(): void {
     // Get pending approvals
-    safeHandleRawWithRole('approval:getPending', ROLES.STAFF, (event, userId?: number) => {
-        const actor = resolveActorId(event, userId)
-        if (!actor.success) { return actor }
-        return getService().getPendingApprovals(actor.actorId)
+    validatedHandler('approval:getPending', ROLES.STAFF, z.number().optional(), (_event, userId, actor) => {
+        // userId from arg is legacy; check against actor.id if present
+        if (userId !== undefined && userId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
+        }
+        return getService().getPendingApprovals(actor.id)
     })
 
     // Get all approvals with filters
-    safeHandleRawWithRole('approval:getAll', ROLES.STAFF, (_event, filters?: { status?: string; entity_type?: string }) => {
+    validatedHandler('approval:getAll', ROLES.STAFF, ApprovalFilterSchema, (_event, filters) => {
         return getService().getAllApprovals(filters)
     })
 
     // Get approval counts for dashboard
-    safeHandleRawWithRole('approval:getCounts', ROLES.STAFF, () => {
+    validatedHandler('approval:getCounts', ROLES.STAFF, z.void(), () => {
         return getService().getApprovalCounts()
     })
 
     // Create approval request
-    safeHandleRawWithRole('approval:create', ROLES.STAFF, (
-        event,
-        entityType: string,
-        entityId: number,
-        legacyRequestedByUserId?: number
-    ) => {
-        const actor = resolveActorId(event, legacyRequestedByUserId)
-        if (!actor.success) { return actor }
-        return getService().createApprovalRequest(entityType, entityId, actor.actorId)
+    validatedHandlerMulti('approval:create', ROLES.STAFF, z.tuple([z.string(), z.number(), z.number().optional()]), (_event, [entityType, entityId, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
+        }
+        return getService().createApprovalRequest(entityType, entityId, actor.id)
     })
 
     // Approve request
-    safeHandleRawWithRole('approval:approve', ROLES.MANAGEMENT, (
-        event,
-        requestId: number,
-        legacyApproverId?: number
-    ) => {
-        const actor = resolveActorId(event, legacyApproverId)
-        if (!actor.success) { return actor }
-        return getService().approve(requestId, actor.actorId)
+    validatedHandlerMulti('approval:approve', ROLES.MANAGEMENT, z.tuple([z.number(), z.number().optional()]), (_event, [requestId, legacyId], actor) => {
+        if (legacyId !== undefined && legacyId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
+        }
+        return getService().approve(requestId, actor.id)
     })
 
     // Reject request
-    safeHandleRawWithRole('approval:reject', ROLES.MANAGEMENT, (
-        event,
-        requestId: number,
-        legacyApproverId: number | undefined,
-        reason: string
-    ) => {
-        const actor = resolveActorId(event, legacyApproverId)
-        if (!actor.success) { return actor }
-        return getService().reject(requestId, actor.actorId, reason)
+    validatedHandlerMulti('approval:reject', ROLES.MANAGEMENT, z.tuple([z.number(), z.number().optional(), z.string()]), (_event, [requestId, legacyId, reason], actor) => {
+        if (legacyId !== undefined && legacyId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
+        }
+        return getService().reject(requestId, actor.id, reason)
     })
 
     // Cancel request
-    safeHandleRawWithRole('approval:cancel', ROLES.STAFF, (
-        event,
-        requestId: number,
-        legacyUserId?: number
-    ) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        return getService().cancel(requestId, actor.actorId)
+    validatedHandlerMulti('approval:cancel', ROLES.STAFF, z.tuple([z.number(), z.number().optional()]), (_event, [requestId, legacyId], actor) => {
+        if (legacyId !== undefined && legacyId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
+        }
+        return getService().cancel(requestId, actor.id)
     })
 }

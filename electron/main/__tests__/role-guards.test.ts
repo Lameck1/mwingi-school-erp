@@ -3,28 +3,27 @@ import { vi, describe, test, expect, beforeEach, type Mock } from 'vitest'
 import { ipcMain } from '../electron-env'
 import { registerAllIpcHandlers } from '../ipc/index'
 
-// ── Helper: create a keytar mock that returns a session with the given role ──
-function mockKeytarWithRole(role: string) {
-    return {
-        default: {
-            getPassword: vi.fn().mockResolvedValue(JSON.stringify({
-                user: { id: 99, username: 'testuser', role, full_name: 'Test', email: 't@t.com', is_active: 1, last_login: null, created_at: '2026-01-01' },
-                lastActivity: Date.now()
-            })),
-            setPassword: vi.fn().mockResolvedValue(null),
-            deletePassword: vi.fn().mockResolvedValue(true)
-        },
+// Mock the session module to return the mocked session data
+vi.mock('../../../security/session', () => ({
+    getSession: vi.fn().mockResolvedValue({
+        user: { id: 99, username: 'testuser', role: 'TEACHER', full_name: 'Test', email: 't@t.com', is_active: 1, last_login: null, created_at: '2026-01-01T00:00:00' },
+        lastActivity: Date.now()
+    }),
+    setSession: vi.fn(),
+    clearSession: vi.fn()
+}))
+
+// Start with TEACHER role (should be denied most finance/admin/management handlers)
+vi.mock('keytar', () => ({
+    default: {
         getPassword: vi.fn().mockResolvedValue(JSON.stringify({
-            user: { id: 99, username: 'testuser', role, full_name: 'Test', email: 't@t.com', is_active: 1, last_login: null, created_at: '2026-01-01' },
+            user: { id: 99, username: 'testuser', role: 'TEACHER', full_name: 'Test', email: 't@t.com', is_active: 1, last_login: null, created_at: new Date().toISOString() },
             lastActivity: Date.now()
         })),
         setPassword: vi.fn().mockResolvedValue(null),
         deletePassword: vi.fn().mockResolvedValue(true)
     }
-}
-
-// Start with TEACHER role (should be denied most finance/admin/management handlers)
-vi.mock('keytar', () => mockKeytarWithRole('TEACHER'))
+}))
 
 vi.mock('../services/base/ServiceContainer', () => ({
     container: {

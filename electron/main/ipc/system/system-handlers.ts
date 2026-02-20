@@ -1,8 +1,10 @@
 import { log } from '../../utils/logger'
-import { ROLES, safeHandleRawWithRole } from '../ipc-result'
+import { ROLES } from '../ipc-result'
+import { LogErrorSchema } from '../schemas/system-schemas'
+import { validatedHandler } from '../validated-handler'
 
 export function registerSystemHandlers(): void {
-    safeHandleRawWithRole('system:logError', ROLES.STAFF, (_event, data: { error: string; stack?: string; componentStack?: string | null; timestamp: string }) => {
+    validatedHandler('system:logError', ROLES.STAFF, LogErrorSchema, (_event, data) => {
         log.error(`[Renderer Error] ${data.error}`, data.stack || '', data.componentStack || '')
     })
 }

@@ -15,7 +15,7 @@ vi.mock('keytar', () => ({
         full_name: 'Admin User',
         email: 'admin@test.com',
         is_active: 1,
-        created_at: '2026-01-01'
+        created_at: '2026-01-01T00:00:00'
       },
       lastActivity: Date.now()
     })),
@@ -40,6 +40,18 @@ describe('validatedHandler', () => {
     handlerMap.clear()
   })
 
+  function attachActor(event: any) {
+    event.__ipcActor = {
+      id: 1,
+      role: 'ADMIN',
+      username: 'admin',
+      full_name: 'Admin User',
+      email: 'admin@test.com',
+      is_active: 1,
+      created_at: '2026-01-01T00:00:00'
+    };
+  }
+
   it('validates input and passes typed data to handler', async () => {
     const schema = z.object({
       name: z.string().min(1),
@@ -55,7 +67,9 @@ describe('validatedHandler', () => {
     validatedHandler('test:create', ['ADMIN'], schema, handlerFn)
 
     const handler = handlerMap.get('test:create')!
-    const result = await handler({}, { name: 'Alice', age: 30 }) as { success: boolean; name: string; actorId: number }
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, { name: 'Alice', age: 30 }) as { success: boolean; name: string; actorId: number }
 
     expect(result.success).toBe(true)
     expect(result.name).toBe('Alice')
@@ -72,7 +86,9 @@ describe('validatedHandler', () => {
     validatedHandler('test:invalid', ['ADMIN'], schema, async () => ({ success: true }))
 
     const handler = handlerMap.get('test:invalid')!
-    const result = await handler({}, { name: '', age: 'not-a-number' }) as { success: boolean; error: string }
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, { name: '', age: 'not-a-number' }) as { success: boolean; error: string }
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('Validation failed')

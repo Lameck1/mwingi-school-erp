@@ -1,10 +1,15 @@
+import { z } from 'zod'
+
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 import { container } from '../../services/base/ServiceContainer'
+import { saveImageFromDataUrl, getImageAsBase64DataUrl, deleteImage } from '../../utils/image-utils'
 import { toDbGender, fromDbGender, toDbActiveFlag } from '../../utils/transforms'
 import { sanitizeString, validateId } from '../../utils/validation'
 import { createGetOrCreateCategoryId, generateSingleStudentInvoice, type FinanceContext } from '../finance/finance-handler-utils'
-import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
+import { ROLES } from '../ipc-result'
+import { StudentFiltersSchema, StudentCreateSchema, StudentUpdateSchema, StudentDeactivateSchema, StudentPurgeSchema, StudentPhotoUploadSchema, StudentPhotoRemoveSchema } from '../schemas/student-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 interface Student {
   id: number
@@ -31,11 +36,7 @@ interface Student {
   credit_balance?: number
 }
 
-interface StudentFilters {
-  search?: string
-  streamId?: number
-  isActive?: boolean
-}
+
 
 interface StudentCreateData {
   admission_number: string
@@ -226,7 +227,7 @@ function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
       )
     `
 
-  safeHandleRawWithRole('student:getAll', ROLES.STAFF, (_event, filters?: StudentFilters) => {
+  validatedHandler('student:getAll', ROLES.STAFF, StudentFiltersSchema, (_event, filters) => {
     let query = `SELECT s.*, st.stream_name, e.student_type as current_type,
         (SELECT COALESCE(SUM((${normalizedInvoiceAmountSql}) - COALESCE(amount_paid, 0)), 0)
          FROM fee_invoice
@@ -260,7 +261,7 @@ function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
     return students.map((student) => ({ ...student, gender: fromDbGender(student.gender) })) as Student[]
   })
 
-  safeHandleRawWithRole('student:getById', ROLES.STAFF, (_event, id: number) => {
+  validatedHandler('student:getById', ROLES.STAFF, z.number(), (_event, id) => {
     const student = db.prepare('SELECT * FROM student WHERE id = ?').get(id) as Student | undefined
     if (!student) {
       return
@@ -284,7 +285,7 @@ function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
     }
   })
 
-  safeHandleRawWithRole('student:getBalance', ROLES.STAFF, (_event, studentId: number) => {
+  validatedHandler('student:getBalance', ROLES.STAFF, z.number(), (_event, studentId) => {
     const invoices = db.prepare(`
       SELECT COALESCE(SUM((${normalizedInvoiceAmountSql}) - COALESCE(amount_paid, 0)), 0) as invoice_balance
       FROM fee_invoice
@@ -300,29 +301,61 @@ function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
 
     return invoiceBalance - creditBalance
   })
+
+  validatedHandler('student:getPhotoDataUrl', ROLES.STAFF, z.number(), async (_event, studentId) => {
+    const row = db.prepare('SELECT photo_path FROM student WHERE id = ?').get(studentId) as { photo_path?: string } | undefined
+    if (!row?.photo_path) {return null}
+    return getImageAsBase64DataUrl(row.photo_path)
+  })
 }
 
 function registerStudentWriteHandlers(db: ReturnType<typeof getDatabase>): void {
   registerCreateStudentHandler(db)
   registerUpdateStudentHandler(db)
 
-  safeHandleRawWithRole('student:deactivate', ROLES.STAFF, (event, id: number, legacyUserId?: number) => {
-    const actor = resolveActorId(event, legacyUserId)
-    if (!actor.success) { return { success: false, error: actor.error } }
+  validatedHandlerMulti('student:deactivate', ROLES.STAFF, StudentDeactivateSchema, (event, [id, _legacyId], actorCtx) => {
     const idVal = validateId(id, 'Student')
     if (!idVal.success) { return { success: false, error: idVal.error } }
     const student = db.prepare('SELECT id, is_active FROM student WHERE id = ?').get(idVal.data!) as { id: number; is_active: number } | undefined
     if (!student) { return { success: false, error: 'Student not found' } }
     if (student.is_active === 0) { return { success: false, error: 'Student is already deactivated' } }
     db.prepare('UPDATE student SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(idVal.data!)
-    logAudit(actor.actorId, 'DEACTIVATE', 'student', idVal.data!, { is_active: 1 }, { is_active: 0 })
+    logAudit(actorCtx.id, 'DEACTIVATE', 'student', idVal.data!, { is_active: 1 }, { is_active: 0 })
     return { success: true }
   })
 
+  validatedHandlerMulti('student:uploadPhoto', ROLES.STAFF, StudentPhotoUploadSchema, async (_event, [studentId, dataUrl], actorCtx) => {
+    try {
+      // Save image to userData/images/students/
+      const filePath = saveImageFromDataUrl(dataUrl, 'students', `student_${studentId}`)
+
+      // Update DB
+      db.prepare('UPDATE student SET photo_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .run(filePath, studentId)
+
+      logAudit(actorCtx.id, 'UPDATE', 'student', studentId, { photo_path: 'old' }, { photo_path: filePath })
+      return { success: true, filePath }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to upload photo' }
+    }
+  })
+
+  validatedHandler('student:removePhoto', ROLES.STAFF, StudentPhotoRemoveSchema, async (_event, studentId, actorCtx) => {
+    try {
+      const row = db.prepare('SELECT photo_path FROM student WHERE id = ?').get(studentId) as { photo_path?: string } | undefined
+      if (row?.photo_path) {
+        deleteImage(row.photo_path)
+      }
+      db.prepare('UPDATE student SET photo_path = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(studentId)
+      logAudit(actorCtx.id, 'UPDATE', 'student', studentId, { photo_path: row?.photo_path }, { photo_path: null })
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to remove photo' }
+    }
+  })
+
   // M-05: Kenya DPA 2019 — PII purge (anonymize student data while retaining financial records)
-  safeHandleRawWithRole('student:purge', ROLES.ADMIN_ONLY, (event, id: number, reason?: string) => {
-    const actor = resolveActorId(event)
-    if (!actor.success) { return { success: false, error: actor.error } }
+  validatedHandlerMulti('student:purge', ROLES.ADMIN_ONLY, StudentPurgeSchema, (event, [id, reason], actorCtx) => {
     const idVal = validateId(id, 'Student')
     if (!idVal.success) { return { success: false, error: idVal.error } }
     const studentId = idVal.data!
@@ -373,7 +406,7 @@ function registerStudentWriteHandlers(db: ReturnType<typeof getDatabase>): void 
 
     try {
       executePurge()
-      logAudit(actor.actorId, 'PURGE', 'student', studentId, {
+      logAudit(actorCtx.id, 'PURGE', 'student', studentId, {
         first_name: student.first_name,
         last_name: student.last_name,
         admission_number: student.admission_number,
@@ -386,10 +419,17 @@ function registerStudentWriteHandlers(db: ReturnType<typeof getDatabase>): void 
 }
 
 function registerCreateStudentHandler(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRawWithRole('student:create', ROLES.STAFF, (event, data: StudentCreateData, legacyUserId?: number) => {
-    const actor = resolveActorId(event, legacyUserId)
-    if (!actor.success) { return { success: false, error: actor.error } }
-    const actorId = actor.actorId
+  // Use validatedHandlerMulti if we need legacyUserId, but usually create only takes data. 
+  // Wait, signature was (event, data, legacyUserId?).
+  // If we assume legacyUserId is passed, we need z.tuple([StudentCreateSchema, z.number().optional()])
+  // But usually create sends JSON body. Let's check signature. 
+  // "safeHandleRawWithRole('student:create', ..., (event, data: StudentCreateData, legacyUserId?: number) => ..."
+  // So it expects 2 args. tuple needed.
+
+  const CreateTuple = z.tuple([StudentCreateSchema, z.number().optional()])
+
+  validatedHandlerMulti('student:create', ROLES.STAFF, CreateTuple, (event, [data, _legacyId], actorCtx) => {
+    const actorId = actorCtx.id
     // Validate and sanitize input
     const admissionNumber = sanitizeString(data.admission_number, 50)
     const firstName = sanitizeString(data.first_name, 100)
@@ -467,11 +507,7 @@ function registerCreateStudentHandler(db: ReturnType<typeof getDatabase>): void 
 }
 
 function registerUpdateStudentHandler(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRawWithRole('student:update', ROLES.STAFF, (event, id: number, data: Partial<StudentCreateData>, legacyUserId?: number) => {
-    const actor = resolveActorId(event, legacyUserId)
-    if (!actor.success) {
-      return { success: false, error: actor.error }
-    }
+  validatedHandlerMulti('student:update', ROLES.STAFF, StudentUpdateSchema, (event, [id, data, _legacyId], actorCtx) => {
 
     // Validate student ID
     const idValidation = validateId(id, 'Student')
@@ -525,7 +561,8 @@ function registerUpdateStudentHandler(db: ReturnType<typeof getDatabase>): void 
           createEnrollment(db, {
             studentId: idValidation.data!,
             streamId: streamValidation.data!,
-            studentType: data.student_type ?? student.student_type,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            studentType: (data.student_type as any) ?? student.student_type,
             enrollmentDate: student.admission_date,
             useCurrentDate: true,
           })
@@ -533,7 +570,7 @@ function registerUpdateStudentHandler(db: ReturnType<typeof getDatabase>): void 
       })
 
       updateStudentTx()
-      logAudit(actor.actorId, 'UPDATE', 'student', idValidation.data!, { id: student.id }, data)
+      logAudit(actorCtx.id, 'UPDATE', 'student', idValidation.data!, { id: student.id }, data)
       return { success: true }
     } catch (error) {
       return {

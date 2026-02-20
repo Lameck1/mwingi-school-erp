@@ -168,11 +168,12 @@ export function safeHandleWithRole<T, TArgs extends unknown[]>(
 
 /** Standard role groups for convenience */
 export const ROLES = {
+    PUBLIC: ['PUBLIC'] as const, // Skip session check
     ADMIN_ONLY: ['ADMIN'] as const,
     FINANCE: ['ADMIN', 'ACCOUNTS_CLERK'] as const,
     MANAGEMENT: ['ADMIN', 'PRINCIPAL', 'DEPUTY_PRINCIPAL'] as const,
     STAFF: ['ADMIN', 'PRINCIPAL', 'DEPUTY_PRINCIPAL', 'ACCOUNTS_CLERK', 'AUDITOR', 'TEACHER'] as const,
-    ALL_AUTHENTICATED: [] as const, // empty = skip role check (handled by safeHandleRaw)
+    ALL_AUTHENTICATED: [] as const, // Allow any active session
 } as const
 
 /**

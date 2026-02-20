@@ -1,93 +1,43 @@
+import { z } from 'zod'
+
 import { container } from '../../services/base/ServiceContainer'
-import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
+import { ROLES } from '../ipc-result'
+import {
+    PromotionGetStudentsSchema,
+    PromotionStudentSchema,
+    PromotionBatchSchema,
+    PromotionHistorySchema,
+    PromotionNextStreamSchema
+} from '../schemas/academic-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 const getService = () => container.resolve('PromotionService')
 
 export function registerPromotionHandlers(): void {
-    safeHandleRawWithRole('promotion:getStreams', ROLES.STAFF, () => {
-        try {
-            return getService().getStreams()
-        } catch (error) {
-            throw new Error(`Failed to get streams: ${(error as Error).message}`)
-        }
+    validatedHandler('promotion:getStreams', ROLES.STAFF, z.undefined(), () => {
+        return getService().getStreams()
     })
 
-    safeHandleRawWithRole('promotion:getStudentsForPromotion', ROLES.STAFF, (
-        _event,
-        streamId: number,
-        academicYearId: number
-    ) => {
-        try {
-            return getService().getStudentsForPromotion(streamId, academicYearId)
-        } catch (error) {
-            throw new Error(`Failed to get students for promotion: ${(error as Error).message}`)
-        }
+    validatedHandlerMulti('promotion:getStudentsForPromotion', ROLES.STAFF, PromotionGetStudentsSchema, (_event, [streamId, academicYearId]: [number, number]) => {
+        return getService().getStudentsForPromotion(streamId, academicYearId)
     })
 
-    safeHandleRawWithRole('promotion:promoteStudent', ROLES.MANAGEMENT, (
-        event,
-        data: {
-            student_id: number
-            from_stream_id: number
-            to_stream_id: number
-            from_academic_year_id: number
-            to_academic_year_id: number
-            to_term_id: number
-        },
-        legacyUserId?: number
-    ) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
-        }
-
-        try {
-            return getService().promoteStudent(data, actor.actorId)
-        } catch (error) {
-            throw new Error(`Failed to promote student: ${(error as Error).message}`)
-        }
+    validatedHandler('promotion:promoteStudent', ROLES.MANAGEMENT, PromotionStudentSchema, (event, data, actor) => {
+        return getService().promoteStudent(data, actor.id)
     })
 
-    safeHandleRawWithRole('promotion:batchPromote', ROLES.MANAGEMENT, (
-        event,
-        studentIds: number[],
-        fromStreamId: number,
-        toStreamId: number,
-        fromAcademicYearId: number,
-        toAcademicYearId: number,
-        toTermId: number,
-        legacyUserId?: number
-    ) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
-        }
-
-        try {
-            return getService().batchPromote(
-                studentIds, fromStreamId, toStreamId,
-                fromAcademicYearId, toAcademicYearId, toTermId, actor.actorId
-            )
-        } catch (error) {
-            throw new Error(`Failed to batch promote: ${(error as Error).message}`)
-        }
+    validatedHandlerMulti('promotion:batchPromote', ROLES.MANAGEMENT, PromotionBatchSchema, (event, [studentIds, fromStreamId, toStreamId, fromAcademicYearId, toAcademicYearId, toTermId]: [number[], number, number, number, number, number, number?], actor) => {
+        return getService().batchPromote(
+            studentIds, fromStreamId, toStreamId,
+            fromAcademicYearId, toAcademicYearId, toTermId, actor.id
+        )
     })
 
-    safeHandleRawWithRole('promotion:getStudentHistory', ROLES.STAFF, (
-        _event,
-        studentId: number
-    ) => {
-        try {
-            return getService().getStudentPromotionHistory(studentId)
-        } catch (error) {
-            throw new Error(`Failed to get promotion history: ${(error as Error).message}`)
-        }
+    validatedHandlerMulti('promotion:getStudentHistory', ROLES.STAFF, PromotionHistorySchema, (_event, [studentId]: [number]) => {
+        return getService().getStudentPromotionHistory(studentId)
     })
 
-    safeHandleRawWithRole('promotion:getNextStream', ROLES.STAFF, (
-        _event,
-        currentStreamId: number
-    ) => {
+    validatedHandlerMulti('promotion:getNextStream', ROLES.STAFF, PromotionNextStreamSchema, (_event, [currentStreamId]: [number]) => {
         return getService().getNextStream(currentStreamId)
     })
 }

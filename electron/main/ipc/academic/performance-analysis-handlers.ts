@@ -1,31 +1,29 @@
 import { container } from '../../services/base/ServiceContainer';
-import { ROLES, safeHandleRawWithRole } from '../ipc-result';
+import { ROLES } from '../ipc-result';
+import {
+  PerformanceMostImprovedSchema,
+  PerformanceComparisonSchema,
+  PerformanceStrugglingSchema,
+  PerformanceTrendsSchema
+} from '../schemas/academic-schemas';
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler';
 
 const getService = () => container.resolve('PerformanceAnalysisService');
 
 export function registerPerformanceAnalysisHandlers() {
-  safeHandleRawWithRole('performance:getMostImproved', ROLES.STAFF, (_event, params: {
-    academicYearId: number;
-    currentTermId: number;
-    comparisonTermId: number;
-    streamId?: number;
-    minimumImprovement?: number;
-  }) => {
+  validatedHandler('performance:getMostImproved', ROLES.STAFF, PerformanceMostImprovedSchema, (_event, params) => {
     return getService().getMostImprovedStudents(params);
   });
 
-  safeHandleRawWithRole(
-    'performance:getComparison',
-    ROLES.STAFF,
-    (_event, studentId: number, academicYearId: number, currentTermId: number, comparisonTermId: number) => {
+  validatedHandlerMulti('performance:getComparison', ROLES.STAFF, PerformanceComparisonSchema, (_event, [studentId, academicYearId, currentTermId, comparisonTermId]: [number, number, number, number]) => {
     return getService().getStudentPerformanceComparison(studentId, academicYearId, currentTermId, comparisonTermId);
   });
 
-  safeHandleRawWithRole('performance:getStruggling', ROLES.STAFF, (_event, academicYearId: number, termId: number, threshold?: number, streamId?: number) => {
+  validatedHandlerMulti('performance:getStruggling', ROLES.STAFF, PerformanceStrugglingSchema, (_event, [academicYearId, termId, threshold, streamId]: [number, number, number?, number?]) => {
     return getService().getStrugglingStudents(academicYearId, termId, threshold ?? 50, streamId);
   });
 
-  safeHandleRawWithRole('performance:getTrends', ROLES.STAFF, (_event, studentId: number, academicYearId: number, numTerms?: number) => {
+  validatedHandlerMulti('performance:getTrends', ROLES.STAFF, PerformanceTrendsSchema, (_event, [studentId, academicYearId, numTerms]: [number, number, number?]) => {
     return getService().getPerformanceTrends(studentId, academicYearId, numTerms ?? 3);
   });
 }

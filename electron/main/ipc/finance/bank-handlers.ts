@@ -1,154 +1,63 @@
+import { z } from 'zod'
+
 import { container } from '../../services/base/ServiceContainer'
-import { validateId, validatePastOrTodayDate } from '../../utils/validation'
-import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
+import { ROLES } from '../ipc-result'
+import {
+    BankAccountSchema, CreateStatementTuple, AddStatementLineTuple,
+    MatchTransactionTuple, UnmatchedTransactionTuple, MarkReconciledTuple
+} from '../schemas/bank-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 const getService = () => container.resolve('BankReconciliationService')
 
 export function registerBankReconciliationHandlers(): void {
     // Bank Accounts
-    safeHandleRawWithRole('bank:getAccounts', ROLES.FINANCE, () => {
+    validatedHandler('bank:getAccounts', ROLES.FINANCE, z.void(), () => {
         return getService().getBankAccounts()
     })
 
-    safeHandleRawWithRole('bank:getAccountById', ROLES.FINANCE, (_event, id: number) => {
+    validatedHandler('bank:getAccountById', ROLES.FINANCE, z.number().int().positive(), (_event, id) => {
         return getService().getBankAccountById(id)
     })
 
-    safeHandleRawWithRole('bank:createAccount', ROLES.FINANCE, (_event, data: {
-        account_name: string
-        account_number: string
-        bank_name: string
-        branch?: string
-        swift_code?: string
-        currency?: string
-        opening_balance: number
-    }) => {
+    validatedHandler('bank:createAccount', ROLES.FINANCE, BankAccountSchema, (_event, data) => {
         return getService().createBankAccount(data)
     })
 
     // Bank Statements
-    safeHandleRawWithRole('bank:getStatements', ROLES.FINANCE, (_event, bankAccountId?: number) => {
+    validatedHandler('bank:getStatements', ROLES.FINANCE, z.number().int().positive().optional(), (_event, bankAccountId) => {
         return getService().getStatements(bankAccountId)
     })
 
-    safeHandleRawWithRole('bank:getStatementWithLines', ROLES.FINANCE, (_event, statementId: number) => {
+    validatedHandler('bank:getStatementWithLines', ROLES.FINANCE, z.number().int().positive(), (_event, statementId) => {
         return getService().getStatementWithLines(statementId)
     })
 
-    safeHandleRawWithRole('bank:createStatement', ROLES.FINANCE, (
-        _event,
-        bankAccountId: number,
-        statementDate: string,
-        openingBalance: number,
-        closingBalance: number,
-        reference?: string
-    ) => {
-        const accountValidation = validateId(bankAccountId, 'Bank account ID')
-        if (!accountValidation.success) {
-            return { success: false, errors: [accountValidation.error || 'Invalid bank account ID'] }
-        }
-        const dateValidation = validatePastOrTodayDate(statementDate)
-        if (!dateValidation.success) {
-            return { success: false, errors: [dateValidation.error || 'Invalid statement date'] }
-        }
-        if (!Number.isFinite(openingBalance) || !Number.isFinite(closingBalance)) {
-            return { success: false, errors: ['Statement balances must be valid numbers'] }
-        }
-
-        return getService().createStatement(bankAccountId, statementDate, openingBalance, closingBalance, reference)
+    validatedHandlerMulti('bank:createStatement', ROLES.FINANCE, CreateStatementTuple, (_event, [bankAccountId, date, openBal, closeBal, ref]) => {
+        return getService().createStatement(bankAccountId, date, openBal, closeBal, ref)
     })
 
-    safeHandleRawWithRole('bank:addStatementLine', ROLES.FINANCE, (
-        _event,
-        statementId: number,
-        line: {
-            transaction_date: string
-            description: string
-            reference?: string | null
-            debit_amount: number
-            credit_amount: number
-            running_balance?: number | null
-        }
-    ) => {
-        const statementValidation = validateId(statementId, 'Bank statement ID')
-        if (!statementValidation.success) {
-            return { success: false, errors: [statementValidation.error || 'Invalid bank statement ID'] }
-        }
-
-        const dateValidation = validatePastOrTodayDate(line?.transaction_date)
-        if (!dateValidation.success) {
-            return { success: false, errors: [dateValidation.error || 'Invalid statement line date'] }
-        }
-
-        const description = line?.description?.trim() || ''
-        if (!description) {
-            return { success: false, errors: ['Statement line description is required'] }
-        }
-
-        const debitAmount = Number(line?.debit_amount)
-        const creditAmount = Number(line?.credit_amount)
-        if (!Number.isFinite(debitAmount) || !Number.isFinite(creditAmount)) {
-            return { success: false, errors: ['Debit and credit amounts must be valid numbers'] }
-        }
-        if (debitAmount < 0 || creditAmount < 0) {
-            return { success: false, errors: ['Debit and credit amounts cannot be negative'] }
-        }
-        const hasDebit = debitAmount > 0
-        const hasCredit = creditAmount > 0
-        if (hasDebit === hasCredit) {
-            return { success: false, errors: ['Exactly one of debit amount or credit amount must be greater than zero'] }
-        }
-        if (line?.running_balance != null && !Number.isFinite(Number(line.running_balance))) {
-            return { success: false, errors: ['Running balance must be a valid number when provided'] }
-        }
-
-        return getService().addStatementLine(statementId, {
-            ...line,
-            transaction_date: dateValidation.data!,
-            description,
-            debit_amount: debitAmount,
-            credit_amount: creditAmount,
-            reference: line.reference ?? null,
-            running_balance: line.running_balance ?? null
-        })
+    validatedHandlerMulti('bank:addStatementLine', ROLES.FINANCE, AddStatementLineTuple, (_event, [statementId, line]) => {
+        return getService().addStatementLine(statementId, line)
     })
 
     // Reconciliation
-    safeHandleRawWithRole('bank:matchTransaction', ROLES.FINANCE, (
-        _event,
-        lineId: number,
-        transactionId: number
-    ) => {
+    validatedHandlerMulti('bank:matchTransaction', ROLES.FINANCE, MatchTransactionTuple, (_event, [lineId, transactionId]) => {
         return getService().matchTransaction(lineId, transactionId)
     })
 
-    safeHandleRawWithRole('bank:unmatchTransaction', ROLES.FINANCE, (_event, lineId: number) => {
+    validatedHandler('bank:unmatchTransaction', ROLES.FINANCE, z.number().int().positive(), (_event, lineId) => {
         return getService().unmatchTransaction(lineId)
     })
 
-    safeHandleRawWithRole('bank:getUnmatchedTransactions', ROLES.FINANCE, (
-        _event,
-        startDate: string,
-        endDate: string,
-        bankAccountId?: number
-    ) => {
+    validatedHandlerMulti('bank:getUnmatchedTransactions', ROLES.FINANCE, UnmatchedTransactionTuple, (_event, [startDate, endDate, bankAccountId]) => {
         return getService().getUnmatchedLedgerTransactions(startDate, endDate, bankAccountId)
     })
 
-    safeHandleRawWithRole('bank:markReconciled', ROLES.FINANCE, (
-        event,
-        statementId: number,
-        legacyUserId?: number
-    ) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
+    validatedHandlerMulti('bank:markReconciled', ROLES.FINANCE, MarkReconciledTuple, (event, [statementId, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
         }
-        const statementValidation = validateId(statementId, 'Statement ID')
-        if (!statementValidation.success) {
-            return { success: false, error: statementValidation.error || 'Invalid statement ID' }
-        }
-
-        return getService().markStatementReconciled(statementValidation.data!, actor.actorId)
+        return getService().markStatementReconciled(statementId, actor.id)
     })
 }

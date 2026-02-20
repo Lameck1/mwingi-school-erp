@@ -1,5 +1,15 @@
 import { container } from '../../services/base/ServiceContainer'
-import { ROLES, safeHandleRawWithRole } from '../ipc-result'
+import { ROLES } from '../ipc-result'
+import {
+    JssTransitionSchema,
+    JssBulkTransitionSchema,
+    JssFeeStructurePayloadSchema,
+    JssGetEligibleSchema,
+    JssGetFeeStructureSchema,
+    JssGetReportSchema,
+    JssGetSummarySchema
+} from '../schemas/academic-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 import type { JSSTransitionService } from '../../services/cbc/JSSTransitionService'
 
@@ -11,102 +21,53 @@ export function registerJSSHandlers() {
     const jssService = container.resolve('JSSTransitionService')
 
     // Initiate transition for single student
-    safeHandleRawWithRole('jss:initiateTransition', ROLES.STAFF, (_event, data: TransitionPayload) => {
-        try {
-            const id = jssService.processStudentTransition(data)
-            return { success: true, data: id }
-        } catch (error) {
-            return { success: false, error: (error as Error).message }
-        }
+    validatedHandler('jss:initiateTransition', ROLES.STAFF, JssTransitionSchema, (_event, data: TransitionPayload, actor) => {
+        // data.processed_by is set in schema but we should probably override with actor.id for security
+        // However, schema expects strict shape.
+        // Let's assume we want to enforce the actor as the processor.
+        const payload = { ...data, processed_by: actor.id }
+        // Wait, schema check already passed.
+        // If schema requires processed_by, frontend must send it.
+        // But we should override it.
+        // Let's use payload.
+        const id = jssService.processStudentTransition(payload)
+        return { success: true, data: id }
     })
 
     // Bulk transition
-    safeHandleRawWithRole('jss:bulkTransition', ROLES.STAFF, (_event, data: BulkTransitionPayload) => {
-        try {
-            const result = jssService.batchProcessTransitions(data)
-            return { success: true, data: result }
-        } catch (error) {
-            return { success: false, error: (error as Error).message }
-        }
+    validatedHandler('jss:bulkTransition', ROLES.STAFF, JssBulkTransitionSchema, (_event, data: BulkTransitionPayload, actor) => {
+        const payload = { ...data, processed_by: actor.id }
+        const result = jssService.batchProcessTransitions(payload)
+        return { success: true, data: result }
     })
 
     // Get eligible students
-    safeHandleRawWithRole('jss:getEligibleStudents', ROLES.STAFF, (_event, fromGrade: number, fiscalYear: number) => {
-        try {
-            const students = jssService.getEligibleStudentsForTransition(fromGrade, fiscalYear)
-            return { success: true, data: students }
-        } catch (error) {
-            return { success: false, error: (error as Error).message }
-        }
+    validatedHandlerMulti('jss:getEligibleStudents', ROLES.STAFF, JssGetEligibleSchema, (_event, [fromGrade, fiscalYear]: [number, number]) => {
+        const students = jssService.getEligibleStudentsForTransition(fromGrade, fiscalYear)
+        return { success: true, data: students }
     })
 
     // Get fee structure
-    safeHandleRawWithRole('jss:getFeeStructure', ROLES.STAFF, (_event, grade: number, fiscalYear: number) => {
-        try {
-            const structure = jssService.getJSSFeeStructure(grade, fiscalYear)
-            if (structure) {
-                // Return raw cents for formatCurrency consistency
-                return {
-                    success: true,
-                    data: structure
-                }
-            }
-            return { success: true, data: null }
-        } catch (error) {
-            return { success: false, error: (error as Error).message }
-        }
+    validatedHandlerMulti('jss:getFeeStructure', ROLES.STAFF, JssGetFeeStructureSchema, (_event, [grade, fiscalYear]: [number, number]) => {
+        const structure = jssService.getJSSFeeStructure(grade, fiscalYear)
+        return { success: true, data: structure }
     })
 
     // Set fee structure
-    safeHandleRawWithRole('jss:setFeeStructure', ROLES.STAFF, (_event, data: FeeStructurePayload) => {
-        try {
-            // Store data directly as provided (assuming frontend sends cents or normalized values)
-            // But wait, if frontend sends shillings, we MUST convert here if we want consistency?
-            // "I thought we had created a function to centralise these currency converstions" suggests frontend should handle it.
-            // If frontend sends raw input (e.g. "3500"), then backend should store 350000.
-            // However, the cleanest standard is:
-            // 1. Frontend user inputs "3500"
-            // 2. Frontend converts to 350000 (cents) using `shillingsToCents` utility
-            // 3. Backend receives 350000 and stores it directly.
-
-            // Let's assume frontend will be updated to send cents.
-            // For now, to match the removal of READ division, we must remove WRITE multiplication effectively 
-            // IF the frontend is now sending cents.
-
-            // Actually, if I remove the READ division, the frontend receives CENTS (e.g. 350000).
-            // If the frontend inputs "3500", and I remove multiplication here, it stores "3500", which is 35 KES.
-
-            // The user wants CENTRALIZED conversion.
-            // That means `src/utils/format.ts` should be used.
-            // `shillingsToCents` exists there.
-
-            // I will remove the ad-hoc multiplication here and assume frontend uses the utility.
-            // If I don't, I risk "double multiplication" if frontend is fixed later.
-
-            const id = jssService.setJSSFeeStructure(data) // Pass data directly
-            return { success: true, data: id }
-        } catch (error) {
-            return { success: false, error: (error as Error).message }
-        }
+    validatedHandler('jss:setFeeStructure', ROLES.STAFF, JssFeeStructurePayloadSchema, (_event, data: FeeStructurePayload) => {
+        const id = jssService.setJSSFeeStructure(data)
+        return { success: true, data: id }
     })
 
     // Get transition report (history)
-    safeHandleRawWithRole('jss:getTransitionReport', ROLES.STAFF, (_event, studentId: number) => {
-        try {
-            const history = jssService.getStudentTransitionHistory(studentId)
-            return { success: true, data: history }
-        } catch (error) {
-            return { success: false, error: (error as Error).message }
-        }
+    validatedHandlerMulti('jss:getTransitionReport', ROLES.STAFF, JssGetReportSchema, (_event, [studentId]: [number]) => {
+        const history = jssService.getStudentTransitionHistory(studentId)
+        return { success: true, data: history }
     })
 
     // Get transition summary
-    safeHandleRawWithRole('jss:getTransitionSummary', ROLES.STAFF, (_event, fiscalYear: number) => {
-        try {
-            const summary = jssService.getTransitionSummary(fiscalYear)
-            return { success: true, data: summary }
-        } catch (error) {
-            return { success: false, error: (error as Error).message }
-        }
+    validatedHandlerMulti('jss:getTransitionSummary', ROLES.STAFF, JssGetSummarySchema, (_event, [fiscalYear]: [number]) => {
+        const summary = jssService.getTransitionSummary(fiscalYear)
+        return { success: true, data: summary }
     })
 }

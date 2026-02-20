@@ -1,11 +1,13 @@
 import { getDatabase } from '../../database'
-import { safeHandleRawWithRole, ROLES } from '../ipc-result'
+import { ROLES } from '../ipc-result'
+import { AuditGetLogSchema } from '../schemas/system-schemas'
+import { validatedHandler } from '../validated-handler'
 
 export function registerAuditHandlers(): void {
     const db = getDatabase()
 
     // ======== AUDIT LOG ========
-    safeHandleRawWithRole('audit:getLog', ROLES.MANAGEMENT, (_event, limit = 100) => {
+    validatedHandler('audit:getLog', ROLES.MANAGEMENT, AuditGetLogSchema, (_event, limit) => {
         const safeLimit = Math.min(Math.max(1, Number(limit) || 100), 10000)
         return db.prepare(`
             SELECT a.*, u.full_name as user_name 

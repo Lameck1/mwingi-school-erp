@@ -1,30 +1,21 @@
-import * as fs from 'node:fs'
-import * as path from 'node:path'
+import * as fs from 'fs'
+import * as path from 'path'
 
 import { dialog, BrowserWindow } from '../../electron-env'
-import { dataImportService, type ImportConfig } from '../../services/data/DataImportService'
-import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
+import { dataImportService } from '../../services/data/DataImportService'
+import { ROLES } from '../ipc-result'
+import { ImportTuple, TemplateTypeSchema } from '../schemas/system-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 
 export function registerDataImportHandlers(): void {
     // Import from file
-    safeHandleRawWithRole('data:import', ROLES.ADMIN_ONLY, (
+    validatedHandlerMulti('data:import', ROLES.ADMIN_ONLY, ImportTuple, (
         event,
-        filePath: string,
-        config: ImportConfig,
-        legacyUserId?: number
+        [filePath, config, _legacyId],
+        actorCtx
     ) => {
         try {
-            const actor = resolveActorId(event, legacyUserId)
-            if (!actor.success) {
-                return {
-                    success: false,
-                    totalRows: 0,
-                    imported: 0,
-                    skipped: 0,
-                    errors: [{ row: 0, message: actor.error }]
-                }
-            }
             const resolved = path.resolve(filePath)
             const allowedExtensions = ['.csv', '.xlsx', '.xls']
             const ext = path.extname(resolved).toLowerCase()
@@ -42,7 +33,7 @@ export function registerDataImportHandlers(): void {
                 buffer,
                 filePath,
                 config,
-                actor.actorId
+                actorCtx.id
             )
         } catch (error) {
             return {
@@ -59,12 +50,12 @@ export function registerDataImportHandlers(): void {
     })
 
     // Get Template
-    safeHandleRawWithRole('data:getTemplate', ROLES.ADMIN_ONLY, (_event, entityType: string) => {
+    validatedHandler('data:getTemplate', ROLES.ADMIN_ONLY, TemplateTypeSchema, (_event, entityType) => {
         return dataImportService.getImportTemplate(entityType)
     })
 
     // Download Template
-    safeHandleRawWithRole('data:downloadTemplate', ROLES.ADMIN_ONLY, async (event, entityType: string) => {
+    validatedHandler('data:downloadTemplate', ROLES.ADMIN_ONLY, TemplateTypeSchema, async (event, entityType) => {
         try {
             const buffer = await dataImportService.generateTemplateFile(entityType)
             const win = BrowserWindow.fromWebContents(event.sender)

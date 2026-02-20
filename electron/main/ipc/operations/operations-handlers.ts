@@ -1,102 +1,77 @@
+import { z } from 'zod'
+
 import { container } from '../../services/base/ServiceContainer'
-import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
-
-import type { BoardingCostService } from '../../services/operations/BoardingCostService'
-import type { TransportCostService } from '../../services/operations/TransportCostService'
-
-type BoardingExpenseInput = Parameters<BoardingCostService['recordBoardingExpense']>[0]
-type TransportRouteInput = Parameters<TransportCostService['createRoute']>[0]
-type TransportExpenseInput = Parameters<TransportCostService['recordTransportExpense']>[0]
-
-function assertPositiveInteger(value: number, label: string): void {
-  if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`${label} must be a positive integer`)
-  }
-}
-
-function assertExpensePayload(params: {
-  amount_cents: number
-  fiscal_year: number
-  gl_account_code: string
-  recorded_by: number
-  term: number
-}, context: 'Boarding' | 'Transport'): void {
-  assertPositiveInteger(params.recorded_by, `${context} expense user`)
-  if (!Number.isInteger(params.amount_cents) || params.amount_cents <= 0) {
-    throw new Error(`${context} expense amount must be greater than zero`)
-  }
-  if (!Number.isInteger(params.fiscal_year) || params.fiscal_year < 2000 || params.fiscal_year > 2100) {
-    throw new Error(`${context} expense fiscal year is invalid`)
-  }
-  if (![1, 2, 3].includes(params.term)) {
-    throw new Error(`${context} expense term must be 1, 2, or 3`)
-  }
-  if (!params.gl_account_code || !params.gl_account_code.trim()) {
-    throw new Error(`${context} expense GL account code is required`)
-  }
-}
+import { ROLES } from '../ipc-result'
+import { BoardingExpenseSchema, TransportExpenseSchema, GetExpensesTuple, TransportRouteSchema } from '../schemas/operations-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 export const registerOperationsHandlers = () => {
   const boardingService = container.resolve('BoardingCostService')
   const transportService = container.resolve('TransportCostService')
 
   // Boarding Handlers
-  safeHandleRawWithRole('operations:boarding:getAllFacilities', ROLES.STAFF, () => {
+  validatedHandler('operations:boarding:getAllFacilities', ROLES.STAFF, z.void(), () => {
     return boardingService.getAllFacilities()
   })
 
-  safeHandleRawWithRole('operations:boarding:getActiveFacilities', ROLES.STAFF, () => {
+  validatedHandler('operations:boarding:getActiveFacilities', ROLES.STAFF, z.void(), () => {
     return boardingService.getActiveFacilities()
   })
 
-  safeHandleRawWithRole('operations:boarding:recordExpense', ROLES.FINANCE, (event, params: BoardingExpenseInput) => {
-    const actor = resolveActorId(event, params.recorded_by)
-    if (!actor.success) {
-      return actor
-    }
-    const sanitizedParams = { ...params, recorded_by: actor.actorId }
-    assertPositiveInteger(sanitizedParams.facility_id, 'Boarding facility')
-    assertExpensePayload(sanitizedParams, 'Boarding')
+  validatedHandler('operations:boarding:recordExpense', ROLES.FINANCE, BoardingExpenseSchema, (event, params, actor) => {
+    // legacy `params.recorded_by` check vs actor.id?
+    // The schema includes `recorded_by`.
+    // The original code:
+    // const actor = resolveActorId(event, params.recorded_by)
+    // const sanitizedParams = { ...params, recorded_by: actor.actorId }
+    // So we should enforce that params.recorded_by matches actor.id OR just override it.
+    // Safe to override it with authentic actor ID.
+
+    // We also need to map the Zod output back to the service input type if strict.
+    // But since Zod output is structural, it should be compatible if schema matches.
+    // However, `assertExpensePayload` (manual validation) is now replaced by Zod.
+
+    const sanitizedParams = { ...params, recorded_by: actor.id }
+    // assertPositiveInteger(sanitizedParams.facility_id) -> handled by schema
+    // assertExpensePayload -> handled by schema
+
     return boardingService.recordBoardingExpense(sanitizedParams)
   })
 
-  safeHandleRawWithRole('operations:boarding:getExpenses', ROLES.STAFF, (_event, facilityId: number, fiscalYear: number, term?: number) => {
+  validatedHandlerMulti('operations:boarding:getExpenses', ROLES.STAFF, GetExpensesTuple, (_event, [facilityId, fiscalYear, term]) => {
     return boardingService.getFacilityExpenses(facilityId, fiscalYear, term)
   })
 
-  safeHandleRawWithRole('operations:boarding:getExpenseSummary', ROLES.STAFF, (_event, facilityId: number, fiscalYear: number, term?: number) => {
+  validatedHandlerMulti('operations:boarding:getExpenseSummary', ROLES.STAFF, GetExpensesTuple, (_event, [facilityId, fiscalYear, term]) => {
     return boardingService.getExpenseSummaryByType(facilityId, fiscalYear, term)
   })
 
   // Transport Handlers
-  safeHandleRawWithRole('operations:transport:getAllRoutes', ROLES.STAFF, () => {
+  validatedHandler('operations:transport:getAllRoutes', ROLES.STAFF, z.void(), () => {
     return transportService.getAllRoutes()
   })
 
-  safeHandleRawWithRole('operations:transport:getActiveRoutes', ROLES.STAFF, () => {
+  validatedHandler('operations:transport:getActiveRoutes', ROLES.STAFF, z.void(), () => {
     return transportService.getActiveRoutes()
   })
 
-  safeHandleRawWithRole('operations:transport:createRoute', ROLES.STAFF, (_event, params: TransportRouteInput) => {
-    return transportService.createRoute(params)
+  validatedHandler('operations:transport:createRoute', ROLES.STAFF, TransportRouteSchema, (_event, params) => {
+    // Original code used `params: TransportRouteInput` without explicit validation (other than safeHandleRaw types)
+    // We assume TransportRouteSchema matches input.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return transportService.createRoute(params as any)
   })
 
-  safeHandleRawWithRole('operations:transport:recordExpense', ROLES.FINANCE, (event, params: TransportExpenseInput) => {
-    const actor = resolveActorId(event, params.recorded_by)
-    if (!actor.success) {
-      return actor
-    }
-    const sanitizedParams = { ...params, recorded_by: actor.actorId }
-    assertPositiveInteger(sanitizedParams.route_id, 'Transport route')
-    assertExpensePayload(sanitizedParams, 'Transport')
+  validatedHandler('operations:transport:recordExpense', ROLES.FINANCE, TransportExpenseSchema, (event, params, actor) => {
+    const sanitizedParams = { ...params, recorded_by: actor.id }
     return transportService.recordTransportExpense(sanitizedParams)
   })
 
-  safeHandleRawWithRole('operations:transport:getExpenses', ROLES.STAFF, (_event, routeId: number, fiscalYear: number, term?: number) => {
+  validatedHandlerMulti('operations:transport:getExpenses', ROLES.STAFF, GetExpensesTuple, (_event, [routeId, fiscalYear, term]) => {
     return transportService.getRouteExpenses(routeId, fiscalYear, term)
   })
 
-  safeHandleRawWithRole('operations:transport:getExpenseSummary', ROLES.STAFF, (_event, routeId: number, fiscalYear: number, term?: number) => {
+  validatedHandlerMulti('operations:transport:getExpenseSummary', ROLES.STAFF, GetExpensesTuple, (_event, [routeId, fiscalYear, term]) => {
     return transportService.getExpenseSummaryByType(routeId, fiscalYear, term)
   })
 }

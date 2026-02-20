@@ -1,7 +1,9 @@
+import { z } from 'zod'
+
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 import { sanitizeString, validateAmount } from '../../utils/validation'
-import { safeHandleRawWithRole, ROLES } from '../ipc-result'
+import { ROLES } from '../ipc-result'
 import { StaffCreateSchema, StaffUpdateSchema, StaffSetActiveSchema } from '../schemas/staff-schemas'
 import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
@@ -149,14 +151,14 @@ function buildUpdateParams(data: Partial<StaffCreateData>, id: number): Array<nu
 }
 
 function registerStaffQueryHandlers(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRawWithRole('staff:getAll', ROLES.STAFF, (_event, activeOnly = true) => {
+  validatedHandler('staff:getAll', ROLES.STAFF, z.boolean().optional(), (_event, activeOnly = true) => {
     const query = activeOnly
       ? 'SELECT * FROM staff WHERE is_active = 1 ORDER BY staff_number'
       : 'SELECT * FROM staff ORDER BY staff_number'
     return db.prepare(query).all() as StaffMember[]
   })
 
-  safeHandleRawWithRole('staff:getById', ROLES.STAFF, (_event, id: number) => {
+  validatedHandler('staff:getById', ROLES.STAFF, z.number(), (_event, id) => {
     return db.prepare('SELECT * FROM staff WHERE id = ?').get(id) as StaffMember | undefined
   })
 }

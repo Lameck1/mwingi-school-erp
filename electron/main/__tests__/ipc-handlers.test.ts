@@ -8,14 +8,14 @@ import { registerAllIpcHandlers } from '../ipc/index';
 vi.mock('keytar', () => ({
   default: {
     getPassword: vi.fn().mockResolvedValue(JSON.stringify({
-      user: { id: 1, username: 'admin', role: 'ADMIN', full_name: 'Admin', email: 'admin@test.com', is_active: 1, last_login: null, created_at: '2026-01-01' },
+      user: { id: 1, username: 'admin', role: 'ADMIN', full_name: 'Admin', email: 'admin@test.com', is_active: 1, last_login: null, created_at: '2026-01-01T00:00:00' },
       lastActivity: Date.now()
     })),
     setPassword: vi.fn().mockResolvedValue(null),
     deletePassword: vi.fn().mockResolvedValue(true)
   },
   getPassword: vi.fn().mockResolvedValue(JSON.stringify({
-    user: { id: 1, username: 'admin', role: 'ADMIN', full_name: 'Admin', email: 'admin@test.com', is_active: 1, last_login: null, created_at: '2026-01-01' },
+    user: { id: 1, username: 'admin', role: 'ADMIN', full_name: 'Admin', email: 'admin@test.com', is_active: 1, last_login: null, created_at: '2026-01-01T00:00:00' },
     lastActivity: Date.now()
   })),
   setPassword: vi.fn().mockResolvedValue(null),

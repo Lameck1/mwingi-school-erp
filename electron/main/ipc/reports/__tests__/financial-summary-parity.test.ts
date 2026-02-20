@@ -15,6 +15,21 @@ vi.mock('../../../electron-env', () => ({
   }
 }))
 
+vi.mock('../../../security/session', () => ({
+  getSession: vi.fn(async () => ({
+    user: {
+      id: 1,
+      username: 'staff',
+      role: 'ADMIN',
+      full_name: 'Staff User',
+      email: 'staff@test.com',
+      is_active: 1,
+      created_at: '2026-01-01T00:00:00'
+    },
+    lastActivity: Date.now()
+  }))
+}))
+
 vi.mock('../../../database', () => ({
   getDatabase: () => db
 }))

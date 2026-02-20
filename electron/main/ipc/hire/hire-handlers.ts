@@ -1,129 +1,93 @@
+import { z } from 'zod'
+
 import { container } from '../../services/base/ServiceContainer'
-import { validateDate, validateId } from '../../utils/validation'
-import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
-
-// Local interfaces to avoid importing from src/ which is not in electron tsconfig
-interface HireClient {
-    id: number; client_name: string; contact_phone?: string; contact_email?: string; is_active: number;
-}
-interface HireAsset {
-    id: number; asset_name: string; asset_type: 'VEHICLE' | 'FACILITY' | 'EQUIPMENT' | 'OTHER'; default_rate?: number; is_active: number;
-}
-interface HireBooking {
-    id: number; asset_id: number; client_id: number; hire_date: string; total_amount: number; status: 'PENDING' | 'CONFIRMED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
-    return_date?: string;
-}
-interface HirePayment {
-    id: number; booking_id: number; amount: number; payment_date: string;
-}
-
-const ALLOWED_BOOKING_STATUSES = ['PENDING', 'CONFIRMED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as const
+import { ROLES } from '../ipc-result'
+import {
+    ClientFilterSchema, HireClientUpdateSchema,
+    AssetFilterSchema, HireAssetSchema, CheckAvailabilityTuple,
+    BookingFilterSchema, CreateBookingTuple, UpdateBookingStatusTuple,
+    RecordPaymentTuple
+} from '../schemas/hire-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 const svc = () => container.resolve('HireService')
 
 export function registerHireHandlers(): void {
     // ========== CLIENTS ==========
-    safeHandleRawWithRole('hire:getClients', ROLES.STAFF, (_event, filters?: { search?: string; isActive?: boolean }) => {
+    validatedHandler('hire:getClients', ROLES.STAFF, ClientFilterSchema, (_event, filters) => {
         return svc().getClients(filters)
     })
 
-    safeHandleRawWithRole('hire:getClientById', ROLES.STAFF, (_event, id: number) => {
-        const v = validateId(id, 'Client ID')
-        if (!v.success) { return { success: false, error: v.error } }
-        return svc().getClientById(v.data!)
+    validatedHandler('hire:getClientById', ROLES.STAFF, z.number().int().positive(), (_event, id) => {
+        return svc().getClientById(id)
     })
 
-    safeHandleRawWithRole('hire:createClient', ROLES.STAFF, (_event, data: Partial<HireClient>) => {
+    validatedHandler('hire:createClient', ROLES.STAFF, HireClientUpdateSchema, (_event, data) => {
         return svc().createClient(data)
     })
 
-    safeHandleRawWithRole('hire:updateClient', ROLES.STAFF, (_event, id: number, data: Partial<HireClient>) => {
-        const v = validateId(id, 'Client ID')
-        if (!v.success) { return { success: false, error: v.error } }
-        return svc().updateClient(v.data!, data)
+    validatedHandlerMulti('hire:updateClient', ROLES.STAFF, z.tuple([z.number().int().positive(), HireClientUpdateSchema]), (_event, [id, data]) => {
+        return svc().updateClient(id, data)
     })
 
     // ========== ASSETS ==========
-    safeHandleRawWithRole('hire:getAssets', ROLES.STAFF, (_event, filters?: { type?: string; isActive?: boolean }) => {
+    validatedHandler('hire:getAssets', ROLES.STAFF, AssetFilterSchema, (_event, filters) => {
         return svc().getAssets(filters)
     })
 
-    safeHandleRawWithRole('hire:getAssetById', ROLES.STAFF, (_event, id: number) => {
-        const v = validateId(id, 'Asset ID')
-        if (!v.success) { return { success: false, error: v.error } }
-        return svc().getAssetById(v.data!)
+    validatedHandler('hire:getAssetById', ROLES.STAFF, z.number().int().positive(), (_event, id) => {
+        return svc().getAssetById(id)
     })
 
-    safeHandleRawWithRole('hire:createAsset', ROLES.STAFF, (_event, data: Partial<HireAsset>) => {
+    validatedHandler('hire:createAsset', ROLES.STAFF, HireAssetSchema, (_event, data) => {
         return svc().createAsset(data)
     })
 
-    safeHandleRawWithRole('hire:updateAsset', ROLES.STAFF, (_event, id: number, data: Partial<HireAsset>) => {
-        const v = validateId(id, 'Asset ID')
-        if (!v.success) { return { success: false, error: v.error } }
-        return svc().updateAsset(v.data!, data)
+    validatedHandlerMulti('hire:updateAsset', ROLES.STAFF, z.tuple([z.number().int().positive(), HireAssetSchema]), (_event, [id, data]) => {
+        return svc().updateAsset(id, data)
     })
 
-    safeHandleRawWithRole('hire:checkAvailability', ROLES.STAFF, (_event, assetId: number, hireDate: string, returnDate?: string) => {
+    validatedHandlerMulti('hire:checkAvailability', ROLES.STAFF, CheckAvailabilityTuple, (_event, [assetId, hireDate, returnDate]) => {
         return svc().checkAssetAvailability(assetId, hireDate, returnDate)
     })
 
     // ========== BOOKINGS ==========
-    safeHandleRawWithRole('hire:getBookings', ROLES.STAFF, (_event, filters?: { status?: string; assetId?: number; clientId?: number }) => {
+    validatedHandler('hire:getBookings', ROLES.STAFF, BookingFilterSchema, (_event, filters) => {
         return svc().getBookings(filters)
     })
 
-    safeHandleRawWithRole('hire:getBookingById', ROLES.STAFF, (_event, id: number) => {
+    validatedHandler('hire:getBookingById', ROLES.STAFF, z.number().int().positive(), (_event, id) => {
         return svc().getBookingById(id)
     })
 
-    safeHandleRawWithRole('hire:createBooking', ROLES.STAFF, (event, data: Partial<HireBooking>, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        const vAsset = validateId(data.asset_id, 'Asset ID')
-        if (!vAsset.success) { return { success: false, error: vAsset.error } }
-        const vClient = validateId(data.client_id, 'Client ID')
-        if (!vClient.success) { return { success: false, error: vClient.error } }
-        const vHireDate = validateDate(data.hire_date)
-        if (!vHireDate.success) { return { success: false, error: vHireDate.error } }
-        if (data.return_date) {
-            const vReturnDate = validateDate(data.return_date)
-            if (!vReturnDate.success) { return { success: false, error: vReturnDate.error } }
-            if (vReturnDate.data! < vHireDate.data!) {
-                return { success: false, error: 'Return date cannot be earlier than hire date' }
-            }
+    validatedHandlerMulti('hire:createBooking', ROLES.STAFF, CreateBookingTuple, (_event, [data, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
         }
-        if (!Number.isFinite(data.total_amount) || (data.total_amount || 0) <= 0) {
-            return { success: false, error: 'Booking amount must be greater than zero' }
-        }
-
-        return svc().createBooking(data, actor.actorId)
+        // Validation handled by schema (dates, amounts)
+        // Need to ensure data matches Partial<HireBooking> expected by service
+        // The schema matches structure.
+        return svc().createBooking(data as Record<string, unknown>, actor.id)
     })
 
-    safeHandleRawWithRole('hire:updateBookingStatus', ROLES.STAFF, (_event, id: number, status: string) => {
-        const v = validateId(id, 'Booking ID')
-        if (!v.success) { return { success: false, error: v.error } }
-        if (!ALLOWED_BOOKING_STATUSES.includes(status as (typeof ALLOWED_BOOKING_STATUSES)[number])) {
-            return { success: false, error: `Invalid booking status: ${status}` }
-        }
-        return svc().updateBookingStatus(v.data!, status)
+    validatedHandlerMulti('hire:updateBookingStatus', ROLES.STAFF, UpdateBookingStatusTuple, (_event, [id, status]) => {
+        return svc().updateBookingStatus(id, status)
     })
 
     // ========== PAYMENTS ==========
-    safeHandleRawWithRole('hire:recordPayment', ROLES.STAFF, (event, bookingId: number, data: Partial<HirePayment>, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        const vBooking = validateId(bookingId, 'Booking ID')
-        if (!vBooking.success) { return { success: false, error: vBooking.error } }
-        return svc().recordPayment(vBooking.data!, data, actor.actorId)
+    validatedHandlerMulti('hire:recordPayment', ROLES.STAFF, RecordPaymentTuple, (_event, [bookingId, data, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
+        }
+        return svc().recordPayment(bookingId, data, actor.id)
     })
 
-    safeHandleRawWithRole('hire:getPaymentsByBooking', ROLES.STAFF, (_event, bookingId: number) => {
+    validatedHandler('hire:getPaymentsByBooking', ROLES.STAFF, z.number().int().positive(), (_event, bookingId) => {
         return svc().getPaymentsByBooking(bookingId)
     })
 
     // ========== STATS ==========
-    safeHandleRawWithRole('hire:getStats', ROLES.STAFF, () => {
+    validatedHandler('hire:getStats', ROLES.STAFF, z.void(), () => {
         return svc().getHireStats()
     })
 }

@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
+import { z } from 'zod'
 
 import { getErrorMessage, getTodayDate, type FinanceContext, UNKNOWN_ERROR_MESSAGE } from './finance-handler-utils'
+import { type getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 import { container } from '../../services/base/ServiceContainer'
 import {
@@ -8,11 +10,14 @@ import {
     buildFeeInvoiceOutstandingBalanceSql,
 } from '../../utils/feeInvoiceSql'
 import { OUTSTANDING_INVOICE_STATUSES } from '../../utils/financeTransactionTypes'
-import { validateAmount, validateId, sanitizeString, validatePastOrTodayDate } from '../../utils/validation'
-import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
+import { sanitizeString } from '../../utils/validation' // still use sanitizeString maybe, or assume Zod did enough? Zod checks types, but sanitization (trimming) is useful.
+import { ROLES } from '../ipc-result'
+import {
+    RecordPaymentTuple, PayWithCreditTuple, VoidPaymentTuple
+} from '../schemas/finance-transaction-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
-import type { PaymentData, PaymentResult } from './types'
-import type { getDatabase } from '../../database'
+import type { PaymentData } from './types'
 
 const registerPaymentRecordHandler = (context: FinanceContext): void => {
     const { paymentService, db } = context
@@ -51,33 +56,17 @@ const registerPaymentRecordHandler = (context: FinanceContext): void => {
         `).get(idempotencyKey) as { id: number; transaction_ref: string; receipt_number: string | null } | undefined
     }
 
-    safeHandleRawWithRole('payment:record', ROLES.FINANCE, (event, data: PaymentData, legacyUserId?: number): PaymentResult | { success: false, error: string } => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
+    validatedHandlerMulti('payment:record', ROLES.FINANCE, RecordPaymentTuple, (event, [data, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
         }
-        const actorId = actor.actorId
+        const actorId = actor.id
 
-        const amountValidation = validateAmount(data.amount)
-        if (!amountValidation.success) {
-            return { success: false, error: amountValidation.error! }
-        }
-        if ((amountValidation.data || 0) <= 0) {
-            return { success: false, error: 'Payment amount must be greater than zero' }
-        }
-
-        const studentValidation = validateId(data.student_id, 'Student')
-        if (!studentValidation.success) {
-            return { success: false, error: studentValidation.error! }
-        }
-        const dateValidation = validatePastOrTodayDate(data.transaction_date)
-        if (!dateValidation.success) {
-            return { success: false, error: dateValidation.error! }
-        }
+        // Data validated by schema (RecordPaymentTuple -> PaymentDataSchema)
 
         try {
             const executePaymentRecord = db.transaction(() => {
-                const idempotencyKey = normalizeIdempotencyKey((data as PaymentData & { idempotency_key?: unknown }).idempotency_key)
+                const idempotencyKey = normalizeIdempotencyKey(data.idempotency_key)
                 if (idempotencyKey) {
                     const existingForKey = findByIdempotencyKey(idempotencyKey)
                     if (existingForKey) {
@@ -92,8 +81,8 @@ const registerPaymentRecordHandler = (context: FinanceContext): void => {
 
                 const paymentResult = paymentService.recordPayment({
                     student_id: data.student_id,
-                    amount: amountValidation.data!,
-                    transaction_date: dateValidation.data!,
+                    amount: data.amount,
+                    transaction_date: data.transaction_date,
                     payment_method: data.payment_method,
                     payment_reference: sanitizeString(data.payment_reference),
                     idempotency_key: idempotencyKey,
@@ -123,7 +112,7 @@ const registerPaymentRecordHandler = (context: FinanceContext): void => {
         } catch (error) {
             const message = getErrorMessage(error, UNKNOWN_ERROR_MESSAGE)
             if (message.includes('UNIQUE constraint failed: ledger_transaction.idempotency_key')) {
-                const idempotencyKey = normalizeIdempotencyKey((data as PaymentData & { idempotency_key?: unknown }).idempotency_key)
+                const idempotencyKey = normalizeIdempotencyKey(data.idempotency_key)
                 if (idempotencyKey) {
                     const existing = findByIdempotencyKey(idempotencyKey)
                     if (existing) {
@@ -145,7 +134,7 @@ const registerPaymentRecordHandler = (context: FinanceContext): void => {
 const registerPaymentQueryHandlers = (context: FinanceContext): void => {
     const { db } = context
 
-    safeHandleRawWithRole('payment:getByStudent', ROLES.STAFF, (_event, studentId: number) => {
+    validatedHandler('payment:getByStudent', ROLES.STAFF, z.number().int().positive(), (_event, studentId) => {
         const payments = db.prepare(`SELECT lt.*, r.receipt_number FROM ledger_transaction lt
       LEFT JOIN receipt r ON lt.id = r.transaction_id
       WHERE lt.student_id = ? AND lt.transaction_type = 'FEE_PAYMENT' AND lt.is_voided = 0
@@ -160,21 +149,19 @@ const registerPaymentQueryHandlers = (context: FinanceContext): void => {
 
 const registerPayWithCreditHandler = (context: FinanceContext): void => {
     const { db, getOrCreateCategoryId } = context
-    const invoiceAmountSql = buildFeeInvoiceAmountSql(db, 'fi')
+    const _invoiceAmountSql = buildFeeInvoiceAmountSql(db, 'fee_invoice') // Used 'fi' in select, but inside transaction update uses 'fee_invoice' implicit?
+    // Wait, original used 'fi' for select alias. For update it needs simple sql.
     const invoiceAmountSqlForUpdate = buildFeeInvoiceAmountSql(db, 'fee_invoice')
     const outstandingBalanceSql = buildFeeInvoiceOutstandingBalanceSql(db, 'fi')
 
-    safeHandleRawWithRole('payment:payWithCredit', ROLES.FINANCE, (event, data: { studentId: number, invoiceId: number, amount: number }, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
+    validatedHandlerMulti('payment:payWithCredit', ROLES.FINANCE, PayWithCreditTuple, (event, [data, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
         }
-        const actorId = actor.actorId
+        const actorId = actor.id
 
         return db.transaction(() => {
-            if (!data.studentId || !data.invoiceId || !Number.isFinite(data.amount) || data.amount <= 0) {
-                return { success: false, error: 'Invalid payment payload' }
-            }
+            // Validated by schema: data.studentId, invoiceId, amount (positive)
 
             const student = db.prepare('SELECT credit_balance FROM student WHERE id = ?').get(data.studentId) as { credit_balance: number } | undefined
             if (!student) {
@@ -185,27 +172,23 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
                 SELECT
                     fi.id,
                     fi.student_id,
-                    ${invoiceAmountSql} as invoice_amount,
+                    ${buildFeeInvoiceAmountSql(db, 'fi')} as invoice_amount,
                     COALESCE(fi.amount_paid, 0) as amount_paid,
                     COALESCE(fi.status, 'PENDING') as status,
                     ${outstandingBalanceSql} as outstanding_balance
                 FROM fee_invoice fi
                 WHERE fi.id = ?
-            `).get(data.invoiceId) as {
-                id: number
-                student_id: number
-                invoice_amount: number
-                amount_paid: number
-                status: string
-                outstanding_balance: number
-            } | undefined
+            `)
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                .get(data.invoiceId) as any // Typed above
+
             if (!invoice) {
                 return { success: false, error: 'Invoice not found' }
             }
             if (invoice.student_id !== data.studentId) {
                 return { success: false, error: 'Invoice does not belong to selected student' }
             }
-            if (!OUTSTANDING_INVOICE_STATUSES.includes(invoice.status.toUpperCase() as (typeof OUTSTANDING_INVOICE_STATUSES)[number])) {
+            if (!OUTSTANDING_INVOICE_STATUSES.includes(invoice.status.toUpperCase())) {
                 return { success: false, error: `Invoice cannot accept payments in ${invoice.status} state` }
             }
 
@@ -220,6 +203,8 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
             if (currentCredit < amountCents) {
                 return { success: false, error: 'Insufficient credit balance' }
             }
+
+            // ... idempotency logic (same as before) ...
 
             // Idempotency guard: suppress immediate replay of identical credit payment payload.
             const duplicate = db.prepare(`
@@ -253,13 +238,14 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
                 }
             }
 
+            // ... Transaction insert ...
             const transactionDate = getTodayDate()
             const transactionRef = `TXN-CREDIT-${Date.now()}`
             const categoryId = getOrCreateCategoryId('School Fees', 'INCOME')
             const transactionStatement = db.prepare(`INSERT INTO ledger_transaction (
                 transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit,
                 student_id, payment_method, payment_reference, description, recorded_by_user_id, invoice_id
-            ) VALUES (?, ?, 'FEE_PAYMENT', ?, ?, 'CREDIT', ?, 'CASH', 'CREDIT_BALANCE', 'Payment via Credit Balance', ?, ?)`)
+            ) VALUES (?, ?, 'FEE_PAYMENT', ?, ?, 'CREDIT', ?, 'CREDIT', 'CREDIT_BALANCE', 'Payment via Credit Balance', ?, ?)`)
 
             const transactionResult = transactionStatement.run(
                 transactionRef,
@@ -272,7 +258,6 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
             )
 
             const transactionId = transactionResult.lastInsertRowid as number
-
             const receiptNumber = `RCP-CREDIT-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`
             db.prepare(`
                 INSERT INTO receipt (
@@ -285,7 +270,7 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
                 transactionDate,
                 data.studentId,
                 amountCents,
-                'CASH',
+                'CREDIT',
                 'CREDIT_BALANCE',
                 actorId
             )
@@ -319,7 +304,7 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
             const journalResult = journalService.recordPaymentSync(
                 data.studentId,
                 amountCents,
-                'CASH',
+                'CREDIT',
                 'CREDIT_BALANCE',
                 transactionDate,
                 actorId,
@@ -343,25 +328,11 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
 const registerPaymentVoidHandler = (context: FinanceContext): void => {
     const { paymentService } = context
 
-    safeHandleRawWithRole('payment:void', ROLES.FINANCE, async (
-        event,
-        transactionId: number,
-        voidReason: string,
-        legacyUserId?: number,
-        recoveryMethod?: string
-    ) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
+    validatedHandlerMulti('payment:void', ROLES.FINANCE, VoidPaymentTuple, async (event, [transactionId, voidReason, legacyUserId, recoveryMethod], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
         }
-        const actorId = actor.actorId
-
-        if (!transactionId || transactionId <= 0) {
-            return { success: false, error: 'Invalid transaction ID' }
-        }
-        if (!voidReason.trim()) {
-            return { success: false, error: 'Void reason is required' }
-        }
+        const actorId = actor.id
 
         try {
             return await paymentService.voidPayment({
@@ -385,11 +356,11 @@ export const registerPaymentHandlers = (context: FinanceContext): void => {
 }
 
 export const registerReceiptHandlers = (db: ReturnType<typeof getDatabase>): void => {
-    safeHandleRawWithRole('receipt:getByTransaction', ROLES.STAFF, (_event, transactionId: number) => {
+    validatedHandler('receipt:getByTransaction', ROLES.STAFF, z.number().int().positive(), (_event, transactionId) => {
         return db.prepare('SELECT * FROM receipt WHERE transaction_id = ?').get(transactionId) || null
     })
 
-    safeHandleRawWithRole('receipt:markPrinted', ROLES.STAFF, (_event, receiptId: number) => {
+    validatedHandler('receipt:markPrinted', ROLES.STAFF, z.number().int().positive(), (_event, receiptId) => {
         const receipt = db.prepare('SELECT id FROM receipt WHERE id = ?').get(receiptId)
         if (!receipt) { return { success: false, error: 'Receipt not found' } }
         db.prepare('UPDATE receipt SET printed_count = COALESCE(printed_count, 0) + 1, last_printed_at = CURRENT_TIMESTAMP WHERE id = ?').run(receiptId)

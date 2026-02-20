@@ -66,6 +66,7 @@ function createWindow() {
             webSecurity: true,
             allowRunningInsecureContent: false,
             experimentalFeatures: false,
+            plugins: true
         },
         show: false,
         titleBarStyle: 'default',
@@ -146,8 +147,8 @@ async function bootstrap(): Promise<void> {
                 ...details.responseHeaders,
                 'Content-Security-Policy': [
                     VITE_DEV_SERVER_URL
-                        ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws:; object-src 'none'; frame-src 'none'"
-                        : "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self' data:; object-src 'none'; frame-src 'none'"
+                        ? "default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws: http: https:; object-src 'none'; frame-src 'self' blob:"
+                        : "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.africastalking.com https://api.twilio.com https://api.sendgrid.com; object-src 'none'; frame-src 'self' blob:"
                 ]
             }
         })
@@ -228,7 +229,7 @@ app.on('before-quit', () => {
 
 let shutdownScheduled = false
 function scheduleGracefulShutdown(): void {
-    if (shutdownScheduled) {return}
+    if (shutdownScheduled) { return }
     shutdownScheduled = true
     setTimeout(() => {
         log.warn('Shutting down after critical error...')

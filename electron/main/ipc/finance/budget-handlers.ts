@@ -1,79 +1,82 @@
+import { z } from 'zod'
+
 import { BudgetEnforcementService } from '../../services/accounting/BudgetEnforcementService'
 import { container } from '../../services/base/ServiceContainer'
-import { type BudgetFilters, type CreateBudgetData } from '../../services/finance/BudgetService'
-import { validateId } from '../../utils/validation'
-import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
+import { ROLES } from '../ipc-result'
+import {
+    BudgetFilterSchema, CreateBudgetTuple, UpdateBudgetTuple,
+    PeriodProcessTuple, ValidateTransactionTuple, SetAllocationTuple,
+    BudgetAlertsTuple, FiscalYearSchema
+} from '../schemas/finance-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 export function registerBudgetHandlers(): void {
-    safeHandleRawWithRole('budget:getAll', ROLES.FINANCE, (_event, filters: BudgetFilters = {}) => {
+    validatedHandler('budget:getAll', ROLES.FINANCE, BudgetFilterSchema, (_event, filters) => {
         const service = container.resolve('BudgetService')
-        return service.findAll(filters)
+        return service.findAll(filters || {})
     })
 
-    safeHandleRawWithRole('budget:getById', ROLES.FINANCE, (_event, id: number) => {
-        const v = validateId(id, 'Budget ID')
-        if (!v.success) { return { success: false, error: v.error } }
+    validatedHandler('budget:getById', ROLES.FINANCE, z.number().int().positive(), (_event, id) => {
         const service = container.resolve('BudgetService')
-        return service.getBudgetWithLineItems(v.data!)
+        return service.getBudgetWithLineItems(id)
     })
 
-    safeHandleRawWithRole('budget:create', ROLES.FINANCE, (event, data: CreateBudgetData, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return { success: false, error: actor.error } }
+    validatedHandlerMulti('budget:create', ROLES.FINANCE, CreateBudgetTuple, (event, [data, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
+        }
         const service = container.resolve('BudgetService')
-        return service.create(data, actor.actorId)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return service.create(data as any, actor.id)
     })
 
-    safeHandleRawWithRole('budget:update', ROLES.FINANCE, (event, id: number, data: Partial<CreateBudgetData>, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return { success: false, error: actor.error } }
-        const vId = validateId(id, 'Budget ID')
-        if (!vId.success) { return { success: false, error: vId.error } }
+    validatedHandlerMulti('budget:update', ROLES.FINANCE, UpdateBudgetTuple, (event, [id, data, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
+        }
         const service = container.resolve('BudgetService')
-        return service.update(vId.data!, data, actor.actorId)
+        return service.update(id, data, actor.id)
     })
 
-    safeHandleRawWithRole('budget:submit', ROLES.FINANCE, (event, budgetId: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return { success: false, error: actor.error } }
-        const vId = validateId(budgetId, 'Budget ID')
-        if (!vId.success) { return { success: false, error: vId.error } }
+    validatedHandlerMulti('budget:submit', ROLES.FINANCE, PeriodProcessTuple, (event, [budgetId, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
+        }
         const service = container.resolve('BudgetService')
-        return service.submitForApproval(vId.data!, actor.actorId)
+        return service.submitForApproval(budgetId, actor.id)
     })
 
-    safeHandleRawWithRole('budget:approve', ROLES.MANAGEMENT, (event, budgetId: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return { success: false, error: actor.error } }
-        const vId = validateId(budgetId, 'Budget ID')
-        if (!vId.success) { return { success: false, error: vId.error } }
+    validatedHandlerMulti('budget:approve', ROLES.MANAGEMENT, PeriodProcessTuple, (event, [budgetId, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
+        }
         const service = container.resolve('BudgetService')
-        return service.approve(vId.data!, actor.actorId)
+        return service.approve(budgetId, actor.id)
     })
 
     const enforcement = new BudgetEnforcementService()
 
-    safeHandleRawWithRole('budget:validateTransaction', ROLES.FINANCE, async (_event, glAccountCode: string, amount: number, fiscalYear: number, department?: string) => {
+    validatedHandlerMulti('budget:validateTransaction', ROLES.FINANCE, ValidateTransactionTuple, async (_event, [glAccountCode, amount, fiscalYear, department]) => {
+        // Zod validates types.
         return enforcement.validateTransaction(glAccountCode, amount, fiscalYear, department || null)
     })
 
-    safeHandleRawWithRole('budget:getAllocations', ROLES.FINANCE, async (_event, fiscalYear: number) => {
+    validatedHandler('budget:getAllocations', ROLES.FINANCE, FiscalYearSchema, async (_event, fiscalYear) => {
         return enforcement.getBudgetAllocations(fiscalYear)
     })
 
-    safeHandleRawWithRole('budget:setAllocation', ROLES.FINANCE, async (event, glAccountCode: string, fiscalYear: number, allocatedAmount: number, department: string | null, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
+    validatedHandlerMulti('budget:setAllocation', ROLES.FINANCE, SetAllocationTuple, async (event, [glAccountCode, fiscalYear, allocatedAmount, department, legacyUserId], actor) => {
+        if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
         }
-        return enforcement.setBudgetAllocation(glAccountCode, fiscalYear, allocatedAmount, department, actor.actorId)
+        return enforcement.setBudgetAllocation(glAccountCode, fiscalYear, allocatedAmount, department, actor.id)
     })
 
-    safeHandleRawWithRole('budget:varianceReport', ROLES.FINANCE, async (_event, fiscalYear: number) => {
+    validatedHandler('budget:varianceReport', ROLES.FINANCE, FiscalYearSchema, async (_event, fiscalYear) => {
         return enforcement.generateBudgetVarianceReport(fiscalYear)
     })
 
-    safeHandleRawWithRole('budget:alerts', ROLES.FINANCE, async (_event, fiscalYear: number, threshold?: number) => {
+    validatedHandlerMulti('budget:alerts', ROLES.FINANCE, BudgetAlertsTuple, async (_event, [fiscalYear, threshold]) => {
         return enforcement.getBudgetAlerts(fiscalYear, threshold)
     })
 }

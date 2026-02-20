@@ -1,9 +1,13 @@
+import { z } from 'zod'
+
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 import { DoubleEntryJournalService } from '../../services/accounting/DoubleEntryJournalService'
 import { SystemAccounts } from '../../services/accounting/SystemAccounts'
 import { PayrollJournalService } from '../../services/finance/PayrollJournalService'
-import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
+import { ROLES } from '../ipc-result'
+import { PayrollRunSchema, PayrollConfirmSchema, PayrollMarkPaidSchema, PayrollRevertSchema, StaffAllowanceAddSchema, StaffAllowanceDeleteSchema } from '../schemas/payroll-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 import type { StaffMember } from './types'
 
@@ -264,13 +268,10 @@ function getPeriodOrFail(db: ReturnType<typeof getDatabase>, periodId: number): 
     return (db.prepare(SELECT_PERIOD).get(periodId) as { id: number; status: string; period_name?: string } | undefined) ?? null
 }
 
+
 function registerPayrollStatusHandlers(db: ReturnType<typeof getDatabase>, journalService: DoubleEntryJournalService): void {
-    safeHandleRawWithRole('payroll:confirm', ROLES.FINANCE, (event, periodId: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
-        }
-        const actorId = actor.actorId
+    validatedHandlerMulti('payroll:confirm', ROLES.FINANCE, PayrollConfirmSchema, (event, [periodId, _legacyId], actorCtx) => {
+        const actorId = actorCtx.id
         return db.transaction(() => {
             const period = getPeriodOrFail(db, periodId)
             if (!period) { return { success: false, error: PERIOD_NOT_FOUND } }
@@ -282,12 +283,8 @@ function registerPayrollStatusHandlers(db: ReturnType<typeof getDatabase>, journ
         })()
     })
 
-    safeHandleRawWithRole('payroll:markPaid', ROLES.FINANCE, (event, periodId: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
-        }
-        const actorId = actor.actorId
+    validatedHandlerMulti('payroll:markPaid', ROLES.FINANCE, PayrollMarkPaidSchema, (event, [periodId, _legacyId], actorCtx) => {
+        const actorId = actorCtx.id
         return db.transaction(() => {
             const period = getPeriodOrFail(db, periodId)
             if (!period) { return { success: false, error: PERIOD_NOT_FOUND } }
@@ -346,12 +343,8 @@ function registerPayrollStatusHandlers(db: ReturnType<typeof getDatabase>, journ
         })()
     })
 
-    safeHandleRawWithRole('payroll:revertToDraft', ROLES.FINANCE, (event, periodId: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
-        }
-        const actorId = actor.actorId
+    validatedHandlerMulti('payroll:revertToDraft', ROLES.FINANCE, PayrollRevertSchema, (event, [periodId, _legacyId], actorCtx) => {
+        const actorId = actorCtx.id
         return db.transaction(() => {
             const period = getPeriodOrFail(db, periodId)
             if (!period) { return { success: false, error: PERIOD_NOT_FOUND } }
@@ -363,12 +356,8 @@ function registerPayrollStatusHandlers(db: ReturnType<typeof getDatabase>, journ
         })()
     })
 
-    safeHandleRawWithRole('payroll:delete', ROLES.FINANCE, (event, periodId: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
-        }
-        const actorId = actor.actorId
+    validatedHandlerMulti('payroll:delete', ROLES.FINANCE, PayrollRevertSchema, (event, [periodId, _legacyId], actorCtx) => {
+        const actorId = actorCtx.id
         return db.transaction(() => {
             const period = getPeriodOrFail(db, periodId)
             if (!period) { return { success: false, error: PERIOD_NOT_FOUND } }
@@ -382,12 +371,8 @@ function registerPayrollStatusHandlers(db: ReturnType<typeof getDatabase>, journ
         })()
     })
 
-    safeHandleRawWithRole('payroll:recalculate', ROLES.FINANCE, (event, periodId: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
-        }
-        return db.transaction(() => recalculatePayroll(db, periodId, actor.actorId))()
+    validatedHandlerMulti('payroll:recalculate', ROLES.FINANCE, PayrollRevertSchema, (event, [periodId, _legacyId], actorCtx) => {
+        return db.transaction(() => recalculatePayroll(db, periodId, actorCtx.id))()
     })
 }
 
@@ -426,18 +411,18 @@ function recalculatePayroll(db: ReturnType<typeof getDatabase>, periodId: number
 }
 
 function registerStaffAllowanceHandlers(db: ReturnType<typeof getDatabase>): void {
-    safeHandleRawWithRole('staff:getAllowances', ROLES.STAFF, (_event, staffId: number) => {
+    validatedHandler('staff:getAllowances', ROLES.STAFF, z.number(), (_event, staffId) => {
         return db.prepare('SELECT * FROM staff_allowance WHERE staff_id = ? AND is_active = 1 ORDER BY allowance_name').all(staffId)
     })
 
-    safeHandleRawWithRole('staff:addAllowance', ROLES.FINANCE, (_event, staffId: number, allowanceName: string, amount: number) => {
+    validatedHandlerMulti('staff:addAllowance', ROLES.FINANCE, StaffAllowanceAddSchema, (_event, [staffId, allowanceName, amount], _actor) => {
         const result = db.prepare(
             'INSERT INTO staff_allowance (staff_id, allowance_name, amount) VALUES (?, ?, ?)'
         ).run(staffId, allowanceName, amount)
         return { success: true, id: result.lastInsertRowid }
     })
 
-    safeHandleRawWithRole('staff:deleteAllowance', ROLES.FINANCE, (_event, allowanceId: number) => {
+    validatedHandler('staff:deleteAllowance', ROLES.FINANCE, StaffAllowanceDeleteSchema, (_event, allowanceId) => {
         db.prepare('UPDATE staff_allowance SET is_active = 0 WHERE id = ?').run(allowanceId)
         return { success: true }
     })
@@ -447,19 +432,15 @@ export function registerPayrollHandlers(): void {
     const db = getDatabase()
     const payrollJournalService = new PayrollJournalService(db)
 
-    safeHandleRawWithRole('payroll:run', ROLES.FINANCE, (event, month: number, year: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
-        }
-        return db.transaction(() => runPayrollForPeriod(db, month, year, actor.actorId))()
+    validatedHandlerMulti('payroll:run', ROLES.FINANCE, PayrollRunSchema, (event, [month, year, _legacyId], actorCtx) => {
+        return db.transaction(() => runPayrollForPeriod(db, month, year, actorCtx.id))()
     })
 
-    safeHandleRawWithRole('payroll:getHistory', PAYROLL_VIEW_ROLES, () => {
+    validatedHandler('payroll:getHistory', PAYROLL_VIEW_ROLES, z.void(), () => {
         return db.prepare('SELECT * FROM payroll_period ORDER BY year DESC, month DESC').all()
     })
 
-    safeHandleRawWithRole('payroll:getDetails', PAYROLL_VIEW_ROLES, (_event, periodId: number) => {
+    validatedHandler('payroll:getDetails', PAYROLL_VIEW_ROLES, z.number(), (_event, periodId) => {
         const period = db.prepare(SELECT_PERIOD).get(periodId)
         if (!period) { return { success: false, error: PERIOD_NOT_FOUND } }
 
@@ -480,12 +461,8 @@ export function registerPayrollHandlers(): void {
         return { success: true, period, results }
     })
 
-    safeHandleRawWithRole('payroll:postToGL', ROLES.FINANCE, async (event, periodId: number, legacyUserId?: number) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) {
-            return { success: false, error: actor.error }
-        }
-        return payrollJournalService.postPayrollToGL(periodId, actor.actorId)
+    validatedHandlerMulti('payroll:postToGL', ROLES.FINANCE, PayrollRevertSchema, async (event, [periodId, _legacyId], actorCtx) => {
+        return payrollJournalService.postPayrollToGL(periodId, actorCtx.id)
     })
 
     const journalService = new DoubleEntryJournalService(db)

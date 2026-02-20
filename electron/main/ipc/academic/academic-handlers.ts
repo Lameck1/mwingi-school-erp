@@ -1,20 +1,19 @@
+import { ipcMain } from 'electron'
+
 import { getDatabase } from '../../database'
 import { renderHtmlToPdfBuffer, resolveOutputPath, writePdfBuffer } from '../../utils/pdf'
-import { ROLES, safeHandleRawWithRole } from '../ipc-result'
-
-interface ExportPdfPayload {
-    html?: string
-    filename?: string
-    title?: string
-    content?: string
-}
-
-interface AcademicYearCreateData {
-    year_name: string
-    start_date: string
-    end_date: string
-    is_current: boolean
-}
+import { ROLES } from '../ipc-result'
+import {
+    AcademicYearCreateSchema,
+    AcademicYearActivateSchema,
+    TermGetByYearSchema,
+    ExamFiltersSchema,
+    ExportPdfSchema,
+    ScheduleGenerateSchema,
+    ScheduleDetectClashesSchema,
+    ScheduleExportPdfSchema
+} from '../schemas/academic-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 interface SchedulerSlot {
     id: number
@@ -61,67 +60,102 @@ const VENUE_TEMPLATE = [
     { id: 3, name: 'Classroom B' }
 ]
 
-function registerAcademicYearAndTermHandlers(db: ReturnType<typeof getDatabase>): void {
-    safeHandleRawWithRole('academicYear:getAll', ROLES.STAFF, () => {
-        return db.prepare('SELECT * FROM academic_year ORDER BY year_name DESC').all()
+export function registerAcademicHandlers() {
+    const db = getDatabase()
+
+    // ==================== Academic Year & Terms ====================
+    ipcMain.handle('academicYear:getAll', () => {
+        return db.prepare('SELECT * FROM academic_year ORDER BY start_date DESC').all()
     })
 
-    safeHandleRawWithRole('academicYear:getCurrent', ROLES.STAFF, () => {
+    ipcMain.handle('academic-year:getAll', () => {
+        return db.prepare('SELECT * FROM academic_year ORDER BY start_date DESC').all()
+    })
+
+    validatedHandler('academic-year:create', ROLES.ADMIN_ONLY, AcademicYearCreateSchema, async (_event, data) => {
+        db.prepare(`
+            INSERT INTO academic_year (year_name, start_date, end_date, is_current)
+            VALUES (?, ?, ?, ?)
+        `).run(data.year_name, data.start_date, data.end_date, data.is_current ? 1 : 0)
+        return { success: true }
+    })
+
+    validatedHandlerMulti('academic-year:activate', ROLES.ADMIN_ONLY, AcademicYearActivateSchema, async (_event, [id]) => {
+        db.transaction(() => {
+            db.prepare('UPDATE academic_year SET is_current = 0').run()
+            db.prepare('UPDATE academic_year SET is_current = 1 WHERE id = ?').run(id)
+        })()
+        return { success: true }
+    })
+
+    ipcMain.handle('term:getAll', () => {
+        return db.prepare(`
+            SELECT t.*, ay.year_name 
+            FROM term t
+            JOIN academic_year ay ON t.academic_year_id = ay.id
+            ORDER BY ay.start_date DESC, t.term_number ASC
+        `).all()
+    })
+
+    validatedHandlerMulti('term:getByYear', ROLES.STAFF, TermGetByYearSchema, async (_event, [academicYearId]) => {
+        return db.prepare('SELECT * FROM term WHERE academic_year_id = ? ORDER BY term_number').all(academicYearId)
+    })
+
+    ipcMain.handle('academicYear:getCurrent', () => {
         return db.prepare('SELECT * FROM academic_year WHERE is_current = 1').get()
     })
 
-    safeHandleRawWithRole('academicYear:create', ROLES.MANAGEMENT, (_event, data: AcademicYearCreateData) => {
-        try {
-            db.transaction(() => {
-                if (data.is_current) {
-                    db.prepare('UPDATE academic_year SET is_current = 0').run()
-                }
-                const statement = db.prepare('INSERT INTO academic_year (year_name, start_date, end_date, is_current) VALUES (?, ?, ?, ?)')
-                statement.run(data.year_name, data.start_date, data.end_date, data.is_current ? 1 : 0)
-            })()
-            return { success: true }
-        } catch (error) {
-            console.error('Failed to create academic year:', error)
-            throw error
-        }
+    ipcMain.handle('academic-year:getCurrent', () => {
+        return db.prepare('SELECT * FROM academic_year WHERE is_current = 1').get()
     })
 
-    safeHandleRawWithRole('academicYear:activate', ROLES.MANAGEMENT, (_event, id: number) => {
-        try {
-            db.transaction(() => {
-                db.prepare('UPDATE academic_year SET is_current = 0').run()
-                db.prepare('UPDATE academic_year SET is_current = 1 WHERE id = ?').run(id)
-            })()
-            return { success: true }
-        } catch (error) {
-            console.error('Failed to activate academic year:', error)
-            throw error
-        }
+    ipcMain.handle('term:getCurrent', () => {
+        return db.prepare(`
+            SELECT t.*, ay.year_name 
+            FROM term t
+            JOIN academic_year ay ON t.academic_year_id = ay.id
+            WHERE ay.is_current = 1 AND t.is_current = 1
+            LIMIT 1
+        `).get() || db.prepare(`
+            SELECT t.*, ay.year_name 
+            FROM term t
+            JOIN academic_year ay ON t.academic_year_id = ay.id
+            WHERE ay.is_current = 1
+            ORDER BY t.term_number DESC
+            LIMIT 1
+        `).get()
     })
 
-    safeHandleRawWithRole('term:getByYear', ROLES.STAFF, (_event, yearId: number) => {
-        return db.prepare('SELECT * FROM term WHERE academic_year_id = ? ORDER BY term_number').all(yearId)
-    })
-
-    safeHandleRawWithRole('term:getCurrent', ROLES.STAFF, () => {
-        return db.prepare('SELECT * FROM term WHERE is_current = 1').get()
-    })
-}
-
-function registerExamLookupHandlers(db: ReturnType<typeof getDatabase>): void {
-    safeHandleRawWithRole('stream:getAll', ROLES.STAFF, () => {
-        return db.prepare('SELECT * FROM stream WHERE is_active = 1 ORDER BY level_order').all()
-    })
-
-    safeHandleRawWithRole('academic:getExamsList', ROLES.STAFF, (_event, filters: { academicYearId?: number; termId?: number }) => {
-        let query = 'SELECT id, name FROM academic_exam WHERE 1=1'
+    // ==================== Exams & Assessments ====================
+    validatedHandler('exam:getAll', ROLES.STAFF, ExamFiltersSchema, async (_event, { academicYearId, termId }) => {
+        let query = 'SELECT * FROM exam WHERE 1=1'
         const params: number[] = []
 
-        if (filters.academicYearId) {
+        if (academicYearId) {
+            query += ' AND academic_year_id = ?'
+            params.push(academicYearId)
+        }
+        if (termId) {
+            query += ' AND term_id = ?'
+            params.push(termId)
+        }
+
+        query += ' ORDER BY created_at DESC'
+        return db.prepare(query).all(...params)
+    })
+
+    // Legacy mapping for frontend compatibility
+    ipcMain.handle('academic:getExamsList', async (event, filters) => {
+        // Reuse the logic from exam:getAll but mapped to safeHandleRaw style if needed
+        // For now, implementing direct call
+        let query = 'SELECT id, name FROM exam WHERE 1=1' // Changed academic_exam to exam
+        const params: number[] = []
+
+        if (filters?.academicYearId) {
             query += ' AND academic_year_id = ?'
             params.push(filters.academicYearId)
         }
-        if (filters.termId) {
+        if (filters?.termId) {
             query += ' AND term_id = ?'
             params.push(filters.termId)
         }
@@ -130,122 +164,157 @@ function registerExamLookupHandlers(db: ReturnType<typeof getDatabase>): void {
         return db.prepare(query).all(...params)
     })
 
-    safeHandleRawWithRole('feeCategory:getAll', ROLES.STAFF, () => {
+    ipcMain.handle('stream:getAll', () => {
+        return db.prepare('SELECT * FROM stream WHERE is_active = 1 ORDER BY level_order').all()
+    })
+
+    ipcMain.handle('feeCategory:getAll', () => {
         return db.prepare('SELECT * FROM fee_category WHERE is_active = 1').all()
     })
-}
 
-function registerPdfExportHandler(): void {
-    safeHandleRawWithRole('export:pdf', ROLES.STAFF, async (_event, data: ExportPdfPayload) => {
+
+    // ==================== PDF Generation Helper (Shared) ====================
+    validatedHandler('report:exportPdf', ROLES.STAFF, ExportPdfSchema, async (_event, { html, content, filename }) => {
         try {
-            const html = data.html || `
-              <html>
+            // If raw content string provided, wrap in HTML
+            const finalHtml = html || `
+                <html>
                 <head>
-                  <meta charset="utf-8" />
-                  <style>
-                    body { font-family: Arial, sans-serif; padding: 24px; }
-                    h1 { font-size: 20px; margin-bottom: 8px; }
-                    p { font-size: 12px; color: #4b5563; }
-                    pre { background: #f9fafb; padding: 12px; border-radius: 6px; }
-                  </style>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 20px; }
+                        table { width: 100%; border-collapse: collapse; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #f2f2f2; }
+                    </style>
                 </head>
-                <body>
-                  <h1>${data.title || 'Export'}</h1>
-                  <p>Generated: ${new Date().toLocaleString()}</p>
-                  <pre>${data.content || ''}</pre>
-                </body>
-              </html>
+                <body>${content}</body>
+                </html>
             `
-            const buffer = await renderHtmlToPdfBuffer(html)
-            const filename = data.filename || `export_${Date.now()}.pdf`
-            const filePath = resolveOutputPath(filename, 'pdf')
+
+            const buffer = await renderHtmlToPdfBuffer(finalHtml)
+            const resolvedFilename = filename || `export_${Date.now()}.pdf`
+            const filePath = resolveOutputPath(resolvedFilename, 'pdf')
             writePdfBuffer(filePath, buffer)
             return { success: true, filePath }
+
         } catch (error) {
-            console.error('PDF export failed:', error)
-            return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+            console.error('PDF Export Error:', error)
+            throw new Error('Failed to generate PDF')
         }
     })
-}
 
-const safeString = (val: unknown): string => (typeof val === 'string' ? val : '')
+    // ==================== Exam Scheduling ====================
 
-function buildScheduleExportHtml(slots: Array<Record<string, unknown>>): string {
-    const rows = slots.map(slot => `
-              <tr>
-                <td>${safeString(slot['subject_name'])}</td>
-                <td>${safeString(slot['start_date'])}</td>
-                <td>${safeString(slot['start_time'])} - ${safeString(slot['end_time'])}</td>
-                <td>${safeString(slot['venue_name'])}</td>
-              </tr>
-            `).join('')
-
-    return `
-              <html>
-                <head>
-                  <meta charset="utf-8" />
-                  <style>
-                    body { font-family: Arial, sans-serif; padding: 24px; }
-                    h1 { font-size: 18px; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-                    th, td { border: 1px solid #e5e7eb; padding: 8px; font-size: 12px; }
-                    th { background: #f3f4f6; text-align: left; }
-                  </style>
-                </head>
-                <body>
-                  <h1>Exam Timetable</h1>
-                  <p>Generated: ${new Date().toLocaleString()}</p>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Subject</th>
-                        <th>Date</th>
-                        <th>Time</th>
-                        <th>Venue</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${rows}
-                    </tbody>
-                  </table>
-                </body>
-              </html>
-            `
-}
-
-function registerSchedulerHandlers(db: ReturnType<typeof getDatabase>): void {
-    safeHandleRawWithRole('schedule:generate', ROLES.STAFF, (_event, data: { examId?: number; startDate?: string; endDate?: string }) => {
+    validatedHandler('schedule:generate', ROLES.STAFF, ScheduleGenerateSchema, async (_event, data) => {
         return generateSchedule(db, data.examId, data.startDate, data.endDate)
     })
 
-    safeHandleRawWithRole('schedule:detectClashes', ROLES.STAFF, async (_event, data: { examId?: number }) => {
-        if (!data.examId) {return []}
+    validatedHandler('schedule:detectClashes', ROLES.STAFF, ScheduleDetectClashesSchema, async (_event, data) => {
+        if (!data.examId) { return [] }
         const generated = await generateSchedule(db, data.examId)
         return detectClashes(db, data.examId, generated.slots)
     })
 
-    safeHandleRawWithRole('schedule:exportPDF', ROLES.STAFF, async (_event, data: { examId?: number; slots?: Array<Record<string, unknown>> }) => {
-        try {
-            const html = buildScheduleExportHtml(data.slots || [])
-            const buffer = await renderHtmlToPdfBuffer(html)
-            const filename = `exam_timetable_${data.examId || 'export'}.pdf`
-            const filePath = resolveOutputPath(filename, 'timetables')
-            writePdfBuffer(filePath, buffer)
-            return { success: true, filePath }
-        } catch (error) {
-            console.error('Export timetable PDF failed:', error)
-            return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    validatedHandler('schedule:exportPdf', ROLES.STAFF, ScheduleExportPdfSchema, async (_event, data) => {
+        if (!data.slots || data.slots.length === 0) {
+            throw new Error('No schedule data to export')
         }
+
+        const rows = (data.slots as unknown as SchedulerSlot[]).map(s => `
+            <tr>
+                <td>${s.subject_name}</td>
+                <td>${s.start_date}</td>
+                <td>${s.start_time} - ${s.end_time}</td>
+                <td>${s.venue_name}</td>
+            </tr>
+        `).join('')
+
+        const html = `
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                    th { background-color: #f2f2f2; }
+                </style>
+            </head>
+            <body>
+            <h1>Exam Timetable</h1>
+            <p>Generated: ${new Date().toLocaleString()}</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Venue</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+            </body>
+            </html>
+        `
+        const buffer = await renderHtmlToPdfBuffer(html)
+        const filename = `exam_timetable_${data.examId || 'export'}.pdf`
+        const filePath = resolveOutputPath(filename, 'timetables')
+        writePdfBuffer(filePath, buffer)
+        return { success: true, filePath }
+    })
+
+    // Alias for consistency
+    validatedHandler('schedule:exportPDF', ROLES.STAFF, ScheduleExportPdfSchema, async (event, data, _actor) => {
+        // Re-use logic by calling the handler manually or just copy-pasting since it's cleaner than internal dispatch with validation
+        if (!data.slots || data.slots.length === 0) {
+            throw new Error('No schedule data to export')
+        }
+
+        const rows = (data.slots as unknown as SchedulerSlot[]).map(s => `
+            <tr>
+                <td>${s.subject_name}</td>
+                <td>${s.start_date}</td>
+                <td>${s.start_time} - ${s.end_time}</td>
+                <td>${s.venue_name}</td>
+            </tr>
+        `).join('')
+
+        const html = `
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                    th { background-color: #f2f2f2; }
+                </style>
+            </head>
+            <body>
+            <h1>Exam Timetable</h1>
+            <p>Generated: ${new Date().toLocaleString()}</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Venue</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+            </body>
+            </html>
+        `
+        const buffer = await renderHtmlToPdfBuffer(html)
+        const filename = `exam_timetable_${data.examId || 'export'}.pdf`
+        const filePath = resolveOutputPath(filename, 'timetables')
+        writePdfBuffer(filePath, buffer)
+        return { success: true, filePath }
     })
 }
 
-export function registerAcademicHandlers(): void {
-    const db = getDatabase()
-    registerAcademicYearAndTermHandlers(db)
-    registerExamLookupHandlers(db)
-    registerPdfExportHandler()
-    registerSchedulerHandlers(db)
-}
+// Helper functions (kept as is)
 
 function detectClashes(
     db: ReturnType<typeof getDatabase>,
@@ -254,7 +323,7 @@ function detectClashes(
 ): Array<{ subject1_id: number; subject1_name: string; subject2_id: number; subject2_name: string; clash_type: string; affected_students: number }> {
     const slotMap = new Map<number, string>()
     for (const slot of slots) {
-        slotMap.set(slot.subject_id, `${slot.start_date} ${slot.start_time}`)
+        slotMap.set(slot.subject_id, `${slot.start_date} ${slot.start_time} `)
     }
 
     const results = db.prepare(`
@@ -285,7 +354,7 @@ function detectClashes(
                 const secondSlot = slotMap.get(secondSubjectId)
 
                 if (firstSlot && secondSlot && firstSlot === secondSlot) {
-                    const key = `${firstSubjectId}|${secondSubjectId}|${firstSlot}`
+                    const key = `${firstSubjectId}| ${secondSubjectId}| ${firstSlot} `
                     clashCounts.set(key, (clashCounts.get(key) || 0) + 1)
                 }
             }
@@ -316,7 +385,7 @@ function loadScheduleSubjects(db: ReturnType<typeof getDatabase>, examId: number
         ORDER BY s.name
     `).all(examId) as { id: number; name: string }[]
 
-    if (subjects.length > 0) {return subjects}
+    if (subjects.length > 0) { return subjects }
     return db.prepare(`SELECT id, name FROM subject ORDER BY name`).all() as { id: number; name: string }[]
 }
 
@@ -373,10 +442,10 @@ function buildSchedulerSlots(subjects: Array<{ id: number; name: string }>, tota
 }
 
 function calculateAverageCapacityUsage(slots: SchedulerSlot[]): number {
-    if (slots.length === 0) {return 0}
+    if (slots.length === 0) { return 0 }
 
     const totalUsage = slots.reduce((sum, slot) => {
-        if (slot.max_capacity <= 0) {return sum}
+        if (slot.max_capacity <= 0) { return sum }
         return sum + (slot.enrolled_students / slot.max_capacity)
     }, 0)
     return (totalUsage / slots.length) * 100

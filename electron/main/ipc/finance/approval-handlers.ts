@@ -1,6 +1,12 @@
+import { z } from 'zod'
+
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
-import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result'
+import { ROLES } from '../ipc-result'
+import {
+  ApproveFinancialRequestTuple, RejectFinancialRequestTuple, GetApprovalQueueTuple
+} from '../schemas/finance-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 type ApprovalRecord = {
   id: number
@@ -35,9 +41,10 @@ export function registerFinanceApprovalHandlers(): void {
 }
 
 function registerApprovalQueueHandler(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRawWithRole('approvals:getQueue', ROLES.FINANCE, (_event, filter: 'PENDING' | 'ALL' = 'PENDING') => {
+  validatedHandlerMulti('approvals:getQueue', ROLES.FINANCE, GetApprovalQueueTuple, (_event, [filter]) => {
     try {
-      const whereClause = filter === 'PENDING' ? "AND ar.status = 'PENDING'" : ''
+      const activeFilter = filter || 'PENDING'
+      const whereClause = activeFilter === 'PENDING' ? "AND ar.status = 'PENDING'" : ''
       const hasWorkflowTable = tableExists(db, 'approval_workflow')
       const hasRuleColumn = columnExists(db, 'approval_request', 'approval_rule_id')
       const hasRuleTable = tableExists(db, 'approval_rule')
@@ -100,12 +107,11 @@ function registerApprovalQueueHandler(db: ReturnType<typeof getDatabase>): void 
 }
 
 function registerApproveHandler(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRawWithRole('approvals:approve', ROLES.MANAGEMENT, (event, approvalId: number, reviewNotes: string, legacyReviewerUserId?: number) => {
-    const actor = resolveActorId(event, legacyReviewerUserId)
-    if (!actor.success) {
-      return { success: false, error: actor.error }
+  validatedHandlerMulti('approvals:approve', ROLES.MANAGEMENT, ApproveFinancialRequestTuple, (event, [approvalId, reviewNotes, legacyReviewerUserId], actor) => {
+    if (legacyReviewerUserId !== undefined && legacyReviewerUserId !== actor.id) {
+      throw new Error("Unauthorized: renderer user mismatch")
     }
-    const reviewerUserId = actor.actorId
+    const reviewerUserId = actor.id
 
     try {
       return db.transaction(() => {
@@ -164,17 +170,14 @@ function registerApproveHandler(db: ReturnType<typeof getDatabase>): void {
 }
 
 function registerRejectHandler(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRawWithRole('approvals:reject', ROLES.MANAGEMENT, (event, approvalId: number, reviewNotes: string, legacyReviewerUserId?: number) => {
-    const actor = resolveActorId(event, legacyReviewerUserId)
-    if (!actor.success) {
-      return { success: false, error: actor.error }
+  validatedHandlerMulti('approvals:reject', ROLES.MANAGEMENT, RejectFinancialRequestTuple, (event, [approvalId, reviewNotes, legacyReviewerUserId], actor) => {
+    if (legacyReviewerUserId !== undefined && legacyReviewerUserId !== actor.id) {
+      throw new Error("Unauthorized: renderer user mismatch")
     }
-    const reviewerUserId = actor.actorId
+    const reviewerUserId = actor.id
 
     try {
-      if (!reviewNotes) {
-        return { success: false, error: 'Review notes are required for rejection' }
-      }
+      // Notes validation now in schema (z.string().min(1))
 
       return db.transaction(() => {
         const approval = db.prepare(`
@@ -239,7 +242,7 @@ function registerRejectHandler(db: ReturnType<typeof getDatabase>): void {
 }
 
 function registerApprovalStatsHandler(db: ReturnType<typeof getDatabase>): void {
-  safeHandleRawWithRole('approvals:getStats', ROLES.FINANCE, () => {
+  validatedHandler('approvals:getStats', ROLES.FINANCE, z.void(), () => {
     try {
       const stats = db.prepare(`
         SELECT

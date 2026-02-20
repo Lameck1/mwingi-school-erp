@@ -1,86 +1,74 @@
-import { container } from '../../services/base/ServiceContainer'
-import { ROLES, resolveActorId, safeHandleRawWithRole } from '../ipc-result'
+import { z } from 'zod'
 
-import type { NotificationRequest, MessageTemplate } from '../../services/notifications/NotificationService'
+import { container } from '../../services/base/ServiceContainer'
+import { ROLES } from '../ipc-result'
+import {
+    SendNotificationTuple,
+    SendBulkFeeRemindersTuple,
+    CreateTemplateTuple,
+    NotificationFilterSchema
+} from '../schemas/notification-schemas'
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
+
+import type { NotificationRequest } from '../../services/notifications/NotificationService'
 
 const getService = () => container.resolve('NotificationService')
 
 export function registerNotificationHandlers(): void {
     // Config
-    safeHandleRawWithRole('notifications:reloadConfig', ROLES.ADMIN_ONLY, () => {
+    validatedHandler('notifications:reloadConfig', ROLES.ADMIN_ONLY, z.void(), () => {
         getService().reloadConfig()
         return true
     })
 
     // Sending
-    safeHandleRawWithRole('notifications:send', ROLES.STAFF, (
+    validatedHandlerMulti('notifications:send', ROLES.STAFF, SendNotificationTuple, (
         event,
-        request: NotificationRequest,
-        legacyUserId?: number
+        [request, _legacyId],
+        actorCtx
     ) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        return getService().send(request, actor.actorId)
+        return getService().send(request as NotificationRequest, actorCtx.id)
     })
 
-    safeHandleRawWithRole('notifications:sendBulkFeeReminders', ROLES.STAFF, (
+    validatedHandlerMulti('notifications:sendBulkFeeReminders', ROLES.STAFF, SendBulkFeeRemindersTuple, (
         event,
-        templateId: number,
-        defaulters: Array<{
-            student_id: number;
-            student_name: string;
-            guardian_name: string;
-            guardian_phone: string;
-            admission_number: string;
-            class_name: string;
-            balance: number;
-        }>,
-        legacyUserId?: number
+        [templateId, defaulters, _legacyId],
+        actorCtx
     ) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
-        return getService().sendBulkFeeReminders(templateId, defaulters, actor.actorId)
+        return getService().sendBulkFeeReminders(templateId, defaulters, actorCtx.id)
     })
 
     // Templates
-    safeHandleRawWithRole('notifications:getTemplates', ROLES.STAFF, () => {
+    validatedHandler('notifications:getTemplates', ROLES.STAFF, z.void(), () => {
         return getService().getTemplates()
     })
 
-    safeHandleRawWithRole('notifications:getTemplate', ROLES.STAFF, (_event, id: number) => {
+    validatedHandler('notifications:getTemplate', ROLES.STAFF, z.number(), (_event, id) => {
         return getService().getTemplate(id)
     })
 
-    safeHandleRawWithRole('notifications:createTemplate', ROLES.STAFF, (
+    validatedHandlerMulti('notifications:createTemplate', ROLES.STAFF, CreateTemplateTuple, (
         event,
-        template: Omit<MessageTemplate, 'id' | 'is_active' | 'variables'>,
-        legacyUserId?: number
+        [template, _legacyId],
+        actorCtx
     ) => {
-        const actor = resolveActorId(event, legacyUserId)
-        if (!actor.success) { return actor }
         return getService().createTemplate({
             name: template.template_name,
             type: template.template_type,
-            category: template.category,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            category: template.category as any,
             subject: template.subject,
             body: template.body,
-            userId: actor.actorId
+            userId: actorCtx.id
         })
     })
 
-    safeHandleRawWithRole('notifications:getDefaultTemplates', ROLES.STAFF, () => {
+    validatedHandler('notifications:getDefaultTemplates', ROLES.STAFF, z.void(), () => {
         return getService().getDefaultTemplates()
     })
 
     // History
-    safeHandleRawWithRole('notifications:getHistory', ROLES.STAFF, (_event, filters?: {
-        recipientType?: string;
-        recipientId?: number;
-        channel?: string;
-        status?: string;
-        startDate?: string;
-        endDate?: string;
-    }) => {
+    validatedHandler('notifications:getHistory', ROLES.STAFF, NotificationFilterSchema, (_event, filters) => {
         return getService().getCommunicationHistory(filters)
     })
 }

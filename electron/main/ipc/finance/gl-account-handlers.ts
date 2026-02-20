@@ -1,42 +1,39 @@
-import { container } from '../../services/base/ServiceContainer';
-import { safeHandleRawWithRole, ROLES, resolveActorId } from '../ipc-result';
+import { z } from 'zod';
 
-import type { GLAccountService, GLAccountData } from '../../services/finance/GLAccountService';
+import { container } from '../../services/base/ServiceContainer';
+import { ROLES } from '../ipc-result';
+import { GLAccountFiltersSchema, CreateGLAccountTuple, UpdateGLAccountTuple, DeleteGLAccountTuple } from '../schemas/finance-schemas';
+import { validatedHandler, validatedHandlerMulti } from '../validated-handler';
 
 const getService = () => container.resolve('GLAccountService');
 
-type GLAccountFilters = Parameters<GLAccountService['getAll']>[0]
-
 export function registerGLAccountHandlers() {
-  safeHandleRawWithRole('gl:get-accounts', ROLES.FINANCE, async (_event, filters?: GLAccountFilters) => {
+  validatedHandler('gl:get-accounts', ROLES.FINANCE, GLAccountFiltersSchema, async (_event, filters) => {
     return await getService().getAll(filters);
   });
 
-  safeHandleRawWithRole('gl:get-account', ROLES.FINANCE, async (_event, id: number) => {
+  validatedHandler('gl:get-account', ROLES.FINANCE, z.number().int().positive(), async (_event, id) => {
     return await getService().getById(id);
   });
 
-  safeHandleRawWithRole('gl:create-account', ROLES.FINANCE, async (event, data: GLAccountData, legacyUserId?: number) => {
-    const actor = resolveActorId(event, legacyUserId);
-    if (!actor.success) {
-      return { success: false, error: actor.error };
+  validatedHandlerMulti('gl:create-account', ROLES.FINANCE, CreateGLAccountTuple, async (event, [data, legacyUserId], actor) => {
+    if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+      throw new Error("Unauthorized: renderer user mismatch")
     }
-    return await getService().create(data, actor.actorId);
+    return await getService().create(data, actor.id);
   });
 
-  safeHandleRawWithRole('gl:update-account', ROLES.FINANCE, async (event, id: number, data: Partial<GLAccountData>, legacyUserId?: number) => {
-    const actor = resolveActorId(event, legacyUserId);
-    if (!actor.success) {
-      return { success: false, error: actor.error };
+  validatedHandlerMulti('gl:update-account', ROLES.FINANCE, UpdateGLAccountTuple, async (event, [id, data, legacyUserId], actor) => {
+    if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+      throw new Error("Unauthorized: renderer user mismatch")
     }
-    return await getService().update(id, data, actor.actorId);
+    return await getService().update(id, data, actor.id);
   });
 
-  safeHandleRawWithRole('gl:delete-account', ROLES.FINANCE, async (event, id: number, legacyUserId?: number) => {
-    const actor = resolveActorId(event, legacyUserId);
-    if (!actor.success) {
-      return { success: false, error: actor.error };
+  validatedHandlerMulti('gl:delete-account', ROLES.FINANCE, DeleteGLAccountTuple, async (event, [id, legacyUserId], actor) => {
+    if (legacyUserId !== undefined && legacyUserId !== actor.id) {
+      throw new Error("Unauthorized: renderer user mismatch")
     }
-    return await getService().delete(id, actor.actorId);
+    return await getService().delete(id, actor.id);
   });
 }
