@@ -43,9 +43,9 @@ export default function FinancialReports() {
                 globalThis.electronAPI.getRevenueByCategory(dateRange.startDate, dateRange.endDate),
                 globalThis.electronAPI.getExpenseByCategory(dateRange.startDate, dateRange.endDate)
             ])
-            setSummary(summaryData)
-            setRevenueData(revenue as ChartData[])
-            setExpenseData(expenses as ChartData[])
+            setSummary(summaryData && typeof summaryData === 'object' && !('success' in summaryData) ? summaryData : { totalIncome: 0, totalExpense: 0, netBalance: 0 })
+            setRevenueData(Array.isArray(revenue) ? revenue : [])
+            setExpenseData(Array.isArray(expenses) ? expenses : [])
         } catch (error) {
             console.error('Failed to load report data:', error)
             showToast('Failed to correlate financial data', 'error')

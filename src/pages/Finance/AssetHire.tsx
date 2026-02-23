@@ -91,7 +91,7 @@ export default function AssetHire() {
 
     const handleCreateBooking = async (e: React.SyntheticEvent) => {
         e.preventDefault()
-        if (!user) {return}
+        if (!user) { return }
 
         // Validate
         if (!bookingForm.asset_id || !bookingForm.client_id || !bookingForm.total_amount) {
@@ -114,7 +114,7 @@ export default function AssetHire() {
             ...bookingForm,
             distance_km: bookingForm.distance_km ? Number.parseFloat(bookingForm.distance_km) : undefined,
             total_amount: shillingsToCents(bookingForm.total_amount)
-        }, user.id)
+        } as unknown as Parameters<typeof globalThis.electronAPI.createHireBooking>[0], user.id)
 
         if (result.success) {
             alert(`Booking created! Number: ${result.booking_number}`)
@@ -144,14 +144,14 @@ export default function AssetHire() {
 
     const handleRecordPayment = async (e: React.SyntheticEvent) => {
         e.preventDefault()
-        if (!user || !selectedBooking) {return}
+        if (!user || !selectedBooking) { return }
 
         const result = await globalThis.electronAPI.recordHirePayment(
             selectedBooking.id,
             {
                 ...paymentForm,
                 amount: shillingsToCents(paymentForm.amount)
-            },
+            } as unknown as Parameters<typeof globalThis.electronAPI.recordHirePayment>[1],
             user.id
         )
 
@@ -207,11 +207,11 @@ export default function AssetHire() {
             'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
         const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
 
-        if (num === 0) {return 'Zero'}
-        if (num < 20) {return ones[num] ?? ''}
-        if (num < 100) {return (tens[Math.floor(num / 10)] ?? '') + (num % 10 ? ' ' + (ones[num % 10] ?? '') : '')}
-        if (num < 1000) {return (ones[Math.floor(num / 100)] ?? '') + ' Hundred' + (num % 100 ? ' and ' + numberToWords(num % 100) : '')}
-        if (num < 1000000) {return numberToWords(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + numberToWords(num % 1000) : '')}
+        if (num === 0) { return 'Zero' }
+        if (num < 20) { return ones[num] ?? '' }
+        if (num < 100) { return (tens[Math.floor(num / 10)] ?? '') + (num % 10 ? ' ' + (ones[num % 10] ?? '') : '') }
+        if (num < 1000) { return (ones[Math.floor(num / 100)] ?? '') + ' Hundred' + (num % 100 ? ' and ' + numberToWords(num % 100) : '') }
+        if (num < 1000000) { return numberToWords(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + numberToWords(num % 1000) : '') }
         return numberToWords(Math.floor(num / 1000000)) + ' Million' + (num % 1000000 ? ' ' + numberToWords(num % 1000000) : '')
     }
 

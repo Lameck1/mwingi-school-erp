@@ -27,10 +27,10 @@ export default function CashFlow() {
         setLoading(true)
         try {
             const stmt = await globalThis.electronAPI.getCashFlowStatement(dateRange.start, dateRange.end)
-            setStatement(stmt)
+            setStatement(stmt && typeof stmt === 'object' && !('success' in stmt) ? stmt : null)
 
             const fc = await globalThis.electronAPI.getForecast(6)
-            setForecast(fc)
+            setForecast(fc && typeof fc === 'object' && !('success' in fc) ? fc : null)
         } catch (error) {
             console.error(error)
         } finally {
@@ -43,7 +43,7 @@ export default function CashFlow() {
     }, [loadData])
 
     const handleExport = async () => {
-        if (!statement) {return}
+        if (!statement) { return }
         await exportToPDF({
             filename: `cash-flow-${dateRange.start}`,
             title: 'Statement of Cash Flows',

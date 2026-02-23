@@ -63,25 +63,27 @@ export default function FeeExemptions() {
         setLoading(true)
         try {
             const [exemptionsRes, yearsRes, categoriesRes, studentsRes, statsRes] = await Promise.all([
-                globalThis.electronAPI.getExemptions({ status: statusFilter || undefined }),
+                globalThis.electronAPI.getExemptions({
+                    ...(statusFilter !== 'all' ? { status: statusFilter as 'ACTIVE' | 'REVOKED' } : {})
+                }),
                 globalThis.electronAPI.getAcademicYears(),
                 globalThis.electronAPI.getFeeCategories(),
-                globalThis.electronAPI.getStudents(),
+                globalThis.electronAPI.getStudents({ stream_id: (undefined as unknown as number) }),
                 globalThis.electronAPI.getExemptionStats()
             ])
-            setExemptions(exemptionsRes)
-            setAcademicYears(yearsRes)
-            setFeeCategories(categoriesRes)
-            setStudents(studentsRes)
-            setStats(statsRes)
+            setExemptions(Array.isArray(exemptionsRes) ? exemptionsRes : [])
+            setAcademicYears(Array.isArray(yearsRes) ? yearsRes : [])
+            setFeeCategories(Array.isArray(categoriesRes) ? categoriesRes : [])
+            setStudents(Array.isArray(studentsRes) ? studentsRes : [])
+            setStats(statsRes && typeof statsRes === 'object' && !('success' in statsRes) ? statsRes : null)
 
             // Set current year as default
-            const currentYear = yearsRes.find((y: AcademicYear) => y.is_current)
+            const currentYear = (Array.isArray(yearsRes) ? yearsRes : []).find((y: AcademicYear) => y.is_current)
             if (currentYear) {
                 setFormData(prev => ({ ...prev, academic_year_id: currentYear.id }))
                 const termsRes = await globalThis.electronAPI.getTermsByYear(currentYear.id)
-                setTerms(termsRes)
-                const currentTerm = termsRes.find((t: Term) => t.is_current)
+                setTerms(Array.isArray(termsRes) ? termsRes : [])
+                const currentTerm = (Array.isArray(termsRes) ? termsRes : []).find((t: Term) => t.is_current)
                 if (currentTerm) {
                     setFormData(prev => ({ ...prev, term_id: currentTerm.id }))
                 }
@@ -112,8 +114,10 @@ export default function FeeExemptions() {
 
 
     const loadExemptions = useCallback(async () => {
-        const exemptionsRes = await globalThis.electronAPI.getExemptions({ status: statusFilter || undefined })
-        setExemptions(exemptionsRes)
+        const exemptionsRes = await globalThis.electronAPI.getExemptions({
+            ...(statusFilter !== 'all' ? { status: statusFilter as 'ACTIVE' | 'REVOKED' } : {})
+        })
+        setExemptions(Array.isArray(exemptionsRes) ? exemptionsRes : [])
     }, [statusFilter])
 
     useEffect(() => {
@@ -123,7 +127,7 @@ export default function FeeExemptions() {
     const handleYearChange = async (yearId: number) => {
         setFormData(prev => ({ ...prev, academic_year_id: yearId, term_id: 0 }))
         const termsRes = await globalThis.electronAPI.getTermsByYear(yearId)
-        setTerms(termsRes)
+        setTerms(Array.isArray(termsRes) ? termsRes : [])
     }
 
     const handleSelectStudent = (student: Student) => {
@@ -149,7 +153,7 @@ export default function FeeExemptions() {
                 exemption_percentage: Number.parseFloat(formData.exemption_percentage),
                 exemption_reason: formData.exemption_reason,
                 notes: formData.notes || undefined
-            }, user.id)
+            } as unknown as Parameters<typeof globalThis.electronAPI.createExemption>[0], user.id)
 
             if (result.success) {
                 showToast('Exemption created successfully', 'success')

@@ -15,11 +15,11 @@ export const StudentLedgerSearch: React.FC<StudentLedgerSearchProps> = ({ onSele
     const [loading, setLoading] = useState(false)
 
     const handleSearch = async () => {
-        if (!search) {return}
+        if (!search) { return }
         setLoading(true)
         try {
             const results = await globalThis.electronAPI.getStudents({ search })
-            setStudents(results)
+            setStudents(Array.isArray(results) ? results : [])
         } catch (error) {
             console.error('Search failed:', error)
         } finally {

@@ -9,6 +9,7 @@ import { useToast } from '../../contexts/ToastContext'
 import { useScrollableTabNav } from '../../hooks/useScrollableTabNav'
 import { useAppStore, useAuthStore } from '../../stores'
 import { type AcademicYear } from '../../types/electron-api/AcademicAPI'
+import { type SchoolSettings } from '../../types/electron-api/SettingsAPI'
 
 export default function Settings() {
     const { schoolSettings, setSchoolSettings } = useAppStore()
@@ -46,7 +47,11 @@ export default function Settings() {
     const loadLogo = useCallback(async () => {
         try {
             const dataUrl = await globalThis.electronAPI.getLogoDataUrl()
-            setLogoDataUrl(dataUrl)
+            if (dataUrl && typeof dataUrl === 'string') {
+                setLogoDataUrl(dataUrl)
+            } else if (dataUrl && typeof dataUrl === 'object' && 'success' in dataUrl && (dataUrl as { success: boolean, result?: string }).success) {
+                setLogoDataUrl((dataUrl as { success: boolean, result?: string }).result as string)
+            }
         } catch (error) {
             console.error('Failed to load logo:', error)
         }
@@ -58,7 +63,7 @@ export default function Settings() {
 
     const handleLogoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
-        if (!file) {return}
+        if (!file) { return }
 
         if (file.size > 5 * 1024 * 1024) {
             showToast('Image file size exceeds 5MB limit', 'error')
@@ -88,7 +93,7 @@ export default function Settings() {
     }
 
     const handleRemoveLogo = async () => {
-        if (!confirm('Are you sure you want to remove the school logo?')) {return}
+        if (!confirm('Are you sure you want to remove the school logo?')) { return }
         setSaving(true)
         try {
             const result = await globalThis.electronAPI.removeLogo()
@@ -145,9 +150,18 @@ export default function Settings() {
     const handleSave = async () => {
         setSaving(true)
         try {
-            await globalThis.electronAPI.updateSettings(formData)
+            await globalThis.electronAPI.updateSettings({
+                school_name: formData.school_name || undefined,
+                school_motto: formData.school_motto || undefined,
+                school_address: formData.address || undefined,
+                school_phone: formData.phone || undefined,
+                school_email: formData.email || undefined,
+                mpesa_paybill: formData.mpesa_paybill || undefined
+            } as Partial<SchoolSettings>)
             const updated = await globalThis.electronAPI.getSettings()
-            setSchoolSettings(updated)
+            if (updated && typeof updated === 'object' && !('success' in updated)) {
+                setSchoolSettings(updated)
+            }
             showToast('School settings synchronized successfully', 'success')
         } catch (error) {
             showToast(error instanceof Error ? error.message : 'Critical error updating settings', 'error')

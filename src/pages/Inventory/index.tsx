@@ -74,20 +74,21 @@ export default function Inventory() {
 
     const handleStockMovement = async (e: React.SyntheticEvent) => {
         e.preventDefault()
-        if (!selectedItem) {return}
+        if (!selectedItem) { return }
 
         try {
-            if (!user) {throw new Error('User not authenticated')}
+            if (!user) { throw new Error('User not authenticated') }
 
             await globalThis.electronAPI.recordStockMovement({
                 item_id: selectedItem.id,
                 movement_type: stockAction,
                 quantity: stockMovement.quantity,
                 unit_cost: shillingsToCents(stockMovement.unit_cost),
-                reference_number: stockMovement.reference_number,
-                description: stockMovement.description,
+                reference_number: stockMovement.reference_number || undefined,
+                description: stockMovement.description || undefined,
                 supplier_id: stockMovement.supplier_id ? Number(stockMovement.supplier_id) : undefined,
-            }, user.id)
+                movement_date: new Date().toISOString()
+            } as unknown as Parameters<typeof globalThis.electronAPI.recordStockMovement>[0], user.id)
 
             setShowStockModal(false)
             setStockMovement({ quantity: 0, unit_cost: 0, description: '', reference_number: '', supplier_id: '' })

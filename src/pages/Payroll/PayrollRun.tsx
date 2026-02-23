@@ -93,7 +93,11 @@ export default function PayrollRun() {
             const result = await api.runPayroll(month, year, user.id)
             if (result.success) {
                 setPayrollData(result.results || [])
-                setSelectedPeriod({ id: result.periodId, period_name: `${months[month - 1]} ${year}`, status: 'DRAFT' })
+                setSelectedPeriod({
+                    id: result.periodId,
+                    period_name: `${months[month - 1]} ${year}`,
+                    status: 'DRAFT'
+                } as Partial<PayrollPeriod>)
                 await loadHistory() // Refresh history
             } else {
                 setError(result.error || 'Failed to run payroll')
@@ -795,8 +799,8 @@ export default function PayrollRun() {
                     recipientType: 'STAFF',
                     userId: user.id
                 })
-                if (result.success) {sent++}
-                else {failed++}
+                if (result.success) { sent++ }
+                else { failed++ }
             } catch {
                 failed++
             }

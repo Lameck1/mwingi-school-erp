@@ -46,7 +46,7 @@ export default function CreateBudget() {
     const loadCategories = async () => {
         try {
             const data = await globalThis.electronAPI.getTransactionCategories()
-            setCategories(data)
+            setCategories(Array.isArray(data) ? data : [])
         } catch (err) {
             console.error('Failed to load categories:', err)
         }
@@ -112,7 +112,7 @@ export default function CreateBudget() {
                     ...item,
                     budgeted_amount: shillingsToCents(item.budgeted_amount) // Whole currency units
                 }))
-            }, user.id)
+            } as unknown as Parameters<typeof globalThis.electronAPI.createBudget>[0], user.id)
 
             if (result.success) {
                 navigate('/budget')

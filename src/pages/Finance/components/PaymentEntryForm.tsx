@@ -56,102 +56,79 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
         setUseCredit(false)
     }, [selectedStudent])
 
+    const processCreditPayment = async (amount: number, studentId: number, userId: number): Promise<PaymentSuccess> => {
+        const invoicesRes = await globalThis.electronAPI.getInvoicesByStudent(studentId)
+        const invoices = Array.isArray(invoicesRes) ? invoicesRes : []
+        const pending = invoices.find((inv: { id: number, balance: number }) => inv.balance > 0)
+
+        if (!pending) {
+            throw new Error('No pending invoices to pay')
+        }
+        if (amount > (selectedStudent?.credit_balance || 0)) {
+            throw new Error('Insufficient credit balance')
+        }
+
+        const result = await globalThis.electronAPI.payWithCredit({
+            studentId, invoiceId: pending.id, amount
+        }, userId)
+
+        if (!result.success) {
+            throw new Error(result.error || result.message || 'Credit payment failed')
+        }
+
+        return {
+            success: true, amount, payment_method: 'CREDIT',
+            payment_reference: 'CREDIT_BALANCE', description: 'Payment via Credit',
+            date: new Date().toISOString(), receiptNumber: 'N/A'
+        }
+    }
+
+    const processStandardPayment = async (amount: number, studentId: number, userId: number): Promise<PaymentSuccess> => {
+        const result = await globalThis.electronAPI.recordPayment({
+            student_id: studentId, amount, payment_method: formData.payment_method,
+            payment_reference: formData.payment_reference, transaction_date: formData.transaction_date,
+            description: formData.description, term_id: currentTerm?.id || 0,
+            idempotency_key: crypto.randomUUID()
+        } as unknown as Parameters<typeof globalThis.electronAPI.recordPayment>[0], userId)
+
+        if (!result.success) {
+            throw new Error(result.errors?.[0] || result.error || 'Payment failed')
+        }
+
+        return {
+            ...result, receiptNumber: result.receipt_number, amount,
+            payment_method: formData.payment_method, payment_reference: formData.payment_reference,
+            description: formData.description, date: formData.transaction_date
+        } as PaymentSuccess
+    }
+
     const handleSubmit = async (e: React.SyntheticEvent) => {
         e.preventDefault()
-        if (!selectedStudent || !formData.amount) {return}
-        if (!user?.id) {
-            showToast('You must be signed in to record payments', 'error')
+        if (!selectedStudent || !formData.amount || !user?.id) {
             return
         }
 
         setSaving(true)
         setSuccess(null)
-        
-        // Store previous balance for rollback
         setPreviousBalance(selectedStudent.balance || 0)
 
         try {
             const amount = shillingsToCents(formData.amount)
-
-            let resultData: PaymentSuccess;
-
-            if (useCredit) {
-                const invoices = await globalThis.electronAPI.getInvoicesByStudent(selectedStudent.id)
-                const pending = invoices.find(inv => inv.balance > 0)
-
-                if (!pending) {
-                    showToast('No pending invoices to pay', 'error')
-                    setSaving(false)
-                    return
-                }
-
-                if (amount > (selectedStudent.credit_balance || 0)) {
-                    showToast('Insufficient credit balance', 'error')
-                    setSaving(false)
-                    return
-                }
-
-                const result = await globalThis.electronAPI.payWithCredit({
-                    studentId: selectedStudent.id,
-                    invoiceId: pending.id,
-                    amount  // Send cents, not shillings
-                }, user.id)
-
-                if (!result.success) {throw new Error(result.error || result.message || 'Credit payment failed')}
-
-                resultData = {
-                    success: true,
-                    amount,  // Store in cents for consistency
-                    payment_method: 'CREDIT',
-                    payment_reference: 'CREDIT_BALANCE',
-                    description: 'Payment via Credit',
-                    date: new Date().toISOString(),
-                    receiptNumber: 'N/A'
-                }
-            } else {
-                const result = await globalThis.electronAPI.recordPayment({
-                    student_id: selectedStudent.id,
-                    amount,
-                    payment_method: formData.payment_method,
-                    payment_reference: formData.payment_reference,
-                    transaction_date: formData.transaction_date,
-                    description: formData.description,
-                    term_id: currentTerm?.id || 0,
-                    idempotency_key: crypto.randomUUID()
-                }, user.id)
-
-                if (!result.success) {throw new Error(result.errors?.[0] || result.error || 'Payment failed')}
-
-                resultData = {
-                    ...result,
-                    receiptNumber: result.receipt_number,
-                    amount,
-                    payment_method: formData.payment_method,
-                    payment_reference: formData.payment_reference,
-                    description: formData.description,
-                    date: formData.transaction_date
-                }
-            }
+            const resultData = useCredit
+                ? await processCreditPayment(amount, selectedStudent.id, user.id)
+                : await processStandardPayment(amount, selectedStudent.id, user.id)
 
             setSuccess(resultData)
-
-            // Calculate new balance for parent update
-            const newBalance = (selectedStudent.balance || 0) - amount
-            onPaymentComplete(newBalance)
-            
-            // Clear previous balance after successful update
+            onPaymentComplete((selectedStudent.balance || 0) - amount)
             setPreviousBalance(null)
-
-            // Clear form
             setFormData({
                 amount: '', payment_method: 'CASH', payment_reference: '',
                 transaction_date: new Date().toISOString().slice(0, 10), description: ''
             })
-
         } catch (error: unknown) {
             const errorMessage = error instanceof Error ? error.message : 'Payment failed'
             showToast(errorMessage, 'error')
-            
+
             // Rollback optimistic update on error
             if (previousBalance !== null && selectedStudent) {
                 onPaymentComplete(previousBalance)
@@ -163,7 +140,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
     }
 
     const handlePrint = () => {
-        if (!success || !selectedStudent) {return}
+        if (!success || !selectedStudent) { return }
 
         // Amount to words converter
         const amountToWords = (num: number): string => {
@@ -171,11 +148,11 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
             const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
 
-            if (num === 0) {return 'Zero'}
-            if (num < 20) {return ones[num] ?? ''}
-            if (num < 100) {return (tens[Math.floor(num / 10)] ?? '') + (num % 10 ? ' ' + (ones[num % 10] ?? '') : '')}
-            if (num < 1000) {return (ones[Math.floor(num / 100)] ?? '') + ' Hundred' + (num % 100 ? ' and ' + amountToWords(num % 100) : '')}
-            if (num < 1000000) {return amountToWords(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + amountToWords(num % 1000) : '')}
+            if (num === 0) { return 'Zero' }
+            if (num < 20) { return ones[num] ?? '' }
+            if (num < 100) { return (tens[Math.floor(num / 10)] ?? '') + (num % 10 ? ' ' + (ones[num % 10] ?? '') : '') }
+            if (num < 1000) { return (ones[Math.floor(num / 100)] ?? '') + ' Hundred' + (num % 100 ? ' and ' + amountToWords(num % 100) : '') }
+            if (num < 1000000) { return amountToWords(Math.floor(num / 1000)) + ' Thousand' + (num % 1000 ? ' ' + amountToWords(num % 1000) : '') }
             return amountToWords(Math.floor(num / 1000000)) + ' Million' + (num % 1000000 ? ' ' + amountToWords(num % 1000000) : '')
         }
 
