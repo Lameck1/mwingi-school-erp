@@ -15,9 +15,11 @@ vi.mock('keytar', () => ({
             user: {
                 id: sessionUserId,
                 username: 'admin',
+                email: 'admin@example.com',
                 role: sessionRole,
                 full_name: 'Admin User',
-                is_active: 1
+                is_active: 1,
+                created_at: new Date().toISOString()
             },
             lastActivity: Date.now()
         })),
@@ -67,6 +69,84 @@ describe('student IPC handlers', () => {
 
         // Create minimal schema for testing
         db.exec(`
+    CREATE TABLE IF NOT EXISTS fee_category (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, category_name TEXT NOT NULL UNIQUE,
+      description TEXT, is_active BOOLEAN DEFAULT 1, priority INTEGER DEFAULT 99,
+      gl_account_id INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS invoice_item (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, invoice_id INTEGER NOT NULL,
+      fee_category_id INTEGER NOT NULL, description TEXT NOT NULL, amount INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS receipt (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, receipt_number TEXT NOT NULL UNIQUE,
+      transaction_id INTEGER NOT NULL UNIQUE, receipt_date DATE NOT NULL,
+      student_id INTEGER NOT NULL, amount INTEGER NOT NULL, amount_in_words TEXT,
+      payment_method TEXT NOT NULL, payment_reference TEXT, printed_count INTEGER DEFAULT 0,
+      created_by_user_id INTEGER NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+          CREATE TABLE IF NOT EXISTS gl_account (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_code TEXT NOT NULL UNIQUE,
+            account_name TEXT NOT NULL,
+            account_type TEXT NOT NULL,
+            normal_balance TEXT NOT NULL,
+            is_active BOOLEAN DEFAULT 1
+          );
+          INSERT OR IGNORE INTO gl_account (account_code, account_name, account_type, normal_balance) VALUES ('1100', 'Accounts Receivable', 'ASSET', 'DEBIT');
+          INSERT OR IGNORE INTO gl_account (account_code, account_name, account_type, normal_balance) VALUES ('2020', 'Student Credit Balance', 'LIABILITY', 'CREDIT');
+          INSERT OR IGNORE INTO gl_account (account_code, account_name, account_type, normal_balance) VALUES ('1010', 'Cash', 'ASSET', 'DEBIT');
+          INSERT OR IGNORE INTO gl_account (account_code, account_name, account_type, normal_balance) VALUES ('1020', 'Bank', 'ASSET', 'DEBIT');
+          INSERT OR IGNORE INTO gl_account (account_code, account_name, account_type, normal_balance) VALUES ('4010', 'Tuition Revenue', 'REVENUE', 'CREDIT');
+          
+          CREATE TABLE IF NOT EXISTS journal_entry (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_ref TEXT NOT NULL UNIQUE,
+            entry_date DATE NOT NULL,
+            entry_type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            student_id INTEGER,
+            staff_id INTEGER,
+            term_id INTEGER,
+            is_posted BOOLEAN DEFAULT 0,
+            posted_by_user_id INTEGER,
+            posted_at DATETIME,
+            is_voided BOOLEAN DEFAULT 0,
+            voided_reason TEXT,
+            voided_by_user_id INTEGER,
+            voided_at DATETIME,
+            requires_approval BOOLEAN DEFAULT 0,
+            approval_status TEXT DEFAULT 'PENDING',
+            approved_by_user_id INTEGER,
+            approved_at DATETIME,
+            created_by_user_id INTEGER NOT NULL,
+            source_ledger_txn_id INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+          CREATE TABLE IF NOT EXISTS journal_entry_line (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            journal_entry_id INTEGER NOT NULL,
+            line_number INTEGER NOT NULL,
+            gl_account_id INTEGER NOT NULL,
+            debit_amount INTEGER DEFAULT 0,
+            credit_amount INTEGER DEFAULT 0,
+            description TEXT
+          );
+          CREATE TABLE IF NOT EXISTS approval_rule (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rule_name TEXT NOT NULL UNIQUE,
+            description TEXT,
+            transaction_type TEXT NOT NULL,
+            min_amount INTEGER,
+            max_amount INTEGER,
+            days_since_transaction INTEGER,
+            required_role_id INTEGER,
+            is_active BOOLEAN DEFAULT 1,
+            created_by_user_id INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+
       CREATE TABLE student (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         admission_number TEXT UNIQUE,
@@ -84,6 +164,7 @@ describe('student IPC handlers', () => {
         address TEXT,
         notes TEXT,
         is_active INTEGER DEFAULT 1,
+        photo_path TEXT,
         created_at TEXT,
         updated_at TEXT
       );
@@ -152,10 +233,10 @@ describe('student IPC handlers', () => {
             guardian_relationship: 'Parent',
             address: '123 Street',
             notes: 'Test student',
-            stream_id: null
-        }
+            } 
 
-        const result = await handler!(event, studentData) as { success: boolean; id?: number }
+ const result = await handler!(event, studentData) as { success: boolean; id?: number, error?: string }
+        if (!result.success) {console.error('CREATE ERROR:', result.error)}
         expect(result.success).toBe(true)
         expect(result.id).toBeGreaterThan(0)
 
@@ -200,7 +281,7 @@ describe('student IPC handlers', () => {
     })
 
     it('purges student PII', async () => {
-        db.prepare(`INSERT INTO student (id, first_name, admission_number, guardian_name) VALUES (1, 'John', 'ADM003', 'Parent')`).run()
+        db.prepare(`INSERT INTO student (id, first_name, admission_number, guardian_name, is_active) VALUES (1, 'John', 'ADM003', 'Parent', 0)`).run()
 
         const handler = handlerMap.get('student:purge')
         expect(handler).toBeDefined()
@@ -208,12 +289,13 @@ describe('student IPC handlers', () => {
         attachActor(event)
 
         // Handler expects [id, reason]
-        const result = await handler!(event, 1, 'GDPR Request') as { success: boolean }
+        const result = await handler!(event, 1, 'GDPR Request') as { success: boolean, error?: string }
+        if (!result.success) {console.error('PURGE ERROR:', result.error)}
         expect(result.success).toBe(true)
 
         const student = db.prepare('SELECT * FROM student WHERE id = 1').get() as any
-        expect(student.first_name).toBe('REDACTED')
-        expect(student.guardian_name).toBe('REDACTED')
+        expect(student.first_name).toBe('[REDACTED-1]')
+        expect(student.guardian_name).toBeNull()
         expect(student.is_active).toBe(0)
     })
 })

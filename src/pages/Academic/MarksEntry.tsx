@@ -80,7 +80,7 @@ export default function MarksEntry() {
             const data = await globalThis.electronAPI.getAcademicResults(
                 selectedExam, alloc.subject_id, alloc.stream_id, user!.id
             )
-            setResults((Array.isArray(data) ? data : []).map((r: { student_id: number; student_name?: string; admission_number?: string; score: number | null; competency_level: number | null; teacher_remarks?: string }) => ({
+            setResults((Array.isArray(data) ? data : []).map((r: import('../../types/electron-api/AcademicAPI').AcademicResult) => ({
                 student_id: r.student_id,
                 student_name: r.student_name || 'Unknown Student',
                 admission_number: r.admission_number || '',

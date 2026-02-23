@@ -16,7 +16,7 @@ export default function AuditLog() {
         setLoading(true)
         try {
             const data = await globalThis.electronAPI.getAuditLog(200)
-            setLogs(data)
+            setLogs(Array.isArray(data) ? data : [])
         } catch (error) {
             console.error('Failed to load audit logs:', error)
             showToast('Audit synchronization failed', 'error')
@@ -153,7 +153,7 @@ export default function AuditLog() {
                                                 <p className="font-mono text-[10px] text-foreground/50 truncate italic">
                                                     {(() => {
                                                         try {
-                                                            if (!log.new_values) {return 'No mutation data'}
+                                                            if (!log.new_values) { return 'No mutation data' }
                                                             const parsed = JSON.parse(log.new_values)
                                                             return JSON.stringify(parsed)
                                                         } catch {
