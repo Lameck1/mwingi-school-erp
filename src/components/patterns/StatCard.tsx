@@ -73,7 +73,7 @@ export function StatCard({
                             <StatValue loading={loading} value={value} />
                         </h3>
 
-                        <StatTrend trend={trend} trendLabel={trendLabel} />
+                        <StatTrend {...(trend ? { trend } : {})} {...(trendLabel ? { trendLabel } : {})} />
                     </div>
                 </div>
 

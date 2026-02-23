@@ -39,13 +39,15 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
         const logErrorFn = api.system.logError
         if (typeof logErrorFn === 'function') {
-            // eslint-disable-next-line promise/no-promise-in-callback
-            void logErrorFn({
+            const payload: Record<string, unknown> = {
                 error: error.message,
-                stack: error.stack,
-                componentStack: errorInfo.componentStack,
                 timestamp: new Date().toISOString()
-            }).catch(e => console.error('Failed to log error to main process:', e))
+            }
+            if (error.stack) {payload['stack'] = error.stack}
+            if (errorInfo.componentStack) {payload['componentStack'] = errorInfo.componentStack}
+
+            // eslint-disable-next-line promise/no-promise-in-callback
+            void logErrorFn(payload as unknown as Parameters<typeof logErrorFn>[0]).catch(e => console.error('Failed to log error to main process:', e))
         }
 
         // Call custom error handler if provided

@@ -61,7 +61,6 @@ export function PrintPreviewHost() {
                                 ref={frameRef}
                                 title={preview.title}
                                 src={preview.pdfUrl}
-                                type="application/pdf"
                                 className="w-full h-[72vh] bg-card"
                             />
                         ) : (

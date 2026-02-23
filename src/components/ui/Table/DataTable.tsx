@@ -241,7 +241,7 @@ function useDataTableController<T extends { id: number | string }>(props: Readon
         onSort,
         selectedIds,
         sortable
-    })
+    } as unknown as DataTableBaseProps)
 
     return {
         columns: state.columns,
@@ -527,17 +527,17 @@ function DataTableContent<T extends { id: number | string }>({ controller, props
 
     return (
         <div className="w-full">
-            <DataTableToolbar controller={controller} onExport={onExport} />
+            <DataTableToolbar controller={controller} {...(onExport ? { onExport: onExport as (format: 'csv' | 'excel' | 'pdf') => void } : {})} />
             <DataTableGrid
                 controller={controller}
                 data={data}
                 selectable={selectable}
                 selectedIds={selectedIds}
                 sortable={sortable}
-                rowClassName={rowClassName}
-                onRowClick={onRowClick}
                 compact={compact}
                 stickyHeader={stickyHeader}
+                {...(rowClassName ? { rowClassName } : {})}
+                {...(onRowClick ? { onRowClick } : {})}
             />
             {paginated && (
                 <DataTablePagination

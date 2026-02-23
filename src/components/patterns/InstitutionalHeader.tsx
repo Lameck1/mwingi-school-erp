@@ -13,7 +13,7 @@ export const InstitutionalHeader: React.FC<InstitutionalHeaderProps> = ({ varian
         const loadSettings = async () => {
             try {
                 const data = await globalThis.electronAPI.settings.getSchoolSettings()
-                setSettings(data)
+                setSettings(data as unknown as SchoolSettings)
             } catch (error) {
                 console.error('Failed to load school settings for header:', error)
             }
@@ -21,7 +21,7 @@ export const InstitutionalHeader: React.FC<InstitutionalHeaderProps> = ({ varian
         void loadSettings()
     }, [])
 
-    if (!settings) {return null}
+    if (!settings) { return null }
 
     if (variant === 'print') {
         return (
