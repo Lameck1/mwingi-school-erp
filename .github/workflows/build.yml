@@ -43,7 +43,7 @@ jobs:
         run: npm run lint:eslint:strict
 
       - name: Test
-        run: npx vitest run
+        run: npx vitest run --coverage
 
       - name: Audit
         run: npm audit --audit-level=high

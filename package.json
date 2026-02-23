@@ -44,7 +44,6 @@
     "electron-log": "^5.4.3",
     "electron-updater": "^6.7.3",
     "exceljs": "^4.4.0",
-    "jspdf": "^4.0.0",
     "keytar": "^7.9.0",
     "lucide-react": "^0.564.0",
     "nodemailer": "^7.0.13",
@@ -67,6 +66,7 @@
     "@typescript-eslint/eslint-plugin": "^8.53.1",
     "@typescript-eslint/parser": "^8.53.1",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/coverage-v8": "^4.0.18",
     "autoprefixer": "^10.4.16",
     "better-sqlite3": "^12.6.2",
     "dependency-cruiser": "^17.3.8",
@@ -83,10 +83,13 @@
     "eslint-plugin-sonarjs": "^3.0.6",
     "eslint-plugin-unicorn": "^62.0.0",
     "husky": "^9.1.7",
+    "jspdf": "^4.2.0",
     "lint-staged": "^16.2.7",
+    "minimatch": "^10.2.2",
     "playwright": "^1.58.0",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
+    "tar": "^7.5.9",
     "typescript": "^5.3.3",
     "vite": "^6.4.1",
     "vite-plugin-electron": "^0.29.0",
@@ -97,7 +100,6 @@
     "appId": "com.mwingi.school.erp",
     "productName": "Mwingi School ERP",
     "copyright": "Copyright © 2025 Mwingi Adventist School",
-    "cscLink": null,
     "directories": {
       "output": "release"
     },
@@ -108,7 +110,7 @@
     ],
     "win": {
       "icon": "assets/icon.ico",
-      "forceCodeSigning": false,
+      "forceCodeSigning": true,
       "target": [
         {
           "target": "nsis",

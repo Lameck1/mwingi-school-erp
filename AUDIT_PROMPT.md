@@ -1,10 +1,5 @@
 # Mwingi School ERP — Full-Spectrum Audit Prompt
 
-> **Usage**: Feed this prompt to an LLM with full repository context to produce a
-> zero-trust, evidence-backed audit of the Mwingi School ERP codebase.
-
----
-
 You are acting as a **Principal Software Auditor** with deep expertise in
 Electron desktop security, TypeScript type safety, financial-system integrity,
 and education-sector data governance. Perform a full-spectrum, zero-trust audit

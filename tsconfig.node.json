@@ -15,6 +15,7 @@
         "noUncheckedIndexedAccess": true,
         "noImplicitOverride": true,
         "noPropertyAccessFromIndexSignature": true,
+        "exactOptionalPropertyTypes": true,
         "verbatimModuleSyntax": true,
         "types": [
             "node"

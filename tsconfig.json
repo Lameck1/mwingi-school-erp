@@ -23,7 +23,7 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,
-    // exactOptionalPropertyTypes: deferred — conflicts with sonarjs/redundant-type ESLint rule (see AUDIT_REPORT_2026.md)
+    "exactOptionalPropertyTypes": true,
     "verbatimModuleSyntax": true,
     "esModuleInterop": true,
     "paths": {

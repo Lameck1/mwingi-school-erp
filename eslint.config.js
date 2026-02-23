@@ -177,7 +177,7 @@ const baseRules = {
   'sonarjs/no-misleading-array-reverse': 'warn',
   'sonarjs/todo-tag': 'warn',
   'sonarjs/no-small-switch': 'warn',
-  'sonarjs/redundant-type-aliases': 'warn',
+  'sonarjs/redundant-type-aliases': 'off',
   'sonarjs/deprecation': 'warn',
   'sonarjs/no-duplicated-branches': 'warn',
   'sonarjs/function-return-type': 'warn',

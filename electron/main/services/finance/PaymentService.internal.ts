@@ -302,15 +302,14 @@ export class PaymentProcessor {
     const pendingInvoices = this.db.prepare(`
       SELECT
         fi.id,
-        fc.priority as category_priority,
+        (SELECT MIN(fc.priority) FROM invoice_item ii JOIN fee_category fc ON ii.fee_category_id = fc.id WHERE ii.invoice_id = fi.id) as category_priority,
         ${this.invoiceOutstandingBalanceSql} as outstanding_balance
       FROM fee_invoice fi
-      LEFT JOIN fee_category fc ON fi.category_id = fc.id
       WHERE fi.student_id = ?
         AND ${this.invoiceOutstandingStatusPredicate}
         AND (${this.invoiceOutstandingBalanceSql}) > 0
       ORDER BY 
-        COALESCE(fc.priority, 99) ASC,
+        COALESCE((SELECT MIN(fc.priority) FROM invoice_item ii JOIN fee_category fc ON ii.fee_category_id = fc.id WHERE ii.invoice_id = fi.id), 99) ASC,
         COALESCE(fi.invoice_date, fi.due_date) ASC,
         fi.id ASC
     `).all(studentId) as Array<{ id: number; outstanding_balance: number }>
@@ -477,23 +476,71 @@ export class VoidProcessor implements IPaymentVoidProcessor {
     const student = this.db.prepare(`SELECT credit_balance FROM student WHERE id = ?`).get(studentId) as { credit_balance: number } | undefined
     const currentCredit = student?.credit_balance || 0
     const decrement = Math.min(currentCredit, creditAmount)
-    if (decrement <= 0) {
-      return
+    const shortfall = creditAmount - decrement
+
+    if (decrement > 0) {
+      this.db.prepare(`UPDATE student SET credit_balance = credit_balance - ? WHERE id = ?`).run(decrement, studentId)
+
+      this.db.prepare(`
+        INSERT INTO credit_transaction (student_id, amount, transaction_type, notes, created_at)
+        VALUES (?, ?, 'CREDIT_REFUNDED', ?, CURRENT_TIMESTAMP)
+      `).run(
+        studentId,
+        decrement,
+        `Void reversal of transaction #${transactionId}`
+      )
     }
 
-    this.db.prepare(`UPDATE student SET credit_balance = credit_balance - ? WHERE id = ?`).run(decrement, studentId)
+    if (shortfall > 0) {
+      // Trace and reverse invoice allocations originally funded by the spent credit
+      const recentCreditTxns = this.db.prepare(`
+        SELECT lt.id, lt.amount 
+        FROM ledger_transaction lt
+        WHERE lt.student_id = ? 
+          AND lt.is_voided = 0
+          AND (lt.payment_method = 'CREDIT_BALANCE' OR lt.payment_reference = 'CREDIT_BALANCE')
+        ORDER BY lt.id DESC
+      `).all(studentId) as Array<{ id: number; amount: number }>
 
-    this.db.prepare(`
-      INSERT INTO credit_transaction (student_id, amount, transaction_type, notes, created_at)
-      VALUES (?, ?, 'CREDIT_REFUNDED', ?, CURRENT_TIMESTAMP)
-    `).run(
-      studentId,
-      decrement,
-      `Void reversal of transaction #${transactionId}`
-    )
+      let remainingShortfall = shortfall
+
+      for (const txn of recentCreditTxns) {
+        if (remainingShortfall <= 0) {break}
+
+        const allocations = this.getPaymentAllocations(txn.id)
+        for (const alloc of allocations) {
+          if (remainingShortfall <= 0) {break}
+
+          const reverseAmount = Math.min(alloc.applied_amount, remainingShortfall)
+          this.reverseInvoiceAllocation(alloc.invoice_id, reverseAmount)
+
+          this.db.prepare(`
+            UPDATE payment_invoice_allocation 
+            SET applied_amount = applied_amount - ? 
+            WHERE invoice_id = ? AND transaction_id = ?
+          `).run(reverseAmount, alloc.invoice_id, txn.id)
+
+          remainingShortfall -= reverseAmount
+        }
+      }
+
+      // If there is still a shortfall (e.g. credit was consumed in a way we couldn't trace), force the credit balance negative.
+      if (remainingShortfall > 0) {
+        this.db.prepare(`UPDATE student SET credit_balance = credit_balance - ? WHERE id = ?`).run(remainingShortfall, studentId)
+
+        this.db.prepare(`
+          INSERT INTO credit_transaction (student_id, amount, transaction_type, notes, created_at)
+          VALUES (?, ?, 'CREDIT_REFUNDED', ?, CURRENT_TIMESTAMP)
+        `).run(
+          studentId,
+          remainingShortfall,
+          `Forced negative balance from void reversal shortfall of transaction #${transactionId}`
+        )
+      }
+    }
   }
 
-  private async voidLinkedJournalEntries(transactionId: number, data: VoidPaymentData): Promise<void> {
+  private voidLinkedJournalEntries(transactionId: number, data: VoidPaymentData): void {
     if (!this.hasSourceLedgerColumn()) {
       return
     }
@@ -511,8 +558,8 @@ export class VoidProcessor implements IPaymentVoidProcessor {
 
     const journalService = new DoubleEntryJournalService(this.db)
     for (const entry of linkedEntries) {
-      // Use the canonical service to ensure reversing entries are created
-      await journalService.voidJournalEntry(
+      // Use the canonical service to ensure reversing entries are created synchronously
+      journalService.voidJournalEntrySync(
         entry.id,
         `Payment void #${transactionId}: ${data.void_reason}`,
         data.voided_by
@@ -522,7 +569,7 @@ export class VoidProcessor implements IPaymentVoidProcessor {
 
   async voidPayment(data: VoidPaymentData): Promise<PaymentResult> {
     try {
-      const transactionResult = this.db.transaction(async () => {
+      const transactionResult = this.db.transaction(() => {
         const transaction = this.db.prepare(`
           SELECT * FROM ledger_transaction
           WHERE id = ? AND is_voided = 0
@@ -543,7 +590,7 @@ export class VoidProcessor implements IPaymentVoidProcessor {
         const creditedAmount = this.reversePaymentAllocations(transaction)
         this.reverseStudentCredit(transaction.student_id, creditedAmount, transaction.id)
 
-        await this.voidLinkedJournalEntries(transaction.id, data)
+        this.voidLinkedJournalEntries(transaction.id, data)
 
         logAudit(data.voided_by, 'VOID', 'ledger_transaction', reversalId, null,
           { original_transaction_id: data.transaction_id, void_reason: data.void_reason })
@@ -555,7 +602,7 @@ export class VoidProcessor implements IPaymentVoidProcessor {
         }
       })
 
-      return await transactionResult()
+      return transactionResult()
     } catch (error) {
       throw new Error(`Failed to void payment: ${(error as Error).message}`)
     }

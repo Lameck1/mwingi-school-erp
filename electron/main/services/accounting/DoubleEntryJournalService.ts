@@ -249,34 +249,10 @@ export class DoubleEntryJournalService {
   ): number {
     const insert = this.db.transaction(() => {
       const supportsSourceLedgerLink = this.hasSourceLedgerTxnColumn();
-      const headerResult = supportsSourceLedgerLink ? this.db.prepare(`
-          INSERT INTO journal_entry (
-            entry_ref, entry_date, entry_type, description,
-            student_id, staff_id, supplier_id, term_id,
-            requires_approval, approval_status,
-            created_by_user_id, source_ledger_txn_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-        entryRef,
-        data.entry_date,
-        data.entry_type,
-        data.description,
-        data.student_id || null,
-        data.staff_id || null,
-        data.supplier_id || null,
-        data.term_id || null,
-        requiresApproval ? 1 : 0,
-        requiresApproval ? 'PENDING' : 'APPROVED',
-        data.created_by_user_id,
-        data.source_ledger_txn_id || null
-      ) : this.db.prepare(`
-          INSERT INTO journal_entry (
-            entry_ref, entry_date, entry_type, description,
-            student_id, staff_id, term_id,
-            requires_approval, approval_status,
-            created_by_user_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
+      const supportsSupplier = this.tableHasColumn('journal_entry', 'supplier_id');
+
+      const columns = ['entry_ref', 'entry_date', 'entry_type', 'description', 'student_id', 'staff_id', 'term_id', 'requires_approval', 'approval_status', 'created_by_user_id'];
+      const values = [
         entryRef,
         data.entry_date,
         data.entry_type,
@@ -287,7 +263,23 @@ export class DoubleEntryJournalService {
         requiresApproval ? 1 : 0,
         requiresApproval ? 'PENDING' : 'APPROVED',
         data.created_by_user_id
-      );
+      ];
+      const placeholders = Array(columns.length).fill('?');
+
+      if (supportsSupplier) {
+        columns.push('supplier_id');
+        values.push(data.supplier_id || null);
+        placeholders.push('?');
+      }
+
+      if (supportsSourceLedgerLink) {
+        columns.push('source_ledger_txn_id');
+        values.push(data.source_ledger_txn_id || null);
+        placeholders.push('?');
+      }
+
+      const sql = `INSERT INTO journal_entry (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
+      const headerResult = this.db.prepare(sql).run(...values);
 
       const entryId = headerResult.lastInsertRowid as number;
       this.insertJournalLines(entryId, data.lines);
@@ -501,11 +493,11 @@ export class DoubleEntryJournalService {
   /**
    * Voids a journal entry (creates reversing entry)
    */
-  async voidJournalEntry(
+  voidJournalEntrySync(
     entryId: number,
     voidReason: string,
     userId: number
-  ): Promise<{ success: boolean; message: string; requires_approval?: boolean }> {
+  ): { success: boolean; message: string; requires_approval?: boolean } {
     try {
       // Get original entry
       const originalEntry = this.db.prepare(`
@@ -661,6 +653,14 @@ export class DoubleEntryJournalService {
         message: `Failed to void journal entry: ${(error as Error).message}`
       };
     }
+  }
+
+  async voidJournalEntry(
+    entryId: number,
+    voidReason: string,
+    userId: number
+  ): Promise<{ success: boolean; message: string; requires_approval?: boolean }> {
+    return this.voidJournalEntrySync(entryId, voidReason, userId);
   }
 
   /**
