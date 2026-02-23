@@ -111,7 +111,7 @@ export default function Attendance() {
     }
 
     const loadStudents = useCallback(async () => {
-        if (!selectedStream || selectedStream <= 0) {return}
+        if (!selectedStream || selectedStream <= 0) { return }
         if (!currentAcademicYear || !currentTerm) { return }
         setLoading(true)
         try {
@@ -203,7 +203,7 @@ export default function Attendance() {
             }))
 
             const result = await globalThis.electronAPI.markAttendance(
-                entries, selectedStream, selectedDate, currentAcademicYear.id, currentTerm.id, user.id
+                entries as unknown as Parameters<typeof globalThis.electronAPI.markAttendance>[0], selectedStream, selectedDate, currentAcademicYear.id, currentTerm.id, user.id
             )
 
             if (result.success) {

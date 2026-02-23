@@ -7,6 +7,8 @@ import { Select } from '../../components/ui/Select'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../stores'
 
+import type { Student } from '../../types/electron-api/StudentAPI'
+
 // Roles that can approve awards
 const APPROVER_ROLES = new Set(['ADMIN', 'PRINCIPAL', 'DEPUTY_PRINCIPAL'])
 
@@ -21,12 +23,12 @@ interface StudentAward {
   category_name: string
   awarded_date: string
   approval_status: 'pending' | 'approved' | 'rejected'
-  assigned_by_name?: string
-  approved_by_name?: string
-  approved_at?: string
-  rejection_reason?: string
-  certificate_number?: string
-  remarks?: string
+  assigned_by_name?: string | undefined
+  approved_by_name?: string | undefined
+  approved_at?: string | undefined
+  rejection_reason?: string | undefined
+  certificate_number?: string | undefined
+  remarks?: string | undefined
 }
 
 interface AwardCategory {
@@ -65,11 +67,11 @@ const AwardsManagement = () => {
     try {
       const status = filterStatus === 'all' ? undefined : filterStatus
       const awardData = await globalThis.electronAPI.getAwards({
-        academicYearId: currentAcademicYear?.id,
-        termId: currentTerm?.id,
+        academicYearId: (currentAcademicYear?.id as number) || undefined,
+        termId: (currentTerm?.id as number) || undefined,
         status
       })
-      setAwards(awardData || [])
+      setAwards((Array.isArray(awardData) ? awardData : []) as StudentAward[])
     } catch (error) {
       console.error('Failed to load awards:', error)
     }
@@ -79,11 +81,11 @@ const AwardsManagement = () => {
     try {
       const [categoryData, studentData] = await Promise.all([
         globalThis.electronAPI.getAwardCategories(),
-        globalThis.electronAPI.getStudents({ stream_id: undefined })
+        globalThis.electronAPI.getStudents({ stream_id: (undefined as unknown as number) })
       ])
 
-      setCategories(categoryData || [])
-      setStudents(studentData.map(s => ({
+      setCategories(Array.isArray(categoryData) ? categoryData : [])
+      setStudents((Array.isArray(studentData) ? studentData : []).map((s: Student) => ({
         id: s.id,
         name: s.full_name || `${s.first_name} ${s.last_name}`,
         admission_number: s.admission_number
@@ -113,10 +115,10 @@ const AwardsManagement = () => {
         studentId: selectedStudent,
         categoryId: selectedCategory,
         academicYearId: currentAcademicYear!.id,
-        termId: currentTerm?.id,
-        userId: user?.id,
-        userRole: user?.role || '',
-        remarks: ''
+        termId: (currentTerm?.id as number) || undefined,
+        userId: (user?.id as number) || undefined,
+        userRole: (user?.role as string) || undefined,
+        remarks: undefined
       })
 
       await loadAwards()
@@ -137,7 +139,7 @@ const AwardsManagement = () => {
     try {
       await globalThis.electronAPI.approveAward({
         awardId,
-        userId: user?.id
+        userId: user?.id || undefined
       })
       await loadAwards()
       showToast('Award approved successfully!', 'success')
@@ -165,7 +167,7 @@ const AwardsManagement = () => {
     try {
       await globalThis.electronAPI.rejectAward({
         awardId: rejectingAwardId!,
-        userId: user?.id,
+        userId: user?.id || undefined,
         reason: rejectionReason
       })
       await loadAwards()

@@ -50,15 +50,15 @@ export default function MarksEntry() {
     const [processing, setProcessing] = useState(false)
 
     const loadInitialData = useCallback(async () => {
-        if (!currentAcademicYear || !currentTerm || !user) {return}
+        if (!currentAcademicYear || !currentTerm || !user) { return }
         try {
             const [examsData, allocationsData] = await Promise.all([
                 globalThis.electronAPI.getAcademicExams(currentAcademicYear.id, currentTerm.id),
                 globalThis.electronAPI.getTeacherAllocations(currentAcademicYear.id, currentTerm.id)
             ])
 
-            setExams(examsData)
-            setAllocations(allocationsData.map((a) => ({
+            setExams(Array.isArray(examsData) ? examsData : [])
+            setAllocations((Array.isArray(allocationsData) ? allocationsData : []).map((a) => ({
                 id: a.id,
                 subject_id: a.subject_id,
                 stream_id: a.stream_id,
@@ -73,14 +73,14 @@ export default function MarksEntry() {
 
     const loadResults = useCallback(async () => {
         const alloc = allocations.find((a: Allocation) => a.id === selectedAllocation)
-        if (!selectedExam || !alloc) {return}
+        if (!selectedExam || !alloc) { return }
 
         setLoading(true)
         try {
             const data = await globalThis.electronAPI.getAcademicResults(
                 selectedExam, alloc.subject_id, alloc.stream_id, user!.id
             )
-            setResults(data.map((r) => ({
+            setResults((Array.isArray(data) ? data : []).map((r: { student_id: number; student_name?: string; admission_number?: string; score: number | null; competency_level: number | null; teacher_remarks?: string }) => ({
                 student_id: r.student_id,
                 student_name: r.student_name || 'Unknown Student',
                 admission_number: r.admission_number || '',
@@ -114,7 +114,7 @@ export default function MarksEntry() {
     }
 
     const handleSave = async () => {
-        if (!selectedExam || !user) {return}
+        if (!selectedExam || !user) { return }
 
         setSaving(true)
         try {
@@ -129,7 +129,7 @@ export default function MarksEntry() {
     }
 
     const handleProcessResults = async () => {
-        if (!selectedExam || !user) {return}
+        if (!selectedExam || !user) { return }
 
         setProcessing(true)
         try {

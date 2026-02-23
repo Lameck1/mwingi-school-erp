@@ -69,8 +69,8 @@ const ExamAnalytics = () => {
         globalThis.electronAPI.getStreams()
       ])
 
-      setExams(examsData || [])
-      setStreams(streamsData || [])
+      setExams(Array.isArray(examsData) ? examsData : [])
+      setStreams(Array.isArray(streamsData) ? streamsData : [])
     } catch (error) {
       console.error('Failed to load initial data:', error)
     }
@@ -108,10 +108,10 @@ const ExamAnalytics = () => {
         })
       ])
 
-      setPerformanceSummary(summary)
-      setGradeDistribution(grades || [])
-      setSubjectPerformance(subjects || [])
-      setStrugglingStudents(struggling || [])
+      setPerformanceSummary(summary && typeof summary === 'object' && !('success' in summary) ? summary : null)
+      setGradeDistribution(Array.isArray(grades) ? grades : [])
+      setSubjectPerformance(Array.isArray(subjects) ? subjects : [])
+      setStrugglingStudents(Array.isArray(struggling) ? struggling : [])
     } catch (error) {
       console.error('Failed to analyze exam:', error)
       showToast('Failed to analyze exam data', 'error')

@@ -52,13 +52,14 @@ const MostImproved = () => {
           globalThis.electronAPI.getStreams()
         ])
 
-        setTerms(termsData?.map(t => ({ id: t.id, name: t.term_name })) || [])
-        setStreams(streamsData || [])
+        const termsList = Array.isArray(termsData) ? termsData : []
+        setTerms(termsList.map((t: { id: number, term_name: string }) => ({ id: t.id, name: t.term_name })))
+        setStreams(Array.isArray(streamsData) ? streamsData : [])
 
         // Auto-select current term as comparison and previous term
-        if (currentTerm && termsData && termsData.length > 0) {
+        if (currentTerm && termsList.length > 0) {
           setSelectedCurrentTerm(currentTerm.id)
-          const previousTerm = termsData.find(t => t.id !== currentTerm.id)
+          const previousTerm = termsList.find((t: { id: number }) => t.id !== currentTerm.id)
           if (previousTerm) {
             setSelectedComparisonTerm(previousTerm.id)
           }
@@ -85,11 +86,11 @@ const MostImproved = () => {
         academicYearId: currentAcademicYear!.id,
         currentTermId: selectedCurrentTerm,
         comparisonTermId: selectedComparisonTerm,
-        streamId: selectedStream || undefined,
+        ...(selectedStream ? { streamId: selectedStream } : {}),
         minimumImprovement
       })
 
-      setImprovedStudents(students || [])
+      setImprovedStudents(Array.isArray(students) ? students : [])
     } catch (error) {
       console.error('Failed to get most improved students:', error)
       showToast('Failed to generate list', 'error')

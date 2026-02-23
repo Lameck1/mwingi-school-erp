@@ -52,7 +52,7 @@ const MeritLists = () => {
   const loadInitialData = async () => {
     try {
       const streamsData = await globalThis.electronAPI.getStreams();
-      setStreams(streamsData);
+      setStreams(Array.isArray(streamsData) ? streamsData : []);
     } catch (error) {
       console.error('Failed to load initial data:', error);
     }
@@ -71,7 +71,7 @@ const MeritLists = () => {
         termId: currentTerm.id,
         streamId: selectedStream,
       });
-      setMeritList(list);
+      setMeritList(Array.isArray(list) ? list : []);
     } catch (error) {
       console.error('Failed to generate merit list:', error);
       showToast('Failed to generate merit list.', 'error');

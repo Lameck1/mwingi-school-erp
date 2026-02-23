@@ -61,7 +61,7 @@ const ExamScheduler = () => {
   const loadInitialData = useCallback(async () => {
     try {
       const examsData = await globalThis.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id })
-      setExams(examsData || [])
+      setExams(Array.isArray(examsData) ? examsData : [])
     } catch (error) {
       console.error('Failed to load initial data:', error)
     }

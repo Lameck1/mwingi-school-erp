@@ -97,7 +97,7 @@ export default function StudentForm() {
 
     const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
-        if (!file) {return}
+        if (!file) { return }
 
         if (file.size > 5 * 1024 * 1024) {
             setError('Image file size exceeds 5MB limit')
@@ -130,7 +130,7 @@ export default function StudentForm() {
     }
 
     const handleRemovePhoto = async () => {
-        if (!confirm('Are you sure you want to remove the student photo?')) {return}
+        if (!confirm('Are you sure you want to remove the student photo?')) { return }
         if (isEdit && id) {
             setSaving(true)
             try {
@@ -159,9 +159,22 @@ export default function StudentForm() {
         try {
             const parsedStreamId = Number.parseInt(formData.stream_id, 10)
             const studentPayload = {
-                ...formData,
-                stream_id: Number.isFinite(parsedStreamId) ? parsedStreamId : undefined
-            }
+                admission_number: formData.admission_number,
+                first_name: formData.first_name,
+                middle_name: formData.middle_name || null,
+                last_name: formData.last_name,
+                date_of_birth: formData.date_of_birth || null,
+                gender: formData.gender,
+                student_type: formData.student_type,
+                admission_date: formData.admission_date || null,
+                guardian_name: formData.guardian_name || null,
+                guardian_phone: formData.guardian_phone || null,
+                guardian_email: formData.guardian_email || null,
+                address: formData.address || null,
+                stream_id: Number.isFinite(parsedStreamId) ? parsedStreamId : null,
+                guardian_relationship: formData.guardian_relationship || null,
+                notes: formData.notes || null
+            } as unknown as Parameters<typeof globalThis.electronAPI.updateStudent>[1]
             type StudentMutationResult = { success: boolean; error?: string; id?: number }
             let mutationResult: StudentMutationResult
 

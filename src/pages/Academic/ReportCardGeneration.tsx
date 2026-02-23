@@ -87,9 +87,9 @@ const ReportCardGeneration: React.FC = () => {
       // Changed to use typed getExams from AcademicAPI
       const year = await globalThis.electronAPI.getCurrentAcademicYear()
       const term = await globalThis.electronAPI.getCurrentTerm()
-      if (year && term) {
+      if (year && !('success' in year) && term && !('success' in term)) {
         const examsData = await globalThis.electronAPI.getAcademicExams(year.id, term.id)
-        setExams(examsData || [])
+        setExams(Array.isArray(examsData) ? examsData : [])
       }
     } catch (error) {
       console.error('Failed to load exams:', error)
@@ -99,7 +99,7 @@ const ReportCardGeneration: React.FC = () => {
   const loadStreams = async () => {
     try {
       const streamsData = await globalThis.electronAPI.getStreams()
-      setStreams(streamsData.map(s => ({ id: s.id, name: s.stream_name })) || [])
+      setStreams(Array.isArray(streamsData) ? streamsData.map(s => ({ id: s.id, name: s.stream_name })) : [])
     } catch (error) {
       console.error('Failed to load streams:', error)
     }
@@ -108,14 +108,14 @@ const ReportCardGeneration: React.FC = () => {
   const loadEmailTemplates = async () => {
     try {
       const templates = await globalThis.electronAPI.getNotificationTemplates()
-      // Filter for report card type if property exists, otherwise all
-      const rcTemplates = templates.filter(t => t.category === 'GENERAL' || t.template_name?.toLowerCase().includes('report'))
-      setEmailTemplates(rcTemplates.map(t => ({
+      const tList = Array.isArray(templates) ? templates : []
+      const rcTemplates = tList.filter((t: { category: string, template_name: string }) => t.category === 'GENERAL' || t.template_name?.toLowerCase().includes('report'))
+      setEmailTemplates(rcTemplates.map((t: { id: number, template_name: string, subject?: string | null, body: string }) => ({
         id: String(t.id),
         name: t.template_name,
         subject: t.subject || '',
         body: t.body
-      })) || [])
+      })))
     } catch (error) {
       console.error('Failed to load email templates:', error)
     }
@@ -136,8 +136,8 @@ const ReportCardGeneration: React.FC = () => {
     })
 
     try {
-      // Get students for stream - using StudentAPI
-      const students = await globalThis.electronAPI.getStudents({ stream_id: selectedStream, is_active: true })
+      const studentsRes = await globalThis.electronAPI.getStudents({ stream_id: selectedStream, is_active: true })
+      const students = Array.isArray(studentsRes) ? studentsRes : []
 
       setProgress(prev => ({ ...prev, total: students.length }))
 
@@ -192,14 +192,14 @@ const ReportCardGeneration: React.FC = () => {
   }
 
   const getProgressPercentage = () => {
-    if (progress.total === 0) {return 0}
+    if (progress.total === 0) { return 0 }
     return Math.round((progress.completed / progress.total) * 100)
   }
 
   const getProgressColor = () => {
     const percent = getProgressPercentage()
-    if (percent < 33) {return 'bg-red-500'}
-    if (percent < 66) {return 'bg-yellow-500'}
+    if (percent < 33) { return 'bg-red-500' }
+    if (percent < 66) { return 'bg-yellow-500' }
     return 'bg-green-500'
   }
 

@@ -28,11 +28,11 @@ export default function ExamManagement() {
     const [newExamWeight, setNewExamWeight] = useState(1)
 
     const loadExams = useCallback(async () => {
-        if (!currentAcademicYear || !currentTerm) {return}
+        if (!currentAcademicYear || !currentTerm) { return }
         setLoading(true)
         try {
             const data = await globalThis.electronAPI.getAcademicExams(currentAcademicYear.id, currentTerm.id)
-            setExams(data)
+            setExams((Array.isArray(data) ? data : []) as unknown as Exam[])
         } catch (error) {
             console.error('Failed to load exams:', error)
         } finally {
@@ -45,7 +45,7 @@ export default function ExamManagement() {
     }, [loadExams])
 
     const handleCreate = async () => {
-        if (!currentAcademicYear || !currentTerm || !user || !newExamName) {return}
+        if (!currentAcademicYear || !currentTerm || !user || !newExamName) { return }
 
         setSaving(true)
         try {
@@ -68,7 +68,7 @@ export default function ExamManagement() {
     }
 
     const handleDelete = async (id: number) => {
-        if (!user) {return}
+        if (!user) { return }
 
         try {
             await globalThis.electronAPI.deleteAcademicExam(id, user.id)

@@ -62,13 +62,13 @@ const ReportCardAnalytics = () => {
 
   const loadInitialData = useCallback(async () => {
     try {
-        const [examsData, streamsData] = await Promise.all([
+      const [examsData, streamsData] = await Promise.all([
         globalThis.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
         globalThis.electronAPI.getStreams()
       ])
 
-      setExams(examsData || [])
-      setStreams(streamsData || [])
+      setExams(Array.isArray(examsData) ? examsData : [])
+      setStreams(Array.isArray(streamsData) ? streamsData : [])
     } catch (error) {
       console.error('Failed to load initial data:', error)
     }
@@ -105,10 +105,10 @@ const ReportCardAnalytics = () => {
         })
       ])
 
-      setPerformanceSummary(summary)
-      setGradeDistribution(grades || [])
-      setSubjectPerformance(subjects || [])
-      setTermComparison(comparison || [])
+      setPerformanceSummary(summary && typeof summary === 'object' && !('success' in summary) ? summary : null)
+      setGradeDistribution(Array.isArray(grades) ? grades : [])
+      setSubjectPerformance(Array.isArray(subjects) ? subjects : [])
+      setTermComparison(Array.isArray(comparison) ? comparison : [])
     } catch (error) {
       console.error('Failed to analyze:', error)
       showToast('Failed to analyze report cards', 'error')
@@ -237,11 +237,11 @@ const ReportCardAnalytics = () => {
               <div className="premium-card">
                 <h3 className="text-lg font-semibold mb-4">Grade Distribution</h3>
                 <div className="space-y-3">
-                  {gradeDistribution.map((item, idx) => (
+                  {gradeDistribution.map((item: GradeDistribution, idx) => (
                     <div key={item.grade} className="flex items-center justify-between">
                       <span className="font-medium w-12">{item.grade}</span>
                       <div className="flex-1 mx-4">
-                        <ProgressBar value={item.percentage} height="h-3" fillClass={COLOR_CLASSES[idx % COLOR_CLASSES.length]} />
+                        <ProgressBar value={item.percentage} height="h-3" fillClass={COLOR_CLASSES[idx % COLOR_CLASSES.length] || 'bg-blue-500'} />
                       </div>
                       <span className="text-sm text-foreground/60 w-20 text-right">{item.count} ({item.percentage.toFixed(1)}%)</span>
                     </div>

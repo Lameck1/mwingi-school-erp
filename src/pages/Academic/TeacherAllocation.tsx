@@ -66,9 +66,9 @@ export default function TeacherAllocation() {
                     globalThis.electronAPI.getAcademicSubjects()
                 ])
 
-                setAllocations(allocationsData || [])
-                setStreams(streamsData || [])
-                setSubjects(subjectsData || [])
+                setAllocations((Array.isArray(allocationsData) ? allocationsData : []) as unknown as Allocation[])
+                setStreams(Array.isArray(streamsData) ? streamsData : [])
+                setSubjects(Array.isArray(subjectsData) ? subjectsData : [])
             }
         } catch (error) {
             console.error('Failed to load allocations:', error)
@@ -80,7 +80,7 @@ export default function TeacherAllocation() {
     const loadInitialData = useCallback(async () => {
         try {
             const staffData = await globalThis.electronAPI.getStaff()
-            setStaff(staffData)
+            setStaff(Array.isArray(staffData) ? staffData : [])
         } catch (error) {
             console.error('Failed to load initial data:', error)
         }
@@ -126,7 +126,7 @@ export default function TeacherAllocation() {
     }
 
     const handleDeleteAllocation = async (allocationId: number) => {
-        if (!user) {return}
+        if (!user) { return }
         try {
             await globalThis.electronAPI.deleteTeacherAllocation(allocationId, user.id)
             await loadAllocations()

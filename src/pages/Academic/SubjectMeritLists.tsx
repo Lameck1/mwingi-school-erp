@@ -18,14 +18,14 @@ interface SubjectRanking {
 }
 
 const scoreToGrade = (score: number): string => {
-  if (score >= 80) {return 'A'}
-  if (score >= 75) {return 'A-'}
-  if (score >= 70) {return 'B+'}
-  if (score >= 65) {return 'B'}
-  if (score >= 60) {return 'B-'}
-  if (score >= 55) {return 'C+'}
-  if (score >= 50) {return 'C'}
-  if (score >= 45) {return 'C-'}
+  if (score >= 80) { return 'A' }
+  if (score >= 75) { return 'A-' }
+  if (score >= 70) { return 'B+' }
+  if (score >= 65) { return 'B' }
+  if (score >= 60) { return 'B-' }
+  if (score >= 55) { return 'C+' }
+  if (score >= 50) { return 'C' }
+  if (score >= 45) { return 'C-' }
   return 'E'
 }
 
@@ -64,9 +64,9 @@ const SubjectMeritLists = () => {
         globalThis.electronAPI.getAcademicSubjects()
       ])
 
-      setExams(examsData || [])
-      setStreams(streamsData || [])
-      setSubjects(subjectsData || [])
+      setExams(Array.isArray(examsData) ? examsData : [])
+      setStreams(Array.isArray(streamsData) ? streamsData : [])
+      setSubjects(Array.isArray(subjectsData) ? subjectsData : [])
     } catch (error) {
       console.error('Failed to load initial data:', error)
     }
@@ -97,12 +97,12 @@ const SubjectMeritLists = () => {
         })
       ])
 
-      const scored = (rankings_ || []).map((row: SubjectMeritListRow) => ({
+      const scored = (Array.isArray(rankings_) ? rankings_ : []).map((row: SubjectMeritListRow) => ({
         ...row,
         grade: scoreToGrade(row.marks)
       }))
       setRankings(scored)
-      setDifficulty(difficulty_)
+      setDifficulty(difficulty_ && typeof difficulty_ === 'object' && !('success' in difficulty_) ? difficulty_ : null)
     } catch (error) {
       console.error('Failed to generate merit list:', error)
       showToast('Failed to generate merit list', 'error')

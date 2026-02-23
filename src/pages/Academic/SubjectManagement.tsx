@@ -48,7 +48,7 @@ export default function SubjectManagement() {
     setLoading(true)
     try {
       const data = await globalThis.electronAPI.getAcademicSubjectsAdmin()
-      setSubjects(data || [])
+      setSubjects(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Failed to load subjects:', error)
       showToast('Failed to load subjects', 'error')
@@ -125,7 +125,7 @@ export default function SubjectManagement() {
       showToast('You must be signed in to manage subjects', 'error')
       return
     }
-    if (!confirm(`${desired ? 'Activate' : 'Deactivate'} subject "${subject.name}"?`)) {return}
+    if (!confirm(`${desired ? 'Activate' : 'Deactivate'} subject "${subject.name}"?`)) { return }
     setSaving(true)
     try {
       await globalThis.electronAPI.setAcademicSubjectActive(subject.id, desired, user.id)
