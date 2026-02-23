@@ -41,7 +41,7 @@ function collectInvokedChannels(files: string[]): Set<string> {
 
 function collectRegisteredInvokeChannels(files: string[]): Set<string> {
   const channels = new Set<string>()
-  const registerRegex = /(?:safeHandle(?:RawWithRole|WithRole|Raw)?|validatedHandler(?:Multi)?)\(\s*'([^']+)'/g
+  const registerRegex = /(?:safeHandle(?:RawWithRole|WithRole|Raw)?|validatedHandler(?:Multi)?|ipcMain\.handle)\(\s*'([^']+)'/g
 
   for (const filePath of files) {
     const content = fs.readFileSync(filePath, 'utf8')
