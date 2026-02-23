@@ -2,23 +2,23 @@ export interface StaffMember {
   id: number
   staff_number: string
   first_name: string
-  middle_name?: string
+  middle_name?: string | undefined
   last_name: string
-  id_number?: string
-  kra_pin?: string
-  nhif_number?: string
-  nssf_number?: string
-  phone?: string
-  email?: string
-  bank_name?: string
-  bank_account?: string
-  department?: string
-  job_title?: string
-  employment_date?: string
-  basic_salary?: number
+  id_number?: string | undefined
+  kra_pin?: string | undefined
+  nhif_number?: string | undefined
+  nssf_number?: string | undefined
+  phone?: string | undefined
+  email?: string | undefined
+  bank_name?: string | undefined
+  bank_account?: string | undefined
+  department?: string | undefined
+  job_title?: string | undefined
+  employment_date?: string | undefined
+  basic_salary?: number | undefined
   is_active: boolean
-  created_at?: string
-  updated_at?: string
+  created_at?: string | undefined
+  updated_at?: string | undefined
 }
 
 export interface StaffAPI {

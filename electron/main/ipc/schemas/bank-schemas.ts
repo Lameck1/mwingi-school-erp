@@ -14,7 +14,9 @@ export const BankAccountSchema = z.object({
 
 export const CreateStatementTuple = z.tuple([
     PositiveIntSchema, // bankAccountId
-    DateStringSchema,
+    DateStringSchema.refine((val) => val <= new Date().toISOString().slice(0, 10), {
+        message: 'Statement date cannot be in the future'
+    }),
     z.number(), // opening
     z.number(), // closing
     z.string().optional() // reference

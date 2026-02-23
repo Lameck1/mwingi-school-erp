@@ -14,13 +14,15 @@ export interface SchoolSettings {
   updated_at: string
 }
 
+type IPCResult<T> = T | { success: false; error: string; errors?: string[] };
+
 export interface SettingsAPI {
-  getSettings: () => Promise<SchoolSettings>
-  getSchoolSettings: () => Promise<SchoolSettings>
+  getSettings: () => Promise<IPCResult<SchoolSettings>>
+  getSchoolSettings: () => Promise<IPCResult<SchoolSettings>>
   updateSettings: (data: Partial<SchoolSettings>) => Promise<{ success: boolean }>
   uploadLogo: (dataUrl: string) => Promise<{ success: boolean; filePath?: string; error?: string }>
   removeLogo: () => Promise<{ success: boolean; error?: string }>
-  getLogoDataUrl: () => Promise<string | null>
+  getLogoDataUrl: () => Promise<IPCResult<string | null>>
 
   // Secure Config (Phase 3)
   getSecureConfig(key: string): Promise<string | null>

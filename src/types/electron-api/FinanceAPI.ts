@@ -100,11 +100,11 @@ export interface Transaction {
   description: string
   transaction_date: string
   transaction_type?: string
-  payment_method?: string
-  payment_reference?: string
-  debit_credit?: string
+  payment_method?: string | undefined
+  payment_reference?: string | undefined
+  debit_credit?: string | undefined
   reference: string
-  is_voided?: boolean
+  is_voided?: boolean | undefined
   created_at: string
   updated_at: string
 }
@@ -113,11 +113,11 @@ export interface PaymentRecordData {
   student_id: number
   amount: number
   payment_method: string
-  payment_reference?: string
-  description?: string
+  payment_reference?: string | undefined
+  description?: string | undefined
   transaction_date: string
   term_id: number
-  idempotency_key?: string
+  idempotency_key?: string | undefined
 }
 
 export interface FinanceApprovalRequest {
@@ -146,7 +146,7 @@ export interface FinanceAPI {
   saveFeeStructure: (_data: FeeStructureCreateData[], _academicYearId: number, _termId: number) => Promise<IPCResult<FeeStructure[]>>
   generateBatchInvoices: (_academicYearId: number, _termId: number, _userId: number) => Promise<{ success: boolean; count: number }>
   generateStudentInvoice: (_studentId: number, _yearId: number, _termId: number, _userId: number) => Promise<{ success: boolean; invoiceNumber?: string; error?: string }>
-  getInvoices: (_filters?: Partial<Invoice>) => Promise<IPCResult<Invoice[]>>
+  getInvoices: (_filters?: { student_id?: number | undefined; academic_year_id?: number | undefined; term_id?: number | undefined; status?: string | undefined }) => Promise<IPCResult<Invoice[]>>
 
   // Payments
   recordPayment: (_data: PaymentRecordData, _userId: number) => Promise<{ success: boolean; transactionRef?: string; receipt_number?: string; errors?: string[]; error?: string }>
@@ -157,8 +157,8 @@ export interface FinanceAPI {
   // Transactions (General)
   getTransactionCategories: () => Promise<IPCResult<TransactionCategory[]>>
   createTransactionCategory: (_name: string, _type: string) => Promise<TransactionCategory>
-  createTransaction: (_data: Partial<Transaction>, _userId: number) => Promise<Transaction>
-  getTransactions: (_filters?: Partial<Transaction>) => Promise<IPCResult<Transaction[]>>
+  createTransaction: (_data: { amount: number; description: string; transaction_date: string; category_id: number; transaction_type?: string | undefined; payment_method?: string | undefined; payment_reference?: string | undefined; reference?: string | undefined }, _userId: number) => Promise<Transaction>
+  getTransactions: (_filters?: { category_id?: number | undefined; start_date?: string | undefined; end_date?: string | undefined; transaction_type?: string | undefined }) => Promise<IPCResult<Transaction[]>>
   getTransactionSummary: (_startDate: string, _endDate: string) => Promise<IPCResult<{ totalIncome: number; totalExpense: number; netBalance: number }>>
 
   // Invoices
@@ -226,8 +226,8 @@ export interface StudentScholarship {
   effective_date: string
   status: 'ACTIVE' | 'EXPIRED' | 'REVOKED'
   created_at: string
-  scholarship_name?: string
-  student_name?: string
+  scholarship_name?: string | undefined
+  student_name?: string | undefined
 }
 
 // CBC Strand Types

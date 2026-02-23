@@ -8,51 +8,51 @@
 
 // ── Students ──
 export interface StudentData {
-  admission_number?: string
-  first_name?: string
-  middle_name?: string
-  last_name?: string
-  email?: string
-  phone?: string
-  date_of_birth?: string
-  gender?: 'MALE' | 'FEMALE'
-  address?: string
-  guardian_name?: string
-  guardian_phone?: string
-  guardian_email?: string
-  guardian_relationship?: string
-  notes?: string
-  stream_id?: number
-  student_type?: 'BOARDER' | 'DAY_SCHOLAR'
-  admission_date?: string
-  is_active?: boolean
+  admission_number?: string | undefined
+  first_name?: string | undefined
+  middle_name?: string | null | undefined
+  last_name?: string | undefined
+  email?: string | undefined
+  phone?: string | undefined
+  date_of_birth?: string | null | undefined
+  gender?: 'MALE' | 'FEMALE' | undefined
+  address?: string | undefined
+  guardian_name?: string | undefined
+  guardian_phone?: string | undefined
+  guardian_email?: string | undefined
+  guardian_relationship?: string | null | undefined
+  notes?: string | null | undefined
+  stream_id?: number | undefined
+  student_type?: 'BOARDER' | 'DAY_SCHOLAR' | undefined
+  admission_date?: string | undefined
+  is_active?: boolean | undefined
 }
 
 export interface StudentFilters {
-  stream_id?: number
-  is_active?: boolean
-  search?: string
+  stream_id?: number | undefined
+  is_active?: boolean | undefined
+  search?: string | undefined
 }
 
 // ── Staff ──
 export interface StaffData {
-  staff_number?: string
-  first_name?: string
-  middle_name?: string
-  last_name?: string
-  id_number?: string
-  kra_pin?: string
-  nhif_number?: string
-  nssf_number?: string
-  phone?: string
-  email?: string
-  bank_name?: string
-  bank_account?: string
-  department?: string
-  job_title?: string
-  employment_date?: string
-  basic_salary?: number
-  is_active?: boolean
+  staff_number?: string | undefined
+  first_name?: string | undefined
+  middle_name?: string | null | undefined
+  last_name?: string | undefined
+  id_number?: string | undefined
+  kra_pin?: string | undefined
+  nhif_number?: string | undefined
+  nssf_number?: string | undefined
+  phone?: string | undefined
+  email?: string | undefined
+  bank_name?: string | undefined
+  bank_account?: string | undefined
+  department?: string | undefined
+  job_title?: string | undefined
+  employment_date?: string | undefined
+  basic_salary?: number | undefined
+  is_active?: boolean | undefined
 }
 
 // ── Finance: Payments ──
@@ -60,13 +60,13 @@ export interface PaymentRecordData {
   student_id: number
   amount: number
   payment_method: string
-  payment_reference?: string
-  description?: string
+  payment_reference?: string | undefined
+  description?: string | undefined
   transaction_date: string
   term_id: number
-  invoice_id?: number
-  amount_in_words?: string
-  idempotency_key?: string
+  invoice_id?: number | undefined
+  amount_in_words?: string | undefined
+  idempotency_key?: string | undefined
 }
 
 export interface PayWithCreditData {
@@ -92,14 +92,14 @@ export interface TransactionData {
   category_id: number
   amount: number
   payment_method: string
-  payment_reference?: string
-  description?: string
+  payment_reference?: string | undefined
+  description?: string | undefined
 }
 
 export interface TransactionFilters {
-  startDate?: string
-  endDate?: string
-  type?: string
+  startDate?: string | undefined
+  endDate?: string | undefined
+  type?: string | undefined
 }
 
 // ── Finance: Scholarships ──
@@ -108,13 +108,13 @@ export interface ScholarshipCreateData {
   description: string
   scholarship_type: 'MERIT' | 'NEED_BASED' | 'SPORTS' | 'PARTIAL' | 'FULL'
   amount: number
-  percentage?: number
+  percentage?: number | undefined
   max_beneficiaries: number
   eligibility_criteria: string
   valid_from: string
   valid_to: string
-  sponsor_name?: string
-  sponsor_contact?: string
+  sponsor_name?: string | undefined
+  sponsor_contact?: string | undefined
 }
 
 export interface ScholarshipAllocationData {
@@ -131,28 +131,30 @@ export interface BudgetCreateData {
   fiscal_year: number
   start_date: string
   end_date: string
-  description?: string
+  description?: string | undefined
   line_items?: Array<{
     gl_account_code: string
     allocated_amount: number
-    description?: string
-  }>
+    description?: string | undefined
+  }> | undefined
 }
 
 export interface BudgetFilters {
-  fiscal_year?: number
-  status?: string
+  fiscal_year?: number | undefined
+  status?: string | undefined
 }
 
 // ── Settings ──
 export interface SettingsData {
-  school_name?: string
-  school_motto?: string
-  school_address?: string
-  school_phone?: string
-  school_email?: string
-  principal_name?: string
-  logo_path?: string
+  school_name?: string | undefined
+  school_motto?: string | undefined
+  school_address?: string | undefined
+  school_phone?: string | undefined
+  school_email?: string | undefined
+  principal_name?: string | undefined
+  logo_data_url?: string | undefined
+  mpesa_paybill?: string | undefined
+  updated_at?: string | undefined
 }
 
 // ── Users ──
@@ -176,19 +178,21 @@ export interface InventoryItemData {
   item_name: string
   category_id: number
   unit_of_measure: string
-  current_stock?: number
-  reorder_level?: number
-  unit_cost?: number
+  current_stock?: number | undefined
+  reorder_level?: number | undefined
+  unit_cost?: number | undefined
 }
 
 export interface StockMovementData {
   item_id: number
   movement_type: 'IN' | 'OUT' | 'ADJUSTMENT'
   quantity: number
-  unit_cost?: number
-  total_cost?: number
-  description?: string
+  unit_cost?: number | undefined
+  total_cost?: number | undefined
+  description?: string | undefined
   movement_date: string
+  reference_number?: string | undefined
+  supplier_id?: number | undefined
 }
 
 // ── Operations: Hire ──
@@ -252,15 +256,15 @@ export interface AcademicSubjectData {
   code: string
   name: string
   curriculum: string
-  is_compulsory?: boolean
-  is_active?: boolean
+  is_compulsory?: boolean | undefined
+  is_active?: boolean | undefined
 }
 
 export interface AcademicExamData {
   name: string
   academic_year_id: number
   term_id: number
-  weight?: number
+  weight?: number | undefined
 }
 
 export interface TeacherAllocationData {
@@ -278,32 +282,32 @@ export interface AcademicResultData {
 
 export interface MeritListFilters {
   examId: number
-  streamId?: number
-  academicYearId?: number
-  termId?: number
+  streamId?: number | undefined
+  academicYearId?: number | undefined
+  termId?: number | undefined
 }
 
 export interface PerformanceFilters {
   academicYearId: number
   termId: number
-  streamId?: number
-  examId?: number
+  streamId?: number | undefined
+  examId?: number | undefined
 }
 
 export interface BatchReportCardData {
   exam_id: number
   stream_id: number
-  template_id?: string
-  include_sms?: boolean
-  output_path?: string
-  merge?: boolean
+  template_id?: string | undefined
+  include_sms?: boolean | undefined
+  output_path?: string | undefined
+  merge?: boolean | undefined
 }
 
 export interface AwardData {
   student_id: number
   category_id: number
   title: string
-  description?: string
+  description?: string | undefined
   academic_year_id: number
   term_id: number
   awarded_by: number
@@ -315,10 +319,10 @@ export interface AwardActionData {
 }
 
 export interface AwardFilters {
-  academicYearId?: number
-  termId?: number
-  categoryId?: number
-  studentId?: number
+  academicYearId?: number | undefined
+  termId?: number | undefined
+  categoryId?: number | undefined
+  studentId?: number | undefined
 }
 
 export interface ExamTimetableConfig {
@@ -329,8 +333,11 @@ export interface ExamTimetableConfig {
 }
 
 export interface ExamFilters {
-  academicYearId?: number
-  termId?: number
+  academicYearId?: number | undefined
+  termId?: number | undefined
+  classId?: number | undefined
+  subjectId?: number | undefined
+  status?: string | undefined
 }
 
 export interface PromotionData {
@@ -353,7 +360,7 @@ export interface CBCParticipationData {
   studentId: number
   strandId: number
   startDate: string
-  endDate?: string
+  endDate?: string | undefined
 }
 
 export interface JSSTransitionData {
@@ -473,12 +480,13 @@ export interface GLAccountData {
 export interface ExemptionCreateData {
   student_id: number
   academic_year_id: number
-  term_id: number
-  fee_category_id: number
+  term_id: number | undefined
+  fee_category_id: number | undefined
   exemption_type: 'FULL' | 'PARTIAL' | 'PERCENTAGE'
-  amount?: number
-  percentage?: number
+  amount?: number | undefined
+  percentage?: number | undefined
   reason: string
+  notes?: string | undefined
 }
 
 // ── Finance: Export ──
@@ -524,6 +532,14 @@ export interface TransportExpenseData {
 export interface SessionData {
   user: { id: number; username: string; full_name: string; role: string }
   lastActivity: number
+}
+
+// ── System ──
+export interface ErrorLogData {
+  error: string
+  stack?: string | undefined
+  componentStack?: string | undefined
+  timestamp: string
 }
 
 // ── Updates ──

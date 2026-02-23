@@ -55,7 +55,7 @@ export interface AcademicYear {
 
 export interface Term {
   id: number
-  term_number?: number
+  term_number?: number | undefined
   term_name: string
   start_date: string
   end_date: string
@@ -82,17 +82,17 @@ export interface AcademicSubject {
   code: string
   name: string
   curriculum: string
-  is_compulsory?: boolean | number
-  is_active?: boolean | number
+  is_compulsory?: boolean | number | undefined
+  is_active?: boolean | number | undefined
 }
 
 export interface AcademicExam {
   id: number
   name: string
-  academic_year_id?: number
-  term_id?: number
-  weight?: number
-  created_at?: string
+  academic_year_id?: number | undefined
+  term_id?: number | undefined
+  weight?: number | undefined
+  created_at?: string | undefined
 }
 
 export interface TeacherAllocation {
@@ -100,19 +100,19 @@ export interface TeacherAllocation {
   subject_id: number
   stream_id: number
   teacher_id: number
-  subject_name?: string
-  stream_name?: string
-  teacher_name?: string
-  curriculum?: string
+  subject_name?: string | undefined
+  stream_name?: string | undefined
+  teacher_name?: string | undefined
+  curriculum?: string | undefined
 }
 
 export interface AcademicResult {
   student_id: number
-  student_name?: string
-  admission_number?: string
+  student_name?: string | undefined
+  admission_number?: string | undefined
   score: number | null
   competency_level: number | null
-  teacher_remarks?: string
+  teacher_remarks?: string | undefined
 }
 
 export interface PromotionBatchFailure {
@@ -174,16 +174,16 @@ export interface AcademicAPI {
   getPerformanceImprovement: (studentId: number) => Promise<IPCResult<PerformanceImprovement[]>>;
 
   // Awards
-  getAwards: (filters?: { academicYearId?: number; termId?: number; status?: string }) => Promise<IPCResult<StudentAward[]>>
+  getAwards: (filters?: { academicYearId?: number | undefined; termId?: number | undefined; status?: string | undefined }) => Promise<IPCResult<StudentAward[]>>
   getAwardCategories: () => Promise<IPCResult<AwardCategory[]>>
-  awardStudent: (data: { studentId: number; categoryId: number; academicYearId: number; termId?: number; userId?: number; userRole?: string; remarks?: string }) => Promise<{ id: number | bigint; status: string; approval_status: string; auto_approved: boolean }>
-  approveAward: (data: { awardId: number; userId?: number }) => Promise<void>
-  rejectAward: (data: { awardId: number; userId?: number; reason: string }) => Promise<void>
+  awardStudent: (data: { studentId: number; categoryId: number; academicYearId: number; termId?: number | undefined; userId?: number | undefined; userRole?: string | undefined; remarks?: string | undefined }) => Promise<{ id: number | bigint; status: string; approval_status: string; auto_approved: boolean }>
+  approveAward: (data: { awardId: number; userId?: number | undefined }) => Promise<void>
+  rejectAward: (data: { awardId: number; userId?: number | undefined; reason: string }) => Promise<void>
   deleteAward: (data: { awardId: number }) => Promise<void>
   getPendingAwardsCount: () => Promise<number>
 
   // Analytics
-  getExams: (filters: { academicYearId?: number; termId?: number }) => Promise<IPCResult<{ id: number; name: string }[]>>
+  getExams: (filters: { academicYearId?: number | undefined; termId?: number | undefined }) => Promise<IPCResult<{ id: number; name: string }[]>>
   getPerformanceSummary: (filters: { examId: number; streamId: number }) => Promise<IPCResult<PerformanceSummary>>
   getGradeDistribution: (filters: { examId: number; streamId: number }) => Promise<IPCResult<GradeDistribution[]>>
   getSubjectPerformance: (filters: { examId: number; streamId: number }) => Promise<IPCResult<SubjectPerformance[]>>
@@ -278,20 +278,20 @@ export interface StrugglingStudent {
 export interface StudentAward {
   id: number
   student_id: number
-  student_name?: string
-  first_name?: string
-  last_name?: string
+  student_name?: string | undefined
+  first_name?: string | undefined
+  last_name?: string | undefined
   admission_number: string
   award_category_id: number
   category_name: string
   awarded_date: string
   approval_status: 'pending' | 'approved' | 'rejected'
-  assigned_by_name?: string
-  approved_by_name?: string
-  approved_at?: string
-  rejection_reason?: string
-  certificate_number?: string
-  remarks?: string
+  assigned_by_name?: string | undefined
+  approved_by_name?: string | undefined
+  approved_at?: string | undefined
+  rejection_reason?: string | undefined
+  certificate_number?: string | undefined
+  remarks?: string | undefined
 }
 
 export interface AwardCategory {

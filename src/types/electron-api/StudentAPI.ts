@@ -4,30 +4,30 @@ export interface Student {
   id: number
   admission_number: string
   first_name: string
-  middle_name: string
+  middle_name: string | null | undefined
   last_name: string
-  full_name?: string
-  email: string
-  phone: string
-  date_of_birth: string
+  full_name?: string | undefined
+  email: string | null | undefined
+  phone: string | null | undefined
+  date_of_birth: string | null | undefined
   gender: 'MALE' | 'FEMALE'
-  address: string
-  guardian_name: string
-  guardian_phone: string
-  guardian_email: string
-  guardian_relationship?: string | null
-  notes?: string | null
-  stream_id: number
+  address: string | null | undefined
+  guardian_name: string | null | undefined
+  guardian_phone: string | null | undefined
+  guardian_email: string | null | undefined
+  guardian_relationship?: string | null | undefined
+  notes?: string | null | undefined
+  stream_id: number | null | undefined
   student_type: 'BOARDER' | 'DAY_SCHOLAR'
-  admission_date: string
+  admission_date: string | null | undefined
   is_active: boolean
-  photo_path?: string | null
+  photo_path?: string | null | undefined
   created_at: string
   updated_at: string
   // Calculated fields
-  stream_name?: string
-  balance?: number
-  credit_balance?: number
+  stream_name?: string | undefined
+  balance?: number | undefined
+  credit_balance?: number | undefined
 }
 
 export interface StudentFilters {

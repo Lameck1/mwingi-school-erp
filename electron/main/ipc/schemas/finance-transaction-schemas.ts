@@ -70,7 +70,10 @@ export const GenerateStudentInvoiceTuple = z.tuple([
 export const PaymentDataSchema = z.object({
     student_id: PositiveIntSchema,
     amount: AmountSchema,
-    transaction_date: DateStringSchema,
+    transaction_date: DateStringSchema.refine(
+        (val) => val <= new Date().toISOString().slice(0, 10),
+        { message: "Transaction date cannot be in the future" }
+    ),
     payment_method: z.string().min(1), // e.g. CASH, MPESA
     payment_reference: z.string().optional(),
     description: z.string().optional(),

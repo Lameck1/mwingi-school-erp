@@ -61,7 +61,7 @@ export const ScheduledReportSchema = z.object({
     report_name: z.string().min(1),
     report_type: z.string().min(1),
     parameters: z.string().optional(), // JSON string
-    schedule_type: z.enum(['DAILY', 'WEEKLY', 'MONTHLY', 'TERM_END', 'YEAR_END']),
+    schedule_type: z.enum(['DAILY', 'WEEKLY', 'MONTHLY']),
     day_of_week: z.number().min(0).max(6).nullable(),
     day_of_month: z.number().min(1).max(31).nullable(),
     time_of_day: z.string().regex(/^\d{2}:\d{2}$/, 'Invalid time format HH:MM'),
@@ -99,10 +99,10 @@ export const ScheduledReportInputSchema = z.object({
     report_name: z.string(),
     report_type: z.string(),
     parameters: z.string().optional(),
-    schedule_type: z.enum(['DAILY', 'WEEKLY', 'MONTHLY', 'TERM_END', 'YEAR_END']),
-    day_of_week: z.number().nullable(),
-    day_of_month: z.number().nullable(),
-    time_of_day: z.string(),
+    schedule_type: z.enum(['DAILY', 'WEEKLY', 'MONTHLY']),
+    day_of_week: z.number().min(0).max(6).nullable(),
+    day_of_month: z.number().min(1).max(31).nullable(),
+    time_of_day: z.string().regex(/^\d{2}:\d{2}$/, 'Invalid time format HH:MM'),
     recipients: z.string(),
     export_format: z.enum(['PDF', 'EXCEL', 'CSV']),
     is_active: z.boolean()
