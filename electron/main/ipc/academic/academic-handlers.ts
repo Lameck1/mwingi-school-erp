@@ -72,7 +72,7 @@ export function registerAcademicHandlers() {
         return db.prepare('SELECT * FROM academic_year ORDER BY start_date DESC').all()
     })
 
-    validatedHandler('academic-year:create', ROLES.ADMIN_ONLY, AcademicYearCreateSchema, async (_event, data) => {
+    validatedHandler('academicYear:create', ROLES.ADMIN_ONLY, AcademicYearCreateSchema, async (_event, data) => {
         db.prepare(`
             INSERT INTO academic_year (year_name, start_date, end_date, is_current)
             VALUES (?, ?, ?, ?)
@@ -80,7 +80,7 @@ export function registerAcademicHandlers() {
         return { success: true }
     })
 
-    validatedHandlerMulti('academic-year:activate', ROLES.ADMIN_ONLY, AcademicYearActivateSchema, async (_event, [id]) => {
+    validatedHandlerMulti('academicYear:activate', ROLES.ADMIN_ONLY, AcademicYearActivateSchema, async (_event, [id]) => {
         db.transaction(() => {
             db.prepare('UPDATE academic_year SET is_current = 0').run()
             db.prepare('UPDATE academic_year SET is_current = 1 WHERE id = ?').run(id)

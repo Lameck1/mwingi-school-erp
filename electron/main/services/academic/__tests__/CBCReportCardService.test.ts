@@ -66,10 +66,20 @@ describe('CBCReportCardService report card correctness', () => {
   beforeEach(() => {
     db = new Database(':memory:')
     db.exec(`
+      CREATE TABLE subject_allocation (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        subject_id INTEGER NOT NULL,
+        teacher_id INTEGER NOT NULL,
+        stream_id INTEGER NOT NULL,
+        term_id INTEGER NOT NULL,
+        is_active BOOLEAN DEFAULT 1
+      );
+
       CREATE TABLE exam (
         id INTEGER PRIMARY KEY,
         academic_year_id INTEGER NOT NULL,
-        term_id INTEGER NOT NULL
+        term_id INTEGER NOT NULL,
+        exam_name TEXT
       );
 
       CREATE TABLE student (
@@ -190,6 +200,7 @@ describe('CBCReportCardService report card correctness', () => {
         (3, 1, 2026, 1, 'ACTIVE', '2026-01-12');
 
       INSERT INTO subject (id, name) VALUES (10, 'Mathematics'), (11, 'English');
+      INSERT INTO subject_allocation (subject_id, teacher_id, stream_id, term_id) VALUES (10, 1, 1, 1), (11, 1, 1, 1);
 
       INSERT INTO exam_result (exam_id, student_id, subject_id, score, teacher_remarks)
       VALUES
