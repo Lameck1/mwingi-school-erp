@@ -74,20 +74,20 @@ describe('data import IPC handlers', () => {
     const handler = handlerMap.get('data:import')
     expect(handler).toBeDefined()
 
-    const result = await handler!({}, 'C:/tmp/students.xlsx', { entityType: 'student' }, 3) as {
+    const result = await handler!({}, 'C:/tmp/students.xlsx', { entityType: 'STUDENT', mappings: [] }, 3) as {
       success: boolean
       errors?: Array<{ message: string }>
     }
 
     expect(result.success).toBe(false)
-    expect(result.errors?.[0]?.message).toContain('renderer user mismatch')
+    expect((result as any).error).toContain('renderer user mismatch')
     expect(importServiceMock.importFromFile).not.toHaveBeenCalled()
   })
 
   it('data:import enforces admin role', async () => {
     sessionRole = 'TEACHER'
     const handler = handlerMap.get('data:import')!
-    const result = await handler({}, 'C:/tmp/students.xlsx', { entityType: 'student' }, 21) as {
+    const result = await handler({}, 'C:/tmp/students.xlsx', { entityType: 'STUDENT', mappings: [] }, 21) as {
       success: boolean
       error?: string
     }

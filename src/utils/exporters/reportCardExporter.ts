@@ -149,10 +149,10 @@ export async function generateReportCardPDF(data: ReportCardData): Promise<jsPDF
 
             let x = marginX + 2
             colWidths.forEach((w, i) => {
-                doc.text(headers[i], x, y + 4.5)
+                doc.text(headers[i] || '', x, y + 4.5)
                 x += w
             })
-            doc.text(headers[7], x, y + 4.5) // Remarks header
+            doc.text(headers[7] || 'REMARKS', x, y + 4.5) // Remarks header
 
             y += 7
             doc.setTextColor(0, 0, 0)
@@ -169,10 +169,10 @@ export async function generateReportCardPDF(data: ReportCardData): Promise<jsPDF
 
         data.grades.forEach((grade, idx) => {
             // Accumulate totals
-            if (grade.cat1) {totals.cat1 += grade.cat1}
-            if (grade.cat2) {totals.cat2 += grade.cat2}
-            if (grade.midterm) {totals.mid += grade.midterm}
-            if (grade.final_exam) {totals.end += grade.final_exam}
+            if (grade.cat1) { totals.cat1 += grade.cat1 }
+            if (grade.cat2) { totals.cat2 += grade.cat2 }
+            if (grade.midterm) { totals.mid += grade.midterm }
+            if (grade.final_exam) { totals.end += grade.final_exam }
             totals.avg += grade.average
             totals.count++
 
@@ -210,11 +210,11 @@ export async function generateReportCardPDF(data: ReportCardData): Promise<jsPDF
 
             // Draw Fixed Columns
             row.forEach((cell, i) => {
-                if (i === 6) {doc.setFont('helvetica', 'bold')}
-                else {doc.setFont('helvetica', 'normal')}
+                if (i === 6) { doc.setFont('helvetica', 'bold') }
+                else { doc.setFont('helvetica', 'normal') }
 
-                doc.text(cell, x, y + 4.5)
-                x += colWidths[i]
+                doc.text(String(cell || ''), x, y + 4.5)
+                x += colWidths[i] || 10
             })
 
             // Draw Wrapped Remarks
@@ -242,31 +242,31 @@ export async function generateReportCardPDF(data: ReportCardData): Promise<jsPDF
         doc.text('TOTALS:', marginX + 2, y + 5)
 
         // Draw totals aligned with columns
-        let tx = marginX + 2 + colWidths[0] // Start at CAT1 column
+        let tx = marginX + 2 + (colWidths[0] || 45) // Start at CAT1 column
         doc.text(totals.cat1 > 0 ? totals.cat1.toString() : '-', tx, y + 5)
-        tx += colWidths[1]
+        tx += (colWidths[1] || 11)
         doc.text(totals.cat2 > 0 ? totals.cat2.toString() : '-', tx, y + 5)
-        tx += colWidths[2]
+        tx += (colWidths[2] || 11)
         doc.text(totals.mid > 0 ? totals.mid.toString() : '-', tx, y + 5)
-        tx += colWidths[3]
+        tx += (colWidths[3] || 11)
         doc.text(totals.end > 0 ? totals.end.toString() : '-', tx, y + 5)
-        tx += colWidths[4]
+        tx += (colWidths[4] || 11)
         doc.text(totals.avg > 0 ? totals.avg.toFixed(0) : '-', tx, y + 5)
 
         y += 7
 
         // Averages Row
         doc.text('AVERAGES:', marginX + 2, y + 5)
-        tx = marginX + 2 + colWidths[0]
+        tx = marginX + 2 + (colWidths[0] || 45)
         const cnt = totals.count || 1
         doc.text(totals.cat1 > 0 ? (totals.cat1 / cnt).toFixed(0) : '-', tx, y + 5)
-        tx += colWidths[1]
+        tx += (colWidths[1] || 11)
         doc.text(totals.cat2 > 0 ? (totals.cat2 / cnt).toFixed(0) : '-', tx, y + 5)
-        tx += colWidths[2]
+        tx += (colWidths[2] || 11)
         doc.text(totals.mid > 0 ? (totals.mid / cnt).toFixed(0) : '-', tx, y + 5)
-        tx += colWidths[3]
+        tx += (colWidths[3] || 11)
         doc.text(totals.end > 0 ? (totals.end / cnt).toFixed(0) : '-', tx, y + 5)
-        tx += colWidths[4]
+        tx += (colWidths[4] || 11)
         doc.text(totals.avg > 0 ? (totals.avg / cnt).toFixed(0) : '-', tx, y + 5)
 
         y += 7

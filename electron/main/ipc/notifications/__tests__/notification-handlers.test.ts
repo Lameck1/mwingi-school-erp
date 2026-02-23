@@ -80,7 +80,13 @@ describe('notification IPC handlers', () => {
     expect(handler).toBeDefined()
     const event = {};
     attachActor(event);
-    const result = await handler!(event, { channel: 'EMAIL' }, 3) as { success: boolean; error?: string }
+    const result = await handler!(event, {
+      channel: 'EMAIL',
+      recipientType: 'STUDENT',
+      recipientId: 1,
+      to: 'test@test.com',
+      message: 'Hello'
+    }, 3) as { success: boolean; error?: string }
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('renderer user mismatch')

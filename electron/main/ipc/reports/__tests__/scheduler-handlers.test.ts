@@ -86,7 +86,7 @@ describe('scheduler handlers', () => {
       created_by_user_id: 1
     }, 0) as { success: boolean; errors?: string[] }
     expect(result.success).toBe(false)
-    expect(result.errors?.[0]).toContain('Invalid user session')
+    expect(result.error).toContain('Invalid user session')
     expect(schedulerMock.createSchedule).not.toHaveBeenCalled()
   })
 
@@ -116,7 +116,7 @@ describe('scheduler handlers', () => {
     }, 5) as { success: boolean; error?: string }
 
     expect(result.success).toBe(false)
-    expect(result.error).toContain('Invalid input')
+    expect(result.error).toContain('Validation failed')
     // expect(result.error).toContain('time_of_day') // Zod message might not include field name
     expect(schedulerMock.createSchedule).not.toHaveBeenCalled()
   })
@@ -140,7 +140,7 @@ describe('scheduler handlers', () => {
     }, 5) as { success: boolean; error?: string }
 
     expect(result.success).toBe(false)
-    expect(result.error).toContain('Invalid input')
+    expect(result.error).toContain('Validation failed')
     // Zod max check doesn't include field name by default
   })
 

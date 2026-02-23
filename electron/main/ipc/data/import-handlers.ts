@@ -15,6 +15,9 @@ export function registerDataImportHandlers(): void {
         [filePath, config, _legacyId],
         actorCtx
     ) => {
+        if (_legacyId !== undefined && _legacyId !== actorCtx.id) {
+            throw new Error('Unauthorized: renderer user mismatch')
+        }
         try {
             const resolved = path.resolve(filePath)
             const allowedExtensions = ['.csv', '.xlsx', '.xls']

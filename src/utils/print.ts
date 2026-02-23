@@ -49,11 +49,11 @@ export function previewPDF(title: string, pdfUrl: string): void {
 }
 
 export function previewHTML(title: string, html: string, onDownload?: () => void): void {
-  openPrintPreview({
-    title,
-    html,
-    onDownload
-  })
+  const previewData: PrintPreviewData = { title, html }
+  if (onDownload) {
+    previewData.onDownload = onDownload
+  }
+  openPrintPreview(previewData)
 }
 
 function getHeadStylesHtml(): string {

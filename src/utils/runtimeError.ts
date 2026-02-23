@@ -34,7 +34,7 @@ export function reportRuntimeError(
     const electronApi = (globalThis as {
         electronAPI?: {
             system?: {
-                logError?: (data: { error: string; stack?: string; componentStack?: string | null; timestamp: string }) => Promise<unknown>
+                logError?: (data: { error: string; stack?: string | undefined; componentStack?: string | null | undefined; timestamp: string }) => Promise<unknown>
             }
         }
     }).electronAPI
@@ -44,6 +44,7 @@ export function reportRuntimeError(
         void logError({
             error: composed,
             stack: error instanceof Error ? error.stack : safeSerializeError(error),
+            componentStack: undefined,
             timestamp: new Date().toISOString()
         })
     }

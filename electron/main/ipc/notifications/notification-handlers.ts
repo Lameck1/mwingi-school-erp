@@ -27,6 +27,9 @@ export function registerNotificationHandlers(): void {
         [request, _legacyId],
         actorCtx
     ) => {
+        if (_legacyId !== undefined && _legacyId !== actorCtx.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
+        }
         return getService().send(request as NotificationRequest, actorCtx.id)
     })
 
