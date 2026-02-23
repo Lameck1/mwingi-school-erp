@@ -18,6 +18,9 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
+    "typecheck:renderer": "tsc --noEmit -p tsconfig.json",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
+    "typecheck": "npm run typecheck:renderer && npm run typecheck:node",
     "lint": "npm run lint:eslint",
     "lint:eslint": "eslint . --ext ts,tsx --report-unused-disable-directives",
     "lint:eslint:strict": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
@@ -25,6 +28,9 @@
     "lint:strict": "npm run lint:eslint",
     "lint:architecture": "depcruise --config .dependency-cruiser.cjs \"src/**/*.ts\" \"src/**/*.tsx\" \"electron/**/*.ts\" --output-type err-long",
     "lint:deps": "npm audit --audit-level=high",
+    "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "audit:full": "npm audit --audit-level=moderate",
+    "audit:full:json": "npm audit --audit-level=moderate --json",
     "lint:md": "npx markdownlint-cli \"**/*.md\" --ignore \"node_modules/**\" --ignore \"dist/**\" --ignore \"dist-electron/**\" --ignore \"release/**\" --ignore \"release2/**\" --ignore \"release3/**\"",
     "lint:md:fix": "npx markdownlint-cli \"**/*.md\" --ignore \"node_modules/**\" --ignore \"dist/**\" --ignore \"dist-electron/**\" --ignore \"release/**\" --ignore \"release2/**\" --ignore \"release3/**\" --fix",
     "lint:quality": "npm run lint:eslint:strict && npm run lint:architecture && npm run lint:md",
@@ -161,6 +167,12 @@
   "overrides": {
     "@isaacs/brace-expansion": "5.0.1",
     "@electron/get": "3.1.0",
+    "glob": {
+      "minimatch": "10.2.2"
+    },
+    "readdir-glob": {
+      "minimatch": "10.2.2"
+    },
     "unzipper": "^0.12.3",
     "archiver": "^7.0.1",
     "test-exclude": "^7.0.1"

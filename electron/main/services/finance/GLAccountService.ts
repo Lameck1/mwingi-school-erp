@@ -107,6 +107,9 @@ export class GLAccountService {
       logAudit(userId, 'CREATE', 'gl_account', result.lastInsertRowid as number, null, data);
 
       const newAccount = await this.getById(result.lastInsertRowid as number);
+      if (newAccount.data === undefined) {
+        return { success: false, error: ACCOUNT_NOT_FOUND };
+      }
       return { success: true, data: newAccount.data, message: 'Account created successfully' };
     } catch (error) {
       console.error('Error creating GL account:', error);
@@ -139,6 +142,9 @@ export class GLAccountService {
       logAudit(userId, 'UPDATE', 'gl_account', id, currentAccount, data);
 
       const updatedAccount = await this.getById(id);
+      if (updatedAccount.data === undefined) {
+        return { success: false, error: ACCOUNT_NOT_FOUND };
+      }
       return { success: true, data: updatedAccount.data, message: 'Account updated successfully' };
     } catch (error) {
       console.error('Error updating GL account:', error);

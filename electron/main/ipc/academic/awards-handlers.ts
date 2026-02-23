@@ -25,10 +25,7 @@ export function registerAwardsHandlers() {
 }
 
 function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void {
-  validatedHandler('awards:assign', ROLES.STAFF, AwardAssignSchema, (event, params: z.infer<typeof AwardAssignSchema>, actor) => {
-    // params is typed via schema inference but for explicit ness I used any or strict inferred type
-    // In schema: userId and userRole optional.
-
+  validatedHandler('awards:assign', ROLES.STAFF, AwardAssignSchema, (_event, params, actor) => {
     // Logic for auto-approve based on actor role
     const actorRole = actor.role;
     // Auto-approve if user is ADMIN/PRINCIPAL/DEPUTY_PRINCIPAL
@@ -57,7 +54,7 @@ function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void
     };
   });
 
-  validatedHandler('awards:approve', ROLES.MANAGEMENT, AwardApproveSchema, (event, params, actor) => {
+  validatedHandler('awards:approve', ROLES.MANAGEMENT, AwardApproveSchema, (_event, params, actor) => {
     // Verify the award exists and is in pending state
     const award = db.prepare(SELECT_AWARD_STATUS).get(params.awardId) as { approval_status: string } | undefined;
     if (!award) { throw new Error(AWARD_NOT_FOUND); }
@@ -76,7 +73,7 @@ function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void
     return { status: 'success', message: 'Award approved successfully' };
   });
 
-  validatedHandler('awards:reject', ROLES.MANAGEMENT, AwardRejectSchema, (event, params, actor) => {
+  validatedHandler('awards:reject', ROLES.MANAGEMENT, AwardRejectSchema, (_event, params, actor) => {
     // Verify the award exists and is in pending state
     const award = db.prepare(SELECT_AWARD_STATUS).get(params.awardId) as { approval_status: string } | undefined;
     if (!award) { throw new Error(AWARD_NOT_FOUND); }
@@ -100,7 +97,7 @@ function registerAwardMutationHandlers(db: ReturnType<typeof getDatabase>): void
 }
 
 function registerAwardDeleteHandler(db: ReturnType<typeof getDatabase>): void {
-  validatedHandlerMulti('awards:delete', ROLES.MANAGEMENT, AwardDeleteSchema, (event, [awardId]: [number, number?], _actor) => {
+  validatedHandlerMulti('awards:delete', ROLES.MANAGEMENT, AwardDeleteSchema, (_event, [awardId], _actor) => {
     const award = db.prepare(SELECT_AWARD_STATUS).get(awardId) as { approval_status: string } | undefined;
     if (!award) { throw new Error(AWARD_NOT_FOUND); }
     if (award.approval_status === 'approved') {
@@ -112,10 +109,10 @@ function registerAwardDeleteHandler(db: ReturnType<typeof getDatabase>): void {
 }
 
 function buildAwardQueryFilters(params?: {
-  status?: string;
-  categoryId?: number;
-  academicYearId?: number;
-  termId?: number;
+  status?: string | undefined;
+  categoryId?: number | undefined;
+  academicYearId?: number | undefined;
+  termId?: number | undefined;
 }): { args: Array<number | string>; query: string } {
   let query = `
         SELECT 
@@ -174,7 +171,7 @@ function registerAwardQueryHandlers(db: ReturnType<typeof getDatabase>): void {
     return result.count;
   });
 
-  validatedHandlerMulti('awards:getStudentAwards', ROLES.STAFF, AwardGetStudentAwardsSchema, (_event, [studentId]: [number]) => {
+  validatedHandlerMulti('awards:getStudentAwards', ROLES.STAFF, AwardGetStudentAwardsSchema, (_event, [studentId]) => {
     return db.prepare(`
         SELECT sa.*, ac.name as category_name, ac.category_type
         FROM student_award sa
@@ -184,7 +181,7 @@ function registerAwardQueryHandlers(db: ReturnType<typeof getDatabase>): void {
       `).all(studentId);
   });
 
-  validatedHandlerMulti('awards:getById', ROLES.STAFF, AwardGetByIdSchema, (_event, [awardId]: [number]) => {
+  validatedHandlerMulti('awards:getById', ROLES.STAFF, AwardGetByIdSchema, (_event, [awardId]) => {
     return db.prepare(`
         SELECT sa.*, ac.name as category_name, ac.category_type, 
                st.admission_number, st.first_name, st.last_name

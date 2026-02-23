@@ -164,7 +164,7 @@ function registerUserManagementHandlers(db: ReturnType<typeof getDatabase>): voi
     validatedHandler('user:create', ROLES.ADMIN_ONLY, UserCreateSchema, async (_event, data, _actor): Promise<{ success: boolean; id?: number; error?: string }> => {
         const pwCheck = validatePassword(data.password)
         if (!pwCheck.success) {
-            return { success: false, error: pwCheck.error }
+            return { success: false, error: pwCheck.error || 'Invalid password' }
         }
 
         const existing = db.prepare('SELECT id FROM user WHERE username = ?').get(data.username) as { id: number } | undefined
@@ -186,7 +186,7 @@ function registerUserManagementHandlers(db: ReturnType<typeof getDatabase>): voi
     validatedHandlerMulti('user:resetPassword', ROLES.ADMIN_ONLY, UserResetPasswordSchema, async (_event, [id, newPassword], _actor): Promise<{ success: boolean; error?: string }> => {
         const pwCheck = validatePassword(newPassword)
         if (!pwCheck.success) {
-            return { success: false, error: pwCheck.error }
+            return { success: false, error: pwCheck.error || 'Invalid password' }
         }
 
         const hash = await bcrypt.hash(newPassword, 10)
@@ -216,7 +216,7 @@ export function registerAuthHandlers(): void {
 
         const pwCheck = validatePassword(data.password)
         if (!pwCheck.success) {
-            return { success: false, error: pwCheck.error }
+            return { success: false, error: pwCheck.error || 'Invalid password' }
         }
 
         const hash = await bcrypt.hash(data.password, 10)
@@ -287,7 +287,7 @@ export function registerAuthHandlers(): void {
         if (!valid) { return { success: false, error: 'Current password is incorrect' } }
 
         const pwCheck = validatePassword(newPassword)
-        if (!pwCheck.success) { return { success: false, error: pwCheck.error } }
+        if (!pwCheck.success) { return { success: false, error: pwCheck.error || 'Invalid password' } }
 
         const hash = await bcrypt.hash(newPassword, 10)
         db.prepare('UPDATE user SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(hash, sessionUserId)

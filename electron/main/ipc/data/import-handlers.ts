@@ -7,6 +7,37 @@ import { ROLES } from '../ipc-result'
 import { ImportTuple, TemplateTypeSchema } from '../schemas/system-schemas'
 import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
+import type { ImportConfig } from '../../services/data/DataImportService'
+import type { z } from 'zod'
+
+function normalizeImportConfig(config: z.infer<typeof ImportTuple>[1]): ImportConfig {
+    const normalizedMappings: ImportConfig['mappings'] = config.mappings.map((mapping) => {
+        const normalized: {
+            sourceColumn: string
+            targetField: string
+            required?: boolean
+        } = {
+            sourceColumn: mapping.sourceColumn,
+            targetField: mapping.targetField
+        }
+        if (mapping.required !== undefined) {
+            normalized.required = mapping.required
+        }
+        return normalized
+    })
+
+    const normalized: ImportConfig = {
+        entityType: config.entityType,
+        mappings: normalizedMappings
+    }
+    if (config.skipDuplicates !== undefined) {
+        normalized.skipDuplicates = config.skipDuplicates
+    }
+    if (config.duplicateKey !== undefined) {
+        normalized.duplicateKey = config.duplicateKey
+    }
+    return normalized
+}
 
 export function registerDataImportHandlers(): void {
     // Import from file
@@ -35,7 +66,7 @@ export function registerDataImportHandlers(): void {
             return dataImportService.importFromFile(
                 buffer,
                 filePath,
-                config,
+                normalizeImportConfig(config),
                 actorCtx.id
             )
         } catch (error) {

@@ -234,7 +234,7 @@ export const ReportCardDownloadSchema = z.object({
     merge: z.boolean()
 })
 
-export const ReportCardOpenFileSchema = z.tuple([z.string()])
+export const ReportCardOpenFileSchema = z.tuple([z.string().min(1)])
 
 export const ScheduleExportPdfSchema = z.object({
     examId: z.number().optional(),

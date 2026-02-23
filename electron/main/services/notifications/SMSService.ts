@@ -29,8 +29,8 @@ export class SMSService {
         if (firstRecipient?.status === 'Success') {
             return {
                 success: true,
-                messageId: firstRecipient.messageId,
-                provider: 'AFRICASTALKING'
+                provider: 'AFRICASTALKING',
+                ...(firstRecipient.messageId !== undefined ? { messageId: firstRecipient.messageId } : {})
             }
         }
 

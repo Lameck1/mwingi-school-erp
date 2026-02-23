@@ -68,7 +68,7 @@ export class PaymentService implements IPaymentRecorder, IPaymentVoidProcessor, 
     }
     const dateValidation = validatePastOrTodayDate(data.transaction_date)
     if (!dateValidation.success) {
-      return { success: false, error: dateValidation.error }
+      return { success: false, error: dateValidation.error ?? 'Invalid transaction date' }
     }
     data.transaction_date = dateValidation.data!
 

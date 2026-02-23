@@ -15,11 +15,11 @@ interface TransactionData {
     category_id: number
     amount: number
     payment_method: string
-    payment_reference?: string
-    description?: string
-    force_budget_override?: boolean
-    budget_override_reason?: string
-    budget_department?: string | null
+    payment_reference?: string | undefined
+    description?: string | undefined
+    force_budget_override?: boolean | undefined
+    budget_override_reason?: string | undefined
+    budget_department?: string | null | undefined
 }
 
 
@@ -209,7 +209,6 @@ export function registerTransactionsHandlers(): void {
         }
     })
 }
-
 
 
 

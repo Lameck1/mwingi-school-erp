@@ -49,16 +49,16 @@ export interface SubjectCreateData {
     code: string
     name: string
     curriculum: string
-    is_compulsory?: boolean
-    is_active?: boolean
+    is_compulsory?: boolean | undefined
+    is_active?: boolean | undefined
 }
 
 export interface SubjectUpdateData {
-    code?: string
-    name?: string
-    curriculum?: string
-    is_compulsory?: boolean
-    is_active?: boolean
+    code?: string | undefined
+    name?: string | undefined
+    curriculum?: string | undefined
+    is_compulsory?: boolean | undefined
+    is_active?: boolean | undefined
 }
 
 export interface Exam {
@@ -74,7 +74,7 @@ export interface CreateExamDTO {
     academic_year_id: number
     term_id: number
     name: string
-    weight?: number
+    weight?: number | undefined
 }
 
 export interface ExamResultView {

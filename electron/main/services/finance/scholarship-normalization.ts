@@ -74,21 +74,31 @@ const todayIsoDate = (): string => new Date().toISOString().split('T')[0] ?? ''
 
 export const normalizeScholarshipData = (data: ScholarshipData | LegacyScholarshipData): ScholarshipData => {
   const legacy = data as LegacyScholarshipData
-  return {
+  const normalized: ScholarshipData = {
     name: firstString(data.name) ?? '',
     description: firstString(data.description) ?? '',
     scholarship_type:
       (firstString(data.scholarship_type, legacy.type) as ScholarshipData['scholarship_type'] | undefined) ??
       'MERIT',
     amount: firstNumber(data.amount, legacy.totalAmount, legacy.total_amount) ?? 0,
-    percentage: toNumber(data.percentage),
     max_beneficiaries: firstNumber(data.max_beneficiaries, legacy.maxBeneficiaries) ?? 9999,
     eligibility_criteria: firstString(data.eligibility_criteria, legacy.eligibilityCriteria) ?? '',
     valid_from: firstString(data.valid_from, legacy.startDate, legacy.validFrom) ?? todayIsoDate(),
-    valid_to: firstString(data.valid_to, legacy.endDate, legacy.validTo) ?? todayIsoDate(),
-    sponsor_name: firstString(data.sponsor_name),
-    sponsor_contact: firstString(data.sponsor_contact)
+    valid_to: firstString(data.valid_to, legacy.endDate, legacy.validTo) ?? todayIsoDate()
   }
+  const percentage = toNumber(data.percentage)
+  if (percentage !== undefined) {
+    normalized.percentage = percentage
+  }
+  const sponsorName = firstString(data.sponsor_name)
+  if (sponsorName !== undefined) {
+    normalized.sponsor_name = sponsorName
+  }
+  const sponsorContact = firstString(data.sponsor_contact)
+  if (sponsorContact !== undefined) {
+    normalized.sponsor_contact = sponsorContact
+  }
+  return normalized
 }
 
 export const normalizeAllocationData = (data: AllocationData | LegacyAllocationData): AllocationData => {

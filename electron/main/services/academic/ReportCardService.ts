@@ -557,14 +557,16 @@ export class ReportCardService {
                 stream_name: student.stream_name || 'N/A',
                 photo: student.photo_path ? getImageAsBase64DataUrl(student.photo_path) : null
             },
-            school: schoolSettings ? {
-                name: schoolSettings.school_name,
-                motto: schoolSettings.school_motto,
-                logo: schoolSettings.logo_path ? getImageAsBase64DataUrl(schoolSettings.logo_path) : null,
-                address: schoolSettings.address,
-                email: schoolSettings.email,
-                phone: schoolSettings.phone
-            } : undefined,
+            ...(schoolSettings ? {
+                school: {
+                    name: schoolSettings.school_name,
+                    motto: schoolSettings.school_motto,
+                    logo: schoolSettings.logo_path ? getImageAsBase64DataUrl(schoolSettings.logo_path) : null,
+                    address: schoolSettings.address,
+                    email: schoolSettings.email,
+                    phone: schoolSettings.phone
+                }
+            } : {}),
             academic_year: yearInfo.year_name || '',
             term: termInfo.term_name || '',
             grades: gradeRows,

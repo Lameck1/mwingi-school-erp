@@ -21,7 +21,15 @@ export function registerBankReconciliationHandlers(): void {
     })
 
     validatedHandler('bank:createAccount', ROLES.FINANCE, BankAccountSchema, (_event, data) => {
-        return getService().createBankAccount(data)
+        return getService().createBankAccount({
+            account_name: data.account_name,
+            account_number: data.account_number,
+            bank_name: data.bank_name,
+            opening_balance: data.opening_balance,
+            ...(data.branch !== undefined ? { branch: data.branch } : {}),
+            ...(data.swift_code !== undefined ? { swift_code: data.swift_code } : {}),
+            ...(data.currency !== undefined ? { currency: data.currency } : {})
+        })
     })
 
     // Bank Statements

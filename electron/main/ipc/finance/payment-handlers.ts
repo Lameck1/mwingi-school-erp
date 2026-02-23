@@ -85,12 +85,12 @@ const registerPaymentRecordHandler = (context: FinanceContext): void => {
                     transaction_date: data.transaction_date,
                     payment_method: data.payment_method,
                     payment_reference: sanitizeString(data.payment_reference),
-                    idempotency_key: idempotencyKey,
                     description: sanitizeString(data.description) || 'Tuition Fee Payment',
                     recorded_by_user_id: actorId,
-                    invoice_id: data.invoice_id,
                     term_id: data.term_id || 0,
-                    amount_in_words: data.amount_in_words
+                    ...(idempotencyKey !== undefined ? { idempotency_key: idempotencyKey } : {}),
+                    ...(data.invoice_id !== undefined ? { invoice_id: data.invoice_id } : {}),
+                    ...(data.amount_in_words !== undefined ? { amount_in_words: data.amount_in_words } : {})
                 })
 
                 if (paymentResult?.success) {
@@ -153,6 +153,14 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
     // Wait, original used 'fi' for select alias. For update it needs simple sql.
     const invoiceAmountSqlForUpdate = buildFeeInvoiceAmountSql(db, 'fee_invoice')
     const outstandingBalanceSql = buildFeeInvoiceOutstandingBalanceSql(db, 'fi')
+    type CreditInvoiceRow = {
+        id: number
+        student_id: number
+        invoice_amount: number
+        amount_paid: number
+        status: string
+        outstanding_balance: number
+    }
 
     validatedHandlerMulti('payment:payWithCredit', ROLES.FINANCE, PayWithCreditTuple, (event, [data, legacyUserId], actor) => {
         if (legacyUserId !== undefined && legacyUserId !== actor.id) {
@@ -179,8 +187,7 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
                 FROM fee_invoice fi
                 WHERE fi.id = ?
             `)
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                .get(data.invoiceId) as any // Typed above
+                .get(data.invoiceId) as CreditInvoiceRow | undefined
 
             if (!invoice) {
                 return { success: false, error: 'Invoice not found' }
@@ -188,7 +195,9 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
             if (invoice.student_id !== data.studentId) {
                 return { success: false, error: 'Invoice does not belong to selected student' }
             }
-            if (!OUTSTANDING_INVOICE_STATUSES.includes(invoice.status.toUpperCase())) {
+            const invoiceStatus = invoice.status.toUpperCase()
+            const canAcceptPayments = OUTSTANDING_INVOICE_STATUSES.some((status) => status === invoiceStatus)
+            if (!canAcceptPayments) {
                 return { success: false, error: `Invoice cannot accept payments in ${invoice.status} state` }
             }
 
@@ -339,7 +348,7 @@ const registerPaymentVoidHandler = (context: FinanceContext): void => {
                 transaction_id: transactionId,
                 void_reason: voidReason.trim(),
                 voided_by: actorId,
-                recovery_method: recoveryMethod
+                ...(recoveryMethod !== undefined ? { recovery_method: recoveryMethod } : {})
             })
         } catch (error) {
             console.error('Payment void error:', error)

@@ -15,8 +15,7 @@ export type UserRole =
   | 'DEPUTY_PRINCIPAL'
   | 'TEACHER'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type APIMethod = (...args: any[]) => any
+type APIMethod = (...args: never[]) => unknown
 type APISlice = Record<string, APIMethod>
 
 interface APIFactories {
@@ -196,6 +195,28 @@ function requireFactories(): APIFactories {
   return factories
 }
 
+function createGuardedMethod<M extends APIMethod>(
+  methodName: string,
+  domain: keyof RolePermissions,
+  getRole: () => UserRole,
+  originalMethod: M | undefined
+): M {
+  const wrapped: APIMethod = (...args: never[]) => {
+    const role = getRole()
+    const allowed = isMethodAllowed(role, domain, methodName)
+    if (!allowed) {
+      return Promise.reject(
+        new Error(`Renderer role '${role}' cannot invoke '${methodName}' in '${domain}' domain`)
+      )
+    }
+    if (!originalMethod) {
+      return Promise.reject(new Error(`Method '${methodName}' not found in '${domain}' domain`))
+    }
+    return Reflect.apply(originalMethod as Function, undefined, args as unknown[])
+  }
+  return wrapped as M
+}
+
 function createDomainGuard<T extends APISlice>(
   api: T,
   domain: keyof RolePermissions,
@@ -204,19 +225,7 @@ function createDomainGuard<T extends APISlice>(
   const guarded: Partial<T> = {}
   for (const methodName of Object.keys(api) as Array<keyof T>) {
     const originalMethod = api[methodName]
-    guarded[methodName] = ((...args: unknown[]) => {
-      const role = getRole()
-      const allowed = isMethodAllowed(role, domain, String(methodName))
-      if (!allowed) {
-        return Promise.reject(
-          new Error(`Renderer role '${role}' cannot invoke '${String(methodName)}' in '${domain}' domain`)
-        )
-      }
-      if (!originalMethod) {
-        return Promise.reject(new Error(`Method '${String(methodName)}' not found in '${domain}' domain`))
-      }
-      return originalMethod(...args)
-    }) as T[keyof T]
+    guarded[methodName] = createGuardedMethod(String(methodName), domain, getRole, originalMethod)
   }
   return guarded as T
 }

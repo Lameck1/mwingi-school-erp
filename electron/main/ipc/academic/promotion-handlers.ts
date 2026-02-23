@@ -18,26 +18,26 @@ export function registerPromotionHandlers(): void {
         return getService().getStreams()
     })
 
-    validatedHandlerMulti('promotion:getStudentsForPromotion', ROLES.STAFF, PromotionGetStudentsSchema, (_event, [streamId, academicYearId]: [number, number]) => {
+    validatedHandlerMulti('promotion:getStudentsForPromotion', ROLES.STAFF, PromotionGetStudentsSchema, (_event, [streamId, academicYearId]) => {
         return getService().getStudentsForPromotion(streamId, academicYearId)
     })
 
-    validatedHandler('promotion:promoteStudent', ROLES.MANAGEMENT, PromotionStudentSchema, (event, data, actor) => {
+    validatedHandler('promotion:promoteStudent', ROLES.MANAGEMENT, PromotionStudentSchema, (_event, data, actor) => {
         return getService().promoteStudent(data, actor.id)
     })
 
-    validatedHandlerMulti('promotion:batchPromote', ROLES.MANAGEMENT, PromotionBatchSchema, (event, [studentIds, fromStreamId, toStreamId, fromAcademicYearId, toAcademicYearId, toTermId]: [number[], number, number, number, number, number, number?], actor) => {
+    validatedHandlerMulti('promotion:batchPromote', ROLES.MANAGEMENT, PromotionBatchSchema, (_event, [studentIds, fromStreamId, toStreamId, fromAcademicYearId, toAcademicYearId, toTermId], actor) => {
         return getService().batchPromote(
             studentIds, fromStreamId, toStreamId,
             fromAcademicYearId, toAcademicYearId, toTermId, actor.id
         )
     })
 
-    validatedHandlerMulti('promotion:getStudentHistory', ROLES.STAFF, PromotionHistorySchema, (_event, [studentId]: [number]) => {
+    validatedHandlerMulti('promotion:getStudentHistory', ROLES.STAFF, PromotionHistorySchema, (_event, [studentId]) => {
         return getService().getStudentPromotionHistory(studentId)
     })
 
-    validatedHandlerMulti('promotion:getNextStream', ROLES.STAFF, PromotionNextStreamSchema, (_event, [currentStreamId]: [number]) => {
+    validatedHandlerMulti('promotion:getNextStream', ROLES.STAFF, PromotionNextStreamSchema, (_event, [currentStreamId]) => {
         return getService().getNextStream(currentStreamId)
     })
 }

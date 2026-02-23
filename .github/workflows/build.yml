@@ -1,60 +1,108 @@
 name: Build and Release
 
 on:
+  pull_request:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    
-    strategy:
-      matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
-        
-    env:
-      CSC_LINK: ${{ secrets.CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        
+  quality-gates:
+    runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
-      - name: Validate Code Signing Secrets (Release Only)
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        run: |
-          if [ -z "$CSC_LINK" ]; then echo "Error: CSC_LINK secret is missing for release build."; exit 1; fi
-          if [ -z "$CSC_KEY_PASSWORD" ]; then echo "Error: CSC_KEY_PASSWORD secret is missing for release build."; exit 1; fi
 
-        
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-          
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
+      - name: Typecheck (Renderer)
+        run: npm run typecheck:renderer
+
+      - name: Typecheck (Node/Main)
+        run: npm run typecheck:node
+
+      - name: Lint (Strict)
         run: npm run lint:eslint:strict
 
-      - name: Test
+      - name: Lint (Architecture)
+        run: npm run lint:architecture
+
+      - name: Test (Verbose)
+        run: npx vitest run --reporter=verbose
+
+      - name: Coverage
         run: npx vitest run --coverage
 
-      - name: Audit
-        run: npm audit --audit-level=high
+      - name: Audit (Prod Runtime - Blocking)
+        run: npm run audit:prod
 
-      
-      - name: Run Build
+      - name: Audit (Full Dependency Set - Non-Blocking Evidence)
+        continue-on-error: true
+        run: npm run audit:full:json > audit-full.json
+
+      - name: Upload Full Audit Evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-full
+          path: audit-full.json
+
+      - name: Build App (Smoke Prerequisite for Tags)
         if: startsWith(github.ref, 'refs/tags/')
+        run: npm run build:vite
+
+      - name: Smoke E2E (Release Tags Only, Blocking)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          E2E: 'true'
+        run: xvfb-run -a npx playwright test tests/e2e/smoke.spec.ts --reporter=line
+
+  build:
+    needs: quality-gates
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+
+    env:
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Code Signing Secrets (Release Only)
+        shell: bash
+        run: |
+          if [ -z "$CSC_LINK" ]; then echo "Error: CSC_LINK secret is missing for release build."; exit 1; fi
+          if [ -z "$CSC_KEY_PASSWORD" ]; then echo "Error: CSC_KEY_PASSWORD secret is missing for release build."; exit 1; fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Build
         run: npm run electron:build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -64,21 +112,21 @@ jobs:
             release/**/*.dmg
             release/**/*.AppImage
             release/**/*.deb
-            
+
   release:
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
-    
+
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
-        
+
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@26994186c0ac3ef5cae75ac16aa32e8153525f77
         with:
           files: |
-            dist-*/
+            dist-*/*
           draft: false
           prerelease: false
         env:

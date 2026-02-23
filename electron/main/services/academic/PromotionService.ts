@@ -224,8 +224,8 @@ export class PromotionService {
             success: failed === 0,
             promoted,
             failed,
-            errors: failed > 0 ? errors : undefined,
-            failureDetails: failed > 0 ? failureDetails : undefined
+            ...(failed > 0 ? { errors } : {}),
+            ...(failed > 0 ? { failureDetails } : {})
         }
     }
 

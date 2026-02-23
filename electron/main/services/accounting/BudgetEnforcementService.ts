@@ -339,7 +339,7 @@ export class BudgetEnforcementService {
           id: a.id,
           gl_account_code: a.gl_account_code,
           account_name: a.account_name,
-          department: a.department || undefined,
+          ...(a.department ? { department: a.department } : {}),
           fiscal_year: a.fiscal_year,
           allocated_amount: a.allocated_amount,
           spent_amount: spent,

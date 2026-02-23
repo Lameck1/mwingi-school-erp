@@ -30,25 +30,8 @@ interface StaffMember {
   updated_at: string
 }
 
-interface StaffCreateData {
-  staff_number?: string
-  first_name?: string
-  middle_name?: string | null
-  last_name?: string
-  id_number?: string | null
-  kra_pin?: string | null
-  nhif_number?: string | null
-  nssf_number?: string | null
-  phone?: string | null
-  email?: string | null
-  bank_name?: string | null
-  bank_account?: string | null
-  department?: string | null
-  job_title?: string | null
-  employment_date?: string | null
-  basic_salary?: number | null
-  is_active?: boolean
-}
+type StaffCreateData = z.infer<typeof StaffCreateSchema>
+type StaffUpdateData = z.infer<typeof StaffUpdateSchema>[1]
 
 function mapOptionalActive(value: boolean | undefined): number | null {
   if (value === undefined) {
@@ -119,7 +102,7 @@ function validateCreateData(data: StaffCreateData): ValidatedStaffCreateData {
   }
 }
 
-function buildUpdateParams(data: Partial<StaffCreateData>, id: number): Array<number | string | null> {
+function buildUpdateParams(data: StaffUpdateData, id: number): Array<number | string | null> {
   // Validate and sanitize update parameters
   // For updates, only validate salary if explicitly provided
   let basicSalary: number | null = null

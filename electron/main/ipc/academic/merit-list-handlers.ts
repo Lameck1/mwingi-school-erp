@@ -69,15 +69,10 @@ function getPerformanceImprovement(studentId: number) {
 
 export function registerMeritListHandlers() {
   validatedHandler('merit-list:generate', ROLES.STAFF, MeritListGenerateSchema, async (_event, options) => {
-    // options is { academicYearId: number; termId: number; streamId: number }
-    // Service expects same shape?
-    // Check service usage in original code: await getService().generateMeritList(options);
-    // Assuming service accepts camelCase or we map it. 
-    // MeritListGenerateSchema uses camelCase keys.
     return await getService().generateMeritList(options);
   });
 
-  validatedHandlerMulti('merit-list:getClass', ROLES.STAFF, MeritListClassSchema, async (event, [examId, streamId]: [number, number, number?], actor) => {
+  validatedHandlerMulti('merit-list:getClass', ROLES.STAFF, MeritListClassSchema, async (_event, [examId, streamId], actor) => {
     const db = getDatabase();
     const examInfo = db.prepare(
       'SELECT academic_year_id, term_id FROM exam WHERE id = ?'
@@ -92,7 +87,7 @@ export function registerMeritListHandlers() {
     );
   });
 
-  validatedHandlerMulti('merit-list:getImprovement', ROLES.STAFF, MeritListImprovementSchema, (_event, [studentId]: [number]) => {
+  validatedHandlerMulti('merit-list:getImprovement', ROLES.STAFF, MeritListImprovementSchema, (_event, [studentId]) => {
     return getPerformanceImprovement(studentId);
   });
 

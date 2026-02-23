@@ -128,15 +128,19 @@ const computeInvoiceItems = (fees: FeeStructureRecord[], exemptions: StudentExem
         invoiceTotal += finalAmount
         originalTotal += originalAmount
 
-        invoiceItems.push({
+        const invoiceItem: InvoiceItemCreation = {
             fee_category_id: fee.fee_category_id,
             description: TERM_FEE_DESCRIPTION,
             amount: finalAmount,
             exemption_id: exemptionId,
             original_amount: originalAmount,
-            exemption_amount: exemptionAmount,
-            gl_account_code: fee.gl_account_code
-        })
+            exemption_amount: exemptionAmount
+        }
+        if (fee.gl_account_code !== undefined) {
+            invoiceItem.gl_account_code = fee.gl_account_code
+        }
+
+        invoiceItems.push(invoiceItem)
     }
 
     return { invoiceItems, invoiceTotal, originalTotal }

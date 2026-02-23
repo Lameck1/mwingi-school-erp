@@ -1,6 +1,6 @@
 import { ipcRenderer } from 'electron'
 
-import type { AssetCreateData, BudgetCreateData, BudgetFilters, ExemptionCreateData, ExportPDFData, FeeStructureCreateData, GLAccountData, PaymentRecordData, PayWithCreditData, ScholarshipAllocationData, ScholarshipCreateData, TransactionData, TransactionFilters } from '../types'
+import type { AssetCreateData, AssetFilters, AssetUpdateData, BudgetCreateData, BudgetFilters, ExemptionCreateData, ExportPDFData, FeeStructureCreateData, GLAccountData, PaymentRecordData, PayWithCreditData, ScholarshipAllocationData, ScholarshipCreateData, TransactionData, TransactionFilters } from '../types'
 
 const CHANNEL_EXPORT_PDF = 'export:pdf'
 
@@ -162,10 +162,10 @@ function createAssetAPI() {
   return {
     getAssetCategories: () => ipcRenderer.invoke('assets:get-categories'),
     getFinancialPeriods: () => ipcRenderer.invoke('assets:get-financial-periods'),
-    getAssets: (filters?: { category?: string; status?: string }) => ipcRenderer.invoke('assets:get-all', filters),
+    getAssets: (filters?: AssetFilters) => ipcRenderer.invoke('assets:get-all', filters),
     getAsset: (id: number) => ipcRenderer.invoke('assets:get-one', id),
     createAsset: (data: AssetCreateData, userId: number) => ipcRenderer.invoke('assets:create', data, userId),
-    updateAsset: (id: number, data: Partial<AssetCreateData>, userId: number) => ipcRenderer.invoke('assets:update', id, data, userId),
+    updateAsset: (id: number, data: AssetUpdateData, userId: number) => ipcRenderer.invoke('assets:update', id, data, userId),
     runDepreciation: (assetId: number, periodId: number, userId: number) => ipcRenderer.invoke('assets:run-depreciation', assetId, periodId, userId),
   }
 }

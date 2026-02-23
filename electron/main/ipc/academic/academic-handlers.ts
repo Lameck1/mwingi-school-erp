@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { z } from 'zod'
 
 import { getDatabase } from '../../database'
 import { renderHtmlToPdfBuffer, resolveOutputPath, writePdfBuffer } from '../../utils/pdf'
@@ -64,11 +64,11 @@ export function registerAcademicHandlers() {
     const db = getDatabase()
 
     // ==================== Academic Year & Terms ====================
-    ipcMain.handle('academicYear:getAll', () => {
+    validatedHandler('academicYear:getAll', ROLES.STAFF, z.void(), () => {
         return db.prepare('SELECT * FROM academic_year ORDER BY start_date DESC').all()
     })
 
-    ipcMain.handle('academic-year:getAll', () => {
+    validatedHandler('academic-year:getAll', ROLES.STAFF, z.void(), () => {
         return db.prepare('SELECT * FROM academic_year ORDER BY start_date DESC').all()
     })
 
@@ -88,7 +88,7 @@ export function registerAcademicHandlers() {
         return { success: true }
     })
 
-    ipcMain.handle('term:getAll', () => {
+    validatedHandler('term:getAll', ROLES.STAFF, z.void(), () => {
         return db.prepare(`
             SELECT t.*, ay.year_name 
             FROM term t
@@ -101,15 +101,15 @@ export function registerAcademicHandlers() {
         return db.prepare('SELECT * FROM term WHERE academic_year_id = ? ORDER BY term_number').all(academicYearId)
     })
 
-    ipcMain.handle('academicYear:getCurrent', () => {
+    validatedHandler('academicYear:getCurrent', ROLES.STAFF, z.void(), () => {
         return db.prepare('SELECT * FROM academic_year WHERE is_current = 1').get()
     })
 
-    ipcMain.handle('academic-year:getCurrent', () => {
+    validatedHandler('academic-year:getCurrent', ROLES.STAFF, z.void(), () => {
         return db.prepare('SELECT * FROM academic_year WHERE is_current = 1').get()
     })
 
-    ipcMain.handle('term:getCurrent', () => {
+    validatedHandler('term:getCurrent', ROLES.STAFF, z.void(), () => {
         return db.prepare(`
             SELECT t.*, ay.year_name 
             FROM term t
@@ -145,9 +145,7 @@ export function registerAcademicHandlers() {
     })
 
     // Legacy mapping for frontend compatibility
-    ipcMain.handle('academic:getExamsList', async (event, filters) => {
-        // Reuse the logic from exam:getAll but mapped to safeHandleRaw style if needed
-        // For now, implementing direct call
+    validatedHandler('academic:getExamsList', ROLES.STAFF, ExamFiltersSchema.optional(), async (_event, filters) => {
         let query = 'SELECT id, name FROM exam WHERE 1=1' // Changed academic_exam to exam
         const params: number[] = []
 
@@ -164,11 +162,11 @@ export function registerAcademicHandlers() {
         return db.prepare(query).all(...params)
     })
 
-    ipcMain.handle('stream:getAll', () => {
+    validatedHandler('stream:getAll', ROLES.STAFF, z.void(), () => {
         return db.prepare('SELECT * FROM stream WHERE is_active = 1 ORDER BY level_order').all()
     })
 
-    ipcMain.handle('feeCategory:getAll', () => {
+    validatedHandler('feeCategory:getAll', ROLES.STAFF, z.void(), () => {
         return db.prepare('SELECT * FROM fee_category WHERE is_active = 1').all()
     })
 
@@ -220,7 +218,7 @@ export function registerAcademicHandlers() {
             throw new Error('No schedule data to export')
         }
 
-        const rows = (data.slots as unknown as SchedulerSlot[]).map(s => `
+        const rows = data.slots.map(s => `
             <tr>
                 <td>${s.subject_name}</td>
                 <td>${s.start_date}</td>
@@ -270,7 +268,7 @@ export function registerAcademicHandlers() {
             throw new Error('No schedule data to export')
         }
 
-        const rows = (data.slots as unknown as SchedulerSlot[]).map(s => `
+        const rows = data.slots.map(s => `
             <tr>
                 <td>${s.subject_name}</td>
                 <td>${s.start_date}</td>

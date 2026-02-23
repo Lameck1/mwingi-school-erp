@@ -20,7 +20,7 @@ export interface StrandExpense {
   amount_cents: number;
   term: number;
   fiscal_year: number;
-  receipt_number?: string;
+  receipt_number?: string | undefined;
   created_by: number;
   created_at: string;
 }
@@ -55,11 +55,11 @@ export interface StudentActivityParticipation {
   strand_id: number;
   activity_name: string;
   start_date: string;
-  end_date?: string;
+  end_date?: string | undefined;
   participation_level: 'PRIMARY' | 'SECONDARY' | 'INTEREST';
   is_active: boolean;
   created_at: string;
-  updated_at?: string;
+  updated_at?: string | undefined;
 }
 
 /**
@@ -121,7 +121,7 @@ export class CBCStrandService {
     amount_cents: number;
     term: number;
     fiscal_year: number;
-    receipt_number?: string;
+    receipt_number?: string | undefined;
     created_by: number;
   }): number {
     const stmt = this.db.prepare(`

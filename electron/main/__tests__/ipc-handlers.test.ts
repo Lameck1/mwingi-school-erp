@@ -228,6 +228,9 @@ describe('IPC Handlers Security Tests', () => {
       expect(registeredHandlers).toContain('user:update');
       expect(registeredHandlers).toContain('transaction:create');
       expect(registeredHandlers).toContain('staff:create');
+      expect(registeredHandlers).toContain('assets:create');
+      expect(registeredHandlers).toContain('assets:update');
+      expect(registeredHandlers).toContain('assets:run-depreciation');
       // expect(registeredHandlers).toContain('inventory:getAll'); // Disabled due to mock bypass
     });
   });

@@ -610,10 +610,10 @@ export class CBCReportCardService {
     return subjects.map((subject) => ({
       subject_id: subject.subject_id,
       subject_name: subject.subject_name || 'Unknown',
-      cat1: subject.cat1,
-      cat2: subject.cat2,
-      mid: subject.mid,
-      final: subject.final,
+      ...(subject.cat1 !== undefined ? { cat1: subject.cat1 } : {}),
+      ...(subject.cat2 !== undefined ? { cat2: subject.cat2 } : {}),
+      ...(subject.mid !== undefined ? { mid: subject.mid } : {}),
+      ...(subject.final !== undefined ? { final: subject.final } : {}),
       marks: subject.marks,
       grade: subject.grade,
       points: this.getPoints(subject.grade),
@@ -680,7 +680,7 @@ export class CBCReportCardService {
       fees_balance: feesBalance,
       qr_code_token: rc.qr_code_token || '',
       generated_at: rc.generated_at,
-      email_sent_at: rc.email_sent_at
+      ...(rc.email_sent_at !== undefined ? { email_sent_at: rc.email_sent_at } : {})
     }
   }
 }

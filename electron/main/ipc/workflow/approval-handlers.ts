@@ -19,7 +19,17 @@ export function registerApprovalHandlers(): void {
 
     // Get all approvals with filters
     validatedHandler('approval:getAll', ROLES.STAFF, ApprovalFilterSchema, (_event, filters) => {
-        return getService().getAllApprovals(filters)
+        if (!filters) {
+            return getService().getAllApprovals()
+        }
+        const normalizedFilters: { status?: string; entity_type?: string } = {}
+        if (filters.status !== undefined) {
+            normalizedFilters.status = filters.status
+        }
+        if (filters.entity_type !== undefined) {
+            normalizedFilters.entity_type = filters.entity_type
+        }
+        return getService().getAllApprovals(normalizedFilters)
     })
 
     // Get approval counts for dashboard

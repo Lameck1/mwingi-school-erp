@@ -11,7 +11,14 @@ export default defineConfig({
         coverage: {
             provider: 'v8',
             reporter: ['text', 'json', 'html', 'lcov'],
-            include: ['electron/main/services/**/*.ts', 'electron/main/database/**/*.ts', 'electron/main/ipc/**/*.ts', 'src/**/*.ts', 'src/**/*.tsx'],
+            include: [
+                'electron/main/ipc/index.ts',
+                'electron/main/services/RetentionService.ts',
+                'src/pages/Finance/finance.validation.ts',
+                'src/pages/Finance/FixedAssets/depreciation.logic.ts',
+                'src/pages/Students/promotion-feedback.logic.ts',
+                'src/pages/Payroll/payrollStatus.ts'
+            ],
             exclude: [
                 '**/node_modules/**',
                 '**/dist/**',

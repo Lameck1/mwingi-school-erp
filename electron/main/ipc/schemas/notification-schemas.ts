@@ -1,14 +1,39 @@
 import { z } from 'zod'
 
+const LEGACY_TEMPLATE_CATEGORY_MAP = {
+    ACADEMIC: 'ATTENDANCE',
+    FINANCE: 'FEE_REMINDER',
+    ADMIN: 'GENERAL'
+} as const
+
+export const NotificationTemplateCategorySchema = z.enum([
+    'FEE_REMINDER',
+    'PAYMENT_RECEIPT',
+    'ATTENDANCE',
+    'GENERAL',
+    'PAYSLIP'
+])
+
+const LegacyNotificationTemplateCategorySchema = z.enum(['ACADEMIC', 'FINANCE', 'ADMIN'])
+
+export const NotificationTemplateCategoryInputSchema = z
+    .union([NotificationTemplateCategorySchema, LegacyNotificationTemplateCategorySchema])
+    .transform((category): z.infer<typeof NotificationTemplateCategorySchema> => {
+        if (category in LEGACY_TEMPLATE_CATEGORY_MAP) {
+            return LEGACY_TEMPLATE_CATEGORY_MAP[category as keyof typeof LEGACY_TEMPLATE_CATEGORY_MAP]
+        }
+        return category as z.infer<typeof NotificationTemplateCategorySchema>
+    })
+
 export const NotificationRequestSchema = z.object({
-    recipientType: z.enum(['STUDENT', 'STAFF', 'GUARDIAN', 'USER']),
+    recipientType: z.enum(['STUDENT', 'STAFF', 'GUARDIAN']),
     recipientId: z.number(),
     channel: z.enum(['SMS', 'EMAIL']),
     to: z.string(),
     subject: z.string().optional(),
     message: z.string(),
     templateId: z.number().optional(),
-    variables: z.record(z.string()).optional()
+    variables: z.record(z.string(), z.string()).optional()
 })
 
 export const SendNotificationTuple = z.tuple([
@@ -35,7 +60,7 @@ export const SendBulkFeeRemindersTuple = z.tuple([
 export const CreateTemplateSchema = z.object({
     template_name: z.string().min(1),
     template_type: z.enum(['SMS', 'EMAIL']),
-    category: z.enum(['ACADEMIC', 'FINANCE', 'ADMIN', 'GENERAL']),
+    category: NotificationTemplateCategoryInputSchema,
     subject: z.string().nullable(),
     body: z.string().min(1)
 })

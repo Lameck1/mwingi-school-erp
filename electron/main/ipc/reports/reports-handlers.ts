@@ -287,7 +287,24 @@ function registerNemisExportHandlers(): void {
 
     validatedHandler('reports:extractStudentData', ROLES.STAFF, ReportGenericFilterSchema, async (_event, filters) => {
         try {
-            return await nemisService.extractStudentData(filters)
+            if (!filters) {
+                return await nemisService.extractStudentData()
+            }
+            const mappedFilters: {
+                class_id?: number
+                academic_year?: string
+                status?: string
+            } = {}
+            if (filters.streamId !== undefined) {
+                mappedFilters.class_id = filters.streamId
+            }
+            if (filters.academicYear !== undefined) {
+                mappedFilters.academic_year = filters.academicYear
+            }
+            if (filters.status !== undefined) {
+                mappedFilters.status = filters.status
+            }
+            return await nemisService.extractStudentData(mappedFilters)
         } catch (error) {
             throw new Error(error instanceof Error ? error.message : 'Failed to extract student data')
         }
@@ -314,7 +331,47 @@ function registerNemisExportHandlers(): void {
             return { success: false, error: 'Unauthorized: renderer user mismatch' }
         }
         try {
-            return await nemisService.createExport(exportConfig, actor.id)
+            const normalizedConfig: {
+                export_type: 'STAFF' | 'STUDENTS' | 'ENROLLMENT' | 'FINANCIAL'
+                format: 'CSV' | 'JSON'
+                filters?: {
+                    class_id?: number
+                    academic_year?: string
+                    gender?: 'M' | 'F'
+                    status?: string
+                }
+                academic_year?: string
+            } = {
+                export_type: exportConfig.export_type,
+                format: exportConfig.format
+            }
+
+            if (exportConfig.filters) {
+                const normalizedFilters: {
+                    class_id?: number
+                    academic_year?: string
+                    gender?: 'M' | 'F'
+                    status?: string
+                } = {}
+                if (exportConfig.filters.class_id !== undefined) {
+                    normalizedFilters.class_id = exportConfig.filters.class_id
+                }
+                if (exportConfig.filters.academic_year !== undefined) {
+                    normalizedFilters.academic_year = exportConfig.filters.academic_year
+                }
+                if (exportConfig.filters.gender !== undefined) {
+                    normalizedFilters.gender = exportConfig.filters.gender
+                }
+                if (exportConfig.filters.status !== undefined) {
+                    normalizedFilters.status = exportConfig.filters.status
+                }
+                normalizedConfig.filters = normalizedFilters
+            }
+            if (exportConfig.academic_year !== undefined) {
+                normalizedConfig.academic_year = exportConfig.academic_year
+            }
+
+            return await nemisService.createExport(normalizedConfig, actor.id)
         } catch (error) {
             return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
         }

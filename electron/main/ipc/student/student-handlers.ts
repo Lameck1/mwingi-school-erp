@@ -162,10 +162,13 @@ function generateAutoInvoice(
     throw new Error(result.error || 'Failed to generate initial invoice')
   }
 
-  return {
+  const response: AutoInvoiceResult = {
     invoiceGenerated: true,
-    invoiceNumber: result.invoiceNumber,
   }
+  if (result.invoiceNumber !== undefined) {
+    response.invoiceNumber = result.invoiceNumber
+  }
+  return response
 }
 
 function normalizeStreamId(streamId: unknown): number | null {
@@ -185,7 +188,7 @@ function getUnknownErrorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
-function mergeStudentUpdate(student: Student, data: Partial<StudentCreateData>) {
+function mergeStudentUpdate(student: Student, data: z.infer<typeof StudentUpdateSchema>[1]) {
   const gender = data.gender === undefined ? student.gender : toDbGender(data.gender)
   const isActive = data.is_active === undefined ? student.is_active : toDbActiveFlag(data.is_active)
 
@@ -553,19 +556,20 @@ function registerUpdateStudentHandler(db: ReturnType<typeof getDatabase>): void 
 
         const streamId = normalizeStreamId(data.stream_id)
         if (streamId) {
-          const streamValidation = validateId(streamId, 'Stream')
-          if (!streamValidation.success) {
-            throw new Error(streamValidation.error || 'Invalid stream ID')
-          }
+            const streamValidation = validateId(streamId, 'Stream')
+            if (!streamValidation.success) {
+                throw new Error(streamValidation.error || 'Invalid stream ID')
+            }
 
-          createEnrollment(db, {
-            studentId: idValidation.data!,
-            streamId: streamValidation.data!,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            studentType: (data.student_type as any) ?? student.student_type,
-            enrollmentDate: student.admission_date,
-            useCurrentDate: true,
-          })
+            const enrollmentStudentType = data.student_type ?? student.student_type
+
+            createEnrollment(db, {
+                studentId: idValidation.data!,
+                streamId: streamValidation.data!,
+                studentType: enrollmentStudentType,
+                enrollmentDate: student.admission_date,
+                useCurrentDate: true,
+            })
         }
       })
 

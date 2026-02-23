@@ -20,18 +20,36 @@ export const TransportExpenseSchema = ExpensePayloadBaseSchema.extend({
     expense_type: z.enum(['FUEL', 'MAINTENANCE', 'INSURANCE', 'PERMITS', 'DRIVER_SALARY', 'OTHER'])
 })
 
-export const TransportRouteSchema = z.object({
+const CanonicalTransportRouteSchema = z.object({
+    route_name: z.string().min(1),
+    distance_km: z.number().nonnegative(),
+    estimated_students: z.number().int().nonnegative(),
+    budget_per_term_cents: z.number().int().nonnegative(),
+    driver_id: z.number().int().positive().optional(),
+    vehicle_registration: z.string().min(1).optional()
+})
+
+const LegacyTransportRouteSchema = z.object({
     route_name: z.string().min(1),
     description: z.string().optional(),
     cost_per_term: z.number().positive(),
-    is_active: z.boolean().optional() // Assuming from standard pattern
-    // TransportRouteInput definition?
-    // I don't see the type definition, but I can infer or assume.
-    // Let's assume generic object or refined if possible.
-    // If unsure, use z.record(z.unknown()) or similar, but better to be specific if possible.
-    // I'll leave it loose if I can't confirm. the handler code: `return transportService.createRoute(params)`
-    // The service probably validates. But M-04 requires input validation at IPC layer.
-    // Let's assume standard route fields.
+    is_active: z.boolean().optional()
+})
+
+export const TransportRouteSchema = z.union([
+    CanonicalTransportRouteSchema,
+    LegacyTransportRouteSchema
+]).transform((params): z.infer<typeof CanonicalTransportRouteSchema> => {
+    if ('distance_km' in params) {
+        return params
+    }
+    return {
+        route_name: params.route_name,
+        distance_km: 0,
+        estimated_students: 0,
+        budget_per_term_cents: Math.round(params.cost_per_term),
+        ...(params.description !== undefined ? { vehicle_registration: params.description } : {})
+    }
 })
 
 // For getAll/Active facilities/routes: z.void()

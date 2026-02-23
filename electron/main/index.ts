@@ -10,6 +10,7 @@ import { verifySystemAccounts } from './services/accounting/SystemAccounts'
 import { BackupService } from './services/BackupService'
 import { registerServices } from './services/base/ServiceContainer'
 import { reportScheduler } from './services/reports/ReportScheduler'
+import { RetentionService } from './services/RetentionService'
 // Initialize logger FIRST — explicit log.xxx() calls work immediately;
 // console overrides are installed after app.whenReady() below.
 import { installConsoleOverrides, log } from './utils/logger'
@@ -176,6 +177,17 @@ async function bootstrap(): Promise<void> {
     if (dbReady) {
         // Initialize Services
         registerServices()
+
+        // Enforce configured data-retention purge policy at startup
+        try {
+            const retentionService = new RetentionService()
+            const retentionSummary = retentionService.initialize()
+            log.info(
+                `Retention purge completed: ${retentionSummary.totalDeleted} record(s) deleted across ${retentionSummary.processedTables} table(s).`
+            )
+        } catch (error) {
+            log.error('Failed to initialize retention purge service:', error)
+        }
 
         // Register IPC handlers
         registerAllIpcHandlers()

@@ -18,25 +18,21 @@ export const registerOperationsHandlers = () => {
     return boardingService.getActiveFacilities()
   })
 
-  validatedHandler('operations:boarding:recordExpense', ROLES.FINANCE, BoardingExpenseSchema, (event, params, actor) => {
+  validatedHandler('operations:boarding:recordExpense', ROLES.FINANCE, BoardingExpenseSchema, (_event, params, actor) => {
     if (params.recorded_by !== actor.id) {
-      throw new Error("Unauthorized: renderer user mismatch")
+      throw new Error('Unauthorized: renderer user mismatch')
     }
-    // legacy `params.recorded_by` check vs actor.id?
-    // The schema includes `recorded_by`.
-    // The original code:
-    // const actor = resolveActorId(event, params.recorded_by)
-    // const sanitizedParams = { ...params, recorded_by: actor.actorId }
-    // So we should enforce that params.recorded_by matches actor.id OR just override it.
-    // Safe to override it with authentic actor ID.
-
-    // We also need to map the Zod output back to the service input type if strict.
-    // But since Zod output is structural, it should be compatible if schema matches.
-    // However, `assertExpensePayload` (manual validation) is now replaced by Zod.
-
-    const sanitizedParams = { ...params, recorded_by: actor.id }
-    // assertPositiveInteger(sanitizedParams.facility_id) -> handled by schema
-    // assertExpensePayload -> handled by schema
+    const sanitizedParams = {
+      facility_id: params.facility_id,
+      gl_account_code: params.gl_account_code,
+      fiscal_year: params.fiscal_year,
+      term: params.term,
+      amount_cents: params.amount_cents,
+      expense_type: params.expense_type,
+      description: params.description,
+      recorded_by: actor.id,
+      ...(params.payment_method !== undefined ? { payment_method: params.payment_method } : {})
+    }
 
     return boardingService.recordBoardingExpense(sanitizedParams)
   })
@@ -59,15 +55,19 @@ export const registerOperationsHandlers = () => {
   })
 
   validatedHandler('operations:transport:createRoute', ROLES.STAFF, TransportRouteSchema, (_event, params) => {
-    // Original code used `params: TransportRouteInput` without explicit validation (other than safeHandleRaw types)
-    // We assume TransportRouteSchema matches input.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return transportService.createRoute(params as any)
+    return transportService.createRoute({
+      route_name: params.route_name,
+      distance_km: params.distance_km,
+      estimated_students: params.estimated_students,
+      budget_per_term_cents: params.budget_per_term_cents,
+      ...(params.driver_id !== undefined ? { driver_id: params.driver_id } : {}),
+      ...(params.vehicle_registration !== undefined ? { vehicle_registration: params.vehicle_registration } : {})
+    })
   })
 
-  validatedHandler('operations:transport:recordExpense', ROLES.FINANCE, TransportExpenseSchema, (event, params, actor) => {
+  validatedHandler('operations:transport:recordExpense', ROLES.FINANCE, TransportExpenseSchema, (_event, params, actor) => {
     if (params.recorded_by !== actor.id) {
-      throw new Error("Unauthorized: renderer user mismatch")
+      throw new Error('Unauthorized: renderer user mismatch')
     }
     const sanitizedParams = { ...params, recorded_by: actor.id }
     return transportService.recordTransportExpense(sanitizedParams)

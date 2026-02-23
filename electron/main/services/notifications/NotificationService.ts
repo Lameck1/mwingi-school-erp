@@ -150,12 +150,12 @@ export class NotificationService {
                 recipientId: request.recipientId,
                 channel: request.channel,
                 to: request.to,
-                subject,
                 message,
                 status: result.success ? 'SENT' : 'FAILED',
-                externalId: result.messageId,
-                errorMessage: result.error,
-                userId
+                userId,
+                ...(subject !== undefined ? { subject } : {}),
+                ...(result.messageId !== undefined ? { externalId: result.messageId } : {}),
+                ...(result.error !== undefined ? { errorMessage: result.error } : {})
             })
 
             return result
@@ -167,11 +167,11 @@ export class NotificationService {
                 recipientId: request.recipientId,
                 channel: request.channel,
                 to: request.to,
-                subject: request.subject,
                 message: request.message,
                 status: 'FAILED',
                 errorMessage,
-                userId
+                userId,
+                ...(request.subject !== undefined ? { subject: request.subject } : {})
             })
 
             return { success: false, error: errorMessage }

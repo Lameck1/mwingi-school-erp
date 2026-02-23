@@ -18,11 +18,23 @@ export function registerMessageHandlers(): void {
     });
 
     validatedHandler('message:saveTemplate', ROLES.MANAGEMENT, MessageSaveTemplateSchema, (_event, template) => {
-        return svc().saveTemplate(template);
+        return svc().saveTemplate({
+            template_name: template.template_name,
+            body: template.body,
+            template_type: template.template_type,
+            ...(template.id !== undefined ? { id: template.id } : {}),
+            ...(template.subject !== undefined ? { subject: template.subject } : {}),
+            ...(template.placeholders !== undefined ? { placeholders: template.placeholders } : {})
+        });
     });
 
     validatedHandler('message:sendSms', ROLES.STAFF, MessageSendSmsSchema, (_event, options, actor) => {
-        return svc().sendSms({ ...options, userId: actor.id });
+        return svc().sendSms({
+            to: options.to,
+            message: options.message,
+            userId: actor.id,
+            ...(options.recipientId !== undefined ? { recipientId: options.recipientId } : {})
+        });
     });
 
     validatedHandler('message:sendEmail', ROLES.STAFF, MessageSendEmailSchema, async (event, options, actor) => {
@@ -38,7 +50,7 @@ export function registerMessageHandlers(): void {
         }, actor.id);
     });
 
-    validatedHandler('message:getLogs', ROLES.STAFF, MessageGetLogsSchema, (_event, [limit]) => {
+    validatedHandler('message:getLogs', ROLES.STAFF, MessageGetLogsSchema, (_event, limit) => {
         return svc().getLogs(limit || 50);
     });
 }

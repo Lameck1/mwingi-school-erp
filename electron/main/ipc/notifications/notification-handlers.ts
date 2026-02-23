@@ -10,9 +10,23 @@ import {
 } from '../schemas/notification-schemas'
 import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
-import type { NotificationRequest } from '../../services/notifications/NotificationService'
+import type { MessageTemplate, NotificationRequest } from '../../services/notifications/notification-types'
 
 const getService = () => container.resolve('NotificationService')
+type TemplateCategory = MessageTemplate['category']
+
+function normalizeTemplateCategory(category: string): TemplateCategory {
+    if (category === 'ACADEMIC') {
+        return 'ATTENDANCE'
+    }
+    if (category === 'FINANCE') {
+        return 'FEE_REMINDER'
+    }
+    if (category === 'ADMIN') {
+        return 'GENERAL'
+    }
+    return category as TemplateCategory
+}
 
 export function registerNotificationHandlers(): void {
     // Config
@@ -23,21 +37,34 @@ export function registerNotificationHandlers(): void {
 
     // Sending
     validatedHandlerMulti('notifications:send', ROLES.STAFF, SendNotificationTuple, (
-        event,
+        _event,
         [request, _legacyId],
         actorCtx
     ) => {
         if (_legacyId !== undefined && _legacyId !== actorCtx.id) {
             throw new Error("Unauthorized: renderer user mismatch")
         }
-        return getService().send(request as NotificationRequest, actorCtx.id)
+        const normalizedRequest: NotificationRequest = {
+            recipientType: request.recipientType,
+            recipientId: request.recipientId,
+            channel: request.channel,
+            to: request.to,
+            message: request.message,
+            ...(request.subject !== undefined ? { subject: request.subject } : {}),
+            ...(request.templateId !== undefined ? { templateId: request.templateId } : {}),
+            ...(request.variables !== undefined ? { variables: request.variables } : {})
+        }
+        return getService().send(normalizedRequest, actorCtx.id)
     })
 
     validatedHandlerMulti('notifications:sendBulkFeeReminders', ROLES.STAFF, SendBulkFeeRemindersTuple, (
-        event,
+        _event,
         [templateId, defaulters, _legacyId],
         actorCtx
     ) => {
+        if (_legacyId !== undefined && _legacyId !== actorCtx.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
+        }
         return getService().sendBulkFeeReminders(templateId, defaulters, actorCtx.id)
     })
 
@@ -51,15 +78,17 @@ export function registerNotificationHandlers(): void {
     })
 
     validatedHandlerMulti('notifications:createTemplate', ROLES.STAFF, CreateTemplateTuple, (
-        event,
+        _event,
         [template, _legacyId],
         actorCtx
     ) => {
+        if (_legacyId !== undefined && _legacyId !== actorCtx.id) {
+            throw new Error("Unauthorized: renderer user mismatch")
+        }
         return getService().createTemplate({
             name: template.template_name,
             type: template.template_type,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            category: template.category as any,
+            category: normalizeTemplateCategory(template.category),
             subject: template.subject,
             body: template.body,
             userId: actorCtx.id
@@ -72,6 +101,35 @@ export function registerNotificationHandlers(): void {
 
     // History
     validatedHandler('notifications:getHistory', ROLES.STAFF, NotificationFilterSchema, (_event, filters) => {
-        return getService().getCommunicationHistory(filters)
+        if (!filters) {
+            return getService().getCommunicationHistory()
+        }
+        const normalized: {
+            recipientType?: string
+            recipientId?: number
+            channel?: string
+            status?: string
+            startDate?: string
+            endDate?: string
+        } = {}
+        if (filters.recipientType !== undefined) {
+            normalized.recipientType = filters.recipientType
+        }
+        if (filters.recipientId !== undefined) {
+            normalized.recipientId = filters.recipientId
+        }
+        if (filters.channel !== undefined) {
+            normalized.channel = filters.channel
+        }
+        if (filters.status !== undefined) {
+            normalized.status = filters.status
+        }
+        if (filters.startDate !== undefined) {
+            normalized.startDate = filters.startDate
+        }
+        if (filters.endDate !== undefined) {
+            normalized.endDate = filters.endDate
+        }
+        return getService().getCommunicationHistory(normalized)
     })
 }

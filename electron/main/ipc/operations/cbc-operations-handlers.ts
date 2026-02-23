@@ -11,21 +11,20 @@ import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 export const registerCbcOperationsHandlers = () => {
   const grantService = container.resolve('GrantTrackingService')
   const studentCostService = container.resolve('StudentCostService')
+  const grantStatusSchema = z.enum(['ACTIVE', 'EXPIRED', 'FULLY_UTILIZED'])
 
   // Grant Handlers
-  validatedHandlerMulti('operations:grants:create', ROLES.FINANCE, GrantCreateTuple, (event, [data, legacyUserId], actor) => {
+  validatedHandlerMulti('operations:grants:create', ROLES.FINANCE, GrantCreateTuple, (_event, [data, legacyUserId], actor) => {
     if (legacyUserId !== undefined && legacyUserId !== actor.id) {
-      throw new Error("Unauthorized: renderer user mismatch")
+      throw new Error('Unauthorized: renderer user mismatch')
     }
     return grantService.createGrant(data, actor.id)
   })
 
-  validatedHandlerMulti('operations:grants:recordUtilization', ROLES.FINANCE, CreateUtilizationTuple, (event, [payload], actor) => {
-    // payload has userId? Check it.
+  validatedHandlerMulti('operations:grants:recordUtilization', ROLES.FINANCE, CreateUtilizationTuple, (_event, [payload], actor) => {
     if (payload.userId !== undefined && payload.userId !== actor.id) {
-      throw new Error("Unauthorized: renderer user mismatch")
+      throw new Error('Unauthorized: renderer user mismatch')
     }
-    // Force actor ID
     const finalPayload = { ...payload, userId: actor.id }
     return grantService.recordUtilization(finalPayload)
   })
@@ -35,8 +34,11 @@ export const registerCbcOperationsHandlers = () => {
   })
 
   validatedHandler('operations:grants:getByStatus', ROLES.STAFF, z.string(), (_event, status) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return grantService.getGrantsByStatus(status as any)
+    const parsedStatus = grantStatusSchema.safeParse(status)
+    if (!parsedStatus.success) {
+      throw new Error('Invalid grant status')
+    }
+    return grantService.getGrantsByStatus(parsedStatus.data)
   })
 
   validatedHandlerMulti('operations:grants:getExpiring', ROLES.STAFF, GetExpiringGrantsTuple, (_event, [daysThreshold]) => {

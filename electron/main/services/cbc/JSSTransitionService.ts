@@ -7,11 +7,11 @@ export interface GradeTransition {
   from_grade: number;
   to_grade: number;
   transition_date: string;
-  old_fee_structure_id?: number;
+  old_fee_structure_id?: number | undefined;
   new_fee_structure_id: number;
   outstanding_balance_cents: number;
-  boarding_status_change?: 'TO_BOARDER' | 'TO_DAY_SCHOLAR' | 'NO_CHANGE';
-  transition_notes?: string;
+  boarding_status_change?: 'TO_BOARDER' | 'TO_DAY_SCHOLAR' | 'NO_CHANGE' | undefined;
+  transition_notes?: string | undefined;
   processed_by: number;
   created_at: string;
 }
@@ -21,12 +21,12 @@ export interface JSSFeeStructure {
   grade: number;
   fiscal_year: number;
   tuition_fee_cents: number;
-  boarding_fee_cents?: number;
-  activity_fee_cents?: number;
-  exam_fee_cents?: number;
-  library_fee_cents?: number;
-  lab_fee_cents?: number;
-  ict_fee_cents?: number;
+  boarding_fee_cents?: number | undefined;
+  activity_fee_cents?: number | undefined;
+  exam_fee_cents?: number | undefined;
+  library_fee_cents?: number | undefined;
+  lab_fee_cents?: number | undefined;
+  ict_fee_cents?: number | undefined;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -108,8 +108,8 @@ export class JSSTransitionService {
     from_grade: number;
     to_grade: number;
     transition_date: string;
-    boarding_status_change?: 'TO_BOARDER' | 'TO_DAY_SCHOLAR' | 'NO_CHANGE';
-    transition_notes?: string;
+    boarding_status_change?: 'TO_BOARDER' | 'TO_DAY_SCHOLAR' | 'NO_CHANGE' | undefined;
+    transition_notes?: string | undefined;
     processed_by: number;
   }): number {
     this.validateTransition(data.from_grade, data.to_grade);
@@ -370,12 +370,12 @@ export class JSSTransitionService {
     grade: number;
     fiscal_year: number;
     tuition_fee_cents: number;
-    boarding_fee_cents?: number;
-    activity_fee_cents?: number;
-    exam_fee_cents?: number;
-    library_fee_cents?: number;
-    lab_fee_cents?: number;
-    ict_fee_cents?: number;
+    boarding_fee_cents?: number | undefined;
+    activity_fee_cents?: number | undefined;
+    exam_fee_cents?: number | undefined;
+    library_fee_cents?: number | undefined;
+    lab_fee_cents?: number | undefined;
+    ict_fee_cents?: number | undefined;
   }): number {
     if (data.grade < 7 || data.grade > 9) {
       throw new Error('JSS grades are 7, 8, and 9 only');

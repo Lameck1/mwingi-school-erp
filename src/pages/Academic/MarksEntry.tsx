@@ -9,6 +9,8 @@ import { Tooltip } from '../../components/ui/Tooltip'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../stores'
 
+import type { AcademicResult } from '../../types/electron-api/AcademicAPI'
+
 interface Exam {
     id: number
     name: string
@@ -80,7 +82,7 @@ export default function MarksEntry() {
             const data = await globalThis.electronAPI.getAcademicResults(
                 selectedExam, alloc.subject_id, alloc.stream_id, user!.id
             )
-            setResults((Array.isArray(data) ? data : []).map((r: import('../../types/electron-api/AcademicAPI').AcademicResult) => ({
+            setResults((Array.isArray(data) ? data : []).map((r: AcademicResult) => ({
                 student_id: r.student_id,
                 student_name: r.student_name || 'Unknown Student',
                 admission_number: r.admission_number || '',

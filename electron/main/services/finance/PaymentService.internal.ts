@@ -46,6 +46,7 @@ export class PaymentProcessor {
   private readonly invoiceOutstandingBalanceSql: string
   private readonly invoiceOutstandingStatusPredicate: string
   private idempotencyColumnAvailable: boolean | null = null
+  private feeCategoryPriorityColumnAvailable: boolean | null = null
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -62,6 +63,15 @@ export class PaymentProcessor {
     const columns = this.db.prepare('PRAGMA table_info(ledger_transaction)').all() as Array<{ name: string }>
     this.idempotencyColumnAvailable = columns.some(column => column.name === 'idempotency_key')
     return this.idempotencyColumnAvailable
+  }
+
+  private hasFeeCategoryPriorityColumn(): boolean {
+    if (this.feeCategoryPriorityColumnAvailable !== null) {
+      return this.feeCategoryPriorityColumnAvailable
+    }
+    const columns = this.db.prepare('PRAGMA table_info(fee_category)').all() as Array<{ name: string }>
+    this.feeCategoryPriorityColumnAvailable = columns.some(column => column.name === 'priority')
+    return this.feeCategoryPriorityColumnAvailable
   }
 
 
@@ -298,6 +308,11 @@ export class PaymentProcessor {
   }
 
   private applyPaymentAcrossOutstandingInvoicesPriority(transactionId: number, studentId: number, paymentAmount: number): number {
+    if (!this.hasFeeCategoryPriorityColumn()) {
+      // Production schema may not define fee_category.priority; fall back to FIFO/date ordering.
+      return this.applyPaymentAcrossOutstandingInvoices(transactionId, studentId, paymentAmount)
+    }
+
     let remainingAmount = paymentAmount
     const pendingInvoices = this.db.prepare(`
       SELECT

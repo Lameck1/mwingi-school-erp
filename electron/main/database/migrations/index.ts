@@ -4,7 +4,9 @@ import { up as seedCoreUp } from './current/0010_seed_core_data.js'
 import { up as seedAcademicUp } from './current/0020_seed_academic_data.js'
 import { up as journalBridgeUp } from './incremental/1001_journal_entry_bridge.js'
 import { up as financeSchemaFixesUp } from './incremental/1002_finance_schema_fixes.js'
+import { up as fixSubjectNamesUp } from './incremental/1002_fix_subject_names.js'
 import { up as budgetAllocationUp } from './incremental/1003_budget_allocation.js'
+import { up as fixGradingScaleUp } from './incremental/1003_fix_grading_scale.js'
 import { up as enrollmentUniqUp } from './incremental/1004_enrollment_active_uniqueness.js'
 import { up as journalEntryTypeExpansionUp } from './incremental/1005_journal_entry_type_expansion.js'
 import { up as paymentInvoiceAllocationUp } from './incremental/1006_payment_invoice_allocation.js'
@@ -24,6 +26,8 @@ import { up as seedFixedAssetGLUp } from './incremental/1019_seed_fixed_asset_gl
 import { up as addSupplierIdToJournalUp } from './incremental/1020_add_supplier_id_to_journal.js'
 import { up as accountingPeriodsUp } from './incremental/1021_accounting_periods.js'
 import { up as expandJournalTypesUp } from './incremental/1022_expand_journal_entry_types.js'
+import { up as addDepartmentToJournalUp } from './incremental/1023_add_department_to_journal_entry.js'
+import { up as loginRateLimitUp } from './incremental/1024_login_rate_limit.js'
 
 import type * as Database from 'better-sqlite3'
 
@@ -56,7 +60,9 @@ const migrations: Migration[] = [
     // Add entries below as the app evolves after first release.
     { name: '1001_journal_entry_bridge', fn: journalBridgeUp },
     { name: '1002_finance_schema_fixes', fn: financeSchemaFixesUp },
+    { name: '1002_fix_subject_names', fn: fixSubjectNamesUp },
     { name: '1003_budget_allocation', fn: budgetAllocationUp },
+    { name: '1003_fix_grading_scale', fn: fixGradingScaleUp },
     { name: '1004_enrollment_active_uniqueness', fn: enrollmentUniqUp },
     { name: '1005_journal_entry_type_expansion', fn: journalEntryTypeExpansionUp },
     { name: '1006_payment_invoice_allocation', fn: paymentInvoiceAllocationUp },
@@ -76,7 +82,13 @@ const migrations: Migration[] = [
     { name: '1020_add_supplier_id_to_journal', fn: addSupplierIdToJournalUp },
     { name: '1021_accounting_periods', fn: accountingPeriodsUp },
     { name: '1022_expand_journal_entry_types', fn: expandJournalTypesUp },
+    { name: '1023_add_department_to_journal_entry', fn: addDepartmentToJournalUp },
+    { name: '1024_login_rate_limit', fn: loginRateLimitUp },
 ]
+
+export function getRegisteredMigrationNames(): string[] {
+    return migrations.map((migration) => migration.name)
+}
 
 /**
  * Run all pending migrations in order.

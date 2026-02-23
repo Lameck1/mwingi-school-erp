@@ -19,28 +19,25 @@ import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 import type { InvoiceItem, FeeInvoiceDB, FeeInvoiceWithDetails, FeeStructureWithDetails } from './types'
 import type { getDatabase } from '../../database'
+import type { FeeStructureItemSchema, InvoiceDataSchema, InvoiceItemSchema } from '../schemas/finance-transaction-schemas'
+
+type CreateInvoiceData = z.infer<typeof InvoiceDataSchema>
+type CreateInvoiceItem = z.infer<typeof InvoiceItemSchema>
+type FeeStructureItemInput = z.infer<typeof FeeStructureItemSchema>
+
+type ComparableInvoiceItem = {
+    fee_category_id: number
+    description?: string | undefined
+    amount: number
+}
 
 function createInvoice(
     db: ReturnType<typeof getDatabase>,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    data: any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    items: any[],
+    data: CreateInvoiceData,
+    items: CreateInvoiceItem[],
     userId: number
 ) {
-    // ... existing implementation ...
-    // Copying the implementation because I need to replace the whole file content helper is generic
-    // Actually, I can just keep the helpers if I just change the register functions?
-    // The previous view_file showed helpers `createInvoice` inside the file. 
-    // I should preserve it.
-
-    // I will use the code from previous view_file, just replacing register functions.
-    // BUT `replace_file_content` for large blocks might be error prone if unchanged lines not perfectly matched.
-    // I will write the WHOLE file.
-
-    // Helper helpers from original file:
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const normalizeItems = (rows: any[]) => rows
+    const normalizeItems = (rows: ReadonlyArray<ComparableInvoiceItem>) => rows
         .map((item) => ({
             fee_category_id: item.fee_category_id,
             description: (item.description || '').trim(),
@@ -56,8 +53,7 @@ function createInvoice(
             return a.description.localeCompare(b.description)
         })
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const isSameItemSet = (a: any[], b: any[]) => {
+    const isSameItemSet = (a: ReadonlyArray<ComparableInvoiceItem>, b: ReadonlyArray<ComparableInvoiceItem>) => {
         if (a.length !== b.length) { return false }
         const left = normalizeItems(a)
         const right = normalizeItems(b)
@@ -71,7 +67,10 @@ function createInvoice(
     }
 
     return db.transaction(() => {
-        const itemsInCents = items.map(item => ({ ...item, amount: item.amount }))
+        const itemsInCents = items.map(item => ({
+            ...item,
+            amount: item.amount
+        }))
         const totalCents = itemsInCents.reduce((sum: number, item) => sum + item.amount, 0)
 
         const recentCandidates = db.prepare(`
@@ -176,7 +175,6 @@ export const registerInvoiceHandlers = (context: FinanceContext): void => {
         if (legacyUserId !== undefined && legacyUserId !== actor.id) {
             throw new Error("Unauthorized: renderer user mismatch")
         }
-        // data and items validated by schema
         return createInvoice(db, data, items, actor.id)
     })
 
@@ -229,11 +227,6 @@ export const registerFeeStructureHandlers = (context: FinanceContext): void => {
         const trimmedName = name.trim()
         const existing = db.prepare('SELECT id FROM fee_category WHERE category_name = ? AND is_active = 1').get(trimmedName)
         if (existing) {
-            // return { success: false, error: ... }
-            // validatedHandler catches errors. Throwing is fine or returning object.
-            // But existing patterns in this file return { success: false, error: ... }
-            // Let's return error object to be consistent with client expectation?
-            // validatedHandler doesn't enforce return type, but calls handler.
             return { success: false, error: 'A fee category with this name already exists' }
         }
 
@@ -259,16 +252,13 @@ export const registerFeeStructureHandlers = (context: FinanceContext): void => {
         if (legacyUserId !== undefined && legacyUserId !== actor.id) {
             throw new Error("Unauthorized: renderer user mismatch")
         }
-        // data validation handled by schema
-
         const deleteStatement = db.prepare('DELETE FROM fee_structure WHERE academic_year_id = ? AND term_id = ?')
         const insertStatement = db.prepare(`
             INSERT INTO fee_structure (academic_year_id, term_id, stream_id, student_type, fee_category_id, amount)
             VALUES (?, ?, ?, ?, ?, ?)
         `)
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const execute = db.transaction((items: any[]) => {
+        const execute = db.transaction((items: FeeStructureItemInput[]) => {
             deleteStatement.run(academicYearId, termId)
             for (const item of items) {
                 insertStatement.run(academicYearId, termId, item.stream_id, item.student_type, item.fee_category_id, item.amount)

@@ -440,7 +440,7 @@ export interface DefaulterEntry {
 export interface NotificationTemplateInput {
   template_name: string
   template_type: 'SMS' | 'EMAIL'
-  category: string
+  category: 'ACADEMIC' | 'FINANCE' | 'ADMIN' | 'FEE_REMINDER' | 'PAYMENT_RECEIPT' | 'ATTENDANCE' | 'GENERAL' | 'PAYSLIP'
   subject?: string
   body: string
 }
@@ -458,14 +458,25 @@ export interface NotificationHistoryFilters {
 export interface AssetCreateData {
   asset_name: string
   asset_code?: string
-  category: string
-  purchase_date: string
-  purchase_cost: number
-  useful_life_years: number
-  salvage_value?: number
+  category_id: number
+  acquisition_date: string
+  acquisition_cost: number
+  accumulated_depreciation?: number
   location?: string
   description?: string
-  status?: string
+  serial_number?: string
+  supplier_id?: number
+  warranty_expiry?: string
+}
+
+export interface AssetUpdateData extends Partial<AssetCreateData> {
+  status?: 'ACTIVE' | 'DISPOSED' | 'WRITTEN_OFF' | 'TRANSFERRED'
+}
+
+export interface AssetFilters {
+  category_id?: number
+  status?: 'ACTIVE' | 'DISPOSED' | 'WRITTEN_OFF' | 'TRANSFERRED'
+  search?: string
 }
 
 export interface GLAccountData {

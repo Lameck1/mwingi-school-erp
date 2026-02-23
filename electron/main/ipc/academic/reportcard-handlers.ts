@@ -5,7 +5,7 @@ import { PDFDocument } from 'pdf-lib'
 import { z } from 'zod'
 
 import { getDatabase } from '../../database'
-import { shell, dialog } from '../../electron-env'
+import { app, shell, dialog } from '../../electron-env'
 import { getSession } from '../../security/session'
 import { container } from '../../services/base/ServiceContainer'
 import { ConfigService } from '../../services/ConfigService'
@@ -34,12 +34,38 @@ const getCbcService = () => container.resolve('CBCReportCardService')
 const getLegacyService = () => container.resolve('ReportCardService')
 const UNKNOWN_ERROR = 'Unknown error'
 const REPORT_CARDS_DIR = 'report-cards'
+const REPORT_CARD_EXTENSION = '.pdf'
 
 type SmtpConfig = {
   host: string
   port: number
   user: string
   pass: string
+}
+
+function resolveAllowedReportCardRoot(): string {
+  return path.resolve(path.join(app.getPath('documents'), 'MwingiSchoolERP', REPORT_CARDS_DIR))
+}
+
+function validateReportCardOpenPath(filePath: string): { ok: true; resolvedPath: string } | { ok: false; error: string } {
+  const resolvedPath = path.resolve(filePath)
+  const allowedRoot = resolveAllowedReportCardRoot()
+  const relativePath = path.relative(allowedRoot, resolvedPath)
+
+  if (!relativePath || relativePath === '.') {
+    return { ok: false, error: 'Invalid report card file path' }
+  }
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    return { ok: false, error: 'Path is outside allowed report card directory' }
+  }
+  if (path.extname(resolvedPath).toLowerCase() !== REPORT_CARD_EXTENSION) {
+    return { ok: false, error: 'Only PDF report card files can be opened' }
+  }
+  if (!fs.existsSync(resolvedPath)) {
+    return { ok: false, error: 'Report card file not found' }
+  }
+
+  return { ok: true, resolvedPath }
 }
 
 async function getSessionUserId(): Promise<number> {
@@ -127,7 +153,7 @@ function registerCbcReportCardHandlers(): void {
 }
 
 function registerCbcBaseHandlers(): void {
-  validatedHandlerMulti('report-card:getSubjects', ROLES.STAFF, ReportCardGetSubjectsSchema, (_event, [examId, streamId]: [number?, number?]) => {
+  validatedHandlerMulti('report-card:getSubjects', ROLES.STAFF, ReportCardGetSubjectsSchema, (_event, [examId, streamId]) => {
     try {
       const db = getDatabase()
 
@@ -262,7 +288,11 @@ function registerCbcDownloadHandlers(): void {
     if (!filePath || typeof filePath !== 'string') {
       return { success: false, error: 'Invalid report card file path' }
     }
-    const openResult = await shell.openPath(filePath)
+    const validatedPath = validateReportCardOpenPath(filePath)
+    if (!validatedPath.ok) {
+      return { success: false, error: validatedPath.error }
+    }
+    const openResult = await shell.openPath(validatedPath.resolvedPath)
     if (openResult) {
       return { success: false, error: openResult }
     }

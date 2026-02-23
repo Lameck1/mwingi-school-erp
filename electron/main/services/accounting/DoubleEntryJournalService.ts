@@ -401,7 +401,7 @@ export class DoubleEntryJournalService {
       description: `Fee payment received - ${paymentMethod} - Ref: ${paymentReference}`,
       student_id: studentId,
       created_by_user_id: userId,
-      source_ledger_txn_id: sourceLedgerTxnId,
+      ...(sourceLedgerTxnId !== undefined ? { source_ledger_txn_id: sourceLedgerTxnId } : {}),
       lines: [
         {
           gl_account_code: debitAccountCode,

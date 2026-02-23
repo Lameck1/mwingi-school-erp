@@ -27,4 +27,4 @@ export const MessageSendEmailSchema = z.object({
     userId: z.number().optional() // legacy
 })
 
-export const MessageGetLogsSchema = z.tuple([z.number().optional()])
+export const MessageGetLogsSchema = z.number().optional()

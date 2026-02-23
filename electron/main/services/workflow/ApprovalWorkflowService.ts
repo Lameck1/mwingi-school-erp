@@ -104,13 +104,17 @@ export class ApprovalWorkflowService {
     amount: number
     description: string
   } {
+    const requestType = params.requestType ?? params.request_type
+    const entityType = params.entityType ?? params.entity_type
+    const entityId = params.entityId ?? params.entity_id
+    const requestedBy = params.requestedBy ?? params.requested_by
     return {
-      requestType: params.requestType ?? params.request_type,
-      entityType: params.entityType ?? params.entity_type,
-      entityId: params.entityId ?? params.entity_id,
-      requestedBy: params.requestedBy ?? params.requested_by,
       amount: params.amount,
-      description: params.description
+      description: params.description,
+      ...(requestType !== undefined ? { requestType } : {}),
+      ...(entityType !== undefined ? { entityType } : {}),
+      ...(entityId !== undefined ? { entityId } : {}),
+      ...(requestedBy !== undefined ? { requestedBy } : {})
     }
   }
 
@@ -336,7 +340,14 @@ export class ApprovalWorkflowService {
       }
 
       const now = new Date().toISOString()
-      this.updateApprovalLevel({ decision, requestId, level, approverId, now, comments })
+      this.updateApprovalLevel({
+        decision,
+        requestId,
+        level,
+        approverId,
+        now,
+        ...(comments !== undefined ? { comments } : {})
+      })
 
       if (decision === 'REJECTED') {
         this.finalizeApprovalRequest(requestId, 'REJECTED', now)

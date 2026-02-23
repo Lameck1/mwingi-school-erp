@@ -168,9 +168,9 @@ class NEMISDataRepository {
       student_count: studentCount.count || 0,
       enrollment_count: enrollmentData.count || 0,
       financial_summary: financialData,
-      period_start: startDate,
-      period_end: endDate,
-      generated_by: 'NEMIS_EXPORT_SERVICE'
+      generated_by: 'NEMIS_EXPORT_SERVICE',
+      ...(startDate !== undefined ? { period_start: startDate } : {}),
+      ...(endDate !== undefined ? { period_end: endDate } : {})
     }
   }
 
@@ -324,7 +324,7 @@ class NEMISValidator implements INEMISValidator {
     return {
       valid: errors.length === 0,
       message: errors.length === 0 ? 'Data is valid' : `Found ${errors.length} validation error(s)`,
-      errors: errors.length > 0 ? errors : undefined
+      ...(errors.length > 0 ? { errors } : {})
     }
   }
 
@@ -423,7 +423,7 @@ class NEMISExportManager implements INEMISExportManager {
     }
 
     // For STUDENTS type, we perform additional schema validation
-    const studentData = data as unknown as NEMISStudent[]
+    const studentData = data as NEMISStudent[]
     for (const student of studentData) {
       const validation = this.validator.validateStudentData(student)
       if (!validation.valid) {

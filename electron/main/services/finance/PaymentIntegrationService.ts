@@ -214,9 +214,9 @@ export class PaymentIntegrationService {
         payment_date: data.transaction_date,
         description,
         reference: paymentRef,
-        term_id: data.term_id,
-        invoice_id: data.invoice_id,
-        recorded_by: userId
+        recorded_by: userId,
+        ...(data.term_id !== undefined ? { term_id: data.term_id } : {}),
+        ...(data.invoice_id !== undefined ? { invoice_id: data.invoice_id } : {})
       })
 
       if (!(paymentResult.success && paymentResult.journal_entry_id)) {
@@ -379,7 +379,7 @@ export class PaymentIntegrationService {
         message: 'Payment recorded successfully',
         transactionRef,
         receiptNumber,
-        journalEntryId,
+        ...(journalEntryId !== undefined ? { journalEntryId } : {}),
         legacyTransactionId
       }
     } catch (error) {
@@ -422,8 +422,8 @@ export class PaymentIntegrationService {
         entry_type: 'FEE_PAYMENT',
         description: data.description || `Fee payment from ${student.full_name} via ${data.payment_method} - Ref: ${data.reference}`,
         student_id: data.student_id,
-        term_id: data.term_id,
         created_by_user_id: data.recorded_by,
+        ...(data.term_id !== undefined ? { term_id: data.term_id } : {}),
         lines: [
           {
             gl_account_code: cashAccountCode,
@@ -446,6 +446,12 @@ export class PaymentIntegrationService {
         return {
           success: false,
           message: `Failed to create journal entry: ${journalResult.message}`
+        };
+      }
+      if (journalResult.entry_id === undefined) {
+        return {
+          success: false,
+          message: 'Failed to create journal entry: missing journal entry identifier'
         };
       }
 
@@ -505,7 +511,7 @@ export class PaymentIntegrationService {
         return {
             success: false,
             message: voidResult.message,
-            requires_approval: voidResult.requires_approval
+            ...(voidResult.requires_approval !== undefined ? { requires_approval: voidResult.requires_approval } : {})
         };
       }
 

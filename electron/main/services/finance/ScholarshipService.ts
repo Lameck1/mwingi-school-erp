@@ -516,10 +516,9 @@ export class ScholarshipService
   // Legacy alias used by older tests
   async allocateScholarship(allocationData: AllocationData | LegacyAllocationData): Promise<AllocationResult & { allocationId?: number }> {
     const result = await this.allocateScholarshipToStudent(allocationData)
-    return {
-      ...result,
-      allocationId: result.allocation_id
-    }
+    return result.allocation_id === undefined
+      ? { ...result }
+      : { ...result, allocationId: result.allocation_id }
   }
 
   /**
