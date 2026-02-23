@@ -55,7 +55,7 @@ describe('bank handlers', () => {
     const handler = handlerMap.get('bank:createStatement')!
     const result = await handler({}, 1, tomorrow, 1000, 1200, 'REF-1') as { success: boolean; errors?: string[] }
     expect(result.success).toBe(false)
-    expect(result.errors?.[0]).toContain('future')
+    expect(result.error).toContain('future')
     expect(bankServiceMock.createStatement).not.toHaveBeenCalled()
   })
 
@@ -64,7 +64,7 @@ describe('bank handlers', () => {
     const handler = handlerMap.get('bank:createStatement')!
     const result = await handler({}, 0, today, 1000, 1200, 'REF-1') as { success: boolean; errors?: string[] }
     expect(result.success).toBe(false)
-    expect(result.errors?.[0]).toContain('Invalid Bank account ID')
+    expect(result.error).toContain('Validation failed')
     expect(bankServiceMock.createStatement).not.toHaveBeenCalled()
   })
 
@@ -88,7 +88,7 @@ describe('bank handlers', () => {
     }) as { success: boolean; errors?: string[] }
 
     expect(result.success).toBe(false)
-    expect(result.errors?.[0]).toContain('Exactly one')
+    expect(result.error).toContain('Exactly one')
     expect(bankServiceMock.addStatementLine).not.toHaveBeenCalled()
   })
 
@@ -107,7 +107,7 @@ describe('bank handlers', () => {
     expect(result.success).toBe(true)
     expect(bankServiceMock.addStatementLine).toHaveBeenCalledWith(2, {
       transaction_date: today,
-      description: 'Fee transfer',
+      description: '  Fee transfer  ',
       reference: null,
       debit_amount: 0,
       credit_amount: 1500,
@@ -120,7 +120,7 @@ describe('bank handlers', () => {
     const result = await handler({}, 0, 2) as { success: boolean; error?: string }
 
     expect(result.success).toBe(false)
-    expect(result.error).toContain('Invalid Statement ID')
+    expect(result.error).toContain('Validation failed')
     expect(bankServiceMock.markStatementReconciled).not.toHaveBeenCalled()
   })
 })

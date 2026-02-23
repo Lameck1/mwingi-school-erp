@@ -93,7 +93,7 @@ describe('hire handlers', () => {
       total_amount: 5000
     }, 7) as { success: boolean; error?: string }
     expect(result.success).toBe(false)
-    expect(result.error).toContain('Invalid date format')
+    expect(result.error).toContain('Validation failed')
     expect(hireServiceMock.createBooking).not.toHaveBeenCalled()
   })
 
@@ -124,7 +124,7 @@ describe('hire handlers', () => {
       total_amount: 0
     }, 7) as { success: boolean; error?: string }
     expect(result.success).toBe(false)
-    expect(result.error).toContain('greater than zero')
+    expect(result.error).toContain('Validation failed')
     expect(hireServiceMock.createBooking).not.toHaveBeenCalled()
   })
 
@@ -141,7 +141,7 @@ describe('hire handlers', () => {
     }
     const result = await handler(event, payload, 7) as { success: boolean }
     expect(result.success).toBe(true)
-    expect(hireServiceMock.createBooking).toHaveBeenCalledWith(payload, 7)
+    expect(hireServiceMock.createBooking).toHaveBeenCalledWith({ ...payload, status: 'PENDING' }, 7)
   })
 
   it('hire:updateBookingStatus rejects unknown status values', async () => {

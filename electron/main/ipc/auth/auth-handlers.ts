@@ -20,50 +20,52 @@ interface User {
     password_hash: string
     full_name: string
     email: string
-    role: string
+    role: "ADMIN" | "ACCOUNTS_CLERK" | "AUDITOR" | "PRINCIPAL" | "DEPUTY_PRINCIPAL" | "TEACHER"
     is_active: number
     last_login: string
     created_at: string
     updated_at?: string
 }
 
-
 // ── Login Rate Limiting ─────────────────────────────────────────
 const MAX_ATTEMPTS = 5
 const BASE_LOCKOUT_MS = 30_000 // 30 seconds
 const MAX_LOCKOUT_MS = 15 * 60_000 // 15 minutes
 
-interface LoginAttemptRecord {
-    failedCount: number
-    lastFailedAt: number
-    lockoutUntil: number
-}
-
-const loginAttempts = new Map<string, LoginAttemptRecord>()
-
-function checkRateLimit(username: string): string | null {
-    const record = loginAttempts.get(username)
+function checkRateLimit(db: ReturnType<typeof getDatabase>, username: string): string | null {
+    const record = db.prepare('SELECT failed_count, last_failed_at, lockout_until FROM login_attempt WHERE username = ?').get(username) as { failed_count: number; last_failed_at: number; lockout_until: number } | undefined
     if (!record) { return null }
-    if (record.lockoutUntil > Date.now()) {
-        const remainingSec = Math.ceil((record.lockoutUntil - Date.now()) / 1000)
+    if (record.lockout_until > Date.now()) {
+        const remainingSec = Math.ceil((record.lockout_until - Date.now()) / 1000)
         return `Too many failed attempts. Try again in ${remainingSec} seconds.`
     }
     return null
 }
 
-function recordFailedLogin(username: string): void {
-    const record = loginAttempts.get(username) ?? { failedCount: 0, lastFailedAt: 0, lockoutUntil: 0 }
-    record.failedCount++
-    record.lastFailedAt = Date.now()
-    if (record.failedCount >= MAX_ATTEMPTS) {
-        const multiplier = Math.pow(2, Math.floor((record.failedCount - MAX_ATTEMPTS) / MAX_ATTEMPTS))
-        record.lockoutUntil = Date.now() + Math.min(BASE_LOCKOUT_MS * multiplier, MAX_LOCKOUT_MS)
+function recordFailedLogin(db: ReturnType<typeof getDatabase>, username: string): void {
+    const record = db.prepare('SELECT failed_count, last_failed_at, lockout_until FROM login_attempt WHERE username = ?').get(username) as { failed_count: number; last_failed_at: number; lockout_until: number } | undefined
+
+    const failedCount = (record?.failed_count ?? 0) + 1
+    let lockoutUntil = record?.lockout_until ?? 0
+    const lastFailedAt = Date.now()
+
+    if (failedCount >= MAX_ATTEMPTS) {
+        const multiplier = Math.pow(2, Math.floor((failedCount - MAX_ATTEMPTS) / MAX_ATTEMPTS))
+        lockoutUntil = Date.now() + Math.min(BASE_LOCKOUT_MS * multiplier, MAX_LOCKOUT_MS)
     }
-    loginAttempts.set(username, record)
+
+    db.prepare(`
+        INSERT INTO login_attempt (username, failed_count, last_failed_at, lockout_until)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(username) DO UPDATE SET
+            failed_count = excluded.failed_count,
+            last_failed_at = excluded.last_failed_at,
+            lockout_until = excluded.lockout_until
+    `).run(username, failedCount, lastFailedAt, lockoutUntil)
 }
 
-function clearFailedLogins(username: string): void {
-    loginAttempts.delete(username)
+function clearFailedLogins(db: ReturnType<typeof getDatabase>, username: string): void {
+    db.prepare('DELETE FROM login_attempt WHERE username = ?').run(username)
 }
 
 function registerSessionHandlers(db: ReturnType<typeof getDatabase>): void {
@@ -226,15 +228,17 @@ export function registerAuthHandlers(): void {
     // ======== AUTH ========
     // ======== AUTH ========
     validatedHandlerMulti('auth:login', ROLES.PUBLIC, LoginSchema, async (_event, [username, password], _actor): Promise<{ success: boolean; user?: Omit<User, 'password_hash'>; error?: string }> => {
-        const rateLimitError = checkRateLimit(username)
+        const rateLimitError = checkRateLimit(db, username)
         if (rateLimitError) {
+            logAudit(0, 'LOGIN_RATE_LIMITED', 'auth', null, null, { username, action_status: 'FAILURE' })
             return { success: false, error: rateLimitError }
         }
 
         const user = db.prepare('SELECT * FROM user WHERE username = ? AND is_active = 1').get(username) as User | undefined
 
         if (!user) {
-            recordFailedLogin(username)
+            recordFailedLogin(db, username)
+            logAudit(0, 'LOGIN_FAILED', 'auth', null, null, { username, detail: 'Invalid credentials' })
             return { success: false, error: 'Invalid username or password' }
         }
 
@@ -242,11 +246,12 @@ export function registerAuthHandlers(): void {
             const valid = await bcrypt.compare(password, user.password_hash)
 
             if (!valid) {
-                recordFailedLogin(username)
+                recordFailedLogin(db, username)
+                logAudit(user.id, 'LOGIN_FAILED', 'auth', user.id, null, { username, detail: 'Invalid credentials' })
                 return { success: false, error: 'Invalid username or password' }
             }
 
-            clearFailedLogins(username)
+            clearFailedLogins(db, username)
             db.prepare('UPDATE user SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(user.id)
             logAudit(user.id, 'LOGIN', 'user', user.id, null, { action: 'Login' })
 

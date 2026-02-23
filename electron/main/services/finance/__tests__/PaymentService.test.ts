@@ -17,6 +17,16 @@ describe('PaymentService', () => {
         
         // Create minimal required tables
         db.exec(`
+    CREATE TABLE IF NOT EXISTS fee_category (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, category_name TEXT NOT NULL UNIQUE,
+      description TEXT, is_active BOOLEAN DEFAULT 1, priority INTEGER DEFAULT 99,
+      gl_account_id INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS invoice_item (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, invoice_id INTEGER NOT NULL,
+      fee_category_id INTEGER NOT NULL, description TEXT NOT NULL, amount INTEGER NOT NULL
+    );
+
           CREATE TABLE student (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             first_name TEXT NOT NULL,

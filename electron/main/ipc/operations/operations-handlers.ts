@@ -19,6 +19,9 @@ export const registerOperationsHandlers = () => {
   })
 
   validatedHandler('operations:boarding:recordExpense', ROLES.FINANCE, BoardingExpenseSchema, (event, params, actor) => {
+    if (params.recorded_by !== actor.id) {
+      throw new Error("Unauthorized: renderer user mismatch")
+    }
     // legacy `params.recorded_by` check vs actor.id?
     // The schema includes `recorded_by`.
     // The original code:
@@ -63,6 +66,9 @@ export const registerOperationsHandlers = () => {
   })
 
   validatedHandler('operations:transport:recordExpense', ROLES.FINANCE, TransportExpenseSchema, (event, params, actor) => {
+    if (params.recorded_by !== actor.id) {
+      throw new Error("Unauthorized: renderer user mismatch")
+    }
     const sanitizedParams = { ...params, recorded_by: actor.id }
     return transportService.recordTransportExpense(sanitizedParams)
   })

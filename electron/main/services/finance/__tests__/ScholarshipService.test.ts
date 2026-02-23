@@ -25,6 +25,37 @@ describe('ScholarshipService', () => {
     testDb = db
     
     db.exec(`
+    CREATE TABLE IF NOT EXISTS fee_category (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, category_name TEXT NOT NULL UNIQUE,
+      description TEXT, is_active BOOLEAN DEFAULT 1, priority INTEGER DEFAULT 99,
+      gl_account_id INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS invoice_item (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, invoice_id INTEGER NOT NULL,
+      fee_category_id INTEGER NOT NULL, description TEXT NOT NULL, amount INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS receipt (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, receipt_number TEXT NOT NULL UNIQUE,
+      transaction_id INTEGER NOT NULL UNIQUE, receipt_date DATE NOT NULL,
+      student_id INTEGER NOT NULL, amount INTEGER NOT NULL, amount_in_words TEXT,
+      payment_method TEXT NOT NULL, payment_reference TEXT, printed_count INTEGER DEFAULT 0,
+      created_by_user_id INTEGER NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+          CREATE TABLE IF NOT EXISTS approval_rule (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rule_name TEXT NOT NULL UNIQUE,
+            description TEXT,
+            transaction_type TEXT NOT NULL,
+            min_amount INTEGER,
+            max_amount INTEGER,
+            days_since_transaction INTEGER,
+            required_role_id INTEGER,
+            is_active BOOLEAN DEFAULT 1,
+            created_by_user_id INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+
       CREATE TABLE student (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         first_name TEXT NOT NULL,
