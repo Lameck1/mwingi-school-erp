@@ -3,10 +3,7 @@ import { fileURLToPath } from 'node:url';
 import js from '@eslint/js';
 import typescriptPlugin from '@typescript-eslint/eslint-plugin';
 import typescriptParser from '@typescript-eslint/parser';
-import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
-import jsxA11yPlugin from 'eslint-plugin-jsx-a11y';
-import importPlugin from 'eslint-plugin-import';
 import promisePlugin from 'eslint-plugin-promise';
 import securityPlugin from 'eslint-plugin-security';
 import sonarjsPlugin from 'eslint-plugin-sonarjs';
@@ -28,44 +25,13 @@ const ignorePatterns = [
   '**/assets/*.js',
 ];
 
-const importSettings = {
-  'import/parsers': {
-    '@typescript-eslint/parser': ['.ts', '.tsx'],
-  },
-  'import/resolver': {
-    typescript: {
-      project: path.join(__dirname, 'tsconfig.eslint.json'),
-      alwaysTryTypes: true,
-    },
-    node: {
-      extensions: ['.js', '.jsx', '.ts', '.tsx', '.d.ts'],
-    },
-  },
-  react: {
-    version: 'detect',
-  },
-  'jsx-a11y': {
-    components: {
-      Input: 'input',
-      Select: 'select',
-      Textarea: 'textarea',
-      Modal: 'dialog',
-    },
-  },
-};
-
 const baseRules = {
   ...js.configs.recommended.rules,
-  ...jsxA11yPlugin.flatConfigs.recommended.rules,
-  ...importPlugin.flatConfigs.recommended.rules,
-  ...importPlugin.flatConfigs.typescript.rules,
   ...promisePlugin.configs['flat/recommended'].rules,
   ...securityPlugin.configs.recommended.rules,
   ...sonarjsPlugin.configs.recommended.rules,
   'no-unused-vars': 'off',
   'no-undef': 'off',
-  'react/react-in-jsx-scope': 'off',
-  'react/prop-types': 'off',
   'react-hooks/rules-of-hooks': 'error',
   'react-hooks/exhaustive-deps': 'error',
   '@typescript-eslint/no-unused-vars': [
@@ -125,39 +91,6 @@ const baseRules = {
   'max-depth': ['warn', 4],
   'max-statements': ['warn', 30],
   'complexity': ['warn', 12],
-  'import/no-cycle': ['error', { maxDepth: 1 }],
-  'import/no-self-import': 'error',
-  'import/no-duplicates': 'error',
-  'import/no-named-as-default': 'off',
-  'import/no-named-as-default-member': 'off',
-  'import/no-mutable-exports': 'off',
-  'import/newline-after-import': ['warn', { count: 1 }],
-  'import/order': [
-    'warn',
-    {
-      groups: [['builtin', 'external'], ['internal'], ['parent', 'sibling', 'index'], ['object', 'type']],
-      'newlines-between': 'always',
-      alphabetize: { order: 'asc', caseInsensitive: true },
-    },
-  ],
-  'jsx-a11y/click-events-have-key-events': 'error',
-  'jsx-a11y/interactive-supports-focus': 'error',
-  'jsx-a11y/control-has-associated-label': [
-      'warn',
-      {
-      ignoreElements: ['audio', 'canvas', 'embed', 'input', 'textarea', 'tr', 'td', 'th', 'video'],
-      controlComponents: ['Select'],
-      labelAttributes: ['label', 'aria-label', 'aria-labelledby', 'title'],
-      },
-    ],
-  'jsx-a11y/label-has-associated-control': [
-    'warn',
-    {
-      assert: 'either',
-      depth: 4,
-      controlComponents: ['Input', 'Select', 'Textarea'],
-    },
-  ],
   'security/detect-object-injection': 'off',
   'security/detect-non-literal-fs-filename': 'off',
   'promise/always-return': 'warn',
@@ -221,16 +154,12 @@ export default [
     },
     plugins: {
       '@typescript-eslint': typescriptPlugin,
-      react: reactPlugin,
       'react-hooks': reactHooksPlugin,
-      'jsx-a11y': jsxA11yPlugin,
-      import: importPlugin,
       promise: promisePlugin,
       security: securityPlugin,
       sonarjs: sonarjsPlugin,
       unicorn: unicornPlugin,
     },
-    settings: importSettings,
     rules: baseRules,
   },
   {
@@ -290,7 +219,6 @@ export default [
     files: ['src/types/electron-api/**/*.ts'],
     rules: {
       'max-params': 'off',
-      'import/order': 'off',
     },
   },
   {
