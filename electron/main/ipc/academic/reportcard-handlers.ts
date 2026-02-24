@@ -77,10 +77,10 @@ async function getSessionUserId(): Promise<number> {
 }
 
 function resolveSmtpConfig(): { config: SmtpConfig | null; error?: string } {
-  const host = ConfigService.getConfig('smtp.host')
-  const port = ConfigService.getConfig('smtp.port')
-  const user = ConfigService.getConfig('smtp.user')
-  const pass = ConfigService.getConfig('smtp.pass')
+  const host = ConfigService.getConfig('smtp_host') ?? ConfigService.getConfig('smtp.host')
+  const port = ConfigService.getConfig('smtp_port') ?? ConfigService.getConfig('smtp.port')
+  const user = ConfigService.getConfig('smtp_user') ?? ConfigService.getConfig('smtp.user')
+  const pass = ConfigService.getConfig('smtp_pass') ?? ConfigService.getConfig('smtp.pass')
 
   if (!host || !port || !user || !pass) {
     return { config: null, error: 'SMTP settings are not configured' }

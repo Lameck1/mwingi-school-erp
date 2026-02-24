@@ -1,11 +1,20 @@
 import { z } from 'zod'
 
-export const SchoolSettingsSchema = z.record(z.string(), z.unknown())
-// Use specific schema if possible, but the handler casts it to Record<string, unknown> validation is minimal in original code.
-// Ideally should validate fields like school_name, etc. but to be safe with unknown fields, generic record is okay for now or partial object.
-// Handler code: `settings['school_name']` etc.
-// Let's use a loose object or record for now to match `data: unknown`.
-export const SettingsUpdateSchema = z.record(z.string(), z.unknown())
+const SettingsUpdateFieldsSchema = z.object({
+    school_name: z.string().min(1).optional(),
+    school_motto: z.string().optional(),
+    address: z.string().optional(),
+    phone: z.string().optional(),
+    email: z.string().email().optional(),
+    logo_path: z.string().optional(),
+    mpesa_paybill: z.string().optional(),
+    sms_api_key: z.string().optional(),
+    sms_api_secret: z.string().optional(),
+    sms_sender_id: z.string().optional(),
+})
+
+export const SchoolSettingsSchema = SettingsUpdateFieldsSchema
+export const SettingsUpdateSchema = SettingsUpdateFieldsSchema.strict()
 
 export const SecureConfigKeySchema = z.string().min(1)
 export const SecureConfigPairSchema = z.tuple([

@@ -31,17 +31,18 @@ export default function IntegrationsSettings() {
 
             setSmsConfig(prev => ({
                 ...prev,
-                api_key: all['sms.api_key'] || '',
-                username: all['sms.username'] || '',
-                sender_id: all['sms.sender_id'] || ''
+                provider: all['sms_provider'] || all['sms.provider'] || prev.provider,
+                api_key: all['sms_api_key'] || all['sms.api_key'] || '',
+                username: all['sms_api_secret'] || all['sms.api_secret'] || all['sms.username'] || '',
+                sender_id: all['sms_sender_id'] || all['sms.sender_id'] || ''
             }))
 
             setSmtpConfig(prev => ({
                 ...prev,
-                host: all['smtp.host'] || '',
-                port: all['smtp.port'] || '587',
-                user: all['smtp.user'] || '',
-                pass: all['smtp.pass'] || ''
+                host: all['smtp_host'] || all['smtp.host'] || '',
+                port: all['smtp_port'] || all['smtp.port'] || '587',
+                user: all['smtp_user'] || all['smtp.user'] || '',
+                pass: all['smtp_pass'] || all['smtp.pass'] || ''
             }))
 
         } catch (error) {
@@ -60,17 +61,17 @@ export default function IntegrationsSettings() {
         setLoading(true)
         try {
             const saveOperations: Promise<boolean>[] = [
-                globalThis.electronAPI.saveSecureConfig('sms.provider', smsConfig.provider)
+                globalThis.electronAPI.saveSecureConfig('sms_provider', smsConfig.provider)
             ]
 
             if (shouldPersistConfigValue(smsConfig.api_key)) {
-                saveOperations.push(globalThis.electronAPI.saveSecureConfig('sms.api_key', smsConfig.api_key))
+                saveOperations.push(globalThis.electronAPI.saveSecureConfig('sms_api_key', smsConfig.api_key))
             }
             if (shouldPersistConfigValue(smsConfig.username)) {
-                saveOperations.push(globalThis.electronAPI.saveSecureConfig('sms.username', smsConfig.username))
+                saveOperations.push(globalThis.electronAPI.saveSecureConfig('sms_api_secret', smsConfig.username))
             }
             if (shouldPersistConfigValue(smsConfig.sender_id)) {
-                saveOperations.push(globalThis.electronAPI.saveSecureConfig('sms.sender_id', smsConfig.sender_id))
+                saveOperations.push(globalThis.electronAPI.saveSecureConfig('sms_sender_id', smsConfig.sender_id))
             }
 
             await Promise.all(saveOperations)
@@ -88,16 +89,16 @@ export default function IntegrationsSettings() {
             const saveOperations: Promise<boolean>[] = []
 
             if (shouldPersistConfigValue(smtpConfig.host)) {
-                saveOperations.push(globalThis.electronAPI.saveSecureConfig('smtp.host', smtpConfig.host))
+                saveOperations.push(globalThis.electronAPI.saveSecureConfig('smtp_host', smtpConfig.host))
             }
             if (shouldPersistConfigValue(smtpConfig.port)) {
-                saveOperations.push(globalThis.electronAPI.saveSecureConfig('smtp.port', smtpConfig.port))
+                saveOperations.push(globalThis.electronAPI.saveSecureConfig('smtp_port', smtpConfig.port))
             }
             if (shouldPersistConfigValue(smtpConfig.user)) {
-                saveOperations.push(globalThis.electronAPI.saveSecureConfig('smtp.user', smtpConfig.user))
+                saveOperations.push(globalThis.electronAPI.saveSecureConfig('smtp_user', smtpConfig.user))
             }
             if (shouldPersistConfigValue(smtpConfig.pass)) {
-                saveOperations.push(globalThis.electronAPI.saveSecureConfig('smtp.pass', smtpConfig.pass))
+                saveOperations.push(globalThis.electronAPI.saveSecureConfig('smtp_pass', smtpConfig.pass))
             }
 
             await Promise.all(saveOperations)

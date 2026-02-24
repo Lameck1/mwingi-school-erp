@@ -1,17 +1,29 @@
 import log from 'electron-log'
 import { autoUpdater, type UpdateInfo, type ProgressInfo } from 'electron-updater'
+import { z } from 'zod'
 
 import { dialog } from '../electron-env'
-import { safeHandleRaw } from '../ipc/ipc-result'
+import { ROLES } from '../ipc/ipc-result'
+import { validatedHandler } from '../ipc/validated-handler'
 
 import type { BrowserWindow } from 'electron'
 
-// Configure logging
-autoUpdater.logger = log
-// log.transports.file.level = 'info' // Commented out to avoid type error if log types mismatch
+type UpdateCommandResult =
+    | { success: true; message?: string }
+    | { success: false; error: string }
+
+type UpdateStatusSnapshot = {
+    isAvailable: boolean
+    downloadProgress: number
+    status: 'disabled' | 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
+    reason?: string
+}
 
 const UPDATE_STATUS_CHANNEL = 'update-status'
 let updateIpcRegistered = false
+
+// Configure logging
+autoUpdater.logger = log
 
 export function registerDisabledUpdateHandlers(reason: string = 'Auto-update is only available in packaged builds'): void {
     if (updateIpcRegistered) {
@@ -19,10 +31,10 @@ export function registerDisabledUpdateHandlers(reason: string = 'Auto-update is 
     }
     updateIpcRegistered = true
 
-    safeHandleRaw('check-for-updates', () => ({ success: false, error: reason }))
-    safeHandleRaw('download-update', () => ({ success: false, error: reason }))
-    safeHandleRaw('install-update', () => ({ success: false, error: reason }))
-    safeHandleRaw('get-update-status', () => ({
+    validatedHandler('check-for-updates', ROLES.MANAGEMENT, z.void(), (): UpdateCommandResult => ({ success: false, error: reason }))
+    validatedHandler('download-update', ROLES.MANAGEMENT, z.void(), (): UpdateCommandResult => ({ success: false, error: reason }))
+    validatedHandler('install-update', ROLES.MANAGEMENT, z.void(), (): UpdateCommandResult => ({ success: false, error: reason }))
+    validatedHandler('get-update-status', ROLES.MANAGEMENT, z.void(), (): UpdateStatusSnapshot => ({
         isAvailable: false,
         downloadProgress: 0,
         status: 'disabled',
@@ -34,6 +46,7 @@ export class AutoUpdateManager {
     private readonly mainWindow: BrowserWindow
     private isUpdateAvailable = false
     private downloadProgress = 0
+    private status: UpdateStatusSnapshot['status'] = 'idle'
 
     constructor(mainWindow: BrowserWindow) {
         this.mainWindow = mainWindow
@@ -42,45 +55,44 @@ export class AutoUpdateManager {
     }
 
     private setupAutoUpdater(): void {
-        // Disable auto-download, we'll control it manually
         autoUpdater.autoDownload = false
         autoUpdater.autoInstallOnAppQuit = true
 
-        // Check for updates on app start (after 5 seconds)
         setTimeout(() => {
             void this.checkForUpdates(true)
         }, 5000)
 
-        // Check for updates every 4 hours
         setInterval(() => {
             void this.checkForUpdates(true)
         }, 4 * 60 * 60 * 1000)
 
-        // Event handlers
         autoUpdater.on('checking-for-update', () => {
+            this.status = 'checking'
             log.info('Checking for updates...')
             this.sendToRenderer(UPDATE_STATUS_CHANNEL, { status: 'checking' })
         })
 
         autoUpdater.on('update-available', (info: UpdateInfo) => {
-            log.info('Update available:', info.version)
+            this.status = 'available'
             this.isUpdateAvailable = true
+            log.info('Update available:', info.version)
             this.sendToRenderer(UPDATE_STATUS_CHANNEL, {
                 status: 'available',
                 version: info.version,
                 releaseNotes: info.releaseNotes
             })
-
-            // Show notification to user
             this.showUpdateNotification(info)
         })
 
         autoUpdater.on('update-not-available', () => {
+            this.status = 'not-available'
+            this.isUpdateAvailable = false
             log.info('No updates available')
             this.sendToRenderer(UPDATE_STATUS_CHANNEL, { status: 'not-available' })
         })
 
         autoUpdater.on('download-progress', (progress: ProgressInfo) => {
+            this.status = 'downloading'
             this.downloadProgress = progress.percent
             this.sendToRenderer(UPDATE_STATUS_CHANNEL, {
                 status: 'downloading',
@@ -92,17 +104,17 @@ export class AutoUpdateManager {
         })
 
         autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
+            this.status = 'downloaded'
             log.info('Update downloaded:', info.version)
             this.sendToRenderer(UPDATE_STATUS_CHANNEL, {
                 status: 'downloaded',
                 version: info.version
             })
-
-            // Prompt user to install
             this.promptInstall(info)
         })
 
         autoUpdater.on('error', (error: Error) => {
+            this.status = 'error'
             log.error('Update error:', error)
             this.sendToRenderer(UPDATE_STATUS_CHANNEL, {
                 status: 'error',
@@ -116,46 +128,59 @@ export class AutoUpdateManager {
             return
         }
         updateIpcRegistered = true
-        safeHandleRaw('check-for-updates', () => this.checkForUpdates(false))
-        safeHandleRaw('download-update', () => this.downloadUpdate())
-        safeHandleRaw('install-update', () => this.installUpdate())
-        safeHandleRaw('get-update-status', () => ({
+
+        validatedHandler('check-for-updates', ROLES.MANAGEMENT, z.void(), (): Promise<UpdateCommandResult> => this.checkForUpdates(false))
+        validatedHandler('download-update', ROLES.MANAGEMENT, z.void(), (): Promise<UpdateCommandResult> => this.downloadUpdate())
+        validatedHandler('install-update', ROLES.MANAGEMENT, z.void(), (): UpdateCommandResult => this.installUpdate())
+        validatedHandler('get-update-status', ROLES.MANAGEMENT, z.void(), (): UpdateStatusSnapshot => ({
             isAvailable: this.isUpdateAvailable,
-            downloadProgress: this.downloadProgress
+            downloadProgress: this.downloadProgress,
+            status: this.status
         }))
     }
 
-    async checkForUpdates(silent: boolean = true): Promise<void> {
+    async checkForUpdates(silent: boolean = true): Promise<UpdateCommandResult> {
         try {
             if (process.env['NODE_ENV'] === 'development') {
-                console.error('[Dev] Keeping auto-update check skipped.')
-                return
+                return { success: false, error: 'Auto-update checks are disabled in development mode.' }
             }
             await autoUpdater.checkForUpdates()
+            return { success: true }
         } catch (error) {
+            const errorMessage = 'Failed to check for updates. Please try again later.'
             if (!silent) {
-                dialog.showErrorBox('Update Error', 'Failed to check for updates. Please try again later.')
+                dialog.showErrorBox('Update Error', errorMessage)
             }
             log.error('Failed to check for updates:', error)
+            return { success: false, error: errorMessage }
         }
     }
 
-    async downloadUpdate(): Promise<void> {
-        if (!this.isUpdateAvailable) {return}
+    async downloadUpdate(): Promise<UpdateCommandResult> {
+        if (!this.isUpdateAvailable) {
+            return { success: false, error: 'No update is available to download.' }
+        }
 
         try {
             await autoUpdater.downloadUpdate()
+            return { success: true }
         } catch (error) {
+            this.status = 'error'
             log.error('Failed to download update:', error)
             this.sendToRenderer(UPDATE_STATUS_CHANNEL, {
                 status: 'error',
                 error: 'Download failed'
             })
+            return { success: false, error: 'Download failed' }
         }
     }
 
-    installUpdate(): void {
+    installUpdate(): UpdateCommandResult {
+        if (!this.isUpdateAvailable) {
+            return { success: false, error: 'No downloaded update is available to install.' }
+        }
         autoUpdater.quitAndInstall(false, true)
+        return { success: true, message: 'Update install initiated' }
     }
 
     private showUpdateNotification(info: UpdateInfo): void {
@@ -204,4 +229,3 @@ export class AutoUpdateManager {
         }
     }
 }
-

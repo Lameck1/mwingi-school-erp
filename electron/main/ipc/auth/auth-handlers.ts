@@ -143,7 +143,12 @@ function registerSessionHandlers(db: ReturnType<typeof getDatabase>): void {
 }
 
 function registerUserManagementHandlers(db: ReturnType<typeof getDatabase>): void {
-    validatedHandlerMulti('user:update', ROLES.ADMIN_ONLY, UserUpdateSchema, (_event, [id, data], _actor): { success: boolean; error?: string } => {
+    validatedHandlerMulti('user:update', ROLES.ADMIN_ONLY, UserUpdateSchema, (_event, [id, data], actor): { success: boolean; error?: string } => {
+        const existing = db.prepare('SELECT id, full_name, email, role FROM user WHERE id = ?').get(id) as { id: number; full_name: string; email: string; role: string } | undefined
+        if (!existing) {
+            return { success: false, error: 'User not found' }
+        }
+
         const stmt = db.prepare(`
             UPDATE user 
             SET full_name = COALESCE(?, full_name),
@@ -154,6 +159,7 @@ function registerUserManagementHandlers(db: ReturnType<typeof getDatabase>): voi
         `)
 
         stmt.run(data.full_name, data.email, data.role, id)
+        logAudit(actor.id, 'UPDATE', 'user', id, existing, data)
         return { success: true }
     })
 
@@ -161,7 +167,7 @@ function registerUserManagementHandlers(db: ReturnType<typeof getDatabase>): voi
         return db.prepare('SELECT id, username, full_name, email, role, is_active, last_login, created_at FROM user').all() as Omit<User, 'password_hash'>[]
     })
 
-    validatedHandler('user:create', ROLES.ADMIN_ONLY, UserCreateSchema, async (_event, data, _actor): Promise<{ success: boolean; id?: number; error?: string }> => {
+    validatedHandler('user:create', ROLES.ADMIN_ONLY, UserCreateSchema, async (_event, data, actor): Promise<{ success: boolean; id?: number; error?: string }> => {
         const pwCheck = validatePassword(data.password)
         if (!pwCheck.success) {
             return { success: false, error: pwCheck.error || 'Invalid password' }
@@ -175,22 +181,40 @@ function registerUserManagementHandlers(db: ReturnType<typeof getDatabase>): voi
         const hash = await bcrypt.hash(data.password, 10)
         const stmt = db.prepare('INSERT INTO user (username, password_hash, full_name, email, role) VALUES (?, ?, ?, ?, ?)')
         const result = stmt.run(data.username, hash, data.full_name, data.email, data.role)
-        return { success: true, id: result.lastInsertRowid as number }
+        const userId = Number(result.lastInsertRowid)
+        logAudit(actor.id, 'CREATE', 'user', userId, null, {
+            username: data.username,
+            full_name: data.full_name,
+            email: data.email,
+            role: data.role
+        })
+        return { success: true, id: userId }
     })
 
-    validatedHandlerMulti('user:toggleStatus', ROLES.ADMIN_ONLY, UserToggleStatusSchema, (_event, [id, isActive], _actor): { success: boolean } => {
+    validatedHandlerMulti('user:toggleStatus', ROLES.ADMIN_ONLY, UserToggleStatusSchema, (_event, [id, isActive], actor): { success: boolean; error?: string } => {
+        const existing = db.prepare('SELECT id, is_active FROM user WHERE id = ?').get(id) as { id: number; is_active: number } | undefined
+        if (!existing) {
+            return { success: false, error: 'User not found' }
+        }
         db.prepare('UPDATE user SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(isActive ? 1 : 0, id)
+        logAudit(actor.id, 'UPDATE_STATUS', 'user', id, { is_active: existing.is_active }, { is_active: isActive ? 1 : 0 })
         return { success: true }
     })
 
-    validatedHandlerMulti('user:resetPassword', ROLES.ADMIN_ONLY, UserResetPasswordSchema, async (_event, [id, newPassword], _actor): Promise<{ success: boolean; error?: string }> => {
+    validatedHandlerMulti('user:resetPassword', ROLES.ADMIN_ONLY, UserResetPasswordSchema, async (_event, [id, newPassword], actor): Promise<{ success: boolean; error?: string }> => {
         const pwCheck = validatePassword(newPassword)
         if (!pwCheck.success) {
             return { success: false, error: pwCheck.error || 'Invalid password' }
         }
 
+        const existing = db.prepare('SELECT id FROM user WHERE id = ?').get(id) as { id: number } | undefined
+        if (!existing) {
+            return { success: false, error: 'User not found' }
+        }
+
         const hash = await bcrypt.hash(newPassword, 10)
         db.prepare('UPDATE user SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(hash, id)
+        logAudit(actor.id, 'RESET_PASSWORD', 'user', id, null, { password_reset: true })
         return { success: true }
     })
 }

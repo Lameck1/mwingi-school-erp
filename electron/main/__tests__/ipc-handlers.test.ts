@@ -125,7 +125,7 @@ describe('IPC Handlers Security Tests', () => {
 
     // Get the mock database instance
     const { getDatabase } = await import('../database');
-    mockDb = getDatabase() as unknown as { prepare: Mock; transaction: Mock };
+    mockDb = getDatabase() as { prepare: Mock; transaction: Mock };
 
     // Register all handlers
     registerAllIpcHandlers();
@@ -154,33 +154,45 @@ describe('IPC Handlers Security Tests', () => {
       const handlerEntry = handlerCalls.find((args) => args[0] === 'user:update');
       const handler = handlerEntry ? handlerEntry[1] : undefined;
 
-      const mockStatement = {
+      const selectStatement = {
+        get: vi.fn().mockReturnValue({
+          id: 1,
+          full_name: 'Jane Doe',
+          email: 'jane@example.com',
+          role: 'ADMIN'
+        })
+      };
+      const updateStatement = {
         run: vi.fn().mockReturnValue({ changes: 1 })
       };
-      mockDb.prepare.mockReturnValue(mockStatement);
+      mockDb.prepare.mockImplementation((query: string) => {
+        if (query.includes('SELECT id, full_name, email, role FROM user WHERE id = ?')) {
+          return selectStatement;
+        }
+        if (query.includes('UPDATE user')) {
+          return updateStatement;
+        }
+        return {
+          all: vi.fn().mockReturnValue([]),
+          get: vi.fn().mockReturnValue(),
+          run: vi.fn().mockReturnValue({ changes: 0 })
+        };
+      });
 
       // Test valid fields
-      await handler({}, 1, { full_name: 'John Doe', email: 'john@example.com', role: 'admin' });
+      await handler({}, 1, { full_name: 'John Doe', email: 'john@example.com', role: 'ADMIN' });
 
-      expect(mockDb.prepare).toHaveBeenCalledWith(
-        expect.stringContaining('UPDATE user')
-      );
-      expect(mockDb.prepare).toHaveBeenCalledWith(
-        expect.stringContaining('SET full_name = COALESCE(?, full_name)')
-      );
+      const firstQueries = mockDb.prepare.mock.calls.map(([query]) => String(query));
+      expect(firstQueries.some((query) => query.includes('UPDATE user'))).toBe(true);
+      expect(firstQueries.some((query) => query.includes('SET full_name = COALESCE(?, full_name)'))).toBe(true);
 
       // Test invalid field (should be ignored) - not a real password
       await handler({}, 1, { full_name: 'John Doe', password: 'test-disallowed-field', is_active: false }); // NOSONAR
 
-      expect(mockDb.prepare).toHaveBeenCalledWith(
-        expect.stringContaining('UPDATE user')
-      );
-      expect(mockDb.prepare).toHaveBeenCalledWith(
-        expect.stringContaining('SET full_name = COALESCE(?, full_name)')
-      );
-      expect(mockDb.prepare).not.toHaveBeenCalledWith(
-        expect.stringContaining('password')
-      );
+      const allQueries = mockDb.prepare.mock.calls.map(([query]) => String(query));
+      expect(allQueries.some((query) => query.includes('UPDATE user'))).toBe(true);
+      expect(allQueries.some((query) => query.includes('SET full_name = COALESCE(?, full_name)'))).toBe(true);
+      expect(allQueries.some((query) => query.includes('password'))).toBe(false);
     });
   });
 
@@ -235,4 +247,5 @@ describe('IPC Handlers Security Tests', () => {
     });
   });
 });
+
 

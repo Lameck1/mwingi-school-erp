@@ -67,7 +67,7 @@ function createWindow() {
             webSecurity: true,
             allowRunningInsecureContent: false,
             experimentalFeatures: false,
-            plugins: true
+            plugins: false
         },
         show: false,
         titleBarStyle: 'default',

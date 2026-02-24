@@ -25,9 +25,16 @@ export function useElectronLayoutEvents(
             })()
         })
         const unsubscribeCheckUpdates = globalThis.electronAPI.menuEvents.onCheckForUpdates(() => {
-            globalThis.electronAPI.system.checkForUpdates().catch((error) => {
-                showToast(error instanceof Error ? error.message : 'Update check failed', 'error')
-            })
+            globalThis.electronAPI.system.checkForUpdates()
+                .then((result) => {
+                    if (!result.success) {
+                        showToast(result.error, 'error')
+                    }
+                    return result
+                })
+                .catch((error) => {
+                    showToast(error instanceof Error ? error.message : 'Update check failed', 'error')
+                })
         })
         const unsubscribeUpdateStatus = globalThis.electronAPI.menuEvents.onUpdateStatus((data: UpdateStatus) => {
             if (data.status === 'available') { showToast(`Update available: v${data.version}`, 'info'); return }

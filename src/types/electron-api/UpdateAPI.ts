@@ -6,9 +6,18 @@ export type UpdateStatus =
   | { status: 'downloaded'; version: string }
   | { status: 'error'; error: string }
 
+export type UpdateCommandResult =
+  | { success: true; message?: string }
+  | { success: false; error: string }
+
 export interface UpdateAPI {
-  checkForUpdates: () => Promise<void>
-  downloadUpdate: () => Promise<void>
-  installUpdate: () => Promise<void>
-  getUpdateStatus: () => Promise<{ isAvailable: boolean; downloadProgress: number }>
+  checkForUpdates: () => Promise<UpdateCommandResult>
+  downloadUpdate: () => Promise<UpdateCommandResult>
+  installUpdate: () => Promise<UpdateCommandResult>
+  getUpdateStatus: () => Promise<{
+    isAvailable: boolean
+    downloadProgress: number
+    status?: 'disabled' | 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
+    reason?: string
+  }>
 }

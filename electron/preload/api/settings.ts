@@ -11,6 +11,7 @@ export function createSettingsAPI() {
     removeLogo: () => ipcRenderer.invoke('settings:removeLogo'),
     getLogoDataUrl: () => ipcRenderer.invoke('settings:getLogoDataUrl'),
     getAllConfigs: () => ipcRenderer.invoke('settings:getAllConfigs'),
+    getSecureConfig: (key: string) => ipcRenderer.invoke('settings:getSecure', key),
     saveSecureConfig: (key: string, value: string) => ipcRenderer.invoke('settings:saveSecure', key, value),
     resetAndSeedDatabase: (userId: number) => ipcRenderer.invoke('system:resetAndSeed', userId),
     normalizeCurrencyScale: (userId: number) => ipcRenderer.invoke('system:normalizeCurrencyScale', userId),

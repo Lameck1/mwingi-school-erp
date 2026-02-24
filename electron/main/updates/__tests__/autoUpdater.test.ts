@@ -6,6 +6,8 @@ type UpdateEventHandler = (payload?: unknown) => void
 const ipcHandlers = new Map<string, IpcHandler>()
 const autoUpdaterListeners: Record<string, UpdateEventHandler> = {}
 const rendererSendMock = vi.fn()
+let sessionRole = 'ADMIN'
+let sessionUserId = 11
 
 const autoUpdaterMock = {
   logger: undefined as unknown,
@@ -18,6 +20,25 @@ const autoUpdaterMock = {
   downloadUpdate: vi.fn(async () => {}),
   quitAndInstall: vi.fn()
 }
+
+vi.mock('keytar', () => ({
+  default: {
+    getPassword: vi.fn(async () => JSON.stringify({
+      user: {
+        id: sessionUserId,
+        username: 'admin',
+        role: sessionRole,
+        full_name: 'Admin User',
+        email: 'admin@example.com',
+        is_active: 1,
+        created_at: new Date().toISOString()
+      },
+      lastActivity: Date.now()
+    })),
+    setPassword: vi.fn(),
+    deletePassword: vi.fn()
+  }
+}))
 
 vi.mock('electron-log', () => ({
   default: {
@@ -44,10 +65,12 @@ vi.mock('../../electron-env', () => ({
   }
 }))
 
-describe('auto updater IPC smoke and error paths', () => {
+describe('auto updater IPC role guards and error paths', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.resetModules()
+    sessionRole = 'ADMIN'
+    sessionUserId = 11
     ipcHandlers.clear()
     rendererSendMock.mockReset()
     autoUpdaterMock.on.mockClear()
@@ -63,7 +86,20 @@ describe('auto updater IPC smoke and error paths', () => {
     vi.useRealTimers()
   })
 
-  it('registerDisabledUpdateHandlers exposes blocking fallback handlers', async () => {
+  it('denies updater channels for unauthorized roles', async () => {
+    sessionRole = 'TEACHER'
+    const { registerDisabledUpdateHandlers } = await import('../autoUpdater')
+    registerDisabledUpdateHandlers('disabled in test')
+
+    const check = await ipcHandlers.get('check-for-updates')!({})
+    expect(check).toEqual(expect.objectContaining({
+      success: false,
+      error: expect.stringContaining('Unauthorized')
+    }))
+  })
+
+  it('registerDisabledUpdateHandlers returns explicit non-success for authorized roles', async () => {
+    sessionRole = 'ADMIN'
     const { registerDisabledUpdateHandlers } = await import('../autoUpdater')
     registerDisabledUpdateHandlers('disabled in test')
 
@@ -92,7 +128,8 @@ describe('auto updater IPC smoke and error paths', () => {
     expect(ipcHandlers.has('download-update')).toBe(true)
     expect(ipcHandlers.has('install-update')).toBe(true)
 
-    await ipcHandlers.get('check-for-updates')!({})
+    const checkResult = await ipcHandlers.get('check-for-updates')!({})
+    expect(checkResult).toEqual({ success: true })
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
 
     const updateAvailable = autoUpdaterListeners['update-available']
@@ -100,14 +137,16 @@ describe('auto updater IPC smoke and error paths', () => {
     updateAvailable!({ version: '1.2.3', releaseNotes: 'patch' })
 
     autoUpdaterMock.downloadUpdate.mockRejectedValueOnce(new Error('network'))
-    await ipcHandlers.get('download-update')!({})
+    const downloadResult = await ipcHandlers.get('download-update')!({})
+    expect(downloadResult).toEqual({ success: false, error: 'Download failed' })
     expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledTimes(1)
     expect(rendererSendMock).toHaveBeenCalledWith(
       'update-status',
       expect.objectContaining({ status: 'error', error: 'Download failed' })
     )
 
-    await ipcHandlers.get('install-update')!({})
+    const installResult = await ipcHandlers.get('install-update')!({})
+    expect(installResult).toEqual({ success: true, message: 'Update install initiated' })
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true)
   })
 })
