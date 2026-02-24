@@ -81,7 +81,7 @@ const AwardsManagement = () => {
     try {
       const [categoryData, studentData] = await Promise.all([
         globalThis.electronAPI.getAwardCategories(),
-        globalThis.electronAPI.getStudents({ stream_id: (undefined as unknown as number) })
+        globalThis.electronAPI.getStudents({})
       ])
 
       setCategories(Array.isArray(categoryData) ? categoryData : [])
@@ -454,3 +454,4 @@ const AwardsManagement = () => {
 }
 
 export default AwardsManagement
+

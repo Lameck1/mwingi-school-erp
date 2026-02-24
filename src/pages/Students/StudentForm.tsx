@@ -174,7 +174,7 @@ export default function StudentForm() {
                 stream_id: Number.isFinite(parsedStreamId) ? parsedStreamId : null,
                 guardian_relationship: formData.guardian_relationship || null,
                 notes: formData.notes || null
-            } as unknown as Parameters<typeof globalThis.electronAPI.updateStudent>[1]
+            } as Parameters<typeof globalThis.electronAPI.updateStudent>[1]
             type StudentMutationResult = { success: boolean; error?: string; id?: number }
             let mutationResult: StudentMutationResult
 
@@ -480,3 +480,4 @@ export default function StudentForm() {
         </div>
     )
 }
+

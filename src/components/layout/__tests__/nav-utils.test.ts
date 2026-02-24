@@ -4,7 +4,7 @@ import { hasMoreSpecificSiblingMatch, pathMatches } from '../nav-utils'
 
 import type { NavItem } from '../types'
 
-const stubIcon = (() => null) as unknown as NavItem['icon']
+const stubIcon = (() => null) as NavItem['icon']
 
 const siblings: NavItem[] = [
     { path: '/students', label: 'Students', icon: stubIcon },
@@ -29,3 +29,4 @@ describe('nav utils', () => {
         expect(hasMoreSpecificSiblingMatch('/students', '/students', siblings)).toBe(false)
     })
 })
+

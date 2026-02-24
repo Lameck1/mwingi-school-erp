@@ -203,7 +203,7 @@ export default function Attendance() {
             }))
 
             const result = await globalThis.electronAPI.markAttendance(
-                entries as unknown as Parameters<typeof globalThis.electronAPI.markAttendance>[0], selectedStream, selectedDate, currentAcademicYear.id, currentTerm.id, user.id
+                entries as Parameters<typeof globalThis.electronAPI.markAttendance>[0], selectedStream, selectedDate, currentAcademicYear.id, currentTerm.id, user.id
             )
 
             if (result.success) {
@@ -336,3 +336,4 @@ export default function Attendance() {
         </div>
     )
 }
+

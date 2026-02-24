@@ -241,7 +241,7 @@ function useDataTableController<T extends { id: number | string }>(props: Readon
         onSort,
         selectedIds,
         sortable
-    } as unknown as DataTableBaseProps)
+    } as DataTableBaseProps)
 
     return {
         columns: state.columns,
@@ -566,3 +566,4 @@ export function DataTable<T extends { id: number | string }>(props: Readonly<Dat
 
     return <DataTableContent controller={controller} props={props} />
 }
+

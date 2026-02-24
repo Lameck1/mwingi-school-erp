@@ -112,7 +112,7 @@ export default function CreateBudget() {
                     ...item,
                     budgeted_amount: shillingsToCents(item.budgeted_amount) // Whole currency units
                 }))
-            } as unknown as Parameters<typeof globalThis.electronAPI.createBudget>[0], user.id)
+            } as Parameters<typeof globalThis.electronAPI.createBudget>[0], user.id)
 
             if (result.success) {
                 navigate('/budget')
@@ -314,3 +314,4 @@ export default function CreateBudget() {
         </div>
     )
 }
+

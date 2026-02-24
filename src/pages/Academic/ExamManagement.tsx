@@ -32,7 +32,7 @@ export default function ExamManagement() {
         setLoading(true)
         try {
             const data = await globalThis.electronAPI.getAcademicExams(currentAcademicYear.id, currentTerm.id)
-            setExams((Array.isArray(data) ? data : []) as unknown as Exam[])
+            setExams((Array.isArray(data) ? data : []) as Exam[])
         } catch (error) {
             console.error('Failed to load exams:', error)
         } finally {
@@ -194,3 +194,4 @@ export default function ExamManagement() {
         </div>
     )
 }
+

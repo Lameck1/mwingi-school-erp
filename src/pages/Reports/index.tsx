@@ -338,7 +338,7 @@ export default function Reports() {
                     { key: 'payment_reference', header: 'Reference' },
                     { key: 'amount', header: 'Amount', format: 'currency' },
                 ],
-                data: dailyCollections as unknown as Record<string, unknown>[]
+                data: dailyCollections.map((item) => ({ ...item } as Record<string, unknown>))
             })
         } else {
             alert('Please select a report with data to export')
@@ -718,4 +718,5 @@ export default function Reports() {
         </div>
     )
 }
+
 

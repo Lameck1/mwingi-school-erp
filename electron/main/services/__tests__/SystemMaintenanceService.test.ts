@@ -47,7 +47,7 @@ describe('SystemMaintenanceService', () => {
     }
 
     const service = new SystemMaintenanceService()
-    const invokeSeedJournalEntries = service as unknown as {
+    const invokeSeedJournalEntries = service as {
       seedJournalEntries: (db: FakeDb, userId: number) => Promise<void>
     }
 
@@ -60,3 +60,4 @@ describe('SystemMaintenanceService', () => {
     warningSpy.mockRestore()
   })
 })
+

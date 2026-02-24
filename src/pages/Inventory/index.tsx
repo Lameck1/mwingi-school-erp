@@ -88,7 +88,7 @@ export default function Inventory() {
                 description: stockMovement.description || undefined,
                 supplier_id: stockMovement.supplier_id ? Number(stockMovement.supplier_id) : undefined,
                 movement_date: new Date().toISOString()
-            } as unknown as Parameters<typeof globalThis.electronAPI.recordStockMovement>[0], user.id)
+            } as Parameters<typeof globalThis.electronAPI.recordStockMovement>[0], user.id)
 
             setShowStockModal(false)
             setStockMovement({ quantity: 0, unit_cost: 0, description: '', reference_number: '', supplier_id: '' })
@@ -379,3 +379,4 @@ export default function Inventory() {
         </div>
     )
 }
+

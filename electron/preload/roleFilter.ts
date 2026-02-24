@@ -212,7 +212,8 @@ function createGuardedMethod<M extends APIMethod>(
     if (!originalMethod) {
       return Promise.reject(new Error(`Method '${methodName}' not found in '${domain}' domain`))
     }
-    return Reflect.apply(originalMethod as Function, undefined, args as unknown[])
+    const callable = originalMethod as (...methodArgs: never[]) => unknown
+    return callable(...args)
   }
   return wrapped as M
 }

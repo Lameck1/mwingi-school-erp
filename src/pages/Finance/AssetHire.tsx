@@ -114,7 +114,7 @@ export default function AssetHire() {
             ...bookingForm,
             distance_km: bookingForm.distance_km ? Number.parseFloat(bookingForm.distance_km) : undefined,
             total_amount: shillingsToCents(bookingForm.total_amount)
-        } as unknown as Parameters<typeof globalThis.electronAPI.createHireBooking>[0], user.id)
+        } as Parameters<typeof globalThis.electronAPI.createHireBooking>[0], user.id)
 
         if (result.success) {
             alert(`Booking created! Number: ${result.booking_number}`)
@@ -151,7 +151,7 @@ export default function AssetHire() {
             {
                 ...paymentForm,
                 amount: shillingsToCents(paymentForm.amount)
-            } as unknown as Parameters<typeof globalThis.electronAPI.recordHirePayment>[1],
+            } as Parameters<typeof globalThis.electronAPI.recordHirePayment>[1],
             user.id
         )
 
@@ -198,7 +198,7 @@ export default function AssetHire() {
                 description: `Asset Hire: ${booking.asset_name}`,
                 amountInWords: `${numberToWords(Math.floor(latestPayment.amount / 100))} Shillings Only`
             },
-            schoolSettings: settings ? (settings as unknown as Record<string, unknown>) : {}
+            schoolSettings: settings ? (settings as Record<string, unknown>) : {}
         })
     }
 
@@ -714,3 +714,4 @@ export default function AssetHire() {
         </div>
     )
 }
+

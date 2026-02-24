@@ -89,7 +89,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
             payment_reference: formData.payment_reference, transaction_date: formData.transaction_date,
             description: formData.description, term_id: currentTerm?.id || 0,
             idempotency_key: crypto.randomUUID()
-        } as unknown as Parameters<typeof globalThis.electronAPI.recordPayment>[0], userId)
+        } as Parameters<typeof globalThis.electronAPI.recordPayment>[0], userId)
 
         if (!result.success) {
             throw new Error(result.errors?.[0] || result.error || 'Payment failed')
@@ -351,3 +351,4 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
         </div>
     )
 }
+

@@ -45,7 +45,7 @@ export default function Students() {
                 streamId: filters.streamId || undefined,
                 isActive: filters.isActive ?? undefined,
                 search: searchRef.current || undefined
-            }) as unknown as Parameters<typeof globalThis.electronAPI.getStudents>[0])
+            }) as Parameters<typeof globalThis.electronAPI.getStudents>[0])
             if (Array.isArray(data)) {
                 setStudents(data)
             } else if (data && 'success' in data && data.success === false) {
@@ -123,7 +123,7 @@ export default function Students() {
                         ledger: result.ledger,
                         closingBalance: result.closingBalance
                     },
-                    schoolSettings: (schoolSettings ? { ...schoolSettings } : undefined) as unknown as Record<string, unknown>
+                    schoolSettings: (schoolSettings ? { ...schoolSettings } : undefined) as Record<string, unknown>
                 })
             } else {
                 showToast('Failed to load ledger data', 'error')
@@ -429,3 +429,4 @@ export default function Students() {
         </div>
     )
 }
+

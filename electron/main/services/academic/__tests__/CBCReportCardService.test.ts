@@ -43,7 +43,7 @@ describe('CBCReportCardService fee balance normalization', () => {
     `)
 
     const service = new CBCReportCardService()
-    const balance = (service as unknown as FeesBalanceAccessor).getFeesBalance(10)
+    const balance = (service as FeesBalanceAccessor).getFeesBalance(10)
 
     expect(balance).toBe(15500)
   })
@@ -56,7 +56,7 @@ describe('CBCReportCardService fee balance normalization', () => {
     `)
 
     const service = new CBCReportCardService()
-    const balance = (service as unknown as FeesBalanceAccessor).getFeesBalance(22)
+    const balance = (service as FeesBalanceAccessor).getFeesBalance(22)
 
     expect(balance).toBe(10000)
   })
@@ -238,3 +238,4 @@ describe('CBCReportCardService report card correctness', () => {
     expect(report?.fees_balance).toBe(8000)
   })
 })
+

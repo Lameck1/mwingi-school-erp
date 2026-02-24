@@ -833,7 +833,8 @@ export default function PayrollRun() {
                     { name: 'Housing Levy', amount: staffEntry.housing_levy },
                 ]
             },
-            schoolSettings: (schoolSettings as unknown as Record<string, unknown>) || {}
+            schoolSettings: schoolSettings ? { ...schoolSettings } : {}
         })
     }
 }
+

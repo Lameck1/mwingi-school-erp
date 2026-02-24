@@ -164,7 +164,7 @@ describe('BackupService safety checks', () => {
     createSqliteFile(backupFile)
     createSqliteFile(mocks.getDatabasePathMock())
 
-    const integritySpy = vi.spyOn(BackupService as unknown as { verifyBackupIntegrity: (backupPath: string) => boolean }, 'verifyBackupIntegrity').mockReturnValue(true)
+    const integritySpy = vi.spyOn(BackupService as { verifyBackupIntegrity: (backupPath: string) => boolean }, 'verifyBackupIntegrity').mockReturnValue(true)
     const createBackupSpy = vi.spyOn(BackupService, 'createBackup').mockResolvedValue({
       success: false,
       error: 'Disk full'
@@ -217,7 +217,7 @@ describe('BackupService safety checks', () => {
     createBackdatedBackup('backup-month-b.sqlite', 75)
 
     // Trigger private cleanup function directly for deterministic testing.
-    await (BackupService as unknown as { cleanupOldBackups: () => Promise<void> }).cleanupOldBackups()
+    await (BackupService as { cleanupOldBackups: () => Promise<void> }).cleanupOldBackups()
 
     const remaining = fs.readdirSync(backupsDir)
     expect(remaining).toContain('backup-day-0.sqlite')
@@ -227,3 +227,4 @@ describe('BackupService safety checks', () => {
     expect(remaining).not.toContain('backup-month-a-older.sqlite')
   })
 })
+

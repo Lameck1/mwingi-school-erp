@@ -68,7 +68,7 @@ export default function FeeExemptions() {
                 }),
                 globalThis.electronAPI.getAcademicYears(),
                 globalThis.electronAPI.getFeeCategories(),
-                globalThis.electronAPI.getStudents({ stream_id: (undefined as unknown as number) }),
+                globalThis.electronAPI.getStudents({}),
                 globalThis.electronAPI.getExemptionStats()
             ])
             setExemptions(Array.isArray(exemptionsRes) ? exemptionsRes : [])
@@ -153,7 +153,7 @@ export default function FeeExemptions() {
                 exemption_percentage: Number.parseFloat(formData.exemption_percentage),
                 exemption_reason: formData.exemption_reason,
                 notes: formData.notes || undefined
-            } as unknown as Parameters<typeof globalThis.electronAPI.createExemption>[0], user.id)
+            } as Parameters<typeof globalThis.electronAPI.createExemption>[0], user.id)
 
             if (result.success) {
                 showToast('Exemption created successfully', 'success')
@@ -519,3 +519,4 @@ export default function FeeExemptions() {
         </div>
     )
 }
+

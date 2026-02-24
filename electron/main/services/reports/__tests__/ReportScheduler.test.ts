@@ -169,7 +169,7 @@ describe('ReportScheduler defaulters payload normalization', () => {
       created_at: '2026-01-01T00:00:00.000Z'
     }
 
-    const payload = await (scheduler as unknown as SchedulerInternals)
+    const payload = await (scheduler as SchedulerInternals)
       .generateReportPayload(schedule, '2026-01-01', '2026-01-31')
 
     expect(payload).toHaveLength(2)
@@ -177,3 +177,4 @@ describe('ReportScheduler defaulters payload normalization', () => {
     expect(payload[1]).toMatchObject({ invoice_number: 'INV-2', balance: 8000 })
   })
 })
+

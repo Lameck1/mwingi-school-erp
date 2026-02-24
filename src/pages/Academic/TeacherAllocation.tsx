@@ -66,7 +66,7 @@ export default function TeacherAllocation() {
                     globalThis.electronAPI.getAcademicSubjects()
                 ])
 
-                setAllocations((Array.isArray(allocationsData) ? allocationsData : []) as unknown as Allocation[])
+                setAllocations((Array.isArray(allocationsData) ? allocationsData : []) as Allocation[])
                 setStreams(Array.isArray(streamsData) ? streamsData : [])
                 setSubjects(Array.isArray(subjectsData) ? subjectsData : [])
             }
@@ -270,3 +270,4 @@ export default function TeacherAllocation() {
         </div>
     )
 }
+
