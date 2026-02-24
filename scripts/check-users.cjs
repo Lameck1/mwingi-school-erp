@@ -1,10 +1,11 @@
 const Database = require('better-sqlite3');
-const path = require('node:path');
+const { resolveDatabasePath } = require('./lib/db-path.cjs');
 
-const dbPath = path.join(__dirname, '../database/school_erp.db');
+const dbPath = resolveDatabasePath();
 const db = new Database(dbPath);
 
 try {
+    console.error('Using database:', dbPath);
     const users = db.prepare('SELECT * FROM user').all();
     console.error('Users found:', users.length);
     if (users.length > 0) {

@@ -1,12 +1,12 @@
 import * as fs from 'node:fs'
-import * as path from 'node:path'
+import { createRequire } from 'node:module'
 
 // This script checks the SQLite header to confirm encryption.
 
-const APP_NAME = 'Mwingi School ERP' // Adjust if needed matches package.json product name
-const USER_DATA_PATH = process.platform === 'win32'
-    ? path.join(process.env.APPDATA || '', APP_NAME, 'data', 'school_erp.db')
-    : path.join(process.env.HOME || '', '.config', APP_NAME, 'data', 'school_erp.db')
+const require = createRequire(import.meta.url)
+const { resolveDatabasePath } = require('./lib/db-path.cjs') as { resolveDatabasePath: () => string }
+
+const USER_DATA_PATH = resolveDatabasePath()
 
 console.error('Checking database at:', USER_DATA_PATH)
 

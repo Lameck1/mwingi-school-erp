@@ -17,7 +17,7 @@ graph TD
 - **Runtime**: Electron (Chromium + Node.js)
 - **Frontend**: React, TypeScript, Tailwind CSS
 - **State Management**: Zustand
-- **Database**: SQLite (via `better-sqlite3`)
+- **Database**: SQLite (via `better-sqlite3-multiple-ciphers`, with `better-sqlite3` fallback in development)
 - **Build Tool**: Vite
 
 ## Project Structure
@@ -50,4 +50,5 @@ We use a Service-Repository pattern to decouple business logic from the database
 
 - **Context Isolation**: Enabled (`contextIsolation: true`)
 - **Node Integration**: Disabled in Renderer (`nodeIntegration: false`)
-- **Content Security Policy**: Applied via `electron-builder` and HTML meta tags.
+- **Renderer Plugins**: Disabled (`plugins: false`)
+- **Content Security Policy**: Applied at runtime in main process via `session.defaultSession.webRequest.onHeadersReceived` (`electron/main/index.ts`).

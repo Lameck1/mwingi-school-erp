@@ -34,7 +34,7 @@ module.exports = {
     },
     {
       name: 'no-orphans',
-      severity: 'ignore',
+      severity: 'warn',
       comment: 'Unused/orphaned modules usually indicate dead code.',
       from: {
         orphan: true,

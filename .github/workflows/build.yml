@@ -45,8 +45,11 @@ jobs:
       - name: Audit (Prod Runtime - Blocking)
         run: npm run audit:prod
 
-      - name: Audit (Full Dependency Set - Non-Blocking Evidence)
-        continue-on-error: true
+      - name: Audit (Full Dependency Set - Blocking)
+        run: npm run audit:full
+
+      - name: Full Audit Evidence
+        if: always()
         run: npm run audit:full:json > audit-full.json
 
       - name: Upload Full Audit Evidence
@@ -55,6 +58,16 @@ jobs:
         with:
           name: audit-full
           path: audit-full.json
+
+      - name: Build App (PR E2E Prerequisite)
+        if: github.event_name == 'pull_request'
+        run: npm run build:vite
+
+      - name: E2E Fee Payment (PR Blocking)
+        if: github.event_name == 'pull_request'
+        env:
+          E2E: 'true'
+        run: xvfb-run -a npx playwright test tests/e2e/fee-payment.spec.ts --reporter=line
 
       - name: Build App (Smoke Prerequisite for Tags)
         if: startsWith(github.ref, 'refs/tags/')

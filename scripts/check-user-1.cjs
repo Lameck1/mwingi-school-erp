@@ -1,8 +1,11 @@
+const Database = require('better-sqlite3');
+const { resolveDatabasePath } = require('./lib/db-path.cjs');
 
- 
-const db = require('better-sqlite3')('C:/Users/lamec/AppData/Roaming/mwingi-school-erp/data/school_erp.db');
+const dbPath = resolveDatabasePath();
+const db = new Database(dbPath);
 
 try {
+    console.error('Using database:', dbPath);
     const user = db.prepare('SELECT * FROM user WHERE id = 1').get();
     if (user) {
         console.error('User 1 found:', user.username);
@@ -11,5 +14,7 @@ try {
     }
 } catch (error) {
     console.error('Database Error:', error.message);
+} finally {
+    db.close();
 }
 

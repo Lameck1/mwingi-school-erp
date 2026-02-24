@@ -1,66 +1,115 @@
-import { test, expect } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright'
 
-// Skip E2E if not in E2E environment
 const isE2E = process.env.E2E === 'true'
+test.skip(!isE2E, 'Set E2E=true to run fee-payment E2E tests')
 
-let electronApp: ElectronApplication
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+let electronApp: ElectronApplication | null = null
 let page: Page | null = null
 
-// Only run if we can launch electron (might fail in headless CI without display)
+async function loginAsAdmin(activePage: Page): Promise<void> {
+  const adminUsername = 'admin'
+  // eslint-disable-next-line sonarjs/no-hardcoded-passwords -- deterministic local E2E credential
+  const adminPassword = 'Admin123!'
+
+  const initialSetupHeading = activePage.locator('h1:has-text("Initial Setup")')
+  if (await initialSetupHeading.isVisible().catch(() => false)) {
+    await activePage.fill('input[placeholder="Enter full name"]', 'Administrator')
+    await activePage.fill('input[placeholder="Enter email (optional)"]', 'admin@example.com')
+    await activePage.fill('input[placeholder="Choose a username"]', adminUsername)
+    await activePage.fill('input[placeholder="Create a password"]', adminPassword)
+    await activePage.fill('input[placeholder="Confirm password"]', adminPassword)
+    await activePage.click('button:has-text("Create Admin Account")')
+  }
+
+  const usernameInput = activePage.locator('input[type="text"]').first()
+  const passwordInput = activePage.locator('input[type="password"]').first()
+  const submitButton = activePage.locator('button[type="submit"]').first()
+
+  if (
+    await usernameInput.isVisible().catch(() => false)
+    && await passwordInput.isVisible().catch(() => false)
+    && await submitButton.isVisible().catch(() => false)
+  ) {
+    for (const candidatePassword of [adminPassword, 'admin123']) {
+      await usernameInput.fill(adminUsername)
+      await passwordInput.fill(candidatePassword)
+      await submitButton.click()
+      if (await activePage.locator('a[href*="fee-payment"]').first().isVisible({ timeout: 3000 }).catch(() => false)) {
+        break
+      }
+    }
+  }
+
+  await expect(activePage.locator('a[href*="fee-payment"]').first()).toBeVisible({ timeout: 15000 })
+}
+
+async function seedDeterministicData(activePage: Page): Promise<void> {
+  const seeded = await activePage.evaluate(async () => {
+    const session = await globalThis.electronAPI.auth.getSession()
+    const userId = session?.user?.id
+    if (!userId) {
+      return { success: false, error: 'Missing session user id' }
+    }
+    return globalThis.electronAPI.resetAndSeedDatabase(userId)
+  })
+
+  expect(seeded.success).toBe(true)
+  await activePage.reload()
+  await activePage.waitForLoadState('domcontentloaded')
+}
+
 test.describe('Fee Payment Flow', () => {
-    test.beforeAll(async () => {
-        if (!isE2E) {
-            return
-        }
+  test.beforeAll(async () => {
+    const launchEnv = { ...process.env, NODE_ENV: 'test' }
+    delete launchEnv.ELECTRON_RUN_AS_NODE
 
-        try {
-            electronApp = await electron.launch({
-                args: [path.join(__dirname, '../../dist-electron/main/index.js')],
-                env: {
-                    ...process.env,
-                    NODE_ENV: 'test'
-                }
-            })
-            page = await electronApp.firstWindow()
-            await page.waitForLoadState('domcontentloaded')
-        } catch (e) {
-            console.warn('Skipping E2E tests: Could not launch Electron', e)
-            page = null
-        }
+    electronApp = await electron.launch({
+      args: [path.join(__dirname, '../../dist-electron/main/index.js')],
+      env: launchEnv
     })
+    page = await electronApp.firstWindow()
+    await page.waitForLoadState('domcontentloaded')
+    await loginAsAdmin(page)
+    await seedDeterministicData(page)
+    await loginAsAdmin(page)
+  })
 
-    test.afterAll(async () => {
-        if (electronApp) {
-            await electronApp.close()
-        }
-    })
+  test.afterAll(async () => {
+    if (electronApp) {
+      await electronApp.close()
+    }
+  })
 
-    test('should login and navigate to fee payment', async () => {
-        if (!isE2E || !page) {return}
+  test('records fee payment deterministically and shows success confirmation', async () => {
+    if (!page) {
+      throw new Error('Fee payment test setup failed: no active Electron page')
+    }
 
-        // Login
-        await page.fill('input[type="text"]', 'admin')
-        await page.fill('input[type="password"]', 'admin123')
-        await page.click('button[type="submit"]')
+    await page.locator('a[href*="fee-payment"]').first().click()
+    await expect(page.locator('h1:has-text("Fee Collection")')).toBeVisible()
 
-        // Wait for dashboard
-        await expect(page.locator('h1:has-text("Financial Overview")')).toBeVisible()
+    const searchInput = page.locator('input[placeholder="Search by name or admission..."]')
+    await searchInput.fill('2026/')
+    await searchInput.press('Enter')
 
-        // Navigate to fee payment
-        await page.click('a[href="/fee-payment"]')
-        await expect(page.locator('h1:has-text("Fee Payment")')).toBeVisible()
-    })
+    const firstStudent = page.getByRole('button', { name: /select/i }).first()
+    await expect(firstStudent).toBeVisible({ timeout: 10000 })
+    await firstStudent.click()
 
-    test('should record a payment', async () => {
-        if (!isE2E || !page) {return}
+    const amountInput = page.getByLabel('Amount Payable (KES)')
+    await expect(amountInput).toBeEnabled()
+    await amountInput.fill('1000')
+    await page.getByLabel('Reference / Slip Number').fill(`E2E-${Date.now()}`)
+    await page.getByLabel('Transaction Narrative').fill('Automated deterministic E2E payment')
+    await page.click('button[type="submit"]:has-text("Finalize Payment")')
 
-        // Mock/Simulate filling payment
-        // Note: In a real test, we'd need to seed data first.
-        // Given the environment constraints, we are just scaffolding this test file.
-
-        // Check if form exists
-        await expect(page.locator('form')).toBeVisible()
-    })
+    await expect(page.locator('text=Recent Ledger Entries')).toBeVisible({ timeout: 15000 })
+    await expect(page.locator('text=/Ksh\\s*1,000\\.00/i')).toBeVisible({ timeout: 15000 })
+    await expect(page.locator('text=Ledger Posted')).toBeVisible({ timeout: 15000 })
+  })
 })

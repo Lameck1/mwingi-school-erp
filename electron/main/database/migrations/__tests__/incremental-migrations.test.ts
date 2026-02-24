@@ -12,6 +12,8 @@ import { up as migration1008 } from '../incremental/1008_attendance_and_reconcil
 import { up as migration1009 } from '../incremental/1009_grant_expiry_date'
 import { up as migration1010 } from '../incremental/1010_bank_reconciliation_constraints'
 import { up as migration1011 } from '../incremental/1011_approval_canonicalization'
+import { getRegisteredMigrationNames } from '../index'
+import { getRollbackStrategy, verifyRollbackCoverage } from '../rollback-policy'
 
 describe('incremental migrations', () => {
   let db: Database.Database
@@ -612,5 +614,17 @@ describe('incremental migrations', () => {
         )
       `).run()
     }).toThrow()
+  })
+
+  it('defines rollback strategy for every registered incremental migration', () => {
+    const missingCoverage = verifyRollbackCoverage()
+    expect(missingCoverage).toEqual([])
+
+    const incremental = getRegisteredMigrationNames().filter((name) => /^1\d{3}_/.test(name))
+    expect(incremental.length).toBeGreaterThan(0)
+    for (const migrationName of incremental) {
+      const strategy = getRollbackStrategy(migrationName)
+      expect(['down', 'backup-restore']).toContain(strategy)
+    }
   })
 })

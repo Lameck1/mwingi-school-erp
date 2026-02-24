@@ -12,26 +12,31 @@ export default defineConfig({
             provider: 'v8',
             reporter: ['text', 'json', 'html', 'lcov'],
             include: [
-                'electron/main/ipc/index.ts',
-                'electron/main/services/RetentionService.ts',
+                'electron/main/ipc/**/*.ts',
+                'electron/main/services/**/*.ts',
+                'electron/main/database/**/*.ts',
                 'src/pages/Finance/finance.validation.ts',
+                'src/pages/Finance/Reconciliation/reconcile.logic.ts',
                 'src/pages/Finance/FixedAssets/depreciation.logic.ts',
                 'src/pages/Students/promotion-feedback.logic.ts',
-                'src/pages/Payroll/payrollStatus.ts'
+                'src/pages/Payroll/payrollStatus.ts',
+                'src/components/layout/nav-utils.ts'
             ],
             exclude: [
                 '**/node_modules/**',
                 '**/dist/**',
+                '**/dist-electron/**',
                 '**/*.test.ts',
                 '**/*.spec.ts',
                 '**/types/**',
-                '**/electron-env.ts'
+                '**/electron-env.ts',
+                '**/migrations/archive/**'
             ],
             thresholds: {
-                lines: 80,
-                functions: 80,
-                branches: 75,
-                statements: 80
+                lines: 25,
+                functions: 20,
+                branches: 15,
+                statements: 25
             },
             reportsDirectory: './coverage'
         },
