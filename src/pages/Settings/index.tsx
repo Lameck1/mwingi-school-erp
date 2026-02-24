@@ -153,9 +153,9 @@ export default function Settings() {
             await globalThis.electronAPI.updateSettings({
                 school_name: formData.school_name || undefined,
                 school_motto: formData.school_motto || undefined,
-                school_address: formData.address || undefined,
-                school_phone: formData.phone || undefined,
-                school_email: formData.email || undefined,
+                address: formData.address || undefined,
+                phone: formData.phone || undefined,
+                email: formData.email || undefined,
                 mpesa_paybill: formData.mpesa_paybill || undefined
             } as Partial<SchoolSettings>)
             const updated = await globalThis.electronAPI.getSettings()

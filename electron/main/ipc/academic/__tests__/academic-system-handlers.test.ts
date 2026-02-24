@@ -22,6 +22,8 @@ const academicSystemServiceMock = {
   saveResults: vi.fn(() => ({ success: true })),
   getResults: vi.fn(() => []),
   processResults: vi.fn(() => ({ success: true })),
+  generateCertificate: vi.fn(() => ({ success: false, message: 'not implemented' })),
+  emailParents: vi.fn(() => ({ success: false, message: 'not implemented' })),
 }
 
 const notificationServiceMock = {
@@ -88,6 +90,8 @@ describe('academic-system IPC handlers', () => {
     sessionUserId = 41
     sessionRole = 'TEACHER'
     academicSystemServiceMock.createSubject.mockClear()
+    academicSystemServiceMock.generateCertificate.mockClear()
+    academicSystemServiceMock.emailParents.mockClear()
     registerAcademicSystemHandlers()
   })
 
@@ -114,5 +118,35 @@ describe('academic-system IPC handlers', () => {
 
     expect(result.success).toBe(true)
     expect(academicSystemServiceMock.createSubject).toHaveBeenCalledWith(payload, 41)
+  })
+
+  it('academic:generateCertificate returns explicit non-success when unimplemented', async () => {
+    sessionRole = 'TEACHER'
+    const handler = handlerMap.get('academic:generateCertificate')!
+    const payload = {
+      studentId: 1,
+      studentName: 'Jane Doe',
+      awardCategory: 'Academic Excellence',
+      academicYearId: 2026,
+      improvementPercentage: 12
+    }
+
+    const result = await handler({}, payload) as { success: boolean; message: string }
+    expect(result.success).toBe(false)
+    expect(academicSystemServiceMock.generateCertificate).toHaveBeenCalledWith(payload)
+  })
+
+  it('academic:emailParents returns explicit non-success when unimplemented', async () => {
+    sessionRole = 'TEACHER'
+    const handler = handlerMap.get('academic:emailParents')!
+    const payload = {
+      students: [{ student_id: 1, student_name: 'Jane Doe', improvement_percentage: 14 }],
+      awardCategory: 'Improvement',
+      templateType: 'DEFAULT'
+    }
+
+    const result = await handler({}, payload) as { success: boolean; message: string }
+    expect(result.success).toBe(false)
+    expect(academicSystemServiceMock.emailParents).toHaveBeenCalledWith(payload)
   })
 })

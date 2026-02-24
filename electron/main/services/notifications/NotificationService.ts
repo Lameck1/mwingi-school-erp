@@ -85,14 +85,23 @@ export class NotificationService {
     private loadConfig(): void {
         if (this.isConfigLoaded) {return}
         try {
-            // Read SMS config from encrypted system_config via ConfigService (F03 remediation)
-            const smsApiKey = ConfigService.getConfig('sms_api_key')
+            // Read SMS config from encrypted system_config via ConfigService.
+            // Backward compatibility: also read dotted keys if present.
+            const smsApiKey = ConfigService.getConfig('sms_api_key') ?? ConfigService.getConfig('sms.api_key')
             const smsApiSecret = ConfigService.getConfig('sms_api_secret')
-            const smsSenderId = ConfigService.getConfig('sms_sender_id')
+                ?? ConfigService.getConfig('sms.api_secret')
+                ?? ConfigService.getConfig('sms.username')
+            const smsSenderId = ConfigService.getConfig('sms_sender_id') ?? ConfigService.getConfig('sms.sender_id')
+            const smsProviderRaw = ConfigService.getConfig('sms_provider') ?? ConfigService.getConfig('sms.provider')
+            const normalizedProvider = (smsProviderRaw ?? 'AFRICASTALKING').toUpperCase()
+            const smsProvider: SMSProviderConfig['provider'] =
+                normalizedProvider === 'TWILIO' || normalizedProvider === 'NEXMO' || normalizedProvider === 'CUSTOM'
+                    ? normalizedProvider
+                    : 'AFRICASTALKING'
 
             if (smsApiKey) {
                 const smsConfig: SMSProviderConfig = {
-                    provider: 'AFRICASTALKING',
+                    provider: smsProvider,
                     apiKey: smsApiKey,
                     apiSecret: smsApiSecret || '',
                     senderId: smsSenderId || ''
@@ -100,11 +109,35 @@ export class NotificationService {
                 this.smsService = new SMSService(smsConfig)
             }
 
-            // Email config still read from school_settings (not migrated yet)
-            const settings = this.db.prepare('SELECT * FROM school_settings WHERE id = 1').get() as Record<string, string> | undefined
-            if (settings?.['email_provider_config']) {
-                const emailConfig: EmailProviderConfig = JSON.parse(settings['email_provider_config'])
+            const smtpHost = ConfigService.getConfig('smtp_host') ?? ConfigService.getConfig('smtp.host')
+            const smtpPortRaw = ConfigService.getConfig('smtp_port') ?? ConfigService.getConfig('smtp.port')
+            const smtpUser = ConfigService.getConfig('smtp_user') ?? ConfigService.getConfig('smtp.user')
+            const smtpPass = ConfigService.getConfig('smtp_pass') ?? ConfigService.getConfig('smtp.pass')
+
+            if (smtpHost && smtpPortRaw && smtpUser && smtpPass) {
+                const smtpPort = Number(smtpPortRaw)
+                const emailConfig: EmailProviderConfig = {
+                    provider: 'SMTP',
+                    host: smtpHost,
+                    port: Number.isFinite(smtpPort) && smtpPort > 0 ? smtpPort : 587,
+                    user: smtpUser,
+                    password: smtpPass,
+                    fromEmail: smtpUser,
+                    fromName: 'Mwingi School ERP',
+                }
                 this.emailService = new EmailService(emailConfig)
+            } else {
+                // Legacy fallback from school_settings JSON blob
+                const hasSchoolSettings = this.db.prepare(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='school_settings'"
+                ).get()
+                if (hasSchoolSettings) {
+                    const settings = this.db.prepare('SELECT * FROM school_settings WHERE id = 1').get() as Record<string, string> | undefined
+                    if (settings?.['email_provider_config']) {
+                        const emailConfig: EmailProviderConfig = JSON.parse(settings['email_provider_config'])
+                        this.emailService = new EmailService(emailConfig)
+                    }
+                }
             }
             this.isConfigLoaded = true
         } catch (error) {
@@ -219,12 +252,13 @@ export class NotificationService {
         try {
             this.db.prepare(`
         INSERT INTO message_log (
-          recipient_type, recipient_id, message_type, subject, message_body,
+          recipient_type, recipient_id, recipient_contact, message_type, subject, message_body,
           status, external_id, error_message, sent_by_user_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
                 data.recipientType,
                 data.recipientId,
+                data.to,
                 data.channel,
                 data.subject || null,
                 data.message,

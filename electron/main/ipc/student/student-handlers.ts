@@ -402,7 +402,7 @@ function registerStudentWriteHandlers(db: ReturnType<typeof getDatabase>): void 
       ).get()
       if (hasMessageLog) {
         db.prepare(
-          "UPDATE message_log SET recipient = ?, message_body = 'purged' WHERE recipient LIKE '%' || ? || '%'"
+          "UPDATE message_log SET recipient_contact = ?, message_body = 'purged' WHERE recipient_contact LIKE '%' || ? || '%'"
         ).run(redacted, student.admission_number)
       }
     })

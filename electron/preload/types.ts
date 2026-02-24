@@ -148,9 +148,9 @@ export interface BudgetFilters {
 export interface SettingsData {
   school_name?: string | undefined
   school_motto?: string | undefined
-  school_address?: string | undefined
-  school_phone?: string | undefined
-  school_email?: string | undefined
+  address?: string | undefined
+  phone?: string | undefined
+  email?: string | undefined
   principal_name?: string | undefined
   logo_data_url?: string | undefined
   mpesa_paybill?: string | undefined

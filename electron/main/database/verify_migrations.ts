@@ -15,7 +15,7 @@ interface MigrationDriftResult {
 const moduleDir = path.dirname(fileURLToPath(import.meta.url))
 
 function isIncrementalMigrationName(name: string): boolean {
-  const match = name.match(/^(\d+)_/)
+  const match = /^(\d+)_/.exec(name)
   if (!match) {
     return false
   }

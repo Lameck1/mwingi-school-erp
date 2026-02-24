@@ -199,6 +199,20 @@ describe('student IPC handlers', () => {
         enrollment_date TEXT,
         status TEXT
       );
+
+      CREATE TABLE message_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        recipient_type TEXT NOT NULL,
+        recipient_id INTEGER,
+        recipient_contact TEXT NOT NULL,
+        message_type TEXT NOT NULL,
+        subject TEXT,
+        message_body TEXT NOT NULL,
+        status TEXT DEFAULT 'PENDING',
+        external_id TEXT,
+        error_message TEXT,
+        sent_by_user_id INTEGER NOT NULL
+      );
       
       INSERT INTO academic_year (name, is_current) VALUES ('2024', 1);
       INSERT INTO term (academic_year_id, term_number, name, is_current) VALUES (1, 1, 'Term 1', 1);
@@ -282,6 +296,11 @@ describe('student IPC handlers', () => {
 
     it('purges student PII', async () => {
         db.prepare(`INSERT INTO student (id, first_name, admission_number, guardian_name, is_active) VALUES (1, 'John', 'ADM003', 'Parent', 0)`).run()
+        db.prepare(`
+          INSERT INTO message_log (
+            recipient_type, recipient_id, recipient_contact, message_type, subject, message_body, status, sent_by_user_id
+          ) VALUES ('STUDENT', 1, 'ADM003 parent', 'SMS', NULL, 'Original', 'SENT', 10)
+        `).run()
 
         const handler = handlerMap.get('student:purge')
         expect(handler).toBeDefined()
@@ -297,5 +316,9 @@ describe('student IPC handlers', () => {
         expect(student.first_name).toBe('[REDACTED-1]')
         expect(student.guardian_name).toBeNull()
         expect(student.is_active).toBe(0)
+
+        const logRow = db.prepare('SELECT recipient_contact, message_body FROM message_log WHERE recipient_id = 1').get() as { recipient_contact: string; message_body: string } | undefined
+        expect(logRow?.recipient_contact).toBe('[REDACTED-1]')
+        expect(logRow?.message_body).toBe('purged')
     })
 })

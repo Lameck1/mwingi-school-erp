@@ -328,6 +328,10 @@ export class AcademicSystemService {
         })
 
         transaction(results)
+        logAudit(userId, 'SAVE_RESULTS', 'exam_result', examId, null, {
+            examId,
+            rows: results.length
+        })
     }
 
     private toNullableBooleanFlag(value: boolean | undefined): 0 | 1 | null {
@@ -412,15 +416,13 @@ export class AcademicSystemService {
 
     // ==================== Certificates & Emails ====================
     async generateCertificate(data: CertificatePayload): Promise<{ success: boolean; message: string }> {
-        // TODO: Implement actual certificate generation logic (PDF generation)
-        console.warn('generateCertificate not fully implemented', data)
-        return { success: true, message: 'Certificate generation simulated' }
+        console.warn('generateCertificate not implemented', data)
+        return { success: false, message: 'Certificate generation is not implemented yet.' }
     }
 
     async emailParents(data: EmailParentsPayload): Promise<{ success: boolean; message: string }> {
-        // TODO: Implement actual email sending logic
-        console.warn('emailParents not fully implemented', data)
-        return { success: true, message: 'Email sending simulated' }
+        console.warn('emailParents not implemented', data)
+        return { success: false, message: 'Parent email dispatch is not implemented yet.' }
     }
 }
 
