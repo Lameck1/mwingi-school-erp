@@ -1,10 +1,42 @@
 import { format } from 'date-fns';
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
 import { formatCurrencyFromCents } from '../../../utils/format';
+import { getIPCFailureMessage, isIPCFailure } from '../../../utils/ipc'
 
 import type { TrialBalanceReport } from '../../../types/electron-api';
+
+const getResultMessage = (value: unknown, fallback: string): string => {
+  if (isIPCFailure(value)) {
+    return getIPCFailureMessage(value, fallback)
+  }
+  if (value && typeof value === 'object') {
+    const maybe = value as { error?: unknown; message?: unknown }
+    if (typeof maybe.error === 'string' && maybe.error.trim()) {
+      return maybe.error
+    }
+    if (typeof maybe.message === 'string' && maybe.message.trim()) {
+      return maybe.message
+    }
+  }
+  return fallback
+}
+
+const parseTrialBalanceResponse = (value: unknown): TrialBalanceReport => {
+  const fallback = 'Failed to load trial balance'
+  if (!value || typeof value !== 'object') {
+    throw new Error(fallback)
+  }
+  const result = value as { success?: unknown; data?: unknown }
+  if (result.success !== true) {
+    throw new Error(getResultMessage(value, fallback))
+  }
+  if (!result.data || typeof result.data !== 'object') {
+    throw new Error('Trial balance response did not include data')
+  }
+  return result.data as TrialBalanceReport
+}
 
 
 export default function TrialBalancePage() {
@@ -16,29 +48,24 @@ export default function TrialBalancePage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void loadTrialBalance();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const loadTrialBalance = async () => {
+  const loadTrialBalance = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const result = await globalThis.electronAPI.getTrialBalance(startDate, endDate) as { success: boolean; data: TrialBalanceReport; message?: string };
-
-      if (result.success) {
-        setTrialBalance(result.data);
-      } else {
-        setError(result.message || 'Failed to load trial balance');
-      }
+      const data = parseTrialBalanceResponse(await globalThis.electronAPI.getTrialBalance(startDate, endDate))
+      setTrialBalance(data);
     } catch (err) {
-      setError((err as Error).message);
+      setTrialBalance(null);
+      setError(err instanceof Error ? err.message : 'Failed to load trial balance');
     } finally {
       setLoading(false);
     }
-  };
+  }, [endDate, startDate]);
+
+  useEffect(() => {
+    void loadTrialBalance();
+  }, [loadTrialBalance]);
 
   if (loading) {
     return (
@@ -77,7 +104,7 @@ export default function TrialBalancePage() {
             aria-label="End date"
           />
           <button
-            onClick={loadTrialBalance}
+            onClick={() => { void loadTrialBalance() }}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/80"
           >
             Generate

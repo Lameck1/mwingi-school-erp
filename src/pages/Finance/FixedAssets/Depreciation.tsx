@@ -8,6 +8,7 @@ import { useToast } from '../../../contexts/ToastContext'
 import { useAuthStore, useAppStore } from '../../../stores'
 import { type FinancialPeriod, type FixedAsset } from '../../../types/electron-api/FixedAssetAPI'
 import { formatCurrencyFromCents } from '../../../utils/format'
+import { unwrapArrayResult } from '../../../utils/ipc'
 
 export default function Depreciation() {
     const { user } = useAuthStore()
@@ -21,23 +22,32 @@ export default function Depreciation() {
 
     const loadAssets = useCallback(async () => {
         try {
-            const data = await globalThis.electronAPI.getAssets({ status: 'ACTIVE' })
+            const data = unwrapArrayResult(
+                await globalThis.electronAPI.getAssets({ status: 'ACTIVE' }),
+                'Failed to load fixed assets'
+            )
             setAssets(data)
         } catch (error) {
             console.error('Failed to load assets', error)
-            showToast('Failed to load fixed assets', 'error')
+            setAssets([])
+            showToast(error instanceof Error ? error.message : 'Failed to load fixed assets', 'error')
         }
     }, [showToast])
 
     const loadPeriods = useCallback(async () => {
         try {
-            const allPeriods = await globalThis.electronAPI.getFinancialPeriods()
+            const allPeriods = unwrapArrayResult(
+                await globalThis.electronAPI.getFinancialPeriods(),
+                'Failed to load financial periods'
+            )
             const unlocked = getUnlockedPeriods(allPeriods)
             setPeriods(unlocked)
             setSelectedPeriodId((current) => current ?? getDefaultPeriodId(unlocked))
         } catch (error) {
             console.error('Failed to load periods', error)
-            showToast('Failed to load financial periods', 'error')
+            setPeriods([])
+            setSelectedPeriodId(null)
+            showToast(error instanceof Error ? error.message : 'Failed to load financial periods', 'error')
         }
     }, [showToast])
 
@@ -80,8 +90,8 @@ export default function Depreciation() {
             } else {
                 showToast(result.error || 'Depreciation failed', 'error')
             }
-        } catch {
-            showToast('Error processing depreciation', 'error')
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : 'Error processing depreciation', 'error')
         } finally {
             setProcessing(null)
         }

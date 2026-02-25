@@ -1,8 +1,10 @@
 import { Search, Loader2, Users } from 'lucide-react'
 import React, { useState } from 'react'
 
+import { useToast } from '../../../contexts/ToastContext'
 import { type Student } from '../../../types/electron-api/StudentAPI'
 import { formatCurrencyFromCents } from '../../../utils/format'
+import { unwrapArrayResult } from '../../../utils/ipc'
 
 interface StudentLedgerSearchProps {
     onSelectStudent: (student: Student) => void
@@ -10,18 +12,28 @@ interface StudentLedgerSearchProps {
 }
 
 export const StudentLedgerSearch: React.FC<StudentLedgerSearchProps> = ({ onSelectStudent, selectedStudent }) => {
+    const { showToast } = useToast()
     const [search, setSearch] = useState('')
     const [students, setStudents] = useState<Student[]>([])
     const [loading, setLoading] = useState(false)
 
     const handleSearch = async () => {
-        if (!search) { return }
+        const searchTerm = search.trim()
+        if (!searchTerm) {
+            setStudents([])
+            return
+        }
         setLoading(true)
         try {
-            const results = await globalThis.electronAPI.getStudents({ search })
-            setStudents(Array.isArray(results) ? results : [])
+            const results = unwrapArrayResult(
+                await globalThis.electronAPI.getStudents({ search: searchTerm }),
+                'Student lookup failed'
+            )
+            setStudents(results)
         } catch (error) {
             console.error('Search failed:', error)
+            showToast(error instanceof Error ? error.message : 'Student lookup failed', 'error')
+            setStudents([])
         } finally {
             setLoading(false)
         }
@@ -47,7 +59,13 @@ export const StudentLedgerSearch: React.FC<StudentLedgerSearchProps> = ({ onSele
                 <input
                     type="text"
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => {
+                        const nextValue = e.target.value
+                        setSearch(nextValue)
+                        if (!nextValue.trim()) {
+                            setStudents([])
+                        }
+                    }}
                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                     placeholder="Search by name or admission..."
                     className="input pl-11 py-3 border-border/20"

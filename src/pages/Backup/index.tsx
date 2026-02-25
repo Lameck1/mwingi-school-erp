@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { useToast } from '../../contexts/ToastContext'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 export default function Backup() {
     const { showToast } = useToast()
@@ -14,11 +15,13 @@ export default function Backup() {
     const loadBackups = useCallback(async () => {
         try {
             const data = await globalThis.electronAPI.getBackupList()
-            setBackups(data)
+            setBackups(unwrapArrayResult(data, 'Failed to load backup list'))
         } catch (error) {
             console.error('Failed to load backups:', error)
+            setBackups([])
+            showToast(error instanceof Error ? error.message : 'Failed to load backups', 'error')
         }
-    }, [])
+    }, [showToast])
 
     useEffect(() => {
         loadBackups().catch((err: unknown) => console.error('Failed to load backups:', err))
@@ -28,7 +31,7 @@ export default function Backup() {
         setBacking(true)
         setResult(null)
         try {
-            const res = await globalThis.electronAPI.createBackup()
+            const res = unwrapIPCResult(await globalThis.electronAPI.createBackup(), 'Backup orchestration failed')
             if (res.cancelled) {
                 setResult(null)
             } else if (res.success) {
@@ -43,7 +46,7 @@ export default function Backup() {
         } catch (error) {
             const msg = error instanceof Error ? error.message : 'Critical synchronization failure'
             setResult({ type: 'error', message: msg })
-            showToast('Backup orchestration failed', 'error')
+            showToast(msg, 'error')
         } finally { setBacking(false) }
     }
 
@@ -58,7 +61,7 @@ export default function Backup() {
         setRestoring(true)
         setResult(null)
         try {
-            const res = await globalThis.electronAPI.restoreBackup(filename)
+            const res = unwrapIPCResult(await globalThis.electronAPI.restoreBackup(filename), 'Restoration orchestration failed')
             if (res.cancelled) {
                 setResult(null)
             } else if (res.success) {
@@ -71,7 +74,7 @@ export default function Backup() {
         } catch (error) {
             const msg = error instanceof Error ? error.message : 'Critical restoration failure'
             setResult({ type: 'error', message: msg })
-            showToast('Restoration orchestration failed', 'error')
+            showToast(msg, 'error')
         } finally { setRestoring(false) }
     }
 

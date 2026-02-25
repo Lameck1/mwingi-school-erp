@@ -8,9 +8,11 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/patterns/PageHeader'
 import { StatCard } from '../../../components/patterns/StatCard'
 import { Badge } from '../../../components/ui/Badge'
+import { useToast } from '../../../contexts/ToastContext'
 import { useAuthStore } from '../../../stores'
 import { type Budget } from '../../../types/electron-api'
 import { formatCurrencyFromCents } from '../../../utils/format'
+import { unwrapIPCResult } from '../../../utils/ipc'
 
 const statusConfig = {
     DRAFT: { label: 'Draft', variant: 'default' as const, icon: Edit },
@@ -25,6 +27,7 @@ export default function BudgetDetails() {
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
     const { user } = useAuthStore()
+    const { showToast } = useToast()
 
     const [budget, setBudget] = useState<Budget | null>(null)
     const [loading, setLoading] = useState(true)
@@ -34,54 +37,83 @@ export default function BudgetDetails() {
         const budgetId = Number(id)
         if (!id || Number.isNaN(budgetId)) {
             console.warn('Invalid budget ID in URL:', id)
+            setBudget(null)
             navigate('/budget')
             return
         }
 
         setLoading(true)
         try {
-            const data = await globalThis.electronAPI.getBudgetById(budgetId)
+            const data = unwrapIPCResult<Budget | null>(
+                await globalThis.electronAPI.getBudgetById(budgetId),
+                'Failed to load budget details'
+            )
             if (!data) {
                 console.warn('Budget not found for ID:', budgetId)
+                setBudget(null)
                 return
             }
             setBudget(data)
         } catch (error) {
             console.error('Failed to load budget:', error)
+            setBudget(null)
+            showToast(error instanceof Error ? error.message : 'Failed to load budget details', 'error')
         } finally {
             setLoading(false)
         }
-    }, [id, navigate])
+    }, [id, navigate, showToast])
 
     useEffect(() => {
         loadBudget().catch((err: unknown) => console.error('Failed to load budget:', err))
     }, [loadBudget])
 
     const handleSubmitForApproval = async () => {
-        if (!budget || !user) {return}
+        if (!budget) {
+            showToast('Budget not loaded', 'warning')
+            return
+        }
+        if (!user?.id) {
+            showToast('You must be signed in to submit a budget', 'error')
+            return
+        }
         setActionLoading(true)
         try {
             const result = await globalThis.electronAPI.submitBudgetForApproval(budget.id, user.id)
             if (result.success) {
-                loadBudget().catch((err: unknown) => console.error('Failed to reload budget:', err))
+                await loadBudget()
+                showToast('Budget submitted for approval', 'success')
+                return
             }
+            showToast((result.errors && result.errors[0]) || 'Failed to submit budget for approval', 'error')
         } catch (error) {
             console.error('Failed to submit budget:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to submit budget for approval', 'error')
         } finally {
             setActionLoading(false)
         }
     }
 
     const handleApprove = async () => {
-        if (!budget || !user) {return}
+        if (!budget) {
+            showToast('Budget not loaded', 'warning')
+            return
+        }
+        if (!user?.id) {
+            showToast('You must be signed in to approve a budget', 'error')
+            return
+        }
         setActionLoading(true)
         try {
             const result = await globalThis.electronAPI.approveBudget(budget.id, user.id)
             if (result.success) {
-                loadBudget().catch((err: unknown) => console.error('Failed to reload budget:', err))
+                await loadBudget()
+                showToast('Budget approved', 'success')
+                return
             }
+            showToast((result.errors && result.errors[0]) || 'Failed to approve budget', 'error')
         } catch (error) {
             console.error('Failed to approve budget:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to approve budget', 'error')
         } finally {
             setActionLoading(false)
         }

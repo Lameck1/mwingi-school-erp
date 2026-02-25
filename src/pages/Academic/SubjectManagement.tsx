@@ -7,6 +7,7 @@ import { Select } from '../../components/ui/Select'
 import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore } from '../../stores'
 import { type AcademicSubject } from '../../types/electron-api/AcademicAPI'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 type SubjectFormState = {
   code: string
@@ -47,8 +48,8 @@ export default function SubjectManagement() {
   const loadSubjects = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await globalThis.electronAPI.getAcademicSubjectsAdmin()
-      setSubjects(Array.isArray(data) ? data : [])
+      const data = unwrapArrayResult(await globalThis.electronAPI.getAcademicSubjectsAdmin(), 'Failed to load subjects')
+      setSubjects(data)
     } catch (error) {
       console.error('Failed to load subjects:', error)
       showToast('Failed to load subjects', 'error')
@@ -93,22 +94,28 @@ export default function SubjectManagement() {
     setSaving(true)
     try {
       if (editing) {
-        await globalThis.electronAPI.updateAcademicSubject(editing.id, {
-          code: form.code.trim().toUpperCase(),
-          name: form.name.trim(),
-          curriculum: form.curriculum,
-          is_compulsory: form.is_compulsory,
-          is_active: form.is_active
-        }, user.id)
+        unwrapIPCResult(
+          await globalThis.electronAPI.updateAcademicSubject(editing.id, {
+            code: form.code.trim().toUpperCase(),
+            name: form.name.trim(),
+            curriculum: form.curriculum,
+            is_compulsory: form.is_compulsory,
+            is_active: form.is_active
+          }, user.id),
+          'Failed to update subject'
+        )
         showToast('Subject updated', 'success')
       } else {
-        await globalThis.electronAPI.createAcademicSubject({
-          code: form.code.trim().toUpperCase(),
-          name: form.name.trim(),
-          curriculum: form.curriculum,
-          is_compulsory: form.is_compulsory,
-          is_active: form.is_active
-        }, user.id)
+        unwrapIPCResult(
+          await globalThis.electronAPI.createAcademicSubject({
+            code: form.code.trim().toUpperCase(),
+            name: form.name.trim(),
+            curriculum: form.curriculum,
+            is_compulsory: form.is_compulsory,
+            is_active: form.is_active
+          }, user.id),
+          'Failed to create subject'
+        )
         showToast('Subject created', 'success')
       }
       setShowModal(false)
@@ -128,7 +135,10 @@ export default function SubjectManagement() {
     if (!confirm(`${desired ? 'Activate' : 'Deactivate'} subject "${subject.name}"?`)) { return }
     setSaving(true)
     try {
-      await globalThis.electronAPI.setAcademicSubjectActive(subject.id, desired, user.id)
+      unwrapIPCResult(
+        await globalThis.electronAPI.setAcademicSubjectActive(subject.id, desired, user.id),
+        `Failed to ${desired ? 'activate' : 'deactivate'} subject`
+      )
       await loadSubjects()
       showToast(`Subject ${desired ? 'activated' : 'deactivated'}`, 'success')
     } catch (error) {

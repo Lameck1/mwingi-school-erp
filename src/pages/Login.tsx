@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { useAuthStore, useAppStore } from '../stores'
+import { type AcademicYear, type Term, type SchoolSettings } from '../types/electron-api'
+import { unwrapIPCResult } from '../utils/ipc'
 
 export default function Login() {
     const navigate = useNavigate()
@@ -18,7 +20,10 @@ export default function Login() {
     useEffect(() => {
         const checkSetup = async () => {
             try {
-                const hasUsers = await globalThis.electronAPI.hasUsers()
+                const hasUsers = unwrapIPCResult<boolean>(
+                    await globalThis.electronAPI.hasUsers(),
+                    'Failed to determine setup state'
+                )
                 if (!hasUsers) {
                     navigate('/setup')
                 }
@@ -44,19 +49,22 @@ export default function Login() {
                 // Load app data in background; don't block login
                 void (async () => {
                     try {
-                        const settingsRes = await globalThis.electronAPI.getSettings()
-                        const yearRes = await globalThis.electronAPI.getCurrentAcademicYear()
-                        const termRes = await globalThis.electronAPI.getCurrentTerm()
+                        const settingsRes = unwrapIPCResult<SchoolSettings>(
+                            await globalThis.electronAPI.getSettings(),
+                            'Failed to load school settings'
+                        )
+                        const yearRes = unwrapIPCResult<AcademicYear>(
+                            await globalThis.electronAPI.getCurrentAcademicYear(),
+                            'Failed to load active academic year'
+                        )
+                        const termRes = unwrapIPCResult<Term>(
+                            await globalThis.electronAPI.getCurrentTerm(),
+                            'Failed to load active term'
+                        )
 
-                        if (settingsRes && !('success' in settingsRes)) {
-                            setSchoolSettings(settingsRes)
-                        }
-                        if (yearRes && !('success' in yearRes)) {
-                            setCurrentAcademicYear(yearRes)
-                        }
-                        if (termRes && !('success' in termRes)) {
-                            setCurrentTerm(termRes)
-                        }
+                        setSchoolSettings(settingsRes)
+                        setCurrentAcademicYear(yearRes)
+                        setCurrentTerm(termRes)
                     } catch (err) {
                         console.error('Post-login bootstrap failed:', err)
                     }

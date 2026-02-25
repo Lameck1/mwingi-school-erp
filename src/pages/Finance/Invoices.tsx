@@ -9,6 +9,7 @@ import { useToast } from '../../contexts/ToastContext'
 import { type Invoice, type InvoiceItem } from '../../types/electron-api/FinanceAPI'
 import { normalizeFilters } from '../../utils/filters'
 import { formatCurrencyFromCents, formatDate } from '../../utils/format'
+import { unwrapArrayResult } from '../../utils/ipc'
 import { printCurrentView } from '../../utils/print'
 
 const getStatusBadgeClass = (status: string): string => {
@@ -32,14 +33,14 @@ export default function Invoices() {
     const { showToast } = useToast()
 
     const loadInvoices = useCallback(async () => {
+        setLoading(true)
         try {
             const data = await globalThis.electronAPI.getInvoices(normalizeFilters({}))
-            if (Array.isArray(data)) {
-                setInvoices(data)
-            }
+            setInvoices(unwrapArrayResult(data, 'Failed to load invoices'))
         } catch (error) {
             console.error('Failed to load invoices:', error)
-            showToast('Failed to load invoices', 'error')
+            setInvoices([])
+            showToast(error instanceof Error ? error.message : 'Failed to load invoices', 'error')
         } finally {
             setLoading(false)
         }
@@ -52,12 +53,13 @@ export default function Invoices() {
     const viewInvoice = async (invoice: Invoice) => {
         try {
             const items = await globalThis.electronAPI.getInvoiceItems(invoice.id)
-            if (Array.isArray(items)) {
-                setInvoiceItems(items)
-                setSelectedInvoice(invoice)
-            }
+            setInvoiceItems(unwrapArrayResult(items, 'Failed to load invoice items'))
+            setSelectedInvoice(invoice)
         } catch (error) {
             console.error('Failed to load invoice items:', error)
+            setInvoiceItems([])
+            setSelectedInvoice(null)
+            showToast(error instanceof Error ? error.message : 'Failed to load invoice items', 'error')
         }
     }
 

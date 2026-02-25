@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Modal } from '../../components/ui/Modal'
 import { useToast } from '../../contexts/ToastContext'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 import type { User, CreateUserData, UpdateUserData } from '../../types/electron-api/UserAPI'
 
@@ -33,10 +34,11 @@ export default function UsersPage() {
         setLoading(true)
         try {
             const usersData = await globalThis.electronAPI.getUsers()
-            setUsers(usersData)
+            setUsers(unwrapArrayResult(usersData, 'Failed to load system users'))
         } catch (error) {
             console.error('Failed to load users:', error)
-            showToast('Failed to load system users', 'error')
+            setUsers([])
+            showToast(error instanceof Error ? error.message : 'Failed to load system users', 'error')
         } finally { setLoading(false) }
     }, [showToast])
 
@@ -48,16 +50,22 @@ export default function UsersPage() {
         try {
             if (isEditing && selectedUser) {
                 const { password, ...updateData } = userData
-                await globalThis.electronAPI.updateUser(selectedUser.id, updateData as UpdateUserData)
+                unwrapIPCResult(
+                    await globalThis.electronAPI.updateUser(selectedUser.id, updateData as UpdateUserData),
+                    'Failed to update user'
+                )
                 showToast('User profile updated successfully', 'success')
             } else {
-                await globalThis.electronAPI.createUser(userData)
+                unwrapIPCResult(
+                    await globalThis.electronAPI.createUser(userData),
+                    'Failed to create user'
+                )
                 showToast('New user account established', 'success')
             }
 
             setShowUserModal(false)
             resetForms()
-            loadData().catch((err: unknown) => console.error('Failed to reload users', err))
+            await loadData()
         } catch (error) {
             console.error('Failed to save user:', error)
             showToast(error instanceof Error ? error.message : 'Critical error saving user', 'error')
@@ -73,11 +81,17 @@ export default function UsersPage() {
             return
         }
 
-        if (!selectedUser) {return}
+        if (!selectedUser) {
+            showToast('Select a user before resetting credentials', 'error')
+            return
+        }
 
         setSaving(true)
         try {
-            await globalThis.electronAPI.resetUserPassword(selectedUser.id, passwordData.newPassword)
+            unwrapIPCResult(
+                await globalThis.electronAPI.resetUserPassword(selectedUser.id, passwordData.newPassword),
+                'Failed to reset user password'
+            )
             setShowPasswordModal(false)
             resetForms()
             showToast('Security credentials updated successfully', 'success')
@@ -94,12 +108,15 @@ export default function UsersPage() {
         if (!confirm(`Are you sure you want to ${action} user "${user.username}"?`)) {return}
 
         try {
-            await globalThis.electronAPI.toggleUserStatus(user.id, !user.is_active)
+            unwrapIPCResult(
+                await globalThis.electronAPI.toggleUserStatus(user.id, !user.is_active),
+                'Failed to update user status'
+            )
             showToast(`User ${action}d successfully`, 'success')
-            loadData().catch((err: unknown) => console.error('Failed to reload users', err))
+            await loadData()
         } catch (error) {
             console.error('Failed to toggle status:', error)
-            showToast('Status transition failed', 'error')
+            showToast(error instanceof Error ? error.message : 'Status transition failed', 'error')
         }
     }
 
@@ -279,7 +296,10 @@ export default function UsersPage() {
             {/* User Modification Modal */}
             <Modal
                 isOpen={showUserModal}
-                onClose={() => setShowUserModal(false)}
+                onClose={() => {
+                    setShowUserModal(false)
+                    resetForms()
+                }}
                 title={isEditing ? 'Sync User Profile' : 'Establish New Access Vector'}
                 size="sm"
             >
@@ -323,7 +343,7 @@ export default function UsersPage() {
                         </div>
                     )}
                     <div className="flex justify-end gap-3 pt-4 border-t border-border/10">
-                        <button type="button" onClick={() => setShowUserModal(false)} className="btn btn-secondary px-6">Discard</button>
+                        <button type="button" onClick={() => { setShowUserModal(false); resetForms() }} className="btn btn-secondary px-6">Discard</button>
                         <button type="submit" disabled={saving} className="btn btn-primary px-8 flex items-center gap-2">
                             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                             <span>{isEditing ? 'Push Changes' : 'Establish Access'}</span>
@@ -335,7 +355,11 @@ export default function UsersPage() {
             {/* Credential Reset Modal */}
             <Modal
                 isOpen={showPasswordModal}
-                onClose={() => setShowPasswordModal(false)}
+                onClose={() => {
+                    setShowPasswordModal(false)
+                    setPasswordData({ newPassword: '', confirmPassword: '' })
+                    setSelectedUser(null)
+                }}
                 title="Security Protocol Override"
                 size="sm"
             >
@@ -358,7 +382,11 @@ export default function UsersPage() {
                             className="input w-full" />
                     </div>
                     <div className="flex justify-end gap-3 pt-4 border-t border-border/10">
-                        <button type="button" onClick={() => setShowPasswordModal(false)} className="btn btn-secondary px-6">Cancel</button>
+                        <button type="button" onClick={() => {
+                            setShowPasswordModal(false)
+                            setPasswordData({ newPassword: '', confirmPassword: '' })
+                            setSelectedUser(null)
+                        }} className="btn btn-secondary px-6">Cancel</button>
                         <button type="submit" disabled={saving} className="btn btn-primary px-8 flex items-center gap-2 shadow-xl shadow-primary/20">
                             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
                             <span>Override Credentials</span>

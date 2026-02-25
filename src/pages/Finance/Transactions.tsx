@@ -6,6 +6,7 @@ import { useToast } from '../../contexts/ToastContext'
 import { type Transaction, type TransactionCategory } from '../../types/electron-api/FinanceAPI'
 import { normalizeFilters } from '../../utils/filters'
 import { formatCurrencyFromCents, formatDate } from '../../utils/format'
+import { unwrapArrayResult } from '../../utils/ipc'
 
 
 export default function Transactions() {
@@ -25,13 +26,13 @@ export default function Transactions() {
     const loadCategories = useCallback(async () => {
         try {
             const allCats = await globalThis.electronAPI.getTransactionCategories()
-            if (Array.isArray(allCats)) {
-                setCategories(allCats)
-            }
-        } catch {
-            // Non-critical — filter will just show "All"
+            setCategories(unwrapArrayResult(allCats, 'Failed to load transaction categories'))
+        } catch (error) {
+            console.error('Failed to load categories:', error)
+            setCategories([])
+            showToast(error instanceof Error ? error.message : 'Failed to load transaction categories', 'error')
         }
-    }, [])
+    }, [showToast])
 
     const loadTransactions = useCallback(async () => {
         setLoading(true)
@@ -41,19 +42,18 @@ export default function Transactions() {
             if (appliedFilter.endDate) { filters['endDate'] = appliedFilter.endDate }
             if (appliedFilter.category_id) { filters['categoryId'] = Number(appliedFilter.category_id) }
             const data = await globalThis.electronAPI.getTransactions(normalizeFilters(filters))
-            if (Array.isArray(data)) {
-                setTransactions(data)
-            }
+            setTransactions(unwrapArrayResult(data, 'Failed to load transactions'))
         } catch (error) {
             console.error('Failed to load transactions:', error)
-            showToast('Failed to synchronize transaction ledger', 'error')
+            setTransactions([])
+            showToast(error instanceof Error ? error.message : 'Failed to synchronize transaction ledger', 'error')
         } finally {
             setLoading(false)
         }
     }, [appliedFilter, showToast])
 
     useEffect(() => {
-        loadCategories().catch(() => { })
+        loadCategories().catch((err: unknown) => console.error('Failed to load transaction categories', err))
     }, [loadCategories])
 
     useEffect(() => {

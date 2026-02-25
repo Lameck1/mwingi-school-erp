@@ -8,7 +8,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 
 import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb';
+import { useToast } from '../../../contexts/ToastContext';
 import { formatCurrencyFromCents } from '../../../utils/format';
+import { getIPCFailureMessage, isIPCFailure } from '../../../utils/ipc'
 
 
 interface GLAccount {
@@ -37,7 +39,24 @@ const getTypeColor = (type: string): string => {
   }
 };
 
+const getResultMessage = (value: unknown, fallback: string): string => {
+  if (isIPCFailure(value)) {
+    return getIPCFailureMessage(value, fallback)
+  }
+  if (value && typeof value === 'object') {
+    const maybe = value as { error?: unknown; message?: unknown }
+    if (typeof maybe.error === 'string' && maybe.error.trim()) {
+      return maybe.error
+    }
+    if (typeof maybe.message === 'string' && maybe.message.trim()) {
+      return maybe.message
+    }
+  }
+  return fallback
+}
+
 export const GLAccountManagement: React.FC = () => {
+  const { showToast } = useToast();
   const [accounts, setAccounts] = useState<GLAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<string>('ALL');
@@ -50,7 +69,13 @@ export const GLAccountManagement: React.FC = () => {
       const result = await globalThis.electronAPI.getGLAccounts(
         filterType === 'ALL' ? undefined : { type: filterType }
       );
-      const data = result?.data ?? [];
+      if (!result || result.success !== true) {
+        throw new Error(getResultMessage(result, 'Failed to load GL accounts'));
+      }
+      if (!Array.isArray(result.data)) {
+        throw new Error('Invalid GL accounts response payload');
+      }
+      const data = result.data;
       // Map backend response to local interface
       const mapped: GLAccount[] = data.map((a) => ({
         code: a.account_code || '',
@@ -63,10 +88,12 @@ export const GLAccountManagement: React.FC = () => {
       setAccounts(mapped);
     } catch (error) {
       console.error('Failed to load accounts:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to load GL accounts', 'error');
+      setAccounts([]);
     } finally {
       setLoading(false);
     }
-  }, [filterType]);
+  }, [filterType, showToast]);
 
   useEffect(() => {
     loadAccounts().catch((err: unknown) => console.error('Failed to load GL accounts', err));

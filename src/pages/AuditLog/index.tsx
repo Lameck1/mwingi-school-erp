@@ -5,6 +5,7 @@ import { PageHeader } from '../../components/patterns/PageHeader'
 import { useToast } from '../../contexts/ToastContext'
 import { type AuditLogEntry } from '../../types/electron-api/AuditAPI'
 import { formatDateTime } from '../../utils/format'
+import { unwrapArrayResult } from '../../utils/ipc'
 
 export default function AuditLog() {
     const { showToast } = useToast()
@@ -15,11 +16,15 @@ export default function AuditLog() {
     const loadLogs = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await globalThis.electronAPI.getAuditLog(200)
-            setLogs(Array.isArray(data) ? data : [])
+            const data = unwrapArrayResult(
+                await globalThis.electronAPI.getAuditLog(200),
+                'Failed to load audit logs'
+            )
+            setLogs(data)
         } catch (error) {
             console.error('Failed to load audit logs:', error)
-            showToast('Audit synchronization failed', 'error')
+            showToast(error instanceof Error ? error.message : 'Audit synchronization failed', 'error')
+            setLogs([])
         } finally { setLoading(false) }
     }, [showToast])
 

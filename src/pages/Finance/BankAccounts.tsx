@@ -1,18 +1,19 @@
 import { Plus, Building2, CreditCard, TrendingUp } from 'lucide-react'
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
 import { Modal } from '../../components/ui/Modal'
 import { useToast } from '../../contexts/ToastContext'
 import { formatCurrencyFromCents, shillingsToCents } from '../../utils/format'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 interface BankAccount {
     id: number
     account_name: string
     account_number: string
     bank_name: string
-    branch: string | null
+    branch?: string | null
     currency: string
     opening_balance: number
     current_balance: number
@@ -33,40 +34,43 @@ export default function BankAccounts() {
     })
     const [saving, setSaving] = useState(false)
 
-    useEffect(() => {
-        void loadAccounts()
-    }, [])
-
-    const loadAccounts = async () => {
+    const loadAccounts = useCallback(async () => {
         setLoading(true)
         try {
             const data = await globalThis.electronAPI.getBankAccounts()
-            setAccounts(data as BankAccount[])
+            setAccounts(unwrapArrayResult(data, 'Failed to load bank accounts'))
         } catch (error) {
             console.error('Failed to load bank accounts:', error)
+            setAccounts([])
+            showToast(error instanceof Error ? error.message : 'Failed to load bank accounts', 'error')
         } finally {
             setLoading(false)
         }
-    }
+    }, [showToast])
+
+    useEffect(() => {
+        void loadAccounts()
+    }, [loadAccounts])
 
     const handleSubmit = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         setSaving(true)
         try {
-            const result = await globalThis.electronAPI.createBankAccount({
+            unwrapIPCResult(
+                await globalThis.electronAPI.createBankAccount({
                 ...formData,
                 opening_balance: shillingsToCents(formData.opening_balance) // Whole currency units -> cents
-            })
+                }),
+                'Failed to create bank account'
+            )
 
-            if (result.success) {
-                setShowAddModal(false)
-                setFormData({ account_name: '', account_number: '', bank_name: '', branch: '', opening_balance: 0 })
-                void loadAccounts()
-            } else {
-                showToast(result.errors?.join(', ') || 'Failed to create account', 'error')
-            }
+            setShowAddModal(false)
+            setFormData({ account_name: '', account_number: '', bank_name: '', branch: '', opening_balance: 0 })
+            await loadAccounts()
+            showToast('Bank account created successfully', 'success')
         } catch (error) {
             console.error('Failed to create account:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to create account', 'error')
         } finally {
             setSaving(false)
         }

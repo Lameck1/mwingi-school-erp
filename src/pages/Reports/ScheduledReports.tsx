@@ -2,11 +2,13 @@ import {
     Calendar, Clock, Mail, Plus, Edit, Trash2,
     FileText
 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { Modal } from '../../components/ui/Modal'
+import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore } from '../../stores'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 import type { ScheduledReport } from '../../types/electron-api/ReportsAPI'
 
@@ -34,6 +36,7 @@ const DAY_OPTIONS = [
 
 export default function ScheduledReports({ embedded = false }: ScheduledReportsProps) {
     const { user } = useAuthStore()
+    const { showToast } = useToast()
 
     const [schedules, setSchedules] = useState<ScheduledReport[]>([])
     const [loading, setLoading] = useState(true)
@@ -51,42 +54,56 @@ export default function ScheduledReports({ embedded = false }: ScheduledReportsP
 
     const [recipientInput, setRecipientInput] = useState('')
 
-    useEffect(() => {
-        void loadSchedules()
-    }, [])
-
-    const loadSchedules = async () => {
+    const loadSchedules = useCallback(async () => {
         setLoading(true)
         try {
             const data = await globalThis.electronAPI.getScheduledReports()
-            if (Array.isArray(data)) {
-                setSchedules(data)
-            }
+            setSchedules(unwrapArrayResult(data, 'Failed to load scheduled reports'))
         } catch (error) {
             console.error('Failed to load schedules:', error)
+            setSchedules([])
+            showToast(error instanceof Error ? error.message : 'Failed to load schedules', 'error')
         } finally {
             setLoading(false)
         }
-    }
+    }, [showToast])
+
+    useEffect(() => {
+        void loadSchedules()
+    }, [loadSchedules])
 
     const handleSave = async () => {
-        if (!user) { return }
+        if (!user?.id) {
+            showToast('You must be signed in to save schedules', 'error')
+            return
+        }
         if (!editingSchedule.report_name) {
-            alert('Report name is required')
+            showToast('Report name is required', 'error')
+            return
+        }
+        if (getRecipients().length === 0) {
+            showToast('Add at least one recipient email', 'error')
             return
         }
 
         setSaving(true)
         try {
             if (editingSchedule.id) {
-                await globalThis.electronAPI.updateScheduledReport(editingSchedule.id, editingSchedule, user.id)
+                unwrapIPCResult(
+                    await globalThis.electronAPI.updateScheduledReport(editingSchedule.id, editingSchedule, user.id),
+                    'Failed to update scheduled report'
+                )
             } else {
-                await globalThis.electronAPI.createScheduledReport(editingSchedule, user.id)
+                unwrapIPCResult(
+                    await globalThis.electronAPI.createScheduledReport(editingSchedule, user.id),
+                    'Failed to create scheduled report'
+                )
             }
             setShowModal(false)
             await loadSchedules()
-        } catch {
-            alert('Failed to save schedule')
+            showToast('Schedule saved successfully', 'success')
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : 'Failed to save schedule', 'error')
         } finally {
             setSaving(false)
         }
@@ -94,12 +111,20 @@ export default function ScheduledReports({ embedded = false }: ScheduledReportsP
 
     const handleDelete = async (id: number) => {
         if (!confirm('Are you sure you want to delete this schedule?')) { return }
+        if (!user?.id) {
+            showToast('You must be signed in to delete schedules', 'error')
+            return
+        }
 
         try {
-            await globalThis.electronAPI.deleteScheduledReport(id, user!.id)
+            unwrapIPCResult(
+                await globalThis.electronAPI.deleteScheduledReport(id, user.id),
+                'Failed to delete scheduled report'
+            )
             await loadSchedules()
-        } catch {
-            alert('Failed to delete schedule')
+            showToast('Schedule deleted successfully', 'success')
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : 'Failed to delete schedule', 'error')
         }
     }
 
@@ -112,11 +137,19 @@ export default function ScheduledReports({ embedded = false }: ScheduledReportsP
     }
 
     const addRecipient = () => {
-        if (!recipientInput?.includes('@')) { return }
+        const candidate = recipientInput.trim()
+        if (!candidate.includes('@')) {
+            showToast('Enter a valid recipient email address', 'warning')
+            return
+        }
         const current = getRecipients()
+        if (current.includes(candidate)) {
+            showToast('Recipient already added', 'warning')
+            return
+        }
         setEditingSchedule({
             ...editingSchedule,
-            recipients: JSON.stringify([...current, recipientInput])
+            recipients: JSON.stringify([...current, candidate])
         })
         setRecipientInput('')
     }
@@ -352,7 +385,12 @@ export default function ScheduledReports({ embedded = false }: ScheduledReportsP
                                 onChange={(e) => setRecipientInput(e.target.value)}
                                 className="input flex-1"
                                 placeholder="email@example.com"
-                                onKeyDown={(e) => e.key === 'Enter' && addRecipient()}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault()
+                                        addRecipient()
+                                    }
+                                }}
                             />
                             <button type="button" onClick={addRecipient} className="btn btn-secondary px-3" aria-label="Add recipient">
                                 <Plus className="w-4 h-4" />

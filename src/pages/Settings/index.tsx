@@ -10,6 +10,7 @@ import { useScrollableTabNav } from '../../hooks/useScrollableTabNav'
 import { useAppStore, useAuthStore } from '../../stores'
 import { type AcademicYear } from '../../types/electron-api/AcademicAPI'
 import { type SchoolSettings } from '../../types/electron-api/SettingsAPI'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 export default function Settings() {
     const { schoolSettings, setSchoolSettings } = useAppStore()
@@ -46,12 +47,11 @@ export default function Settings() {
 
     const loadLogo = useCallback(async () => {
         try {
-            const dataUrl = await globalThis.electronAPI.getLogoDataUrl()
-            if (dataUrl && typeof dataUrl === 'string') {
-                setLogoDataUrl(dataUrl)
-            } else if (dataUrl && typeof dataUrl === 'object' && 'success' in dataUrl && (dataUrl as { success: boolean, result?: string }).success) {
-                setLogoDataUrl((dataUrl as { success: boolean, result?: string }).result as string)
-            }
+            const dataUrl = unwrapIPCResult<string | null>(
+                await globalThis.electronAPI.getLogoDataUrl(),
+                'Failed to load school logo'
+            )
+            setLogoDataUrl(typeof dataUrl === 'string' ? dataUrl : null)
         } catch (error) {
             console.error('Failed to load logo:', error)
         }
@@ -130,12 +130,14 @@ export default function Settings() {
     const loadAcademicYears = useCallback(async () => {
         setLoadingYears(true)
         try {
-            const years = await globalThis.electronAPI.getAcademicYears()
-            if (Array.isArray(years)) {
-                setAcademicYears(years)
-            }
-        } catch {
-            showToast('Failed to load academic cycles', 'error')
+            const years = unwrapArrayResult(
+                await globalThis.electronAPI.getAcademicYears(),
+                'Failed to load academic cycles'
+            )
+            setAcademicYears(years)
+        } catch (error) {
+            setAcademicYears([])
+            showToast(error instanceof Error ? error.message : 'Failed to load academic cycles', 'error')
         } finally {
             setLoadingYears(false)
         }
@@ -150,18 +152,22 @@ export default function Settings() {
     const handleSave = async () => {
         setSaving(true)
         try {
-            await globalThis.electronAPI.updateSettings({
-                school_name: formData.school_name || undefined,
-                school_motto: formData.school_motto || undefined,
-                address: formData.address || undefined,
-                phone: formData.phone || undefined,
-                email: formData.email || undefined,
-                mpesa_paybill: formData.mpesa_paybill || undefined
-            } as Partial<SchoolSettings>)
-            const updated = await globalThis.electronAPI.getSettings()
-            if (updated && typeof updated === 'object' && !('success' in updated)) {
-                setSchoolSettings(updated)
-            }
+            const updatePayload: Partial<SchoolSettings> = {}
+            if (formData.school_name) { updatePayload.school_name = formData.school_name }
+            if (formData.school_motto) { updatePayload.school_motto = formData.school_motto }
+            if (formData.address) { updatePayload.address = formData.address }
+            if (formData.phone) { updatePayload.phone = formData.phone }
+            if (formData.email) { updatePayload.email = formData.email }
+            if (formData.mpesa_paybill) { updatePayload.mpesa_paybill = formData.mpesa_paybill }
+            unwrapIPCResult(
+                await globalThis.electronAPI.updateSettings(updatePayload),
+                'Failed to update school settings'
+            )
+            const updated = unwrapIPCResult<SchoolSettings>(
+                await globalThis.electronAPI.getSettings(),
+                'Failed to reload school settings'
+            )
+            setSchoolSettings(updated)
             showToast('School settings synchronized successfully', 'success')
         } catch (error) {
             showToast(error instanceof Error ? error.message : 'Critical error updating settings', 'error')
@@ -175,13 +181,16 @@ export default function Settings() {
         }
         setSaving(true)
         try {
-            await globalThis.electronAPI.createAcademicYear(newYearData)
+            unwrapIPCResult(
+                await globalThis.electronAPI.createAcademicYear(newYearData),
+                'Failed to create academic cycle'
+            )
             showToast('Academic cycle established successfully', 'success')
             setShowYearModal(false)
             setNewYearData({ year_name: '', start_date: '', end_date: '', is_current: false })
             await loadAcademicYears()
-        } catch {
-            showToast('Failed to create academic year', 'error')
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : 'Failed to create academic year', 'error')
         } finally {
             setSaving(false)
         }
@@ -190,11 +199,14 @@ export default function Settings() {
     const handleActivateYear = async (id: number) => {
         setSaving(true)
         try {
-            await globalThis.electronAPI.activateAcademicYear(id)
+            unwrapIPCResult(
+                await globalThis.electronAPI.activateAcademicYear(id),
+                'Failed to activate academic cycle'
+            )
             showToast('Academic session activated successfully', 'success')
             await loadAcademicYears()
-        } catch {
-            showToast('Failed to activate academic year', 'error')
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : 'Failed to activate academic year', 'error')
         } finally {
             setSaving(false)
         }

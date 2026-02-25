@@ -14,6 +14,7 @@ import { type Stream } from '../../types/electron-api/AcademicAPI'
 import { type Student } from '../../types/electron-api/StudentAPI'
 import { normalizeFilters } from '../../utils/filters'
 import { formatCurrencyFromCents } from '../../utils/format'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 import { printDocument } from '../../utils/print'
 
 
@@ -41,19 +42,19 @@ export default function Students() {
     const loadStudents = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await globalThis.electronAPI.getStudents(normalizeFilters({
+            const data = unwrapArrayResult(
+                await globalThis.electronAPI.getStudents(normalizeFilters({
                 streamId: filters.streamId || undefined,
                 isActive: filters.isActive ?? undefined,
                 search: searchRef.current || undefined
-            }) as Parameters<typeof globalThis.electronAPI.getStudents>[0])
-            if (Array.isArray(data)) {
-                setStudents(data)
-            } else if (data && 'success' in data && data.success === false) {
-                showToast(data.error, 'error')
-            }
+                }) as Parameters<typeof globalThis.electronAPI.getStudents>[0]),
+                'Failed to load students'
+            )
+            setStudents(data)
         } catch (error) {
             console.error('Failed to load students:', error)
-            showToast('Failed to load students', 'error')
+            setStudents([])
+            showToast(error instanceof Error ? error.message : 'Failed to load students', 'error')
         } finally {
             setLoading(false)
         }
@@ -61,16 +62,15 @@ export default function Students() {
 
     const loadData = useCallback(async () => {
         try {
-            const streamsData = await globalThis.electronAPI.getStreams()
-            if (Array.isArray(streamsData)) {
-                setStreams(streamsData)
-            } else if (streamsData && 'success' in streamsData && streamsData.success === false) {
-                showToast(streamsData.error, 'error')
-            }
+            const streamsData = unwrapArrayResult(await globalThis.electronAPI.getStreams(), 'Failed to load streams')
+            setStreams(streamsData)
             await loadStudents()
         } catch (error) {
             console.error('Failed to load data:', error)
-            showToast('Failed to load data', 'error')
+            setStreams([])
+            setStudents([])
+            setLoading(false)
+            showToast(error instanceof Error ? error.message : 'Failed to load data', 'error')
         }
     }, [loadStudents, showToast])
 
@@ -97,6 +97,10 @@ export default function Students() {
         loadStudents().catch((err: unknown) => console.error('Failed to search students', err))
     }
 
+    useEffect(() => {
+        setCurrentPage(1)
+    }, [search, filters.streamId, filters.isActive])
+
     const filteredStudents = students
     const totalPages = Math.ceil(filteredStudents.length / itemsPerPage)
     const paginatedStudents = filteredStudents.slice(
@@ -104,33 +108,44 @@ export default function Students() {
         currentPage * itemsPerPage
     )
 
+    useEffect(() => {
+        if (totalPages > 0 && currentPage > totalPages) {
+            setCurrentPage(totalPages)
+        }
+    }, [currentPage, totalPages])
+
 
 
 
     const handlePrintStatement = async (student: Student) => {
         setPrintingId(student.id)
         try {
-            const result = await globalThis.electronAPI.getStudentLedgerReport(student.id)
-            if (result && !('success' in result)) { // Narrowing IPCResult to data
-                printDocument({
-                    title: `Statement - ${student.first_name} ${student.last_name}`,
-                    template: 'statement',
-                    data: {
-                        studentName: `${student.first_name} ${student.middle_name || ''} ${student.last_name}`,
-                        admissionNumber: student.admission_number,
-                        streamName: student.stream_name,
-                        openingBalance: result.openingBalance,
-                        ledger: result.ledger,
-                        closingBalance: result.closingBalance
-                    },
-                    schoolSettings: (schoolSettings ? { ...schoolSettings } : undefined) as Record<string, unknown>
-                })
-            } else {
-                showToast('Failed to load ledger data', 'error')
-            }
+            const result = unwrapIPCResult<{
+                student?: Record<string, unknown>
+                ledger: Record<string, unknown>[]
+                openingBalance: number
+                closingBalance: number
+                error?: string
+            }>(
+                await globalThis.electronAPI.getStudentLedgerReport(student.id),
+                'Failed to load ledger data'
+            )
+            printDocument({
+                title: `Statement - ${student.first_name} ${student.last_name}`,
+                template: 'statement',
+                data: {
+                    studentName: `${student.first_name} ${student.middle_name || ''} ${student.last_name}`,
+                    admissionNumber: student.admission_number,
+                    streamName: student.stream_name,
+                    openingBalance: result.openingBalance,
+                    ledger: result.ledger,
+                    closingBalance: result.closingBalance
+                },
+                schoolSettings: (schoolSettings ? { ...schoolSettings } : undefined) as Record<string, unknown>
+            })
         } catch (error) {
             console.error(error)
-            showToast('Error generating statement', 'error')
+            showToast(error instanceof Error ? error.message : 'Error generating statement', 'error')
         } finally {
             setPrintingId(null)
         }
@@ -275,8 +290,10 @@ export default function Students() {
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-5">
-                                                    <p className="font-bold text-foreground">{student.first_name} {student.last_name}</p>
-                                                    <p className="text-[10px] text-foreground/40 font-mono">{student.admission_number}</p>
+                                                    <p className="font-bold text-foreground">{student.stream_name || 'Unassigned Stream'}</p>
+                                                    <p className="text-[10px] text-foreground/40 font-mono uppercase tracking-wider">
+                                                        {student.student_type?.replace('_', ' ') || 'N/A'}
+                                                    </p>
                                                 </td>
                                                 <td className="px-4 py-5 text-right">
                                                     <p className={`text-xs font-bold ${(student.balance || 0) > 0 ? 'text-amber-600 dark:text-amber-500' : 'text-emerald-500'}`}>

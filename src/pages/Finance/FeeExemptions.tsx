@@ -7,6 +7,7 @@ import { type AcademicYear, type Term } from '../../types/electron-api/AcademicA
 import { type FeeExemption, type ExemptionStats } from '../../types/electron-api/ExemptionAPI'
 import { type FeeCategory } from '../../types/electron-api/FinanceAPI'
 import { type Student } from '../../types/electron-api/StudentAPI'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 
 const getReasonBadgeColor = (reason: string): string => {
@@ -44,7 +45,7 @@ export default function FeeExemptions() {
     const [filteredStudents, setFilteredStudents] = useState<Student[]>([])
 
     // Filters
-    const [statusFilter, setStatusFilter] = useState<string>('ACTIVE')
+    const [statusFilter, setStatusFilter] = useState<'ACTIVE' | 'REVOKED' | 'all'>('ACTIVE')
 
     // Form state
     const [formData, setFormData] = useState({
@@ -64,36 +65,50 @@ export default function FeeExemptions() {
         try {
             const [exemptionsRes, yearsRes, categoriesRes, studentsRes, statsRes] = await Promise.all([
                 globalThis.electronAPI.getExemptions({
-                    ...(statusFilter !== 'all' ? { status: statusFilter as 'ACTIVE' | 'REVOKED' } : {})
+                    ...(statusFilter !== 'all' ? { status: statusFilter } : {})
                 }),
                 globalThis.electronAPI.getAcademicYears(),
                 globalThis.electronAPI.getFeeCategories(),
                 globalThis.electronAPI.getStudents({}),
                 globalThis.electronAPI.getExemptionStats()
             ])
-            setExemptions(Array.isArray(exemptionsRes) ? exemptionsRes : [])
-            setAcademicYears(Array.isArray(yearsRes) ? yearsRes : [])
-            setFeeCategories(Array.isArray(categoriesRes) ? categoriesRes : [])
-            setStudents(Array.isArray(studentsRes) ? studentsRes : [])
-            setStats(statsRes && typeof statsRes === 'object' && !('success' in statsRes) ? statsRes : null)
+            const exemptions = unwrapArrayResult(exemptionsRes, 'Failed to load exemptions')
+            const years = unwrapArrayResult(yearsRes, 'Failed to load academic years')
+            const categories = unwrapArrayResult(categoriesRes, 'Failed to load fee categories')
+            const studentsList = unwrapArrayResult(studentsRes, 'Failed to load students')
+            const statsData = unwrapIPCResult<ExemptionStats>(statsRes, 'Failed to load exemption stats')
+
+            setExemptions(exemptions)
+            setAcademicYears(years)
+            setFeeCategories(categories)
+            setStudents(studentsList)
+            setStats(statsData)
 
             // Set current year as default
-            const currentYear = (Array.isArray(yearsRes) ? yearsRes : []).find((y: AcademicYear) => y.is_current)
+            const currentYear = years.find((y: AcademicYear) => y.is_current)
             if (currentYear) {
                 setFormData(prev => ({ ...prev, academic_year_id: currentYear.id }))
                 const termsRes = await globalThis.electronAPI.getTermsByYear(currentYear.id)
-                setTerms(Array.isArray(termsRes) ? termsRes : [])
-                const currentTerm = (Array.isArray(termsRes) ? termsRes : []).find((t: Term) => t.is_current)
+                const terms = unwrapArrayResult(termsRes, 'Failed to load terms for current year')
+                setTerms(terms)
+                const currentTerm = terms.find((t: Term) => t.is_current)
                 if (currentTerm) {
                     setFormData(prev => ({ ...prev, term_id: currentTerm.id }))
                 }
             }
         } catch (error) {
             console.error('Failed to load exemption data:', error)
+            setExemptions([])
+            setAcademicYears([])
+            setTerms([])
+            setFeeCategories([])
+            setStudents([])
+            setStats(null)
+            showToast(error instanceof Error ? error.message : 'Failed to load exemption data', 'error')
         } finally {
             setLoading(false)
         }
-    }, [statusFilter])
+    }, [showToast, statusFilter])
 
     useEffect(() => {
         loadData().catch((err: unknown) => console.error('Failed to load exemption data', err))
@@ -114,11 +129,17 @@ export default function FeeExemptions() {
 
 
     const loadExemptions = useCallback(async () => {
-        const exemptionsRes = await globalThis.electronAPI.getExemptions({
-            ...(statusFilter !== 'all' ? { status: statusFilter as 'ACTIVE' | 'REVOKED' } : {})
-        })
-        setExemptions(Array.isArray(exemptionsRes) ? exemptionsRes : [])
-    }, [statusFilter])
+        try {
+            const exemptionsRes = await globalThis.electronAPI.getExemptions({
+                ...(statusFilter !== 'all' ? { status: statusFilter } : {})
+            })
+            setExemptions(unwrapArrayResult(exemptionsRes, 'Failed to load exemptions'))
+        } catch (error) {
+            console.error('Failed to load exemptions:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to load exemptions', 'error')
+            setExemptions([])
+        }
+    }, [showToast, statusFilter])
 
     useEffect(() => {
         loadExemptions().catch((err: unknown) => console.error('Failed to load exemptions', err))
@@ -126,8 +147,14 @@ export default function FeeExemptions() {
 
     const handleYearChange = async (yearId: number) => {
         setFormData(prev => ({ ...prev, academic_year_id: yearId, term_id: 0 }))
-        const termsRes = await globalThis.electronAPI.getTermsByYear(yearId)
-        setTerms(Array.isArray(termsRes) ? termsRes : [])
+        try {
+            const termsRes = await globalThis.electronAPI.getTermsByYear(yearId)
+            setTerms(unwrapArrayResult(termsRes, 'Failed to load terms for selected year'))
+        } catch (error) {
+            console.error('Failed to load terms:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to load terms for selected year', 'error')
+            setTerms([])
+        }
     }
 
     const handleSelectStudent = (student: Student) => {
@@ -139,7 +166,7 @@ export default function FeeExemptions() {
 
     const handleCreate = async (e: React.SyntheticEvent) => {
         e.preventDefault()
-        if (!user || !formData.student_id || !formData.academic_year_id || !formData.exemption_percentage || !formData.exemption_reason) {
+        if (!user?.id || !formData.student_id || !formData.academic_year_id || !formData.exemption_percentage || !formData.exemption_reason) {
             showToast('Please fill in all required fields', 'warning')
             return
         }
@@ -169,12 +196,12 @@ export default function FeeExemptions() {
             }
         } catch (error) {
             console.error('Failed to create exemption:', error)
-            showToast('Failed to create exemption', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to create exemption', 'error')
         }
     }
 
     const handleRevoke = async () => {
-        if (!user || !selectedExemption || !revokeReason) {
+        if (!user?.id || !selectedExemption || !revokeReason) {
             showToast('Please provide a reason for revoking', 'warning')
             return
         }
@@ -192,7 +219,7 @@ export default function FeeExemptions() {
             }
         } catch (error) {
             console.error('Failed to revoke exemption:', error)
-            showToast('Failed to revoke exemption', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to revoke exemption', 'error')
         }
     }
 
@@ -243,11 +270,11 @@ export default function FeeExemptions() {
             <div className="flex gap-4">
                 <select
                     value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
+                    onChange={(e) => setStatusFilter(e.target.value as 'ACTIVE' | 'REVOKED' | 'all')}
                     className="px-4 py-2 border border-border rounded-lg bg-input text-foreground"
                     aria-label="Filter by status"
                 >
-                    <option value="">All Status</option>
+                    <option value="all">All Status</option>
                     <option value="ACTIVE">Active</option>
                     <option value="REVOKED">Revoked</option>
                 </select>
@@ -339,7 +366,16 @@ export default function FeeExemptions() {
                                 {selectedStudent ? (
                                     <div className="flex items-center justify-between p-2 border border-border rounded-lg bg-primary/10">
                                         <span>{selectedStudent.first_name} {selectedStudent.last_name} ({selectedStudent.admission_number})</span>
-                                        <button type="button" onClick={() => setSelectedStudent(null)} className="text-red-500">×</button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedStudent(null)
+                                                setFormData(prev => ({ ...prev, student_id: 0 }))
+                                            }}
+                                            className="text-red-500"
+                                        >
+                                            ×
+                                        </button>
                                     </div>
                                 ) : (
                                     <>
@@ -463,7 +499,13 @@ export default function FeeExemptions() {
                             <div className="flex justify-end gap-2">
                                 <button
                                     type="button"
-                                    onClick={() => { setShowModal(false); setSelectedStudent(null); }}
+                                    onClick={() => {
+                                        setShowModal(false)
+                                        setSelectedStudent(null)
+                                        setStudentSearch('')
+                                        setFilteredStudents([])
+                                        setFormData(prev => ({ ...prev, student_id: 0 }))
+                                    }}
                                     className="px-4 py-2 bg-secondary rounded-lg"
                                 >
                                     Cancel

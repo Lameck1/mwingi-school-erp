@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { ProgressBar } from '../../components/ui/ProgressBar'
 import { useToast } from '../../contexts/ToastContext'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 interface GenerationProgress {
   total: number
@@ -21,6 +22,18 @@ interface EmailTemplate {
   body: string
 }
 
+function getOperationErrorMessage(result: unknown, fallback: string): string {
+  if (typeof result === 'object' && result !== null) {
+    if ('message' in result && typeof result.message === 'string' && result.message.trim()) {
+      return result.message
+    }
+    if ('error' in result && typeof result.error === 'string' && result.error.trim()) {
+      return result.error
+    }
+  }
+  return fallback
+}
+
 const handleDownloadReportCards = async (examId: number | null, streamId: number | null, showToastFn: (msg: string, type: 'success' | 'error' | 'warning') => void): Promise<void> => {
   if (!examId || !streamId) {
     showToastFn('Please select an exam and stream first', 'warning')
@@ -35,7 +48,8 @@ const handleDownloadReportCards = async (examId: number | null, streamId: number
     if (result.success) {
       showToastFn('Report cards downloaded successfully', 'success')
     } else {
-      showToastFn(result.message || 'Download failed', 'error')
+      const message = result.message || ('error' in result ? String(result.error || '') : '') || 'Download failed'
+      showToastFn(message, 'error')
     }
   } catch (error) {
     console.error('Download failed:', error)
@@ -53,6 +67,43 @@ const renderProgressIcon = (status: GenerationProgress['status']) => {
   }
 
   return <AlertCircle className="w-6 h-6 text-red-500" />
+}
+
+async function runBatchReportCardGeneration(examId: number, streamId: number) {
+  const result = await globalThis.electronAPI.generateBatchReportCards({
+    exam_id: examId,
+    stream_id: streamId
+  })
+  if (!result.success) {
+    throw new Error(getOperationErrorMessage(result, 'Failed to generate report cards'))
+  }
+  return result
+}
+
+async function runBatchEmailDispatch(examId: number, streamId: number, templateId: string, includeSms: boolean) {
+  const result = await globalThis.electronAPI.emailReportCards({
+    exam_id: examId,
+    stream_id: streamId,
+    template_id: templateId,
+    include_sms: includeSms
+  })
+  if (!result.success) {
+    throw new Error(getOperationErrorMessage(result, 'Failed to send report card emails'))
+  }
+  return { sent: result.sent, failed: result.failed }
+}
+
+async function runBatchMerge(examId: number, streamId: number) {
+  const fallbackFileName = `ReportCards_${examId}_${streamId}.pdf`
+  const result = await globalThis.electronAPI.mergeReportCards({
+    exam_id: examId,
+    stream_id: streamId,
+    output_path: fallbackFileName
+  })
+  if (!result.success) {
+    throw new Error(getOperationErrorMessage(result, 'Failed to merge report cards'))
+  }
+  return result.filePath || fallbackFileName
 }
 
 const ReportCardGeneration: React.FC = () => {
@@ -80,35 +131,49 @@ const ReportCardGeneration: React.FC = () => {
     void loadExams()
     void loadStreams()
     void loadEmailTemplates()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadExams = async () => {
     try {
       // Changed to use typed getExams from AcademicAPI
-      const year = await globalThis.electronAPI.getCurrentAcademicYear()
-      const term = await globalThis.electronAPI.getCurrentTerm()
-      if (year && !('success' in year) && term && !('success' in term)) {
-        const examsData = await globalThis.electronAPI.getAcademicExams(year.id, term.id)
-        setExams(Array.isArray(examsData) ? examsData : [])
-      }
+      const year = unwrapIPCResult<{ id: number }>(
+        await globalThis.electronAPI.getCurrentAcademicYear(),
+        'Failed to load current academic year'
+      )
+      const term = unwrapIPCResult<{ id: number }>(
+        await globalThis.electronAPI.getCurrentTerm(),
+        'Failed to load current term'
+      )
+      const examsData = unwrapArrayResult(
+        await globalThis.electronAPI.getAcademicExams(year.id, term.id),
+        'Failed to load exams'
+      )
+      setExams(examsData)
     } catch (error) {
       console.error('Failed to load exams:', error)
+      showToast(error instanceof Error ? error.message : 'Failed to load exams', 'error')
+      setExams([])
     }
   }
 
   const loadStreams = async () => {
     try {
-      const streamsData = await globalThis.electronAPI.getStreams()
-      setStreams(Array.isArray(streamsData) ? streamsData.map(s => ({ id: s.id, name: s.stream_name })) : [])
+      const streamsData = unwrapArrayResult(await globalThis.electronAPI.getStreams(), 'Failed to load streams')
+      setStreams(streamsData.map(s => ({ id: s.id, name: s.stream_name })))
     } catch (error) {
       console.error('Failed to load streams:', error)
+      showToast(error instanceof Error ? error.message : 'Failed to load streams', 'error')
+      setStreams([])
     }
   }
 
   const loadEmailTemplates = async () => {
     try {
-      const templates = await globalThis.electronAPI.getNotificationTemplates()
-      const tList = Array.isArray(templates) ? templates : []
+      const tList = unwrapArrayResult(
+        await globalThis.electronAPI.getNotificationTemplates(),
+        'Failed to load email templates'
+      )
       const rcTemplates = tList.filter((t: { category: string, template_name: string }) => t.category === 'GENERAL' || t.template_name?.toLowerCase().includes('report'))
       setEmailTemplates(rcTemplates.map((t: { id: number, template_name: string, subject?: string | null, body: string }) => ({
         id: String(t.id),
@@ -118,6 +183,8 @@ const ReportCardGeneration: React.FC = () => {
       })))
     } catch (error) {
       console.error('Failed to load email templates:', error)
+      showToast(error instanceof Error ? error.message : 'Failed to load email templates', 'error')
+      setEmailTemplates([])
     }
   }
 
@@ -136,41 +203,27 @@ const ReportCardGeneration: React.FC = () => {
     })
 
     try {
-      const studentsRes = await globalThis.electronAPI.getStudents({ stream_id: selectedStream, is_active: true })
-      const students = Array.isArray(studentsRes) ? studentsRes : []
+      const students = unwrapArrayResult(
+        await globalThis.electronAPI.getStudents({ stream_id: selectedStream, is_active: true }),
+        'Failed to load students for selected stream'
+      )
 
       setProgress(prev => ({ ...prev, total: students.length }))
 
-      // Generate report cards - using new AcademicAPI method
-      const results = await globalThis.electronAPI.generateBatchReportCards({
-        exam_id: selectedExam,
-        stream_id: selectedStream
-      })
+      const results = await runBatchReportCardGeneration(selectedExam, selectedStream)
+
+      let emailResultSummary: { sent: number; failed: number } | null = null
 
       // If email requested
       if (sendEmail) {
         setProgress(prev => ({ ...prev, status: 'emailing' }))
-
-        await globalThis.electronAPI.emailReportCards({
-          exam_id: selectedExam,
-          stream_id: selectedStream,
-          template_id: selectedTemplate,
-          include_sms: sendSMS
-        })
+        emailResultSummary = await runBatchEmailDispatch(selectedExam, selectedStream, selectedTemplate, sendSMS)
       }
 
       // If merge PDFs requested
       if (mergePDFs) {
-        await globalThis.electronAPI.mergeReportCards({
-          exam_id: selectedExam,
-          stream_id: selectedStream,
-          output_path: `ReportCards_${selectedExam}_${selectedStream}.pdf`
-        })
-
-        setGeneratedFiles(prev => [
-          ...prev,
-          `ReportCards_${selectedExam}_${selectedStream}.pdf`
-        ])
+        const mergedFilePath = await runBatchMerge(selectedExam, selectedStream)
+        setGeneratedFiles(prev => [...prev, mergedFilePath])
       }
 
       setProgress(prev => ({
@@ -180,7 +233,18 @@ const ReportCardGeneration: React.FC = () => {
         status: 'complete'
       }))
 
-      showToast(`Report cards generated successfully! ${results.generated} generated, ${results.failed} failed`, 'success')
+      if (emailResultSummary && emailResultSummary.failed > 0) {
+        showToast(
+          `Generated ${results.generated}; generation failures: ${results.failed}; emails sent: ${emailResultSummary.sent}, email failures: ${emailResultSummary.failed}`,
+          'warning'
+        )
+      } else {
+        const emailSuffix = emailResultSummary ? `; emails sent: ${emailResultSummary.sent}` : ''
+        showToast(
+          `Report cards generated successfully! ${results.generated} generated, ${results.failed} failed${emailSuffix}`,
+          'success'
+        )
+      }
     } catch (error) {
       setProgress(prev => ({
         ...prev,

@@ -6,6 +6,7 @@ import { Modal } from '../../components/ui/Modal'
 import { useToast } from '../../contexts/ToastContext'
 import { type StaffMember } from '../../types/electron-api/StaffAPI'
 import { centsToShillings, formatCurrencyFromCents, shillingsToCents } from '../../utils/format'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 export default function Staff() {
     const { showToast } = useToast()
@@ -31,10 +32,11 @@ export default function Staff() {
     const loadStaff = useCallback(async () => {
         try {
             const data = await globalThis.electronAPI.getStaff(false)
-            setStaff(data)
+            setStaff(unwrapArrayResult(data, 'Failed to load staff records'))
         } catch (error) {
             console.error('Failed to load staff:', error)
-            showToast('Failed to synchronize staff directory', 'error')
+            setStaff([])
+            showToast(error instanceof Error ? error.message : 'Failed to synchronize staff directory', 'error')
         } finally { setLoading(false) }
     }, [showToast])
 
@@ -102,10 +104,16 @@ export default function Staff() {
             }
 
             if (editing) {
-                await globalThis.electronAPI.updateStaff(editing.id, payload)
+                unwrapIPCResult(
+                    await globalThis.electronAPI.updateStaff(editing.id, payload),
+                    'Failed to update staff record'
+                )
                 showToast('Staff record updated', 'success')
             } else {
-                await globalThis.electronAPI.createStaff(payload)
+                unwrapIPCResult(
+                    await globalThis.electronAPI.createStaff(payload),
+                    'Failed to create staff record'
+                )
                 showToast('Staff record created', 'success')
             }
             setShowModal(false)
@@ -121,7 +129,10 @@ export default function Staff() {
         if (!confirm(`${desired ? 'Activate' : 'Deactivate'} ${member.first_name} ${member.last_name}?`)) {return}
         setSaving(true)
         try {
-            await globalThis.electronAPI.setStaffActive(member.id, desired)
+            unwrapIPCResult(
+                await globalThis.electronAPI.setStaffActive(member.id, desired),
+                'Failed to update staff status'
+            )
             await loadStaff()
             showToast(`Staff ${desired ? 'activated' : 'deactivated'}`, 'success')
         } catch (error) {

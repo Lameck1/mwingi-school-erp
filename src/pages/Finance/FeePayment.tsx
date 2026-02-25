@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
+import { useToast } from '../../contexts/ToastContext'
 import { useAppStore } from '../../stores'
 import { LedgerHistory } from './components/LedgerHistory'
 import { PaymentEntryForm } from './components/PaymentEntryForm'
@@ -8,35 +9,42 @@ import { StudentLedgerSearch } from './components/StudentLedgerSearch'
 import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 import { type Payment } from '../../types/electron-api/FinanceAPI'
 import { type Student } from '../../types/electron-api/StudentAPI'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 
 export default function FeePayment() {
     const [searchParams] = useSearchParams()
     const { schoolSettings } = useAppStore()
+    const { showToast } = useToast()
 
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
     const [payments, setPayments] = useState<Payment[]>([])
 
     const loadStudent = useCallback(async (studentId: number) => {
         try {
-            const studentRes = await globalThis.electronAPI.getStudentById(studentId)
-            const balance = await globalThis.electronAPI.getStudentBalance(studentId)
-            const studentPayments = await globalThis.electronAPI.getPaymentsByStudent(studentId)
+            const studentRes = unwrapIPCResult<Student>(
+                await globalThis.electronAPI.getStudentById(studentId),
+                'Failed to load student profile'
+            )
+            const balance = unwrapIPCResult<number>(
+                await globalThis.electronAPI.getStudentBalance(studentId),
+                'Failed to load student balance'
+            )
+            const studentPayments = unwrapArrayResult(
+                await globalThis.electronAPI.getPaymentsByStudent(studentId),
+                'Failed to load payment history'
+            )
 
-            if (studentRes && !('success' in studentRes)) {
-                // We're casting here because the component adds a 'balance' property for internal state
-                setSelectedStudent({ ...studentRes, balance })
-            }
-
-            if (Array.isArray(studentPayments)) {
-                setPayments(studentPayments)
-            } else if (studentPayments && 'success' in studentPayments && studentPayments.success === false) {
-                console.warn('Failed to load student payments:', studentPayments.error)
-            }
+            // The view model includes transient balance from a separate API call.
+            setSelectedStudent({ ...studentRes, balance })
+            setPayments(studentPayments)
         } catch (error) {
             console.error('Failed to load student:', error)
+            setSelectedStudent(null)
+            setPayments([])
+            showToast(error instanceof Error ? error.message : 'Failed to load student', 'error')
         }
-    }, [])
+    }, [showToast])
 
     useEffect(() => {
         const studentId = searchParams.get('student')
@@ -89,7 +97,11 @@ export default function FeePayment() {
                         payments={payments}
                         student={selectedStudent}
                         schoolSettings={schoolSettings}
-                        onPaymentVoided={() => selectedStudent && loadStudent(selectedStudent.id)}
+                        onPaymentVoided={() => {
+                            if (selectedStudent) {
+                                void loadStudent(selectedStudent.id)
+                            }
+                        }}
                     />
                 </div>
             </div>

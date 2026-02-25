@@ -7,6 +7,7 @@ import { Select } from '../../components/ui/Select'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore } from '../../stores'
 import { type SubjectDifficulty, type SubjectMeritListRow } from '../../types/electron-api/AcademicAPI'
+import { type IPCFailure, unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 interface SubjectRanking {
   position: number
@@ -64,13 +65,14 @@ const SubjectMeritLists = () => {
         globalThis.electronAPI.getAcademicSubjects()
       ])
 
-      setExams(Array.isArray(examsData) ? examsData : [])
-      setStreams(Array.isArray(streamsData) ? streamsData : [])
-      setSubjects(Array.isArray(subjectsData) ? subjectsData : [])
+      setExams(unwrapArrayResult(examsData, 'Failed to load exams'))
+      setStreams(unwrapArrayResult(streamsData, 'Failed to load streams'))
+      setSubjects(unwrapArrayResult(subjectsData, 'Failed to load subjects'))
     } catch (error) {
       console.error('Failed to load initial data:', error)
+      showToast(error instanceof Error ? error.message : 'Failed to load initial data', 'error')
     }
-  }, [currentAcademicYear, currentTerm])
+  }, [currentAcademicYear, currentTerm, showToast])
 
   useEffect(() => {
     loadInitialData().catch((err: unknown) => console.error('Failed to load initial data:', err))
@@ -97,12 +99,17 @@ const SubjectMeritLists = () => {
         })
       ])
 
-      const scored = (Array.isArray(rankings_) ? rankings_ : []).map((row: SubjectMeritListRow) => ({
+      const scored = unwrapArrayResult(rankings_, 'Failed to load subject merit list').map((row: SubjectMeritListRow) => ({
         ...row,
         grade: scoreToGrade(row.marks)
       }))
       setRankings(scored)
-      setDifficulty(difficulty_ && typeof difficulty_ === 'object' && !('success' in difficulty_) ? difficulty_ : null)
+      setDifficulty(
+        unwrapIPCResult<SubjectDifficulty>(
+          difficulty_ as SubjectDifficulty | IPCFailure,
+          'Failed to load subject difficulty metrics'
+        )
+      )
     } catch (error) {
       console.error('Failed to generate merit list:', error)
       showToast('Failed to generate merit list', 'error')

@@ -8,17 +8,7 @@ import { type AcademicYear, type Term, type Stream } from '../../types/electron-
 import { type FeeCategory, type FeeStructureCreateData } from '../../types/electron-api/FinanceAPI'
 import { STUDENT_TYPES_LIST } from '../../utils/constants'
 import { centsToShillings, formatCurrencyFromCents, shillingsToCents } from '../../utils/format'
-
-
-interface FeeStructureItem {
-    stream_id?: number
-    streamId?: number
-    student_type?: string
-    studentType?: string
-    fee_category_id?: number
-    feeCategoryId?: number
-    amount?: number
-}
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 export default function FeeStructure() {
     const { showToast } = useToast()
@@ -48,27 +38,38 @@ export default function FeeStructure() {
                 globalThis.electronAPI.getStreams(),
                 globalThis.electronAPI.getFeeCategories()
             ])
-            if (Array.isArray(yearsRes)) { setYears(yearsRes) }
-            if (Array.isArray(streamsRes)) { setStreams(streamsRes) }
-            if (Array.isArray(catsRes)) { setCategories(catsRes) }
 
-            const currentYear = await globalThis.electronAPI.getCurrentAcademicYear()
-            if (currentYear && !('success' in currentYear)) {
+            const safeYears = unwrapArrayResult(yearsRes, 'Failed to load academic years')
+            const safeStreams = unwrapArrayResult(streamsRes, 'Failed to load streams')
+            const safeCategories = unwrapArrayResult(catsRes, 'Failed to load fee categories')
+            setYears(safeYears)
+            setStreams(safeStreams)
+            setCategories(safeCategories)
+
+            const currentYear = unwrapIPCResult<AcademicYear>(
+                await globalThis.electronAPI.getCurrentAcademicYear(),
+                'Failed to load current academic year'
+            )
+            if (currentYear) {
                 setSelectedYear(currentYear.id.toString())
-                const termList = await globalThis.electronAPI.getTermsByYear(currentYear.id)
-                if (Array.isArray(termList)) {
-                    setTerms(termList)
-                    const currentTerm = await globalThis.electronAPI.getCurrentTerm()
-                    if (currentTerm && !('success' in currentTerm)) {
-                        setSelectedTerm(currentTerm.id.toString())
-                    } else if (termList.length > 0 && termList[0]) {
-                        setSelectedTerm(termList[0].id.toString())
-                    }
+                const safeTermList = unwrapArrayResult(
+                    await globalThis.electronAPI.getTermsByYear(currentYear.id),
+                    'Failed to load terms for current academic year'
+                )
+                setTerms(safeTermList)
+                const currentTerm = unwrapIPCResult<Term>(
+                    await globalThis.electronAPI.getCurrentTerm(),
+                    'Failed to load current term'
+                )
+                if (currentTerm) {
+                    setSelectedTerm(currentTerm.id.toString())
+                } else if (safeTermList.length > 0 && safeTermList[0]) {
+                    setSelectedTerm(safeTermList[0].id.toString())
                 }
             }
         } catch (error) {
             console.error(error)
-            showToast('Failed to load initial data', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to load initial data', 'error')
         }
     }, [showToast])
 
@@ -82,25 +83,27 @@ export default function FeeStructure() {
         const loadStructure = async () => {
             setLoading(true)
             try {
-                const data = await globalThis.electronAPI.getFeeStructure(Number(selectedYear), Number(selectedTerm))
-                if (Array.isArray(data)) {
-                    const map: Record<string, number> = {}
-                    data.forEach((item: FeeStructureItem) => {
-                        const streamId = item.stream_id || item.streamId
-                        const studentType = item.student_type || item.studentType
-                        const categoryId = item.fee_category_id || item.feeCategoryId
-                        const amount = item.amount
+                const data = unwrapArrayResult(
+                    await globalThis.electronAPI.getFeeStructure(Number(selectedYear), Number(selectedTerm)),
+                    'Failed to load fee structure'
+                )
+                const map: Record<string, number> = {}
+                data.forEach((item) => {
+                    const streamId = item.stream_id
+                    const studentType = item.student_type
+                    const categoryId = item.fee_category_id
+                    const amount = item.amount
 
-                        if (streamId && studentType && categoryId && amount !== undefined) {
-                            const key = `${streamId}-${studentType}-${categoryId}`
-                            map[key] = centsToShillings(amount)
-                        }
-                    })
-                    setStructure(map)
-                }
+                    if (streamId && studentType && categoryId) {
+                        const key = `${streamId}-${studentType}-${categoryId}`
+                        map[key] = centsToShillings(amount)
+                    }
+                })
+                setStructure(map)
             } catch (error) {
                 console.error(error)
-                showToast('Failed to load fee structure', 'error')
+                setStructure({})
+                showToast(error instanceof Error ? error.message : 'Failed to load fee structure', 'error')
             } finally {
                 setLoading(false)
             }
@@ -108,6 +111,9 @@ export default function FeeStructure() {
 
         if (selectedYear && selectedTerm) {
             void loadStructure()
+        } else {
+            setStructure({})
+            setLoading(false)
         }
     }, [selectedYear, selectedTerm, showToast])
 
@@ -201,34 +207,40 @@ export default function FeeStructure() {
                 }
             }
 
-            await globalThis.electronAPI.saveFeeStructure(data, Number(selectedYear), Number(selectedTerm))
+            const result = await globalThis.electronAPI.saveFeeStructure(data, Number(selectedYear), Number(selectedTerm))
+            unwrapIPCResult(result, 'Failed to save fee structure')
             showToast('Fee structure saved successfully', 'success')
         } catch (error) {
             console.error(error)
-            showToast('Failed to save fee structure', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to save fee structure', 'error')
         } finally {
             setSaving(false)
         }
     }
 
     const handleCreateCategory = async () => {
-        if (!newCategoryName.trim()) { return }
+        if (!newCategoryName.trim()) {
+            showToast('Category name is required', 'warning')
+            return
+        }
         try {
-            await globalThis.electronAPI.createFeeCategory(newCategoryName, '')
+            unwrapIPCResult(await globalThis.electronAPI.createFeeCategory(newCategoryName, ''), 'Failed to create category')
             setNewCategoryName('')
             setShowNewCategory(false)
-            const cats = await globalThis.electronAPI.getFeeCategories()
-            if (Array.isArray(cats)) {
-                setCategories(cats)
-            }
+            const cats = unwrapArrayResult(await globalThis.electronAPI.getFeeCategories(), 'Failed to reload fee categories')
+            setCategories(cats)
             showToast('Category created', 'success')
         } catch (error) {
             console.error(error)
-            showToast('Failed to create category', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to create category', 'error')
         }
     }
 
     const handleGenerateInvoices = async () => {
+        if (!selectedYear || !selectedTerm) {
+            showToast('Please select academic year and term before generating invoices', 'error')
+            return
+        }
         setGenerating(true)
         try {
             if (!user?.id) {
@@ -289,16 +301,33 @@ export default function FeeStructure() {
                             value={selectedYear}
                             onChange={async e => {
                                 const yearId = Number(e.target.value)
-                                setSelectedYear(e.target.value)
-                                if (!yearId) { return }
+                                const nextYear = e.target.value
+                                setSelectedYear(nextYear)
+                                if (!yearId) {
+                                    setTerms([])
+                                    setSelectedTerm('')
+                                    setStructure({})
+                                    return
+                                }
 
                                 try {
-                                    const terms = await globalThis.electronAPI.getTermsByYear(yearId)
-                                    if (Array.isArray(terms)) {
-                                        setTerms(terms)
-                                    }
+                                    const terms = unwrapArrayResult(
+                                        await globalThis.electronAPI.getTermsByYear(yearId),
+                                        'Failed to load terms'
+                                    )
+                                    setTerms(terms)
+                                    setSelectedTerm((prev) => {
+                                        if (terms.some((term) => term.id.toString() === prev)) {
+                                            return prev
+                                        }
+                                        return terms[0]?.id.toString() || ''
+                                    })
                                 } catch (error) {
                                     console.error('Failed to load terms:', error)
+                                    showToast(error instanceof Error ? error.message : 'Failed to load terms', 'error')
+                                    setTerms([])
+                                    setSelectedTerm('')
+                                    setStructure({})
                                 }
                             }}
                             className="input w-full border-border/20 focus:border-primary/50 transition-all font-medium py-2.5"

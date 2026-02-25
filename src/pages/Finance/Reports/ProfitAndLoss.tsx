@@ -1,10 +1,42 @@
 import { format } from 'date-fns';
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
 import { formatCurrencyFromCents } from '../../../utils/format';
+import { getIPCFailureMessage, isIPCFailure } from '../../../utils/ipc'
 
 import type { ProfitAndLossReport } from '../../../types/electron-api';
+
+const getResultMessage = (value: unknown, fallback: string): string => {
+  if (isIPCFailure(value)) {
+    return getIPCFailureMessage(value, fallback)
+  }
+  if (value && typeof value === 'object') {
+    const maybe = value as { error?: unknown; message?: unknown }
+    if (typeof maybe.error === 'string' && maybe.error.trim()) {
+      return maybe.error
+    }
+    if (typeof maybe.message === 'string' && maybe.message.trim()) {
+      return maybe.message
+    }
+  }
+  return fallback
+}
+
+const parseProfitAndLossResponse = (value: unknown): ProfitAndLossReport => {
+  const fallback = 'Failed to load P&L'
+  if (!value || typeof value !== 'object') {
+    throw new Error(fallback)
+  }
+  const result = value as { success?: unknown; data?: unknown }
+  if (result.success !== true) {
+    throw new Error(getResultMessage(value, fallback))
+  }
+  if (!result.data || typeof result.data !== 'object') {
+    throw new Error('Profit & Loss response did not include data')
+  }
+  return result.data as ProfitAndLossReport
+}
 
 
 const formatPercentage = (percentage: number): string => `${percentage.toFixed(1)}%`;
@@ -18,29 +50,24 @@ export default function ProfitAndLossPage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void loadProfitAndLoss();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const loadProfitAndLoss = async () => {
+  const loadProfitAndLoss = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const result = await globalThis.electronAPI.getProfitAndLoss(startDate, endDate) as { success: boolean; data: ProfitAndLossReport; message?: string };
-
-      if (result.success) {
-        setProfitAndLoss(result.data);
-      } else {
-        setError(result.message || 'Failed to load P&L');
-      }
+      const data = parseProfitAndLossResponse(await globalThis.electronAPI.getProfitAndLoss(startDate, endDate))
+      setProfitAndLoss(data);
     } catch (err) {
-      setError((err as Error).message);
+      setProfitAndLoss(null);
+      setError(err instanceof Error ? err.message : 'Failed to load P&L');
     } finally {
       setLoading(false);
     }
-  };
+  }, [endDate, startDate]);
+
+  useEffect(() => {
+    void loadProfitAndLoss();
+  }, [loadProfitAndLoss]);
 
   if (loading) {
     return (
@@ -79,7 +106,7 @@ export default function ProfitAndLossPage() {
             aria-label="End date"
           />
           <button
-            onClick={loadProfitAndLoss}
+            onClick={() => { void loadProfitAndLoss() }}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/80"
           >
             Generate

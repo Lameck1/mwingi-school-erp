@@ -8,8 +8,10 @@ import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
 import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
+import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore } from '../../stores'
 import { formatDate } from '../../utils/format'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 interface ApprovalRequest {
     id: number
@@ -30,6 +32,19 @@ interface ApprovalCounts {
     rejected: number
 }
 
+function isApprovalCounts(value: unknown): value is ApprovalCounts {
+    if (typeof value !== 'object' || value === null) {
+        return false
+    }
+
+    const candidate = value as Partial<ApprovalCounts>
+    return (
+        typeof candidate.pending === 'number' &&
+        typeof candidate.approved === 'number' &&
+        typeof candidate.rejected === 'number'
+    )
+}
+
 const statusConfig = {
     PENDING: { label: 'Pending', variant: 'warning' as const, icon: Clock },
     APPROVED: { label: 'Approved', variant: 'success' as const, icon: CheckCircle },
@@ -37,8 +52,23 @@ const statusConfig = {
     CANCELLED: { label: 'Cancelled', variant: 'default' as const, icon: AlertTriangle },
 }
 
+function getApprovalActionErrorMessage(
+    result: { success: boolean; errors?: string[] } & Record<string, unknown>,
+    fallback: string
+): string {
+    if (Array.isArray(result.errors) && result.errors.length > 0) {
+        return result.errors.join(', ')
+    }
+    const possibleError = result['error']
+    if (typeof possibleError === 'string' && possibleError.trim().length > 0) {
+        return possibleError
+    }
+    return fallback
+}
+
 export default function Approvals() {
     const { user } = useAuthStore()
+    const { showToast } = useToast()
     const [requests, setRequests] = useState<ApprovalRequest[]>([])
     const [counts, setCounts] = useState<ApprovalCounts>({ pending: 0, approved: 0, rejected: 0 })
     const [loading, setLoading] = useState(true)
@@ -58,40 +88,59 @@ export default function Approvals() {
                     : globalThis.electronAPI.getAllApprovals(),
                 globalThis.electronAPI.getApprovalCounts()
             ])
-            setRequests(requestsData as ApprovalRequest[])
-            setCounts(countsData as ApprovalCounts)
+
+            const safeRequests = unwrapArrayResult(requestsData, 'Invalid approval request payload')
+            const safeCounts = unwrapIPCResult<ApprovalCounts>(countsData, 'Failed to load approval counts')
+            if (!isApprovalCounts(safeCounts)) {
+                throw new Error('Invalid approval counts payload')
+            }
+
+            setRequests(safeRequests)
+            setCounts(safeCounts)
         } catch (error) {
             console.error('Failed to load approvals:', error)
+            setRequests([])
+            setCounts({ pending: 0, approved: 0, rejected: 0 })
+            showToast(error instanceof Error ? error.message : 'Failed to load approvals', 'error')
         } finally {
             setLoading(false)
         }
-    }, [filter])
+    }, [filter, showToast])
 
     useEffect(() => {
         loadData().catch((err: unknown) => console.error('Failed to load data:', err))
     }, [loadData])
 
     const handleApprove = async (request: ApprovalRequest) => {
-        if (!user) {return}
+        if (!user?.id) {
+            showToast('You must be signed in to approve requests', 'error')
+            return
+        }
         setProcessing(true)
         try {
             const result = await globalThis.electronAPI.approveRequest(request.id, user.id)
             if (result.success) {
-                loadData().catch((err: unknown) => console.error('Failed to reload data:', err))
+                showToast('Request approved', 'success')
+                await loadData()
             } else {
-                alert(result.errors?.join(', ') || 'Failed to approve')
+                const message = getApprovalActionErrorMessage(result, 'Failed to approve')
+                showToast(message, 'error')
             }
         } catch (error) {
             console.error('Failed to approve:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to approve', 'error')
         } finally {
             setProcessing(false)
         }
     }
 
     const handleReject = async () => {
-        if (!user || !selectedRequest) {return}
+        if (!user?.id || !selectedRequest) {
+            showToast('You must select a request and be signed in to reject', 'error')
+            return
+        }
         if (!rejectReason.trim()) {
-            alert('Please provide a reason for rejection')
+            showToast('Please provide a reason for rejection', 'warning')
             return
         }
 
@@ -102,12 +151,15 @@ export default function Approvals() {
                 setShowRejectModal(false)
                 setRejectReason('')
                 setSelectedRequest(null)
-                loadData().catch((err: unknown) => console.error('Failed to reload data:', err))
+                showToast('Request rejected', 'success')
+                await loadData()
             } else {
-                alert(result.errors?.join(', ') || 'Failed to reject')
+                const message = getApprovalActionErrorMessage(result, 'Failed to reject')
+                showToast(message, 'error')
             }
         } catch (error) {
             console.error('Failed to reject:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to reject', 'error')
         } finally {
             setProcessing(false)
         }
@@ -115,6 +167,7 @@ export default function Approvals() {
 
     const openRejectModal = (request: ApprovalRequest) => {
         setSelectedRequest(request)
+        setRejectReason('')
         setShowRejectModal(true)
     }
 
@@ -262,7 +315,11 @@ export default function Approvals() {
             {/* Reject Modal */}
             <Modal
                 isOpen={showRejectModal}
-                onClose={() => setShowRejectModal(false)}
+                onClose={() => {
+                    setShowRejectModal(false)
+                    setRejectReason('')
+                    setSelectedRequest(null)
+                }}
                 title="Reject Request"
             >
                 <div className="space-y-4">
@@ -278,7 +335,11 @@ export default function Approvals() {
                     />
                     <div className="flex justify-end gap-3">
                         <button
-                            onClick={() => setShowRejectModal(false)}
+                            onClick={() => {
+                                setShowRejectModal(false)
+                                setRejectReason('')
+                                setSelectedRequest(null)
+                            }}
                             className="btn btn-secondary"
                         >
                             Cancel

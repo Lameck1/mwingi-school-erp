@@ -1,6 +1,9 @@
 import { useEffect } from 'react'
 
 import { useAppStore } from '../../stores'
+import type { AcademicYear, Term } from '../../types/electron-api/AcademicAPI'
+import type { SchoolSettings } from '../../types/electron-api/SettingsAPI'
+import { unwrapIPCResult } from '../../utils/ipc'
 
 export function useLoadGlobalSettings(): { schoolName: string; currentAcademicYearName: string } {
     const { schoolSettings, currentAcademicYear, setSchoolSettings, setCurrentAcademicYear, setCurrentTerm } = useAppStore()
@@ -13,17 +16,9 @@ export function useLoadGlobalSettings(): { schoolName: string; currentAcademicYe
                     globalThis.electronAPI.academic.getCurrentAcademicYear(),
                     globalThis.electronAPI.academic.getCurrentTerm()
                 ])
-                /* eslint-disable @typescript-eslint/no-unnecessary-condition */
-                if (settings && !('error' in settings)) {
-                    setSchoolSettings(settings)
-                }
-                if (year && !('error' in year)) {
-                    setCurrentAcademicYear(year)
-                }
-                if (term && !('error' in term)) {
-                    setCurrentTerm(term)
-                }
-                /* eslint-enable @typescript-eslint/no-unnecessary-condition */
+                setSchoolSettings(unwrapIPCResult<SchoolSettings>(settings, 'Failed to load school settings'))
+                setCurrentAcademicYear(unwrapIPCResult<AcademicYear>(year, 'Failed to load current academic year'))
+                setCurrentTerm(unwrapIPCResult<Term>(term, 'Failed to load current term'))
             } catch (error) {
                 console.error('Failed to load global settings:', error)
             }

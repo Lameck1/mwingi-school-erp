@@ -7,6 +7,7 @@ import { useAuthStore } from '../../../stores'
 import { type Payment } from '../../../types/electron-api/FinanceAPI'
 import { type Student } from '../../../types/electron-api/StudentAPI'
 import { formatCurrencyFromCents, formatDate } from '../../../utils/format'
+import { getIPCFailureMessage, isIPCFailure } from '../../../utils/ipc'
 import { printDocument } from '../../../utils/print'
 
 import type { SchoolSettings } from '../../../types/electron-api/SettingsAPI'
@@ -16,6 +17,29 @@ interface LedgerHistoryProps {
     student: Student | null
     schoolSettings: SchoolSettings | null
     onPaymentVoided?: () => void
+}
+
+const isSuccessResult = (value: unknown): value is { success: true } => (
+    typeof value === 'object' &&
+    value !== null &&
+    'success' in value &&
+    (value as { success?: unknown }).success === true
+)
+
+const getResultMessage = (value: unknown, fallback: string): string => {
+    if (isIPCFailure(value)) {
+        return getIPCFailureMessage(value, fallback)
+    }
+    if (value && typeof value === 'object') {
+        const maybe = value as { error?: unknown; message?: unknown }
+        if (typeof maybe.error === 'string' && maybe.error.trim()) {
+            return maybe.error
+        }
+        if (typeof maybe.message === 'string' && maybe.message.trim()) {
+            return maybe.message
+        }
+    }
+    return fallback
 }
 
 export const LedgerHistory: React.FC<LedgerHistoryProps> = ({ payments, student, schoolSettings, onPaymentVoided }) => {
@@ -31,7 +55,15 @@ export const LedgerHistory: React.FC<LedgerHistoryProps> = ({ payments, student,
     }
 
     const handleVoidConfirm = async () => {
-        if (!voidModalPayment || !voidReason.trim() || !user?.id) {return}
+        if (!voidModalPayment) {return}
+        if (!voidReason.trim()) {
+            showToast('Provide a reason before voiding a payment', 'warning')
+            return
+        }
+        if (!user?.id) {
+            showToast('You must be signed in to void a payment', 'error')
+            return
+        }
 
         setVoidingId(voidModalPayment.id)
         try {
@@ -40,16 +72,16 @@ export const LedgerHistory: React.FC<LedgerHistoryProps> = ({ payments, student,
                 voidReason.trim(),
                 user.id
             )
-            if (result.success) {
+            if (isSuccessResult(result)) {
                 showToast('Payment voided successfully', 'success')
                 setVoidModalPayment(null)
                 onPaymentVoided?.()
             } else {
-                showToast(result.error || result.message || 'Failed to void payment', 'error')
+                showToast(getResultMessage(result, 'Failed to void payment'), 'error')
             }
         } catch (error) {
             console.error('Payment void error:', error)
-            showToast('Failed to void payment', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to void payment', 'error')
         } finally {
             setVoidingId(null)
         }

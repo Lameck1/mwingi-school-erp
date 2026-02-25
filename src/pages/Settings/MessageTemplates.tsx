@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Modal } from '../../components/ui/Modal'
 import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore } from '../../stores'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 import type { MessageTemplate } from '../../types/electron-api/MessagingAPI'
 
@@ -27,14 +28,12 @@ export default function MessageTemplates() {
     const loadTemplates = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await globalThis.electronAPI.getNotificationTemplates()
-            if (!Array.isArray(data) && data && 'success' in data && data.success === false) {
-                throw new Error(data.error || 'Failed to load templates')
-            }
-            setTemplates(Array.isArray(data) ? data : [])
+            const data = unwrapArrayResult(await globalThis.electronAPI.getNotificationTemplates(), 'Failed to load templates')
+            setTemplates(data)
         } catch (error) {
             console.error('Failed to load templates:', error)
-            showToast('Failed to load message templates', 'error')
+            setTemplates([])
+            showToast(error instanceof Error ? error.message : 'Failed to load message templates', 'error')
         } finally {
             setLoading(false)
         }
@@ -45,7 +44,10 @@ export default function MessageTemplates() {
     }, [loadTemplates])
 
     const handleSaveTemplate = async () => {
-        if (!user) { return }
+        if (!user?.id) {
+            showToast('You must be signed in to create templates', 'error')
+            return
+        }
         if (!editingTemplate.template_name || !editingTemplate.body) {
             showToast('Name and body are required', 'error')
             return
@@ -61,18 +63,17 @@ export default function MessageTemplates() {
                 body: editingTemplate.body
             }
 
-            const result = await globalThis.electronAPI.createNotificationTemplate(payload, user.id)
-            if (result.success) {
-                setShowTemplateModal(false)
-                setEditingTemplate({ template_type: 'SMS', category: 'GENERAL' })
-                await loadTemplates()
-                showToast('Template created successfully', 'success')
-            } else {
-                showToast(result.errors?.join(', ') || 'Failed to create template', 'error')
-            }
+            unwrapIPCResult(
+                await globalThis.electronAPI.createNotificationTemplate(payload, user.id),
+                'Failed to create template'
+            )
+            setShowTemplateModal(false)
+            setEditingTemplate({ template_type: 'SMS', category: 'GENERAL' })
+            await loadTemplates()
+            showToast('Template created successfully', 'success')
         } catch (error) {
             console.error('Failed to save template:', error)
-            showToast('An error occurred while saving', 'error')
+            showToast(error instanceof Error ? error.message : 'An error occurred while saving', 'error')
         } finally {
             setSaving(false)
         }
@@ -99,7 +100,7 @@ export default function MessageTemplates() {
 
         return (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {(Array.isArray(templates) ? templates : []).map(template => (
+                {templates.map(template => (
                     <div key={template.id} className="premium-card group relative hover:border-primary/30 transition-all duration-300">
                         <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button className="p-2 rounded-lg bg-secondary/80 hover:bg-primary/20 text-foreground hover:text-primary transition-all" type="button" aria-label={`Preview ${template.template_name}`}>

@@ -8,10 +8,12 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
+import { useToast } from '../../contexts/ToastContext'
 import { useScrollableTabNav } from '../../hooks/useScrollableTabNav'
 import { useAuthStore } from '../../stores'
 import { exportToPDF, downloadCSV } from '../../utils/exporters'
 import { formatCurrencyFromCents } from '../../utils/format'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 import { printCurrentView } from '../../utils/print'
 
 const ScheduledReports = lazy(() => import('./ScheduledReports'))
@@ -29,6 +31,19 @@ interface FinancialSummary {
     totalIncome: number
     totalExpense: number
     netBalance: number
+}
+
+function isFinancialSummary(value: unknown): value is FinancialSummary {
+    if (typeof value !== 'object' || value === null) {
+        return false
+    }
+
+    const candidate = value as Partial<FinancialSummary>
+    return (
+        typeof candidate.totalIncome === 'number' &&
+        typeof candidate.totalExpense === 'number' &&
+        typeof candidate.netBalance === 'number'
+    )
 }
 
 interface Defaulter {
@@ -55,6 +70,7 @@ interface DailyCollectionItem {
 
 export default function Reports() {
     const { user } = useAuthStore()
+    const { showToast } = useToast()
     const location = useLocation()
     const [loading, setLoading] = useState(false)
     const [dateRange, setDateRange] = useState({
@@ -74,12 +90,14 @@ export default function Reports() {
     const stableSetActiveTab = useCallback((tab: typeof activeTab) => setActiveTab(tab), [])
     const { navRef, handleTabClick } = useScrollableTabNav(stableSetActiveTab)
 
-    const loadReportData = async () => {
+    const loadReportData = useCallback(async () => {
         setLoading(true)
         try {
             // Load student statistics
-            const students = await globalThis.electronAPI.getStudents({})
-            const currentStudents = Array.isArray(students) ? students : []
+            const currentStudents = unwrapArrayResult(
+                await globalThis.electronAPI.getStudents({}),
+                'Failed to load students'
+            )
             const dayScholars = currentStudents.filter((s) => s.student_type === 'DAY_SCHOLAR').length
             const boarders = currentStudents.filter((s) => s.student_type === 'BOARDER').length
             setStudentStats({
@@ -89,14 +107,21 @@ export default function Reports() {
             })
 
             // Load financial summary
-            const summary = await window.electronAPI.getTransactionSummary(dateRange.start, dateRange.end)
-            if (summary && !('success' in summary)) {
-                setFinancialSummary(summary)
+            const summaryRaw = unwrapIPCResult(
+                await window.electronAPI.getTransactionSummary(dateRange.start, dateRange.end),
+                'Failed to load financial summary'
+            )
+            if (!isFinancialSummary(summaryRaw)) {
+                throw new Error('Invalid financial summary payload')
             }
+            const summary = summaryRaw
+            setFinancialSummary(summary)
 
             // Load fee collection data
-            const feeData = await globalThis.electronAPI.getFeeCollectionReport(dateRange.start, dateRange.end)
-            const currentFeeData = Array.isArray(feeData) ? feeData : []
+            const currentFeeData = unwrapArrayResult(
+                await globalThis.electronAPI.getFeeCollectionReport(dateRange.start, dateRange.end),
+                'Failed to load fee collection data'
+            )
 
             // Group by month
             const monthlyData: Record<string, number> = {}
@@ -131,23 +156,35 @@ export default function Reports() {
             )
 
             // Load defaulters
-            const defaulterData = await globalThis.electronAPI.getDefaulters()
-            setDefaulters(Array.isArray(defaulterData) ? (defaulterData) : [])
+            const defaulterData = unwrapArrayResult(
+                await globalThis.electronAPI.getDefaulters(),
+                'Failed to load defaulters report'
+            )
+            setDefaulters(defaulterData)
 
             // Load daily collections
-            const dailyData = await globalThis.electronAPI.getDailyCollection(selectedDate)
-            setDailyCollections(Array.isArray(dailyData) ? (dailyData as DailyCollectionItem[]) : [])
+            const dailyData = unwrapArrayResult(
+                await globalThis.electronAPI.getDailyCollection(selectedDate),
+                'Failed to load daily collection report'
+            )
+            setDailyCollections(dailyData)
         } catch (error) {
             console.error('Failed to load report data:', error)
+            setStudentStats(null)
+            setFinancialSummary(null)
+            setFeeCollectionData([])
+            setPaymentMethodData([])
+            setDefaulters([])
+            setDailyCollections([])
+            showToast(error instanceof Error ? error.message : 'Failed to load report data', 'error')
         } finally {
             setLoading(false)
         }
-    }
+    }, [dateRange.end, dateRange.start, selectedDate, showToast])
 
     useEffect(() => {
         void loadReportData()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [dateRange, selectedDate])
+    }, [loadReportData])
 
     useEffect(() => {
         const params = new URLSearchParams(location.search)
@@ -159,11 +196,11 @@ export default function Reports() {
 
     const handleSendReminder = async (student: Defaulter) => {
         if (!student.guardian_phone) {
-            alert('Guardian phone number missing')
+            showToast('Guardian phone number missing', 'warning')
             return
         }
         if (!user?.id) {
-            alert('You must be signed in to send reminders')
+            showToast('You must be signed in to send reminders', 'error')
             return
         }
 
@@ -178,19 +215,19 @@ export default function Reports() {
             })
 
             if (result.success) {
-                alert(`Reminder sent to ${student.first_name}'s guardian`)
+                showToast(`Reminder sent to ${student.first_name}'s guardian`, 'success')
             } else {
-                alert('Failed to send: ' + result.error)
+                showToast(`Failed to send: ${result.error || 'Unknown SMS error'}`, 'error')
             }
-        } catch {
-            alert('Error sending reminder')
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : 'Error sending reminder', 'error')
         }
     }
 
     const handleBulkReminders = async () => {
         if (!confirm(`Send reminders to ${defaulters.length} guardians?`)) { return }
         if (!user?.id) {
-            alert('You must be signed in to send reminders')
+            showToast('You must be signed in to send reminders', 'error')
             return
         }
 
@@ -221,7 +258,7 @@ export default function Reports() {
         }
 
         setSendingBulk(false)
-        alert(`Finished: ${sentCount} sent, ${failedCount} failed.`)
+        showToast(`Reminder dispatch complete: ${sentCount} sent, ${failedCount} failed`, failedCount === 0 ? 'success' : 'warning')
     }
 
     const handleExportPDF = async () => {
@@ -291,7 +328,7 @@ export default function Reports() {
                 }))
             })
         } else {
-            alert('Please select a report with data to export')
+            showToast('Please select a report with data to export', 'warning')
         }
     }
 
@@ -341,7 +378,7 @@ export default function Reports() {
                 data: dailyCollections.map((item) => ({ ...item } as Record<string, unknown>))
             })
         } else {
-            alert('Please select a report with data to export')
+            showToast('Please select a report with data to export', 'warning')
         }
     }
 

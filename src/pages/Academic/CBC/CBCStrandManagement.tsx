@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
+import { useToast } from '../../../contexts/ToastContext'
 import { formatCurrencyFromCents } from '../../../utils/format';
+import { unwrapIPCResult } from '../../../utils/ipc'
 
 
 interface CBCStrand {
@@ -22,6 +24,53 @@ interface StrandProfitability {
   student_count: number;
 }
 
+const isCBCStrand = (value: unknown): value is CBCStrand =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as { id?: unknown }).id === 'number' &&
+  typeof (value as { name?: unknown }).name === 'string';
+
+interface RawStrandProfitability {
+  strand_id: number;
+  strand_name: string;
+  revenue_cents: number;
+  expenses_cents: number;
+  net_profit_cents: number;
+  profit_margin_percent: number;
+  student_count: number;
+}
+
+const isRawStrandProfitability = (value: unknown): value is RawStrandProfitability =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as { strand_id?: unknown }).strand_id === 'number' &&
+  typeof (value as { strand_name?: unknown }).strand_name === 'string' &&
+  typeof (value as { revenue_cents?: unknown }).revenue_cents === 'number' &&
+  typeof (value as { expenses_cents?: unknown }).expenses_cents === 'number' &&
+  typeof (value as { net_profit_cents?: unknown }).net_profit_cents === 'number' &&
+  typeof (value as { profit_margin_percent?: unknown }).profit_margin_percent === 'number' &&
+  typeof (value as { student_count?: unknown }).student_count === 'number';
+
+const parseStrandsPayload = (payload: unknown): CBCStrand[] => {
+  if (Array.isArray(payload)) {
+    return payload.filter((strand): strand is CBCStrand => isCBCStrand(strand));
+  }
+  if (typeof payload === 'object' && payload !== null && Array.isArray((payload as { data?: unknown }).data)) {
+    return ((payload as { data: unknown[] }).data).filter((strand): strand is CBCStrand => isCBCStrand(strand));
+  }
+  throw new Error('Invalid CBC strands payload');
+};
+
+const parseProfitabilityPayload = (payload: unknown): RawStrandProfitability[] => {
+  if (Array.isArray(payload)) {
+    return payload.filter((row): row is RawStrandProfitability => isRawStrandProfitability(row));
+  }
+  if (typeof payload === 'object' && payload !== null && Array.isArray((payload as { data?: unknown }).data)) {
+    return ((payload as { data: unknown[] }).data).filter((row): row is RawStrandProfitability => isRawStrandProfitability(row));
+  }
+  throw new Error('Invalid CBC profitability payload');
+};
+
 const getStrandColor = (profit_margin: number): string => {
   if (profit_margin >= 20) {
     return 'bg-green-500/15 text-green-600 dark:text-green-400';
@@ -33,40 +82,60 @@ const getStrandColor = (profit_margin: number): string => {
 };
 
 const CBCStrandManagement: React.FC = () => {
+  const { showToast } = useToast()
   const [profitability, setProfitability] = useState<StrandProfitability[]>([]);
   const [loading, setLoading] = useState(true);
   const [fiscalYear, setFiscalYear] = useState(new Date().getFullYear());
   const [term, setTerm] = useState(1);
 
-  useEffect(() => {
-    void loadData();
-  }, [fiscalYear, term]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      // Fetch strands from IPC (CBC handlers)
-      const strandsResult = await globalThis.electronAPI.academic.getCBCStrands();
-      const strandsData: CBCStrand[] = strandsResult?.data || [];
+      const [strandsPayload, profitabilityPayload] = await Promise.all([
+        globalThis.electronAPI.academic.getCBCStrands(),
+        globalThis.electronAPI.academic.getCBCProfitabilityReport(fiscalYear, term),
+      ]);
 
-      // Profitability data derived from strand + financial data
-      // For now, map strands to profitability structure if profitability endpoint exists
-      const profData: StrandProfitability[] = strandsData.map((s: CBCStrand) => ({
-        strand_id: s.id,
-        strand_name: s.name,
-        revenue: 0,
-        expenses: 0,
-        profit: 0,
-        profit_margin: 0,
-        student_count: 0,
-      }));
+      const resolvedStrandsPayload = unwrapIPCResult<unknown>(
+        strandsPayload,
+        'Failed to load CBC strands'
+      );
+      const strandsData = parseStrandsPayload(resolvedStrandsPayload);
+      const resolvedProfitabilityPayload = unwrapIPCResult<unknown>(
+        profitabilityPayload,
+        'Failed to load CBC profitability report'
+      );
+      const profitabilityData = parseProfitabilityPayload(resolvedProfitabilityPayload);
+      const profitabilityByStrand = new Map<number, RawStrandProfitability>(
+        profitabilityData.map((row) => [row.strand_id, row])
+      );
+
+      // Keep strand list stable while projecting profitability values when available.
+      const profData: StrandProfitability[] = strandsData.map((s: CBCStrand) => {
+        const metrics = profitabilityByStrand.get(s.id);
+        return {
+          strand_id: s.id,
+          strand_name: s.name,
+          revenue: metrics?.revenue_cents ?? 0,
+          expenses: metrics?.expenses_cents ?? 0,
+          profit: metrics?.net_profit_cents ?? 0,
+          profit_margin: metrics?.profit_margin_percent ?? 0,
+          student_count: metrics?.student_count ?? 0,
+        };
+      });
       setProfitability(profData);
     } catch (error) {
       console.error('Error loading data:', error);
+      setProfitability([]);
+      showToast(error instanceof Error ? error.message : 'Failed to load CBC strand data', 'error')
     } finally {
       setLoading(false);
     }
-  };
+  }, [fiscalYear, showToast, term]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   if (loading) {
     return <div className="flex justify-center items-center h-64">Loading CBC Strand Data...</div>;

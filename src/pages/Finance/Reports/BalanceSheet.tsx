@@ -1,10 +1,42 @@
 import { format } from 'date-fns';
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
 import { formatCurrencyFromCents } from '../../../utils/format';
+import { getIPCFailureMessage, isIPCFailure } from '../../../utils/ipc'
 
 import type { BalanceSheetReport } from '../../../types/electron-api';
+
+const getResultMessage = (value: unknown, fallback: string): string => {
+  if (isIPCFailure(value)) {
+    return getIPCFailureMessage(value, fallback)
+  }
+  if (value && typeof value === 'object') {
+    const maybe = value as { error?: unknown; message?: unknown }
+    if (typeof maybe.error === 'string' && maybe.error.trim()) {
+      return maybe.error
+    }
+    if (typeof maybe.message === 'string' && maybe.message.trim()) {
+      return maybe.message
+    }
+  }
+  return fallback
+}
+
+const parseBalanceSheetResponse = (value: unknown): BalanceSheetReport => {
+  const fallback = 'Failed to load balance sheet'
+  if (!value || typeof value !== 'object') {
+    throw new Error(fallback)
+  }
+  const result = value as { success?: unknown; data?: unknown }
+  if (result.success !== true) {
+    throw new Error(getResultMessage(value, fallback))
+  }
+  if (!result.data || typeof result.data !== 'object') {
+    throw new Error('Balance sheet response did not include data')
+  }
+  return result.data as BalanceSheetReport
+}
 
 
 export default function BalanceSheetPage() {
@@ -13,29 +45,24 @@ export default function BalanceSheetPage() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void loadBalanceSheet();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const loadBalanceSheet = async () => {
+  const loadBalanceSheet = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const result = await globalThis.electronAPI.getBalanceSheet(asOfDate) as { success: boolean; data: BalanceSheetReport; message?: string };
-
-      if (result.success) {
-        setBalanceSheet(result.data);
-      } else {
-        setError(result.message || 'Failed to load balance sheet');
-      }
+      const data = parseBalanceSheetResponse(await globalThis.electronAPI.getBalanceSheet(asOfDate))
+      setBalanceSheet(data);
     } catch (err) {
-      setError((err as Error).message);
+      setBalanceSheet(null);
+      setError(err instanceof Error ? err.message : 'Failed to load balance sheet');
     } finally {
       setLoading(false);
     }
-  };
+  }, [asOfDate]);
+
+  useEffect(() => {
+    void loadBalanceSheet();
+  }, [loadBalanceSheet]);
 
   if (loading) {
     return (
@@ -66,7 +93,7 @@ export default function BalanceSheetPage() {
             aria-label="As of date"
           />
           <button
-            onClick={loadBalanceSheet}
+            onClick={() => { void loadBalanceSheet() }}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/80"
           >
             Generate

@@ -7,6 +7,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../contexts/ToastContext'
 import { type BankAccount, type BankStatement, type BankStatementLine, type UnmatchedTransaction } from '../../../types/electron-api/BankReconciliationAPI'
 import { formatCurrencyFromCents, shillingsToCents } from '../../../utils/format'
+import { unwrapArrayResult, unwrapIPCResult } from '../../../utils/ipc'
 
 const IMPORT_FILE_ERROR = 'Select a CSV file to import'
 
@@ -35,20 +36,29 @@ export default function ReconcileAccount() {
 
     const loadAccounts = useCallback(async () => {
         try {
-            const data = await globalThis.electronAPI.getAccounts()
+            const data = unwrapArrayResult(await globalThis.electronAPI.getAccounts(), 'Failed to load bank accounts')
             setAccounts(data)
             if (data.length > 0 && !selectedAccount && data[0]) {
                 setSelectedAccount(data[0].id)
             }
         } catch (error) {
             console.error('Failed to load accounts', error)
-            showToast('Failed to load bank accounts', 'error')
+            setAccounts([])
+            setSelectedAccount(null)
+            setStatements([])
+            setSelectedStatement(null)
+            setLines([])
+            setUnmatchedTransactions([])
+            showToast(error instanceof Error ? error.message : 'Failed to load bank accounts', 'error')
         }
     }, [selectedAccount, showToast])
 
     const loadStatements = useCallback(async (accountId: number) => {
         try {
-            const data = await globalThis.electronAPI.getStatements(accountId)
+            const data = unwrapArrayResult(
+                await globalThis.electronAPI.getStatements(accountId),
+                'Failed to load statements'
+            )
             setStatements(data)
             setSelectedStatement((current) => {
                 if (!current) {
@@ -58,24 +68,35 @@ export default function ReconcileAccount() {
             })
         } catch (error) {
             console.error('Failed to load statements', error)
-            showToast('Failed to load statements', 'error')
+            setStatements([])
+            setSelectedStatement(null)
+            showToast(error instanceof Error ? error.message : 'Failed to load statements', 'error')
         }
     }, [showToast])
 
     const loadStatementDetails = useCallback(async (statementId: number) => {
         try {
-            const result = await globalThis.electronAPI.getStatementWithLines(statementId)
+            const result = unwrapIPCResult(
+                await globalThis.electronAPI.getStatementWithLines(statementId),
+                'Failed to load statement details'
+            )
             if (result) {
-                setLines(result.lines)
+                setLines(Array.isArray(result.lines) ? result.lines : [])
+                return
             }
+            setLines([])
         } catch (error) {
             console.error('Failed to load statement lines', error)
-            showToast('Failed to load statement details', 'error')
+            setLines([])
+            showToast(error instanceof Error ? error.message : 'Failed to load statement details', 'error')
         }
     }, [showToast])
 
     const loadUnmatchedTransactions = useCallback(async () => {
-        if (!selectedStatement) {return}
+        if (!selectedStatement) {
+            setUnmatchedTransactions([])
+            return
+        }
         try {
             const start = new Date(selectedStatement.statement_date)
             start.setDate(1)
@@ -83,15 +104,19 @@ export default function ReconcileAccount() {
             end.setMonth(end.getMonth() + 1)
             end.setDate(0)
 
-            const data = await globalThis.electronAPI.getUnmatchedTransactions(
-                start.toISOString().slice(0, 10),
-                end.toISOString().slice(0, 10),
-                selectedAccount || undefined
+            const data = unwrapArrayResult(
+                await globalThis.electronAPI.getUnmatchedTransactions(
+                    start.toISOString().slice(0, 10),
+                    end.toISOString().slice(0, 10),
+                    selectedAccount || undefined
+                ),
+                'Failed to load unmatched ledger entries'
             )
             setUnmatchedTransactions(data)
         } catch (error) {
             console.error('Failed to load ledger transactions', error)
-            showToast('Failed to load unmatched ledger entries', 'error')
+            setUnmatchedTransactions([])
+            showToast(error instanceof Error ? error.message : 'Failed to load unmatched ledger entries', 'error')
         }
     }, [selectedAccount, selectedStatement, showToast])
 
@@ -211,7 +236,10 @@ export default function ReconcileAccount() {
             }
 
             await loadStatements(selectedAccount)
-            const updatedStatements = await globalThis.electronAPI.getStatements(selectedAccount)
+            const updatedStatements = unwrapArrayResult(
+                await globalThis.electronAPI.getStatements(selectedAccount),
+                'Failed to reload statements after import'
+            )
             const importedStatement = updatedStatements.find((statement) => statement.id === statementResult.id) || null
             setSelectedStatement(importedStatement)
             showToast(`Imported ${parsed.lines.length} statement lines`, 'success')
@@ -247,7 +275,7 @@ export default function ReconcileAccount() {
             showToast('Statement line matched successfully', 'success')
         } catch (error) {
             console.error('Match error', error)
-            showToast('Failed to match transactions', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to match transactions', 'error')
         } finally {
             setMatching(false)
         }
@@ -269,7 +297,10 @@ export default function ReconcileAccount() {
                     <select
                         id="field-107"
                         value={selectedAccount || ''}
-                        onChange={(event) => setSelectedAccount(Number(event.target.value))}
+                        onChange={(event) => {
+                            const value = event.target.value
+                            setSelectedAccount(value ? Number(value) : null)
+                        }}
                         className="input"
                     >
                         {accounts.map((account) => (

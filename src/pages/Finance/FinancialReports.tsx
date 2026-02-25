@@ -5,6 +5,7 @@ import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis
 import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 import { useToast } from '../../contexts/ToastContext'
 import { formatCurrencyFromCents } from '../../utils/format'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 
 
@@ -43,12 +44,15 @@ export default function FinancialReports() {
                 globalThis.electronAPI.getRevenueByCategory(dateRange.startDate, dateRange.endDate),
                 globalThis.electronAPI.getExpenseByCategory(dateRange.startDate, dateRange.endDate)
             ])
-            setSummary(summaryData && typeof summaryData === 'object' && !('success' in summaryData) ? summaryData : { totalIncome: 0, totalExpense: 0, netBalance: 0 })
-            setRevenueData(Array.isArray(revenue) ? revenue : [])
-            setExpenseData(Array.isArray(expenses) ? expenses : [])
+            setSummary(unwrapIPCResult<TransactionSummary>(summaryData, 'Failed to load transaction summary'))
+            setRevenueData(unwrapArrayResult(revenue, 'Failed to load revenue by category'))
+            setExpenseData(unwrapArrayResult(expenses, 'Failed to load expense by category'))
         } catch (error) {
             console.error('Failed to load report data:', error)
-            showToast('Failed to correlate financial data', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to correlate financial data', 'error')
+            setSummary({ totalIncome: 0, totalExpense: 0, netBalance: 0 })
+            setRevenueData([])
+            setExpenseData([])
         } finally {
             setLoading(false)
         }

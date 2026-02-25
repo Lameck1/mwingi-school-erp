@@ -6,6 +6,7 @@ import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore } from '../../stores'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 interface ExamSlot {
   id: number
@@ -60,12 +61,16 @@ const ExamScheduler = () => {
 
   const loadInitialData = useCallback(async () => {
     try {
-      const examsData = await globalThis.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id })
-      setExams(Array.isArray(examsData) ? examsData : [])
+      const examsData = unwrapArrayResult(
+        await globalThis.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
+        'Failed to load exams'
+      )
+      setExams(examsData)
     } catch (error) {
       console.error('Failed to load initial data:', error)
+      showToast(error instanceof Error ? error.message : 'Failed to load exam list', 'error')
     }
-  }, [currentAcademicYear, currentTerm])
+  }, [currentAcademicYear, currentTerm, showToast])
 
   useEffect(() => {
     loadInitialData().catch((err: unknown) => console.error('Failed to load initial data:', err))
@@ -83,12 +88,15 @@ const ExamScheduler = () => {
 
     setLoading(true)
     try {
-      const result = await globalThis.electronAPI.generateExamTimetable({
-        examId: selectedExam,
-        startDate,
-        endDate,
-        slots: slots.length || 20 // Default number of slots
-      }) as TimetableResult
+      const result = unwrapIPCResult<TimetableResult>(
+        await globalThis.electronAPI.generateExamTimetable({
+          examId: selectedExam,
+          startDate,
+          endDate,
+          slots: slots.length || 20 // Default number of slots
+        }),
+        'Failed to generate exam timetable'
+      )
 
       setSlots(result?.slots || [])
       setClashes(result?.clashes || [])
@@ -113,8 +121,11 @@ const ExamScheduler = () => {
 
     setLoading(true)
     try {
-      const clashData = await globalThis.electronAPI.detectExamClashes({ examId: selectedExam }) as ClashReport[]
-      setClashes(clashData || [])
+      const clashData = unwrapArrayResult<ClashReport>(
+        await globalThis.electronAPI.detectExamClashes({ examId: selectedExam }),
+        'Failed to detect clashes'
+      )
+      setClashes(clashData)
 
       if (clashData?.length === 0) {
         showToast('No clashes detected!', 'success')
@@ -138,10 +149,13 @@ const ExamScheduler = () => {
     }
 
     try {
-      await globalThis.electronAPI.exportExamTimetableToPDF({
-        examId: selectedExam,
-        slots
-      })
+      unwrapIPCResult(
+        await globalThis.electronAPI.exportExamTimetableToPDF({
+          examId: selectedExam,
+          slots
+        }),
+        'Failed to export exam timetable PDF'
+      )
     } catch (error) {
       console.error('Failed to export PDF:', error)
       showToast('Failed to export PDF', 'error')

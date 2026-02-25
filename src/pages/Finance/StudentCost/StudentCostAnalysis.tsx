@@ -11,6 +11,7 @@ import { useToast } from '../../../contexts/ToastContext'
 import { useAppStore } from '../../../stores'
 import { type Student, type StudentCostResult } from '../../../types/electron-api'
 import { formatCurrencyFromCents } from '../../../utils/format'
+import { unwrapArrayResult, unwrapIPCResult } from '../../../utils/ipc'
 
 export default function StudentCostAnalysis() {
     const { showToast } = useToast()
@@ -23,29 +24,39 @@ export default function StudentCostAnalysis() {
     const loadStudents = useCallback(async () => {
         try {
             const data = await globalThis.electronAPI.getStudents({ is_active: true })
-            if (Array.isArray(data)) {
-                setStudents(data)
-            }
+            setStudents(unwrapArrayResult(data, 'Failed to load students'))
         } catch (error) {
             console.error(error)
+            showToast(error instanceof Error ? error.message : 'Failed to load students', 'error')
         }
-    }, [])
+    }, [showToast])
 
     const loadCostData = useCallback(async (studentId: number) => {
         try {
+            setCostData(null)
+            setCostVsRevenue(null)
+
             if (!currentAcademicYear?.id || !currentTerm?.id) {
                 showToast('Select an active academic year and term to calculate costs', 'error')
                 return
             }
 
-            const breakdown = await globalThis.electronAPI.calculateStudentCost(studentId, currentTerm.id, currentAcademicYear.id)
+            const breakdown = unwrapIPCResult(
+                await globalThis.electronAPI.calculateStudentCost(studentId, currentTerm.id, currentAcademicYear.id),
+                'Failed to calculate student cost breakdown'
+            )
             setCostData(breakdown)
 
-            const vsRevenue = await globalThis.electronAPI.getStudentCostVsRevenue(studentId, currentTerm.id)
+            const vsRevenue = unwrapIPCResult(
+                await globalThis.electronAPI.getStudentCostVsRevenue(studentId, currentTerm.id),
+                'Failed to load cost vs revenue data'
+            )
             setCostVsRevenue(vsRevenue)
         } catch (error) {
             console.error(error)
-            showToast('Failed to calculate student cost', 'error')
+            setCostData(null)
+            setCostVsRevenue(null)
+            showToast(error instanceof Error ? error.message : 'Failed to calculate student cost', 'error')
         }
     }, [showToast, currentAcademicYear, currentTerm])
 
@@ -56,7 +67,10 @@ export default function StudentCostAnalysis() {
     useEffect(() => {
         if (selectedStudent !== '') {
             loadCostData(Number(selectedStudent)).catch((err: unknown) => console.error('Failed to load cost data', err))
+            return
         }
+        setCostData(null)
+        setCostVsRevenue(null)
     }, [selectedStudent, loadCostData])
 
     // Chart Data

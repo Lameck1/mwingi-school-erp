@@ -5,6 +5,7 @@ import { useToast } from '../../../contexts/ToastContext'
 import { useAuthStore, useAppStore } from '../../../stores'
 import { type Student } from '../../../types/electron-api/StudentAPI'
 import { shillingsToCents, formatCurrencyFromCents } from '../../../utils/format'
+import { unwrapArrayResult } from '../../../utils/ipc'
 import { printDocument } from '../../../utils/print'
 
 import type { SchoolSettings } from '../../../types/electron-api/SettingsAPI'
@@ -56,9 +57,11 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
         setUseCredit(false)
     }, [selectedStudent])
 
-    const processCreditPayment = async (amount: number, studentId: number, userId: number): Promise<PaymentSuccess> => {
-        const invoicesRes = await globalThis.electronAPI.getInvoicesByStudent(studentId)
-        const invoices = Array.isArray(invoicesRes) ? invoicesRes : []
+const processCreditPayment = async (amount: number, studentId: number, userId: number): Promise<PaymentSuccess> => {
+        const invoices = unwrapArrayResult(
+            await globalThis.electronAPI.getInvoicesByStudent(studentId),
+            'Failed to load student invoices'
+        )
         const pending = invoices.find((inv: { id: number, balance: number }) => inv.balance > 0)
 
         if (!pending) {
@@ -104,7 +107,16 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
 
     const handleSubmit = async (e: React.SyntheticEvent) => {
         e.preventDefault()
-        if (!selectedStudent || !formData.amount || !user?.id) {
+        if (!selectedStudent) {
+            showToast('Select a student before recording payment', 'warning')
+            return
+        }
+        if (!formData.amount) {
+            showToast('Enter payment amount', 'warning')
+            return
+        }
+        if (!user?.id) {
+            showToast('User session not found. Please log in again.', 'error')
             return
         }
 
@@ -114,6 +126,9 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
 
         try {
             const amount = shillingsToCents(formData.amount)
+            if (amount <= 0) {
+                throw new Error('Payment amount must be greater than zero')
+            }
             const resultData = useCredit
                 ? await processCreditPayment(amount, selectedStudent.id, user.id)
                 : await processStandardPayment(amount, selectedStudent.id, user.id)
@@ -179,7 +194,11 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
 
     const handleSendSms = async () => {
         if (!success || !selectedStudent?.guardian_phone) {
-            alert('Guardian phone number missing')
+            showToast('Guardian phone number missing', 'warning')
+            return
+        }
+        if (!user?.id) {
+            showToast('You must be signed in to send SMS receipts', 'error')
             return
         }
 
@@ -192,16 +211,16 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
                 message,
                 recipientId: selectedStudent.id,
                 recipientType: 'STUDENT',
-                userId: user?.id ?? 0
+                userId: user.id
             })
 
             if (result.success) {
-                alert('SMS receipt sent successfully!')
+                showToast('SMS receipt sent successfully', 'success')
             } else {
-                alert('Failed to send SMS: ' + result.error)
+                showToast(`Failed to send SMS: ${result.error || 'Unknown error'}`, 'error')
             }
-        } catch {
-            alert('Error sending SMS')
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : 'Error sending SMS', 'error')
         } finally {
             setSendingSms(false)
         }

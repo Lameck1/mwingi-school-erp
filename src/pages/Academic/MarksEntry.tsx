@@ -8,6 +8,7 @@ import { Select } from '../../components/ui/Select'
 import { Tooltip } from '../../components/ui/Tooltip'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../stores'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 import type { AcademicResult } from '../../types/electron-api/AcademicAPI'
 
@@ -52,15 +53,20 @@ export default function MarksEntry() {
     const [processing, setProcessing] = useState(false)
 
     const loadInitialData = useCallback(async () => {
-        if (!currentAcademicYear || !currentTerm || !user) { return }
+        if (!currentAcademicYear || !currentTerm || !user) {
+            setExams([])
+            setAllocations([])
+            setResults([])
+            return
+        }
         try {
             const [examsData, allocationsData] = await Promise.all([
                 globalThis.electronAPI.getAcademicExams(currentAcademicYear.id, currentTerm.id),
                 globalThis.electronAPI.getTeacherAllocations(currentAcademicYear.id, currentTerm.id)
             ])
 
-            setExams(Array.isArray(examsData) ? examsData : [])
-            setAllocations((Array.isArray(allocationsData) ? allocationsData : []).map((a) => ({
+            setExams(unwrapArrayResult(examsData, 'Failed to load exams'))
+            setAllocations(unwrapArrayResult(allocationsData, 'Failed to load teacher allocations').map((a) => ({
                 id: a.id,
                 subject_id: a.subject_id,
                 stream_id: a.stream_id,
@@ -70,19 +76,26 @@ export default function MarksEntry() {
             })))
         } catch (error) {
             console.error('Failed to load marks entry data:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to load marks entry data', 'error')
         }
-    }, [currentAcademicYear, currentTerm, user])
+    }, [currentAcademicYear, currentTerm, user, showToast])
 
     const loadResults = useCallback(async () => {
         const alloc = allocations.find((a: Allocation) => a.id === selectedAllocation)
-        if (!selectedExam || !alloc) { return }
+        if (!selectedExam || !alloc || !user?.id) {
+            setResults([])
+            return
+        }
 
         setLoading(true)
         try {
-            const data = await globalThis.electronAPI.getAcademicResults(
-                selectedExam, alloc.subject_id, alloc.stream_id, user!.id
+            const data = unwrapArrayResult(
+                await globalThis.electronAPI.getAcademicResults(
+                    selectedExam, alloc.subject_id, alloc.stream_id, user.id
+                ),
+                'Failed to load student results'
             )
-            setResults((Array.isArray(data) ? data : []).map((r: AcademicResult) => ({
+            setResults(data.map((r: AcademicResult) => ({
                 student_id: r.student_id,
                 student_name: r.student_name || 'Unknown Student',
                 admission_number: r.admission_number || '',
@@ -92,10 +105,11 @@ export default function MarksEntry() {
             })))
         } catch (error) {
             console.error('Failed to load results:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to load results', 'error')
         } finally {
             setLoading(false)
         }
-    }, [allocations, selectedAllocation, selectedExam, user])
+    }, [allocations, selectedAllocation, selectedExam, user, showToast])
 
     useEffect(() => {
         if (currentAcademicYear && currentTerm) {
@@ -116,30 +130,50 @@ export default function MarksEntry() {
     }
 
     const handleSave = async () => {
-        if (!selectedExam || !user) { return }
+        if (!selectedExam) {
+            showToast('Select an exam before saving results', 'warning')
+            return
+        }
+        if (!user?.id) {
+            showToast('You must be signed in to save results', 'error')
+            return
+        }
 
         setSaving(true)
         try {
-            await globalThis.electronAPI.saveAcademicResults(selectedExam, results, user.id)
+            unwrapIPCResult(
+                await globalThis.electronAPI.saveAcademicResults(selectedExam, results, user.id),
+                'Failed to save results'
+            )
             showToast('Results saved successfully!', 'success')
         } catch (error) {
             console.error('Failed to save results:', error)
-            showToast('Failed to save results', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to save results', 'error')
         } finally {
             setSaving(false)
         }
     }
 
     const handleProcessResults = async () => {
-        if (!selectedExam || !user) { return }
+        if (!selectedExam) {
+            showToast('Select an exam before processing results', 'warning')
+            return
+        }
+        if (!user?.id) {
+            showToast('You must be signed in to process results', 'error')
+            return
+        }
 
         setProcessing(true)
         try {
-            await globalThis.electronAPI.processAcademicResults(selectedExam, user.id)
+            unwrapIPCResult(
+                await globalThis.electronAPI.processAcademicResults(selectedExam, user.id),
+                'Failed to process results'
+            )
             showToast('Results processed successfully! Ranks have been updated.', 'success')
         } catch (error) {
             console.error('Failed to process results:', error)
-            showToast('Failed to process results', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to process results', 'error')
         } finally {
             setProcessing(false)
         }

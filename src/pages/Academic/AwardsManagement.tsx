@@ -6,6 +6,7 @@ import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../stores'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 import type { Student } from '../../types/electron-api/StudentAPI'
 
@@ -37,6 +38,14 @@ interface AwardCategory {
   category_type: string
   description: string
 }
+
+const isStudentAward = (value: unknown): value is StudentAward =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as { id?: unknown }).id === 'number' &&
+  typeof (value as { student_id?: unknown }).student_id === 'number' &&
+  typeof (value as { award_category_id?: unknown }).award_category_id === 'number' &&
+  typeof (value as { approval_status?: unknown }).approval_status === 'string';
 
 const AwardsManagement = () => {
   const { currentAcademicYear, currentTerm } = useAppStore()
@@ -71,11 +80,14 @@ const AwardsManagement = () => {
         termId: (currentTerm?.id as number) || undefined,
         status
       })
-      setAwards((Array.isArray(awardData) ? awardData : []) as StudentAward[])
+      const parsedAwards = unwrapArrayResult(awardData, 'Failed to load awards')
+      setAwards(parsedAwards.filter((award): award is StudentAward => isStudentAward(award)))
     } catch (error) {
       console.error('Failed to load awards:', error)
+      showToast(error instanceof Error ? error.message : 'Failed to load awards', 'error')
+      setAwards([])
     }
-  }, [currentAcademicYear, currentTerm, filterStatus])
+  }, [currentAcademicYear, currentTerm, filterStatus, showToast])
 
   const loadInitialData = useCallback(async () => {
     try {
@@ -84,16 +96,22 @@ const AwardsManagement = () => {
         globalThis.electronAPI.getStudents({})
       ])
 
-      setCategories(Array.isArray(categoryData) ? categoryData : [])
-      setStudents((Array.isArray(studentData) ? studentData : []).map((s: Student) => ({
+      const categoriesData = unwrapArrayResult(categoryData, 'Failed to load award categories')
+      const studentsData = unwrapArrayResult(studentData, 'Failed to load students')
+
+      setCategories(categoriesData)
+      setStudents(studentsData.map((s: Student) => ({
         id: s.id,
         name: s.full_name || `${s.first_name} ${s.last_name}`,
         admission_number: s.admission_number
-      })) || [])
+      })))
     } catch (error) {
       console.error('Failed to load initial data:', error)
+      showToast(error instanceof Error ? error.message : 'Failed to load award setup data', 'error')
+      setCategories([])
+      setStudents([])
     }
-  }, [])
+  }, [showToast])
 
   useEffect(() => {
     loadInitialData().catch((err: unknown) => console.error('Failed to load initial data:', err))
@@ -108,18 +126,29 @@ const AwardsManagement = () => {
       showToast('Please select a student and award category', 'warning')
       return
     }
+    if (!currentAcademicYear?.id) {
+      showToast('Select an active academic year before assigning awards', 'warning')
+      return
+    }
+    if (!user?.id) {
+      showToast('User session not found. Please log in again.', 'error')
+      return
+    }
 
     setLoading(true)
     try {
-      await globalThis.electronAPI.awardStudent({
+      unwrapIPCResult(
+        await globalThis.electronAPI.awardStudent({
         studentId: selectedStudent,
         categoryId: selectedCategory,
-        academicYearId: currentAcademicYear!.id,
+        academicYearId: currentAcademicYear.id,
         termId: (currentTerm?.id as number) || undefined,
-        userId: (user?.id as number) || undefined,
+        userId: user.id,
         userRole: (user?.role as string) || undefined,
         remarks: undefined
-      })
+        }),
+        'Failed to assign award'
+      )
 
       await loadAwards()
       setSelectedStudent(0)
@@ -128,24 +157,31 @@ const AwardsManagement = () => {
       showToast('Award assigned successfully!', 'success')
     } catch (error) {
       console.error('Failed to assign award:', error)
-      showToast('Failed to assign award', 'error')
+      showToast(error instanceof Error ? error.message : 'Failed to assign award', 'error')
     } finally {
       setLoading(false)
     }
   }
 
   const handleApproveAward = async (awardId: number) => {
+    if (!user?.id) {
+      showToast('User session not found. Please log in again.', 'error')
+      return
+    }
     setLoading(true)
     try {
-      await globalThis.electronAPI.approveAward({
-        awardId,
-        userId: user?.id || undefined
-      })
+      unwrapIPCResult(
+        await globalThis.electronAPI.approveAward({
+          awardId,
+          userId: user.id
+        }),
+        'Failed to approve award'
+      )
       await loadAwards()
       showToast('Award approved successfully!', 'success')
     } catch (error) {
       console.error('Failed to approve award:', error)
-      showToast('Failed to approve award', 'error')
+      showToast(error instanceof Error ? error.message : 'Failed to approve award', 'error')
     } finally {
       setLoading(false)
     }
@@ -162,14 +198,25 @@ const AwardsManagement = () => {
       showToast('Please enter a reason for rejection', 'warning')
       return
     }
+    if (!user?.id) {
+      showToast('User session not found. Please log in again.', 'error')
+      return
+    }
+    if (!rejectingAwardId) {
+      showToast('No award selected for rejection', 'warning')
+      return
+    }
 
     setLoading(true)
     try {
-      await globalThis.electronAPI.rejectAward({
-        awardId: rejectingAwardId!,
-        userId: user?.id || undefined,
-        reason: rejectionReason
-      })
+      unwrapIPCResult(
+        await globalThis.electronAPI.rejectAward({
+          awardId: rejectingAwardId,
+          userId: user.id,
+          reason: rejectionReason
+        }),
+        'Failed to reject award'
+      )
       await loadAwards()
       setShowRejectModal(false)
       setRejectingAwardId(null)
@@ -177,7 +224,7 @@ const AwardsManagement = () => {
       showToast('Award rejected', 'success')
     } catch (error) {
       console.error('Failed to reject award:', error)
-      showToast('Failed to reject award', 'error')
+      showToast(error instanceof Error ? error.message : 'Failed to reject award', 'error')
     } finally {
       setLoading(false)
     }
@@ -186,7 +233,10 @@ const AwardsManagement = () => {
   const handleDeleteAward = async (awardId: number) => {
     setLoading(true)
     try {
-      await globalThis.electronAPI.deleteAward({ awardId })
+      unwrapIPCResult(
+        await globalThis.electronAPI.deleteAward({ awardId }),
+        'Failed to delete award'
+      )
       setAwards(awards.filter(a => a.id !== awardId))
       showToast('Award deleted successfully!', 'success')
     } catch (error) {

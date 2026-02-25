@@ -6,13 +6,14 @@ import { useState, useEffect, useCallback } from 'react'
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../stores'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 interface Exam {
     id: number
     name: string
-    weight?: number
-    is_published?: boolean
-    created_at?: string
+    weight?: number | undefined
+    is_published?: boolean | undefined
+    created_at?: string | undefined
 }
 
 export default function ExamManagement() {
@@ -31,52 +32,82 @@ export default function ExamManagement() {
         if (!currentAcademicYear || !currentTerm) { return }
         setLoading(true)
         try {
-            const data = await globalThis.electronAPI.getAcademicExams(currentAcademicYear.id, currentTerm.id)
-            setExams((Array.isArray(data) ? data : []) as Exam[])
+            const data = unwrapArrayResult(
+                await globalThis.electronAPI.getAcademicExams(currentAcademicYear.id, currentTerm.id),
+                'Failed to load exams'
+            )
+            setExams(data)
         } catch (error) {
             console.error('Failed to load exams:', error)
+            setExams([])
+            showToast(error instanceof Error ? error.message : 'Failed to load exams', 'error')
         } finally {
             setLoading(false)
         }
-    }, [currentAcademicYear, currentTerm])
+    }, [currentAcademicYear, currentTerm, showToast])
 
     useEffect(() => {
         loadExams().catch((err: unknown) => console.error('Failed to load exams:', err))
     }, [loadExams])
 
     const handleCreate = async () => {
-        if (!currentAcademicYear || !currentTerm || !user || !newExamName) { return }
+        if (!currentAcademicYear || !currentTerm) {
+            showToast('Select active academic year and term before creating an exam', 'error')
+            return
+        }
+        if (!user?.id) {
+            showToast('You must be signed in to create exams', 'error')
+            return
+        }
+        if (!newExamName.trim()) {
+            showToast('Exam name is required', 'warning')
+            return
+        }
+        if (!Number.isFinite(newExamWeight) || newExamWeight <= 0) {
+            showToast('Exam weight must be greater than 0', 'error')
+            return
+        }
 
         setSaving(true)
         try {
-            await globalThis.electronAPI.createAcademicExam({
-                academic_year_id: currentAcademicYear.id,
-                term_id: currentTerm.id,
-                name: newExamName,
-                weight: Number(newExamWeight)
-            }, user.id)
+            unwrapIPCResult(
+                await globalThis.electronAPI.createAcademicExam({
+                    academic_year_id: currentAcademicYear.id,
+                    term_id: currentTerm.id,
+                    name: newExamName.trim(),
+                    weight: Number(newExamWeight)
+                }, user.id),
+                'Failed to create exam'
+            )
 
             setNewExamName('')
             setNewExamWeight(1)
             await loadExams()
+            showToast('Exam created successfully', 'success')
         } catch (error) {
             console.error('Failed to create exam:', error)
-            showToast('Failed to create exam', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to create exam', 'error')
         } finally {
             setSaving(false)
         }
     }
 
     const handleDelete = async (id: number) => {
-        if (!user) { return }
+        if (!user?.id) {
+            showToast('You must be signed in to delete exams', 'error')
+            return
+        }
 
         try {
-            await globalThis.electronAPI.deleteAcademicExam(id, user.id)
+            unwrapIPCResult(
+                await globalThis.electronAPI.deleteAcademicExam(id, user.id),
+                'Failed to delete exam'
+            )
             await loadExams()
             showToast('Exam deleted', 'success')
         } catch (error) {
             console.error('Failed to delete exam:', error)
-            showToast('Failed to delete exam', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to delete exam', 'error')
         }
     }
 

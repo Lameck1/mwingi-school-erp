@@ -9,6 +9,7 @@ import { PageHeader } from '../../../components/patterns/PageHeader'
 import { useAppStore, useAuthStore } from '../../../stores'
 import { type CreateBudgetLineItemData } from '../../../types/electron-api'
 import { formatCurrency, shillingsToCents } from '../../../utils/format'
+import { unwrapArrayResult } from '../../../utils/ipc'
 
 interface TransactionCategory {
     id: number
@@ -45,10 +46,15 @@ export default function CreateBudget() {
 
     const loadCategories = async () => {
         try {
-            const data = await globalThis.electronAPI.getTransactionCategories()
-            setCategories(Array.isArray(data) ? data : [])
+            const data = unwrapArrayResult(
+                await globalThis.electronAPI.getTransactionCategories(),
+                'Failed to load transaction categories'
+            )
+            setCategories(data)
         } catch (err) {
             console.error('Failed to load categories:', err)
+            setError(err instanceof Error ? err.message : 'Failed to load transaction categories')
+            setCategories([])
         }
     }
 

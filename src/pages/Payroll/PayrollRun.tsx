@@ -8,6 +8,7 @@ import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore, useAppStore } from '../../stores'
 import { type PayrollPeriod, type PayrollEntry } from '../../types/electron-api/PayrollAPI'
 import { formatCurrencyFromCents } from '../../utils/format'
+import { unwrapArrayResult } from '../../utils/ipc'
 import { printDocument } from '../../utils/print'
 import { reportRuntimeError } from '../../utils/runtimeError'
 
@@ -46,10 +47,10 @@ export default function PayrollRun() {
         try {
             const api = globalThis.electronAPI
             const data = await api.getPayrollHistory()
-            setHistory(data)
+            setHistory(unwrapArrayResult(data, 'Failed to load payroll history'))
         } catch (err) {
-            reportRuntimeError(err, { area: 'Payroll.Run', action: 'loadHistory' }, 'Failed to load payroll history')
-            showToast('Failed to load payroll history', 'error')
+            const message = reportRuntimeError(err, { area: 'Payroll.Run', action: 'loadHistory' }, 'Failed to load payroll history')
+            showToast(message, 'error')
         } finally {
             setLoadingHistory(false)
         }
@@ -66,7 +67,7 @@ export default function PayrollRun() {
             const api = globalThis.electronAPI
             const response = await api.getPayrollDetails(periodId)
             if (response.success) {
-                setPayrollData(response.results || [])
+                setPayrollData(unwrapArrayResult(response.results ?? [], 'Payroll details returned invalid staff rows'))
                 setSelectedPeriod(response.period || null)
             } else {
                 setError(response.error || 'Failed to load payroll details')
@@ -92,7 +93,7 @@ export default function PayrollRun() {
             const api = globalThis.electronAPI
             const result = await api.runPayroll(month, year, user.id)
             if (result.success) {
-                setPayrollData(result.results || [])
+                setPayrollData(unwrapArrayResult(result.results ?? [], 'Payroll run returned invalid staff rows'))
                 setSelectedPeriod({
                     id: result.periodId,
                     period_name: `${months[month - 1]} ${year}`,
@@ -236,7 +237,7 @@ export default function PayrollRun() {
         try {
             const result = await globalThis.electronAPI.recalculatePayroll(selectedPeriod.id, user.id)
             if (result.success) {
-                setPayrollData(result.results || [])
+                setPayrollData(unwrapArrayResult(result.results ?? [], 'Payroll recalculation returned invalid staff rows'))
                 showToast('Payroll recalculated', 'success')
                 return
             }

@@ -11,16 +11,19 @@ import {
 } from 'recharts'
 
 import { Tooltip as UITooltip } from '../components/ui/Tooltip'
+import { useToast } from '../contexts/ToastContext'
 import { useAppStore } from '../stores'
 import { type AuditLogEntry } from '../types/electron-api/AuditAPI'
 import { type FeeCollectionItem } from '../types/electron-api/ReportsAPI'
 import { formatCurrencyFromCents, formatDateTime } from '../utils/format'
+import { unwrapArrayResult, unwrapIPCResult } from '../utils/ipc'
 
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#334155', '#ec4899']
 const COLOR_CLASSES = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-slate-700', 'bg-pink-500']
 
 export default function Dashboard() {
     const { currentTerm, currentAcademicYear } = useAppStore()
+    const { showToast } = useToast()
     const [dashboardData, setDashboardData] = useState<{
         totalStudents: number
         totalStaff: number
@@ -45,14 +48,15 @@ export default function Dashboard() {
                     globalThis.electronAPI.getAuditLog(6)
                 ])
 
-                // Handle potential IPC error objects instead of data
-                const isIpcError = (val: unknown): val is { success: false; error?: string } =>
-                    !!val && typeof val === 'object' && !Array.isArray(val) && 'success' in val && (val as { success: boolean }).success === false
-
-                const safeDashboardData = isIpcError(data) ? null : data
-                const safeFeeCategories = Array.isArray(categoryData) ? categoryData : []
-                const safeRecentActivities = Array.isArray(logs) ? logs : []
-                const safeFeeData = Array.isArray(feeData) ? feeData : []
+                const safeDashboardData = unwrapIPCResult<{
+                    totalStudents: number
+                    totalStaff: number
+                    feeCollected: number
+                    outstandingBalance: number
+                }>(data, 'Failed to load dashboard metrics')
+                const safeFeeData = unwrapArrayResult(feeData, 'Failed to load fee collection data')
+                const safeFeeCategories = unwrapArrayResult(categoryData, 'Failed to load fee category breakdown')
+                const safeRecentActivities = unwrapArrayResult(logs, 'Failed to load recent activity log')
 
                 setDashboardData(safeDashboardData)
                 setFeeCategories(safeFeeCategories)
@@ -73,12 +77,13 @@ export default function Dashboard() {
                 )
             } catch (error) {
                 console.error('Failed to load dashboard data:', error)
+                showToast(error instanceof Error ? error.message : 'Failed to load dashboard data', 'error')
             } finally {
                 setLoading(false)
             }
         }
         void loadDashboardData()
-    }, [])
+    }, [showToast])
 
 
 

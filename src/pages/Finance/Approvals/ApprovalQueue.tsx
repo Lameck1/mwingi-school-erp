@@ -2,8 +2,10 @@ import { format } from 'date-fns';
 import { useState, useEffect, useCallback } from 'react';
 
 import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
+import { useToast } from '../../../contexts/ToastContext';
 import { useAuthStore } from '../../../stores';
 import { formatCurrencyFromCents } from '../../../utils/format';
+import { getIPCFailureMessage, isIPCFailure } from '../../../utils/ipc'
 
 
 interface ApprovalRequest {
@@ -29,33 +31,75 @@ const getStatusBadge = (status: string) => {
   return colors[status as keyof typeof colors] || colors.PENDING;
 };
 
+const isSuccessResult = (value: unknown): value is { success: true; data?: unknown } => (
+  typeof value === 'object' &&
+  value !== null &&
+  'success' in value &&
+  (value as { success?: unknown }).success === true
+)
+
+const getResultMessage = (value: unknown, fallback: string): string => {
+  if (isIPCFailure(value)) {
+    return getIPCFailureMessage(value, fallback)
+  }
+  if (value && typeof value === 'object') {
+    const maybe = value as { error?: unknown; message?: unknown }
+    if (typeof maybe.error === 'string' && maybe.error.trim()) {
+      return maybe.error
+    }
+    if (typeof maybe.message === 'string' && maybe.message.trim()) {
+      return maybe.message
+    }
+  }
+  return fallback
+}
+
 export default function ApprovalQueuePage() {
   const { user } = useAuthStore();
+  const { showToast } = useToast();
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [filter, setFilter] = useState<'PENDING' | 'ALL'>('PENDING');
   const [loading, setLoading] = useState<boolean>(false);
+  const [processing, setProcessing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedApproval, setSelectedApproval] = useState<ApprovalRequest | null>(null);
   const [reviewNotes, setReviewNotes] = useState<string>('');
 
+  const formatRequestedAt = (value: string): string => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return 'Unknown time';
+    }
+    return format(date, 'MMM dd, HH:mm');
+  };
+
   const loadApprovals = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setSelectedApproval(null);
+    setReviewNotes('');
 
     try {
       const result = await globalThis.electronAPI.getApprovalQueue(filter);
 
-      if (result.success) {
-        setApprovals(result.data);
-      } else {
-        setError(result.error || result.message || 'Failed to load approvals');
+      if (!isSuccessResult(result)) {
+        throw new Error(getResultMessage(result, 'Failed to load approvals'))
       }
+
+      if (!Array.isArray(result.data)) {
+        throw new Error('Invalid approval queue payload');
+      }
+
+      setApprovals(result.data as ApprovalRequest[]);
     } catch (err) {
-      setError((err as Error).message);
+      const message = err instanceof Error ? err.message : 'Failed to load approvals';
+      setApprovals([]);
+      setError(message);
+      showToast(message, 'error');
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, showToast]);
 
   useEffect(() => {
     loadApprovals().catch((err: unknown) => console.error('Failed to load approvals:', err));
@@ -64,53 +108,78 @@ export default function ApprovalQueuePage() {
   const handleApprove = async (approvalId: number) => {
     if (!user?.id) {
       setError('You must be signed in to approve transactions');
+      showToast('You must be signed in to approve transactions', 'error');
       return;
     }
+    if (processing) {
+      return;
+    }
+    setProcessing(true);
     try {
       const result = await globalThis.electronAPI.approveTransaction(
         approvalId,
-        reviewNotes || 'Approved',
+        reviewNotes.trim() || 'Approved',
         user.id
       );
 
-      if (result.success) {
-        loadApprovals().catch((err: unknown) => console.error('Failed to reload approvals:', err));
+      if (isSuccessResult(result)) {
+        await loadApprovals();
+        showToast('Transaction approved', 'success');
         setSelectedApproval(null);
         setReviewNotes('');
       } else {
-        setError(result.error || result.message || 'Approval failed');
+        const message = getResultMessage(result, 'Approval failed')
+        setError(message);
+        showToast(message, 'error');
       }
     } catch (err) {
-      setError((err as Error).message);
+      const message = err instanceof Error ? err.message : 'Approval failed';
+      setError(message);
+      showToast(message, 'error');
+    } finally {
+      setProcessing(false);
     }
   };
 
   const handleReject = async (approvalId: number) => {
-    if (!reviewNotes) {
+    if (!reviewNotes.trim()) {
       setError('Please provide a reason for rejection');
+      showToast('Please provide a reason for rejection', 'warning');
       return;
     }
     if (!user?.id) {
       setError('You must be signed in to reject transactions');
+      showToast('You must be signed in to reject transactions', 'error');
+      return;
+    }
+    if (processing) {
       return;
     }
 
+    setProcessing(true);
     try {
       const result = await globalThis.electronAPI.rejectTransaction(
         approvalId,
-        reviewNotes,
+        reviewNotes.trim(),
         user.id
       );
 
-      if (result.success) {
-        loadApprovals().catch((err: unknown) => console.error('Failed to reload approvals:', err));
+      if (isSuccessResult(result)) {
+        await loadApprovals();
+        showToast('Transaction rejected', 'success');
         setSelectedApproval(null);
         setReviewNotes('');
       } else {
-        setError(result.error || result.message || 'Rejection failed');
+        const message = getResultMessage(result, 'Rejection failed')
+        setError(message);
+        showToast(message, 'error');
       }
     } catch (err) {
-      setError((err as Error).message);
+      const message = err instanceof Error ? err.message : 'Rejection failed';
+      setError(message);
+      showToast(message, 'error');
+    } finally {
+      setProcessing(false);
     }
   };
   if (loading) {
@@ -198,7 +267,7 @@ export default function ApprovalQueuePage() {
                   <td className="px-6 py-4 text-sm text-foreground">
                     {approval.requested_by_name}
                     <div className="text-xs text-muted-foreground">
-                      {format(new Date(approval.requested_at), 'MMM dd, HH:mm')}
+                      {formatRequestedAt(approval.requested_at)}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-sm">
@@ -210,6 +279,7 @@ export default function ApprovalQueuePage() {
                     {approval.status === 'PENDING' && (
                       <button
                         onClick={() => setSelectedApproval(approval)}
+                        disabled={processing}
                         className="text-primary hover:text-primary/80"
                       >
                         Review
@@ -271,15 +341,17 @@ export default function ApprovalQueuePage() {
             <div className="flex gap-3">
               <button
                 onClick={() => handleApprove(selectedApproval.id)}
+                disabled={processing}
                 className="flex-1 px-4 py-2 bg-success text-white rounded-md hover:bg-success/80"
               >
-                Approve
+                {processing ? 'Processing...' : 'Approve'}
               </button>
               <button
                 onClick={() => handleReject(selectedApproval.id)}
+                disabled={processing}
                 className="flex-1 px-4 py-2 bg-destructive text-white rounded-md hover:bg-destructive/80"
               >
-                Reject
+                {processing ? 'Processing...' : 'Reject'}
               </button>
               <button
                 onClick={() => {

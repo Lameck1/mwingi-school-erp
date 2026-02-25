@@ -7,6 +7,7 @@ import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../stores'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 interface Staff {
     id: number
@@ -31,8 +32,8 @@ interface Allocation {
     id: number
     subject_id: number
     teacher_id: number
-    subject_name?: string
-    teacher_name?: string
+    subject_name?: string | undefined
+    teacher_name?: string | undefined
 }
 
 export default function TeacherAllocation() {
@@ -66,25 +67,31 @@ export default function TeacherAllocation() {
                     globalThis.electronAPI.getAcademicSubjects()
                 ])
 
-                setAllocations((Array.isArray(allocationsData) ? allocationsData : []) as Allocation[])
-                setStreams(Array.isArray(streamsData) ? streamsData : [])
-                setSubjects(Array.isArray(subjectsData) ? subjectsData : [])
+                setAllocations(unwrapArrayResult(allocationsData, 'Failed to load allocations'))
+                setStreams(unwrapArrayResult(streamsData, 'Failed to load streams'))
+                setSubjects(unwrapArrayResult(subjectsData, 'Failed to load subjects'))
+            } else {
+                setAllocations([])
             }
         } catch (error) {
             console.error('Failed to load allocations:', error)
+            setAllocations([])
+            showToast(error instanceof Error ? error.message : 'Failed to load allocations', 'error')
         } finally {
             setLoading(false)
         }
-    }, [currentAcademicYear, currentTerm, selectedStream])
+    }, [currentAcademicYear, currentTerm, selectedStream, showToast])
 
     const loadInitialData = useCallback(async () => {
         try {
             const staffData = await globalThis.electronAPI.getStaff()
-            setStaff(Array.isArray(staffData) ? staffData : [])
+            setStaff(unwrapArrayResult(staffData, 'Failed to load staff list'))
         } catch (error) {
             console.error('Failed to load initial data:', error)
+            setStaff([])
+            showToast(error instanceof Error ? error.message : 'Failed to load staff list', 'error')
         }
-    }, [])
+    }, [showToast])
 
     useEffect(() => {
         loadInitialData().catch((err: unknown) => console.error('Failed to load initial data:', err))
@@ -102,13 +109,16 @@ export default function TeacherAllocation() {
 
         setSaving(true)
         try {
-            await globalThis.electronAPI.allocateTeacher({
-                academic_year_id: currentAcademicYear.id,
-                term_id: currentTerm.id,
-                stream_id: selectedStream,
-                subject_id: selectedSubject,
-                teacher_id: selectedTeacher
-            }, user.id)
+            unwrapIPCResult(
+                await globalThis.electronAPI.allocateTeacher({
+                    academic_year_id: currentAcademicYear.id,
+                    term_id: currentTerm.id,
+                    stream_id: selectedStream,
+                    subject_id: selectedSubject,
+                    teacher_id: selectedTeacher
+                }, user.id),
+                'Failed to save teacher allocation'
+            )
 
             // Refresh allocations list
             await loadAllocations()
@@ -119,21 +129,27 @@ export default function TeacherAllocation() {
             showToast('Teacher allocated successfully', 'success')
         } catch (error) {
             console.error('Failed to allocate teacher:', error)
-            showToast('Failed to save allocation', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to save allocation', 'error')
         } finally {
             setSaving(false)
         }
     }
 
     const handleDeleteAllocation = async (allocationId: number) => {
-        if (!user) { return }
+        if (!user?.id) {
+            showToast('You must be signed in to remove allocations', 'error')
+            return
+        }
         try {
-            await globalThis.electronAPI.deleteTeacherAllocation(allocationId, user.id)
+            unwrapIPCResult(
+                await globalThis.electronAPI.deleteTeacherAllocation(allocationId, user.id),
+                'Failed to remove teacher allocation'
+            )
             await loadAllocations()
             showToast('Allocation removed', 'success')
         } catch (error) {
             console.error('Failed to delete allocation:', error)
-            showToast('Failed to remove allocation', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to remove allocation', 'error')
         }
     }
 

@@ -1,11 +1,12 @@
 import { Download, Printer, FileText } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 import { PageHeader } from '../../components/patterns/PageHeader';
 import { Select } from '../../components/ui/Select';
 import { useToast } from '../../contexts/ToastContext';
 import { useAppStore } from '../../stores';
 import { exportToPDF } from '../../utils/exporters';
+import { unwrapArrayResult } from '../../utils/ipc';
 import { printCurrentView } from '../../utils/print';
 
 interface MeritListItem {
@@ -45,18 +46,19 @@ const MeritLists = () => {
 
   const [selectedStream, setSelectedStream] = useState<number>(0);
 
-  useEffect(() => {
-    void loadInitialData();
-  }, []);
-
-  const loadInitialData = async () => {
+  const loadInitialData = useCallback(async () => {
     try {
-      const streamsData = await globalThis.electronAPI.getStreams();
-      setStreams(Array.isArray(streamsData) ? streamsData : []);
+      const streamsData = unwrapArrayResult(await globalThis.electronAPI.getStreams(), 'Failed to load streams');
+      setStreams(streamsData);
     } catch (error) {
       console.error('Failed to load initial data:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to load streams', 'error');
     }
-  };
+  }, [showToast]);
+
+  useEffect(() => {
+    void loadInitialData();
+  }, [loadInitialData]);
 
   const handleGenerate = async () => {
     if (!currentAcademicYear || !currentTerm || !selectedStream) {
@@ -66,12 +68,15 @@ const MeritLists = () => {
 
     setLoading(true);
     try {
-      const list = await globalThis.electronAPI.generateMeritList({
-        academicYearId: currentAcademicYear.id,
-        termId: currentTerm.id,
-        streamId: selectedStream,
-      });
-      setMeritList(Array.isArray(list) ? list : []);
+      const list = unwrapArrayResult(
+        await globalThis.electronAPI.generateMeritList({
+          academicYearId: currentAcademicYear.id,
+          termId: currentTerm.id,
+          streamId: selectedStream,
+        }),
+        'Failed to generate merit list'
+      );
+      setMeritList(list);
     } catch (error) {
       console.error('Failed to generate merit list:', error);
       showToast('Failed to generate merit list.', 'error');

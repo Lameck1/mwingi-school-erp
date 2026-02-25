@@ -8,8 +8,10 @@
 import React, { useEffect, useState } from 'react';
 
 import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb';
+import { useToast } from '../../../contexts/ToastContext';
 import { useAuthStore, useAppStore } from '../../../stores';
 import { formatCurrency, shillingsToCents } from '../../../utils/format';
+import { getIPCFailureMessage, isIPCFailure } from '../../../utils/ipc'
 
 
 interface ImportedBalance {
@@ -68,7 +70,24 @@ const parseCsvBalances = (text: string): { balances: ImportedBalance[]; error?: 
   return { balances: parsed };
 };
 
+const getResultMessage = (value: unknown, fallback: string): string => {
+  if (isIPCFailure(value)) {
+    return getIPCFailureMessage(value, fallback)
+  }
+  if (value && typeof value === 'object') {
+    const maybe = value as { error?: unknown; message?: unknown }
+    if (typeof maybe.error === 'string' && maybe.error.trim()) {
+      return maybe.error
+    }
+    if (typeof maybe.message === 'string' && maybe.message.trim()) {
+      return maybe.message
+    }
+  }
+  return fallback
+}
+
 export const OpeningBalanceImport: React.FC = () => {
+  const { showToast } = useToast();
   const { user } = useAuthStore();
   const { currentAcademicYear } = useAppStore();
   const [balances, setBalances] = useState<ImportedBalance[]>([]);
@@ -103,30 +122,33 @@ export const OpeningBalanceImport: React.FC = () => {
       const text = await file.text();
       const { balances: parsed, error } = parseCsvBalances(text);
       if (error) {
-        alert(error);
+        showToast(error, 'error');
         return;
       }
 
       if (parsed.length === 0) {
-        alert('No valid rows found in CSV file');
+        showToast('No valid rows found in CSV file', 'warning');
         return;
       }
 
       setBalances(parsed);
       setVerified(false);
+      showToast(`Loaded ${parsed.length} balance row(s)`, 'success');
     } catch (err) {
       console.error('CSV parse error:', err);
-      alert('Failed to parse CSV file. Ensure it is a valid CSV format.');
+      showToast('Failed to parse CSV file. Ensure it is a valid CSV format.', 'error');
+    } finally {
+      event.target.value = '';
     }
   };
 
   const handleAddBalance = () => {
     if (!newBalance.identifier || !newBalance.name || newBalance.amount <= 0) {
-      alert('Please fill all fields');
+      showToast('Please fill all fields', 'warning');
       return;
     }
 
-    setBalances([...balances, { ...newBalance }]);
+    setBalances((prev) => [...prev, { ...newBalance }]);
     setNewBalance({
       type: 'STUDENT',
       identifier: '',
@@ -139,11 +161,16 @@ export const OpeningBalanceImport: React.FC = () => {
   };
 
   const handleRemoveBalance = (index: number) => {
-    setBalances(balances.filter((_, i) => i !== index));
+    setBalances((prev) => prev.filter((_, i) => i !== index));
     setVerified(false);
   };
 
   const handleVerify = () => {
+    if (balances.length === 0) {
+      showToast('Add balances before verification', 'warning');
+      return;
+    }
+
     const totalDebits = balances
       .filter((b) => b.debitCredit === 'DEBIT')
       .reduce((sum, b) => sum + b.amount, 0);
@@ -154,30 +181,31 @@ export const OpeningBalanceImport: React.FC = () => {
 
     if (Math.abs(totalDebits - totalCredits) < 0.01) {
       setVerified(true);
-      alert('✓ Verification successful! Debits equal credits.');
+      showToast('Verification successful. Debits equal credits.', 'success');
     } else {
       setVerified(false);
-      alert(
-        `✗ Verification failed!\nDebits: Kes ${totalDebits.toFixed(
-          2
-        )}\nCredits: Kes ${totalCredits.toFixed(
-          2
-        )}\nVariance: Kes ${Math.abs(totalDebits - totalCredits).toFixed(2)}`
+      showToast(
+        `Verification failed. Debits: Kes ${totalDebits.toFixed(2)}, Credits: Kes ${totalCredits.toFixed(2)}, Variance: Kes ${Math.abs(totalDebits - totalCredits).toFixed(2)}`,
+        'error'
       );
     }
   };
 
   const handleImport = async () => {
+    if (balances.length === 0) {
+      showToast('Add balances before importing', 'warning');
+      return;
+    }
     if (!verified) {
-      alert('Please verify balances before importing');
+      showToast('Please verify balances before importing', 'warning');
       return;
     }
     if (!user?.id) {
-      alert('You must be signed in to import opening balances');
+      showToast('You must be signed in to import opening balances', 'error');
       return;
     }
     if (!currentAcademicYear?.id) {
-      alert('Select an active academic year before importing balances');
+      showToast('Select an active academic year before importing balances', 'error');
       return;
     }
 
@@ -196,7 +224,7 @@ export const OpeningBalanceImport: React.FC = () => {
 
       const invalidStudent = studentBalances.find(b => !Number.isFinite(b.student_id) || b.student_id <= 0);
       if (invalidStudent) {
-        alert('Student balances must include a valid numeric student ID in the identifier field.');
+        showToast('Student balances must include a valid numeric student ID in the identifier field.', 'error');
         return;
       }
 
@@ -213,18 +241,29 @@ export const OpeningBalanceImport: React.FC = () => {
         }));
 
       if (studentBalances.length > 0) {
-        await globalThis.electronAPI.importStudentOpeningBalances(studentBalances, currentAcademicYear.id, 'csv_import', user.id);
+        const studentImportResult = await globalThis.electronAPI.importStudentOpeningBalances(
+          studentBalances,
+          currentAcademicYear.id,
+          'csv_import',
+          user.id
+        );
+        if (!studentImportResult || studentImportResult.success !== true) {
+          throw new Error(getResultMessage(studentImportResult, 'Failed to import student opening balances'));
+        }
       }
       if (glBalances.length > 0) {
-        await globalThis.electronAPI.importGLOpeningBalances(glBalances, user.id);
+        const glImportResult = await globalThis.electronAPI.importGLOpeningBalances(glBalances, user.id);
+        if (!glImportResult || glImportResult.success !== true) {
+          throw new Error(getResultMessage(glImportResult, 'Failed to import GL opening balances'));
+        }
       }
 
-      alert('Opening balances imported successfully!');
+      showToast('Opening balances imported successfully', 'success');
       setBalances([]);
       setVerified(false);
     } catch (error) {
       console.error('Import failed:', error);
-      alert('Import failed. Please try again.');
+      showToast(error instanceof Error ? error.message : 'Import failed. Please try again.', 'error');
     } finally {
       setImporting(false);
     }
@@ -280,7 +319,7 @@ export const OpeningBalanceImport: React.FC = () => {
             <input
               id="opening-balance-upload"
               type="file"
-              accept=".csv,.xlsx"
+              accept=".csv,text/csv"
               onChange={handleFileUpload}
               className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
             />

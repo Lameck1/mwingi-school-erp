@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 
 import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
+import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore } from '../../stores'
 import { type HireBooking, type HireAsset, type HireClient, type HireStats } from '../../types/electron-api/HireAPI'
 import { formatCurrencyFromCents, shillingsToCents, centsToShillings } from '../../utils/format'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 import { printDocument } from '../../utils/print'
 
 
@@ -22,6 +24,7 @@ const getStatusColor = (status: string) => {
 
 export default function AssetHire() {
     const { user } = useAuthStore()
+    const { showToast } = useToast()
     const [activeTab, setActiveTab] = useState<TabType>('bookings')
     const [bookings, setBookings] = useState<HireBooking[]>([])
     const [clients, setClients] = useState<HireClient[]>([])
@@ -35,11 +38,19 @@ export default function AssetHire() {
     const [statusFilter, setStatusFilter] = useState('')
     const [searchQuery, setSearchQuery] = useState('')
 
+    const getTodayDate = () => new Date().toISOString().split('T')[0] ?? ''
+    const buildPaymentForm = (balanceCents?: number) => ({
+        amount: balanceCents !== undefined ? String(centsToShillings(balanceCents)) : '',
+        payment_method: 'CASH',
+        payment_reference: '',
+        payment_date: getTodayDate()
+    })
+
     // Booking form state
     const [bookingForm, setBookingForm] = useState({
         asset_id: 0,
         client_id: 0,
-        hire_date: new Date().toISOString().split('T')[0] ?? '',
+        hire_date: getTodayDate(),
         return_date: '',
         purpose: '',
         destination: '',
@@ -58,18 +69,15 @@ export default function AssetHire() {
     })
 
     // Payment form state
-    const [paymentForm, setPaymentForm] = useState({
-        amount: '',
-        payment_method: 'CASH',
-        payment_reference: '',
-        payment_date: new Date().toISOString().split('T')[0]
-    })
+    const [paymentForm, setPaymentForm] = useState(buildPaymentForm())
 
-    useEffect(() => {
-        void loadData()
-    }, [])
+    const closePaymentModal = () => {
+        setShowPaymentModal(false)
+        setSelectedBooking(null)
+        setPaymentForm(buildPaymentForm())
+    }
 
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         setLoading(true)
         try {
             const [bookingsRes, clientsRes, assetsRes, statsRes] = await Promise.all([
@@ -78,128 +86,176 @@ export default function AssetHire() {
                 globalThis.electronAPI.getHireAssets({ isActive: true }),
                 globalThis.electronAPI.getHireStats()
             ])
-            setBookings(bookingsRes)
-            setClients(clientsRes)
-            setAssets(assetsRes)
-            setStats(statsRes)
+            setBookings(unwrapArrayResult(bookingsRes, 'Failed to load hire bookings'))
+            setClients(unwrapArrayResult(clientsRes, 'Failed to load hire clients'))
+            setAssets(unwrapArrayResult(assetsRes, 'Failed to load hire assets'))
+            setStats(unwrapIPCResult<HireStats>(statsRes, 'Failed to load hire statistics'))
         } catch (error) {
             console.error('Failed to load hire data:', error)
+            setBookings([])
+            setClients([])
+            setAssets([])
+            setStats(null)
+            showToast(error instanceof Error ? error.message : 'Failed to load hire data', 'error')
         } finally {
             setLoading(false)
         }
-    }
+    }, [showToast])
+
+    useEffect(() => {
+        void loadData()
+    }, [loadData])
 
     const handleCreateBooking = async (e: React.SyntheticEvent) => {
         e.preventDefault()
-        if (!user) { return }
+        if (!user) {
+            showToast('User not authenticated', 'error')
+            return
+        }
 
         // Validate
         if (!bookingForm.asset_id || !bookingForm.client_id || !bookingForm.total_amount) {
-            alert('Please fill in all required fields')
+            showToast('Please fill in all required fields', 'warning')
             return
         }
 
-        // Check availability
-        const available = await globalThis.electronAPI.checkHireAvailability(
-            bookingForm.asset_id,
-            bookingForm.hire_date,
-            bookingForm.return_date || undefined
-        )
-        if (!available) {
-            alert('Asset is not available for the selected dates')
-            return
-        }
+        try {
+            const available = unwrapIPCResult(
+                await globalThis.electronAPI.checkHireAvailability(
+                    bookingForm.asset_id,
+                    bookingForm.hire_date,
+                    bookingForm.return_date || undefined
+                ),
+                'Failed to verify asset availability'
+            )
+            if (!available) {
+                showToast('Asset is not available for the selected dates', 'warning')
+                return
+            }
 
-        const result = await globalThis.electronAPI.createHireBooking({
-            ...bookingForm,
-            distance_km: bookingForm.distance_km ? Number.parseFloat(bookingForm.distance_km) : undefined,
-            total_amount: shillingsToCents(bookingForm.total_amount)
-        } as Parameters<typeof globalThis.electronAPI.createHireBooking>[0], user.id)
+            const result = await globalThis.electronAPI.createHireBooking({
+                ...bookingForm,
+                distance_km: bookingForm.distance_km ? Number.parseFloat(bookingForm.distance_km) : undefined,
+                total_amount: shillingsToCents(bookingForm.total_amount)
+            } as Parameters<typeof globalThis.electronAPI.createHireBooking>[0], user.id)
 
-        if (result.success) {
-            alert(`Booking created! Number: ${result.booking_number}`)
-            setShowBookingModal(false)
-            setBookingForm({
-                asset_id: 0, client_id: 0, hire_date: new Date().toISOString().split('T')[0] ?? '',
-                return_date: '', purpose: '', destination: '', distance_km: '', total_amount: ''
-            })
-            void loadData()
-        } else {
-            alert(`Error: ${result.errors?.join(', ')}`)
+            if (result.success) {
+                showToast(`Booking created: ${result.booking_number || 'N/A'}`, 'success')
+                setShowBookingModal(false)
+                setBookingForm({
+                    asset_id: 0, client_id: 0, hire_date: getTodayDate(),
+                    return_date: '', purpose: '', destination: '', distance_km: '', total_amount: ''
+                })
+                void loadData()
+                return
+            }
+
+            showToast((result.errors && result.errors[0]) || 'Failed to create booking', 'error')
+        } catch (error) {
+            console.error('Failed to create booking:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to create booking', 'error')
         }
     }
 
     const handleCreateClient = async (e: React.SyntheticEvent) => {
         e.preventDefault()
-        const result = await globalThis.electronAPI.createHireClient(clientForm)
-        if (result.success) {
-            alert('Client created successfully!')
-            setShowClientModal(false)
-            setClientForm({ client_name: '', contact_phone: '', contact_email: '', organization: '', address: '', notes: '' })
-            void loadData()
-        } else {
-            alert(`Error: ${result.errors?.join(', ')}`)
+        try {
+            const result = await globalThis.electronAPI.createHireClient(clientForm)
+            if (result.success) {
+                showToast('Client created successfully', 'success')
+                setShowClientModal(false)
+                setClientForm({ client_name: '', contact_phone: '', contact_email: '', organization: '', address: '', notes: '' })
+                void loadData()
+                return
+            }
+            showToast((result.errors && result.errors[0]) || 'Failed to create client', 'error')
+        } catch (error) {
+            console.error('Failed to create client:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to create client', 'error')
         }
     }
 
     const handleRecordPayment = async (e: React.SyntheticEvent) => {
         e.preventDefault()
-        if (!user || !selectedBooking) { return }
+        if (!user || !selectedBooking) {
+            showToast('Select a booking before recording payment', 'warning')
+            return
+        }
 
-        const result = await globalThis.electronAPI.recordHirePayment(
-            selectedBooking.id,
-            {
-                ...paymentForm,
-                amount: shillingsToCents(paymentForm.amount)
-            } as Parameters<typeof globalThis.electronAPI.recordHirePayment>[1],
-            user.id
-        )
+        try {
+            const result = await globalThis.electronAPI.recordHirePayment(
+                selectedBooking.id,
+                {
+                    ...paymentForm,
+                    amount: shillingsToCents(paymentForm.amount)
+                } as Parameters<typeof globalThis.electronAPI.recordHirePayment>[1],
+                user.id
+            )
 
-        if (result.success) {
-            alert(`Payment recorded! Receipt: ${result.receipt_number}`)
-            setShowPaymentModal(false)
-            setPaymentForm({ amount: '', payment_method: 'CASH', payment_reference: '', payment_date: new Date().toISOString().split('T')[0] })
-            setSelectedBooking(null)
-            void loadData()
-        } else {
-            alert(`Error: ${result.errors?.join(', ')}`)
+            if (result.success) {
+                showToast(`Payment recorded: ${result.receipt_number || 'receipt issued'}`, 'success')
+                closePaymentModal()
+                void loadData()
+                return
+            }
+
+            showToast((result.errors && result.errors[0]) || 'Failed to record payment', 'error')
+        } catch (error) {
+            console.error('Failed to record payment:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to record payment', 'error')
         }
     }
 
     const handleUpdateStatus = async (bookingId: number, status: 'CONFIRMED' | 'PENDING' | 'CANCELLED' | 'IN_PROGRESS' | 'COMPLETED') => {
-        const result = await globalThis.electronAPI.updateHireBookingStatus(bookingId, status)
-        if (result.success) {
-            void loadData()
-        } else {
-            alert(`Error: ${result.errors?.join(', ')}`)
+        try {
+            const result = await globalThis.electronAPI.updateHireBookingStatus(bookingId, status)
+            if (result.success) {
+                void loadData()
+                return
+            }
+            showToast((result.errors && result.errors[0]) || 'Failed to update booking status', 'error')
+        } catch (error) {
+            console.error('Failed to update booking status:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to update booking status', 'error')
         }
     }
 
     const handlePrintReceipt = async (booking: HireBooking) => {
-        const payments = await globalThis.electronAPI.getHirePaymentsByBooking(booking.id)
-        const latestPayment = payments[0]
-        if (!latestPayment) {
-            alert('No payments to print')
-            return
-        }
+        try {
+            const payments = unwrapArrayResult(
+                await globalThis.electronAPI.getHirePaymentsByBooking(booking.id),
+                'Failed to load booking payments'
+            )
+            const latestPayment = payments[0]
+            if (!latestPayment) {
+                showToast('No payments available to print', 'warning')
+                return
+            }
 
-        const settings = await globalThis.electronAPI.getSchoolSettings()
-        printDocument({
-            title: `Hire Receipt - ${latestPayment.receipt_number}`,
-            template: 'receipt',
-            data: {
-                receiptNumber: latestPayment.receipt_number,
-                date: latestPayment.payment_date,
-                amount: latestPayment.amount,
-                paymentMode: latestPayment.payment_method,
-                reference: latestPayment.payment_reference,
-                studentName: booking.client_name,
-                admissionNumber: booking.booking_number,
-                description: `Asset Hire: ${booking.asset_name}`,
-                amountInWords: `${numberToWords(Math.floor(latestPayment.amount / 100))} Shillings Only`
-            },
-            schoolSettings: settings ? (settings as Record<string, unknown>) : {}
-        })
+            const settings = unwrapIPCResult(
+                await globalThis.electronAPI.getSchoolSettings(),
+                'Failed to load school settings'
+            )
+            printDocument({
+                title: `Hire Receipt - ${latestPayment.receipt_number}`,
+                template: 'receipt',
+                data: {
+                    receiptNumber: latestPayment.receipt_number,
+                    date: latestPayment.payment_date,
+                    amount: latestPayment.amount,
+                    paymentMode: latestPayment.payment_method,
+                    reference: latestPayment.payment_reference,
+                    studentName: booking.client_name,
+                    admissionNumber: booking.booking_number,
+                    description: `Asset Hire: ${booking.asset_name}`,
+                    amountInWords: `${numberToWords(Math.floor(latestPayment.amount / 100))} Shillings Only`
+                },
+                schoolSettings: settings ? (settings as Record<string, unknown>) : {}
+            })
+        } catch (error) {
+            console.error('Failed to print hire receipt:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to print receipt', 'error')
+        }
     }
 
     const numberToWords = (num: number): string => {
@@ -358,7 +414,11 @@ export default function AssetHire() {
                                         {booking.status !== 'COMPLETED' && booking.status !== 'CANCELLED' && (
                                             <>
                                                 <button
-                                                    onClick={() => { setSelectedBooking(booking); setShowPaymentModal(true); setPaymentForm({ ...paymentForm, amount: String(centsToShillings(booking.balance || 0)) }) }}
+                                                    onClick={() => {
+                                                        setSelectedBooking(booking)
+                                                        setPaymentForm(buildPaymentForm(booking.balance || 0))
+                                                        setShowPaymentModal(true)
+                                                    }}
                                                     className="text-success hover:text-success/80"
                                                 >
                                                     Pay
@@ -651,7 +711,7 @@ export default function AssetHire() {
                                     value={paymentForm.amount}
                                     onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
                                     className="w-full border border-border rounded-lg p-2 bg-input text-foreground"
-                                    max={selectedBooking.balance}
+                                    max={centsToShillings(selectedBooking.balance || 0)}
                                     required
                                     aria-label="Payment amount in KES"
                                 />
@@ -695,7 +755,7 @@ export default function AssetHire() {
                             <div className="flex justify-end gap-2">
                                 <button
                                     type="button"
-                                    onClick={() => { setShowPaymentModal(false); setSelectedBooking(null); }}
+                                    onClick={closePaymentModal}
                                     className="px-4 py-2 bg-secondary rounded-lg"
                                 >
                                     Cancel

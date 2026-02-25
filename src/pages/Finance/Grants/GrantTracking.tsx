@@ -14,6 +14,7 @@ import { useToast } from '../../../contexts/ToastContext'
 import { useAuthStore } from '../../../stores'
 import { type Grant } from '../../../types/electron-api'
 import { formatCurrencyFromCents, shillingsToCents } from '../../../utils/format'
+import { unwrapArrayResult, unwrapIPCResult } from '../../../utils/ipc'
 
 function renderUtilizationCell(row: Grant) {
     const percentage = row.utilization_percentage || 0;
@@ -79,10 +80,11 @@ export default function GrantTracking() {
         setLoading(true)
         try {
             const data = await globalThis.electronAPI.getGrantsByStatus(filterStatus)
-            setGrants(data)
+            setGrants(unwrapArrayResult(data, 'Failed to load grants'))
         } catch (error) {
             console.error(error)
-            showToast('Failed to load grants', 'error')
+            setGrants([])
+            showToast(error instanceof Error ? error.message : 'Failed to load grants', 'error')
         } finally {
             setLoading(false)
         }
@@ -99,17 +101,20 @@ export default function GrantTracking() {
             return
         }
         try {
-            await globalThis.electronAPI.createGrant({
+            unwrapIPCResult(
+                await globalThis.electronAPI.createGrant({
                 ...createForm,
                 amount_allocated: shillingsToCents(createForm.amount_allocated),
                 amount_received: shillingsToCents(createForm.amount_received)
-            }, user.id)
+                }, user.id),
+                'Failed to create grant'
+            )
             showToast('Grant created successfully', 'success')
             setIsCreateModalOpen(false)
             loadData().catch((err: unknown) => console.error('Failed to reload grants', err))
         } catch (error) {
             console.error(error)
-            showToast('Failed to create grant', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to create grant', 'error')
         }
     }
 
@@ -121,26 +126,24 @@ export default function GrantTracking() {
             return
         }
         try {
-            const result = await globalThis.electronAPI.recordGrantUtilization({
+            unwrapIPCResult(
+                await globalThis.electronAPI.recordGrantUtilization({
                 grantId: selectedGrant.id,
                 amount: shillingsToCents(utilizationForm.amount),
                 description: utilizationForm.description,
                 glAccountCode: null,
                 utilizationDate: utilizationForm.utilizationDate,
                 userId: user.id
-            })
-            
-            if (result.success) {
-                showToast('Utilization recorded successfully', 'success')
-                setIsUtilizeModalOpen(false)
-                setUtilizationForm({ amount: '', description: '', utilizationDate: new Date().toISOString().slice(0, 10) })
-                loadData().catch((err: unknown) => console.error('Failed to reload grants', err))
-            } else {
-                showToast(result.error || 'Failed to record utilization', 'error')
-            }
+                }),
+                'Failed to record utilization'
+            )
+            showToast('Utilization recorded successfully', 'success')
+            setIsUtilizeModalOpen(false)
+            setUtilizationForm({ amount: '', description: '', utilizationDate: new Date().toISOString().slice(0, 10) })
+            loadData().catch((err: unknown) => console.error('Failed to reload grants', err))
         } catch (error) {
             console.error(error)
-            showToast('Error recording utilization', 'error')
+            showToast(error instanceof Error ? error.message : 'Error recording utilization', 'error')
         }
     }
 

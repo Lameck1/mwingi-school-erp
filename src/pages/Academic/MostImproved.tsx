@@ -6,6 +6,7 @@ import { PageHeader } from '../../components/patterns/PageHeader'
 import { Select } from '../../components/ui/Select'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../stores'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 interface ImprovedStudent {
   student_id: number
@@ -52,9 +53,9 @@ const MostImproved = () => {
           globalThis.electronAPI.getStreams()
         ])
 
-        const termsList = Array.isArray(termsData) ? termsData : []
+        const termsList = unwrapArrayResult(termsData, 'Failed to load terms')
         setTerms(termsList.map((t: { id: number, term_name: string }) => ({ id: t.id, name: t.term_name })))
-        setStreams(Array.isArray(streamsData) ? streamsData : [])
+        setStreams(unwrapArrayResult(streamsData, 'Failed to load streams'))
 
         // Auto-select current term as comparison and previous term
         if (currentTerm && termsList.length > 0) {
@@ -67,14 +68,19 @@ const MostImproved = () => {
       }
     } catch (error) {
       console.error('Failed to load initial data:', error)
+      showToast(error instanceof Error ? error.message : 'Failed to load initial data', 'error')
     }
-  }, [currentAcademicYear, currentTerm])
+  }, [currentAcademicYear, currentTerm, showToast])
 
   useEffect(() => {
     loadInitialData().catch((err: unknown) => console.error('Failed to load initial data:', err))
   }, [loadInitialData])
 
   const handleGenerateMostImproved = async () => {
+    if (!currentAcademicYear?.id) {
+      showToast('Please select an academic year', 'warning')
+      return
+    }
     if (!selectedCurrentTerm || !selectedComparisonTerm) {
       showToast('Please select both current and comparison terms', 'warning')
       return
@@ -82,15 +88,18 @@ const MostImproved = () => {
 
     setLoading(true)
     try {
-      const students = await globalThis.electronAPI.getMostImprovedStudents({
-        academicYearId: currentAcademicYear!.id,
-        currentTermId: selectedCurrentTerm,
-        comparisonTermId: selectedComparisonTerm,
-        ...(selectedStream ? { streamId: selectedStream } : {}),
-        minimumImprovement
-      })
+      const students = unwrapArrayResult(
+        await globalThis.electronAPI.getMostImprovedStudents({
+          academicYearId: currentAcademicYear.id,
+          currentTermId: selectedCurrentTerm,
+          comparisonTermId: selectedComparisonTerm,
+          ...(selectedStream ? { streamId: selectedStream } : {}),
+          minimumImprovement
+        }),
+        'Failed to generate most improved list'
+      )
 
-      setImprovedStudents(Array.isArray(students) ? students : [])
+      setImprovedStudents(students)
     } catch (error) {
       console.error('Failed to get most improved students:', error)
       showToast('Failed to generate list', 'error')
@@ -108,14 +117,16 @@ const MostImproved = () => {
     try {
       // Generate certificates for selected students
       await Promise.all(
-        improvedStudents.map(student =>
-          globalThis.electronAPI.generateCertificate({
+        improvedStudents.map(async (student) => unwrapIPCResult(
+          await globalThis.electronAPI.generateCertificate({
             studentId: student.student_id,
             studentName: student.student_name,
             awardCategory: selectedAward,
             academicYearId: currentAcademicYear!.id,
             improvementPercentage: student.improvement_percentage
-          })
+          }),
+          `Failed to generate certificate for ${student.student_name}`
+        )
         )
       )
       showToast(`${improvedStudents.length} certificates generated successfully!`, 'success')
@@ -136,11 +147,14 @@ const MostImproved = () => {
         showToast('Please sign in again to send emails', 'warning')
         return
       }
-      await globalThis.electronAPI.emailParents({
-        students: improvedStudents,
-        awardCategory: selectedAward,
-        templateType: 'improvement_award'
-      }, user.id)
+      unwrapIPCResult(
+        await globalThis.electronAPI.emailParents({
+          students: improvedStudents,
+          awardCategory: selectedAward,
+          templateType: 'improvement_award'
+        }, user.id),
+        'Failed to email parents'
+      )
       showToast(`Emails sent to ${improvedStudents.length} parents!`, 'success')
     } catch (error) {
       console.error('Failed to send emails:', error)

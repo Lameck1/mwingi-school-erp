@@ -2,6 +2,7 @@ import { Save, Lock, Smartphone, Mail, Globe, Eye, EyeOff } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 
 import { useToast } from '../../contexts/ToastContext'
+import { getIPCFailureMessage, isIPCFailure, unwrapIPCResult } from '../../utils/ipc'
 
 const MASKED_SECRET_VALUE = '******'
 
@@ -27,7 +28,10 @@ export default function IntegrationsSettings() {
 
     const loadConfigs = useCallback(async () => {
         try {
-            const all = await globalThis.electronAPI.getAllConfigs()
+            const all = unwrapIPCResult<Record<string, string>>(
+                await globalThis.electronAPI.getAllConfigs(),
+                'Failed to load integration settings'
+            )
 
             setSmsConfig(prev => ({
                 ...prev,
@@ -47,6 +51,19 @@ export default function IntegrationsSettings() {
 
         } catch (error) {
             console.error(error)
+            setSmsConfig({
+                provider: 'africastalking',
+                api_key: '',
+                username: '',
+                sender_id: ''
+            })
+            setSmtpConfig({
+                host: '',
+                port: '587',
+                user: '',
+                pass: '',
+                secure: 'false'
+            })
             showToast('Failed to load integration settings', 'error')
         }
     }, [showToast])
@@ -57,10 +74,20 @@ export default function IntegrationsSettings() {
 
     const shouldPersistConfigValue = (value: string): boolean => value.trim() !== MASKED_SECRET_VALUE
 
+    const normalizeSecureSaveResult = (result: unknown, fallback: string): boolean => {
+        if (typeof result === 'boolean') {
+            return result
+        }
+        if (isIPCFailure(result)) {
+            throw new Error(getIPCFailureMessage(result, fallback))
+        }
+        throw new Error(fallback)
+    }
+
     const handleSaveSMS = async () => {
         setLoading(true)
         try {
-            const saveOperations: Promise<boolean>[] = [
+            const saveOperations: Promise<unknown>[] = [
                 globalThis.electronAPI.saveSecureConfig('sms_provider', smsConfig.provider)
             ]
 
@@ -74,10 +101,16 @@ export default function IntegrationsSettings() {
                 saveOperations.push(globalThis.electronAPI.saveSecureConfig('sms_sender_id', smsConfig.sender_id))
             }
 
-            await Promise.all(saveOperations)
+            const saveResults = (await Promise.all(saveOperations)).map((result) =>
+                normalizeSecureSaveResult(result, 'Failed to persist SMS configuration')
+            )
+            if (saveResults.some((saved) => !saved)) {
+                throw new Error('One or more SMS configuration values were not persisted')
+            }
             showToast('SMS Gateway settings saved securely', 'success')
-        } catch {
-            showToast('Failed to save SMS settings', 'error')
+        } catch (error) {
+            console.error('Failed to save SMS settings:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to save SMS settings', 'error')
         } finally {
             setLoading(false)
         }
@@ -86,7 +119,7 @@ export default function IntegrationsSettings() {
     const handleSaveSMTP = async () => {
         setLoading(true)
         try {
-            const saveOperations: Promise<boolean>[] = []
+            const saveOperations: Promise<unknown>[] = []
 
             if (shouldPersistConfigValue(smtpConfig.host)) {
                 saveOperations.push(globalThis.electronAPI.saveSecureConfig('smtp_host', smtpConfig.host))
@@ -100,11 +133,21 @@ export default function IntegrationsSettings() {
             if (shouldPersistConfigValue(smtpConfig.pass)) {
                 saveOperations.push(globalThis.electronAPI.saveSecureConfig('smtp_pass', smtpConfig.pass))
             }
+            if (saveOperations.length === 0) {
+                showToast('No SMTP changes to save', 'warning')
+                return
+            }
 
-            await Promise.all(saveOperations)
+            const saveResults = (await Promise.all(saveOperations)).map((result) =>
+                normalizeSecureSaveResult(result, 'Failed to persist SMTP configuration')
+            )
+            if (saveResults.some((saved) => !saved)) {
+                throw new Error('One or more SMTP configuration values were not persisted')
+            }
             showToast('SMTP settings saved securely', 'success')
-        } catch {
-            showToast('Failed to save SMTP settings', 'error')
+        } catch (error) {
+            console.error('Failed to save SMTP settings:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to save SMTP settings', 'error')
         } finally {
             setLoading(false)
         }

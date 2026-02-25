@@ -11,6 +11,7 @@ import { Select } from '../../components/ui/Select'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../stores'
 import { type Stream, type AcademicYear, type Term, type PromotionStudent } from '../../types/electron-api/AcademicAPI'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 import { reportRuntimeError } from '../../utils/runtimeError'
 
 export default function Promotions() {
@@ -35,50 +36,57 @@ export default function Promotions() {
 
     const loadStreams = useCallback(async () => {
         try {
-            const data = await globalThis.electronAPI.getPromotionStreams()
-            if (Array.isArray(data)) {
-                setStreams(data)
-            } else if (data && 'success' in data && data.success === false) {
-                console.error('Failed to load streams:', data.error)
-            }
+            const data = unwrapArrayResult(await globalThis.electronAPI.getPromotionStreams(), 'Failed to load streams')
+            setStreams(data)
         } catch (error) {
             reportRuntimeError(error, { area: 'Students.Promotions', action: 'loadStreams' }, 'Failed to load streams')
+            setStreams([])
+            setFromStream(0)
+            setToStream(0)
+            setStudents([])
+            setSelectedStudents([])
+            showToast(error instanceof Error ? error.message : 'Failed to load streams', 'error')
         }
-    }, [])
+    }, [showToast])
 
     const loadAcademicYears = useCallback(async () => {
         try {
-            const data = await globalThis.electronAPI.getAcademicYears()
-            if (Array.isArray(data)) {
-                setAcademicYears(data)
-                // Default to next academic year if available
-                if (data.length > 1 && data[0]) {
-                    setToAcademicYear(data[0].id)
-                }
-            } else if (data && 'success' in data && data.success === false) {
-                console.error('Failed to load academic years:', data.error)
+            const data = unwrapArrayResult(await globalThis.electronAPI.getAcademicYears(), 'Failed to load academic years')
+            setAcademicYears(data)
+            // Prefer a non-current year as promotion destination.
+            const targetYear = data.find((year) => !year.is_current) || data[0] || null
+            if (targetYear) {
+                setToAcademicYear(targetYear.id)
             }
         } catch (error) {
             reportRuntimeError(error, { area: 'Students.Promotions', action: 'loadAcademicYears' }, 'Failed to load academic years')
+            setAcademicYears([])
+            setToAcademicYear(0)
+            setTerms([])
+            setToTerm(0)
+            showToast(error instanceof Error ? error.message : 'Failed to load academic years', 'error')
         }
-    }, [])
+    }, [showToast])
 
     const loadTerms = useCallback(async () => {
-        if (!toAcademicYear) { return }
+        if (!toAcademicYear) {
+            setTerms([])
+            setToTerm(0)
+            return
+        }
         try {
-            const data = await globalThis.electronAPI.getTermsByYear(toAcademicYear)
-            if (Array.isArray(data)) {
-                setTerms(data)
-                if (data.length > 0 && data[0]) {
-                    setToTerm(data[0].id)
-                }
-            } else if (data && 'success' in data && data.success === false) {
-                console.error('Failed to load terms:', data.error)
+            const data = unwrapArrayResult(await globalThis.electronAPI.getTermsByYear(toAcademicYear), 'Failed to load terms')
+            setTerms(data)
+            if (data.length > 0 && data[0]) {
+                setToTerm(data[0].id)
             }
         } catch (error) {
             reportRuntimeError(error, { area: 'Students.Promotions', action: 'loadTerms' }, 'Failed to load terms')
+            setTerms([])
+            setToTerm(0)
+            showToast(error instanceof Error ? error.message : 'Failed to load terms', 'error')
         }
-    }, [toAcademicYear])
+    }, [showToast, toAcademicYear])
 
     useEffect(() => {
         loadStreams().catch((err: unknown) => console.error('Failed to load streams', err))
@@ -92,33 +100,43 @@ export default function Promotions() {
     }, [toAcademicYear, loadTerms])
 
     const loadStudents = useCallback(async () => {
-        if (!currentAcademicYear) { return }
+        if (!currentAcademicYear) {
+            setStudents([])
+            setSelectedStudents([])
+            return
+        }
         setLoading(true)
         try {
-            const data = await globalThis.electronAPI.getStudentsForPromotion(fromStream, currentAcademicYear.id)
-            if (Array.isArray(data)) {
-                setStudents(data)
-            } else if (data && 'success' in data && data.success === false) {
-                console.error('Failed to load students for promotion:', data.error)
-            }
+            const data = unwrapArrayResult(
+                await globalThis.electronAPI.getStudentsForPromotion(fromStream, currentAcademicYear.id),
+                'Failed to load students for promotion'
+            )
+            setStudents(data)
             setSelectedStudents([])
         } catch (error) {
             reportRuntimeError(error, { area: 'Students.Promotions', action: 'loadStudents' }, 'Failed to load students')
+            setStudents([])
+            setSelectedStudents([])
+            showToast(error instanceof Error ? error.message : 'Failed to load students for promotion', 'error')
         } finally {
             setLoading(false)
         }
-    }, [fromStream, currentAcademicYear])
+    }, [fromStream, currentAcademicYear, showToast])
 
     const suggestNextStream = useCallback(async () => {
         try {
-            const next = await globalThis.electronAPI.getNextStream(fromStream)
-            if (next && !('success' in next)) {
+            const next = unwrapIPCResult<Stream | null>(
+                await globalThis.electronAPI.getNextStream(fromStream),
+                'Failed to get next stream'
+            )
+            if (next) {
                 setToStream(next.id)
             }
         } catch (error) {
             reportRuntimeError(error, { area: 'Students.Promotions', action: 'suggestNextStream' }, 'Failed to get next stream')
+            showToast(error instanceof Error ? error.message : 'Failed to get next stream', 'error')
         }
-    }, [fromStream])
+    }, [fromStream, showToast])
 
     useEffect(() => {
         if (fromStream && currentAcademicYear) {
@@ -128,7 +146,10 @@ export default function Promotions() {
             suggestNextStream().catch((err: unknown) => {
                 reportRuntimeError(err, { area: 'Students.Promotions', action: 'suggestNextStreamEffect' }, 'Failed to suggest next stream')
             })
+            return
         }
+        setStudents([])
+        setSelectedStudents([])
     }, [fromStream, currentAcademicYear, loadStudents, suggestNextStream])
 
     const toggleStudent = (studentId: number) => {
@@ -148,7 +169,14 @@ export default function Promotions() {
     }
 
     const handlePromote = () => {
-        if (!currentAcademicYear || !user) { return }
+        if (!currentAcademicYear) {
+            showToast('No active academic year selected', 'error')
+            return
+        }
+        if (!user?.id) {
+            showToast('You must be signed in to promote students', 'error')
+            return
+        }
         if (selectedStudents.length === 0) {
             showToast('Please select students to promote', 'warning')
             return
@@ -162,7 +190,14 @@ export default function Promotions() {
     }
 
     const executePromotion = async () => {
-        if (!currentAcademicYear || !user) { return }
+        if (!currentAcademicYear) {
+            showToast('No active academic year selected', 'error')
+            return
+        }
+        if (!user?.id) {
+            showToast('You must be signed in to promote students', 'error')
+            return
+        }
 
         setConfirmingPromotion(false)
         setLastPromotionFeedback(null)
@@ -416,4 +451,3 @@ export default function Promotions() {
         </div>
     )
 }
-

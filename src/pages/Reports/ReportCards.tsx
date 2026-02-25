@@ -7,7 +7,9 @@ import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
 import { Modal } from '../../components/ui/Modal'
 import { Select } from '../../components/ui/Select'
+import { useToast } from '../../contexts/ToastContext'
 import { useAppStore } from '../../stores'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 import { generateReportCardHTML } from '../../utils/reportCardGenerator'
 
 import type { Stream } from '../../types/electron-api/AcademicAPI'
@@ -16,6 +18,7 @@ import type { ReportCardData, ReportCardStudentEntry } from '../../types/electro
 
 export default function ReportCards() {
     const { currentAcademicYear, currentTerm } = useAppStore()
+    const { showToast } = useToast()
 
     const [streams, setStreams] = useState<Stream[]>([])
     const [selectedStream, setSelectedStream] = useState<number>(0)
@@ -30,60 +33,74 @@ export default function ReportCards() {
 
     useEffect(() => {
         void loadStreams()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     const loadStreams = async () => {
         try {
-            const data = await globalThis.electronAPI.getStreams()
-            if (Array.isArray(data)) {
-                setStreams(data)
-            }
+            const data = unwrapArrayResult(await globalThis.electronAPI.getStreams(), 'Failed to load streams')
+            setStreams(data)
         } catch (error) {
             console.error('Failed to load streams:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to load streams', 'error')
+            setStreams([])
         }
     }
 
     const loadStudents = useCallback(async () => {
-        if (!currentAcademicYear || !currentTerm) { return }
+        if (!currentAcademicYear || !currentTerm || selectedStream === 0) {
+            setStudents([])
+            return
+        }
         setLoading(true)
         try {
-            const data = await globalThis.electronAPI.getStudentsForReportCards(
-                selectedStream, currentAcademicYear.id, currentTerm.id
+            const data = unwrapArrayResult(
+                await globalThis.electronAPI.getStudentsForReportCards(
+                    selectedStream, currentAcademicYear.id, currentTerm.id
+                ),
+                'Failed to load students for report cards'
             )
-            if (Array.isArray(data)) {
-                setStudents(data)
-            }
+            setStudents(data)
         } catch (error) {
             console.error('Failed to load students:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to load students for report cards', 'error')
+            setStudents([])
         } finally {
             setLoading(false)
         }
-    }, [selectedStream, currentAcademicYear, currentTerm])
+    }, [selectedStream, currentAcademicYear, currentTerm, showToast])
 
     useEffect(() => {
         if (selectedStream && currentAcademicYear && currentTerm) {
             loadStudents().catch((err: unknown) => console.error('Failed to load students for report cards', err))
+        } else {
+            setStudents([])
         }
     }, [selectedStream, currentAcademicYear, currentTerm, loadStudents])
 
 
     const handleViewStudent = async (studentId: number) => {
-        if (!currentAcademicYear || !currentTerm) { return }
+        if (!currentAcademicYear || !currentTerm) {
+            showToast('Select an active academic year and term before generating report cards', 'warning')
+            return
+        }
         setGenerating(true)
         try {
-            const result = await globalThis.electronAPI.generateReportCard(
-                studentId, currentAcademicYear.id, currentTerm.id
+            const result = unwrapIPCResult<ReportCardData | null>(
+                await globalThis.electronAPI.generateReportCard(
+                    studentId, currentAcademicYear.id, currentTerm.id
+                ),
+                'Failed to generate report card'
             )
-            if (result && !('success' in result)) {
+            if (result) {
                 setPreviewData(result)
                 setShowPreview(true)
-            } else if (result && 'success' in result && result.success === false) {
-                alert(result.error)
             } else {
-                alert('No report card data available for this student')
+                showToast('No report card data available for this student', 'warning')
             }
         } catch (error) {
             console.error('Failed to generate report card:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to generate report card', 'error')
         } finally {
             setGenerating(false)
         }
@@ -99,16 +116,23 @@ export default function ReportCards() {
                 globalThis.electronAPI.reports.downloadReportCardPDF(
                     htmlContent,
                     `report-card-${previewData.student.admission_number}.pdf`
-                ).catch((err: unknown) => {
-                    console.error('Failed to download PDF:', err)
-                    alert('Failed to download PDF')
-                })
+                )
+                    .then((result) => {
+                        const downloadResult = unwrapIPCResult<{ filePath: string }>(result, 'Failed to download PDF')
+                        showToast('Report card PDF downloaded', 'success')
+                        return downloadResult.filePath
+                    })
+                    .catch((err: unknown) => {
+                        console.error('Failed to download PDF:', err)
+                        showToast(err instanceof Error ? err.message : 'Failed to download PDF', 'error')
+                        return null
+                    })
             }
 
             previewHTML(`Report Card - ${previewData.student.admission_number}`, htmlContent, onDownload)
         } catch (error) {
             console.error('Failed to preview report card:', error)
-            alert('Failed to preview report card')
+            showToast(error instanceof Error ? error.message : 'Failed to preview report card', 'error')
         }
     }
 

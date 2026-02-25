@@ -9,6 +9,7 @@ import { Select } from '../../components/ui/Select'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore } from '../../stores'
 import { exportToPDF } from '../../utils/exporters'
+import { type IPCFailure, unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 interface PerformanceSummary {
   mean_score: number
@@ -67,12 +68,13 @@ const ReportCardAnalytics = () => {
         globalThis.electronAPI.getStreams()
       ])
 
-      setExams(Array.isArray(examsData) ? examsData : [])
-      setStreams(Array.isArray(streamsData) ? streamsData : [])
+      setExams(unwrapArrayResult(examsData, 'Failed to load exams'))
+      setStreams(unwrapArrayResult(streamsData, 'Failed to load streams'))
     } catch (error) {
       console.error('Failed to load initial data:', error)
+      showToast(error instanceof Error ? error.message : 'Failed to load initial data', 'error')
     }
-  }, [currentAcademicYear, currentTerm])
+  }, [currentAcademicYear, currentTerm, showToast])
 
   useEffect(() => {
     loadInitialData().catch((err: unknown) => console.error('Failed to load initial data:', err))
@@ -105,10 +107,15 @@ const ReportCardAnalytics = () => {
         })
       ])
 
-      setPerformanceSummary(summary && typeof summary === 'object' && !('success' in summary) ? summary : null)
-      setGradeDistribution(Array.isArray(grades) ? grades : [])
-      setSubjectPerformance(Array.isArray(subjects) ? subjects : [])
-      setTermComparison(Array.isArray(comparison) ? comparison : [])
+      setPerformanceSummary(
+        unwrapIPCResult<PerformanceSummary>(
+          summary as PerformanceSummary | IPCFailure,
+          'Failed to load performance summary'
+        )
+      )
+      setGradeDistribution(unwrapArrayResult(grades, 'Failed to load grade distribution'))
+      setSubjectPerformance(unwrapArrayResult(subjects, 'Failed to load subject performance'))
+      setTermComparison(unwrapArrayResult(comparison, 'Failed to load term comparison'))
     } catch (error) {
       console.error('Failed to analyze:', error)
       showToast('Failed to analyze report cards', 'error')

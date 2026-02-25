@@ -6,6 +6,8 @@ import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
+import { useToast } from '../../contexts/ToastContext'
+import { unwrapArrayResult } from '../../utils/ipc'
 
 const MessageTemplates = lazy(() => import('../Settings/MessageTemplates'))
 
@@ -23,6 +25,7 @@ interface LogEntry {
 }
 
 export default function CommunicationLog() {
+    const { showToast } = useToast()
     const [logs, setLogs] = useState<LogEntry[]>([])
     const [loading, setLoading] = useState(true)
     const [stats, setStats] = useState({ total: 0, sent: 0, failed: 0, sms: 0, email: 0 })
@@ -40,15 +43,13 @@ export default function CommunicationLog() {
         setLoading(true)
         try {
             // Use existing getMessageLogs API which takes a limit parameter
-            const data = await globalThis.electronAPI.getMessageLogs(100)
-
-            // API results wrapped in validatedHandler return { success: false, error } on failure
-            if (!Array.isArray(data) && data && 'success' in data && data.success === false) {
-                throw new Error(data.error || 'Unknown IPC error')
-            }
+            const data = unwrapArrayResult(
+                await globalThis.electronAPI.getMessageLogs(100),
+                'Failed to load communication logs'
+            )
 
             // Apply client-side filtering since the API doesn't support it
-            let filteredData = Array.isArray(data) ? data : []
+            let filteredData = data
 
             if (typeFilter !== 'ALL') {
                 filteredData = filteredData.filter((l: LogEntry) => l.message_type === typeFilter)
@@ -63,16 +64,35 @@ export default function CommunicationLog() {
                     l.subject?.toLowerCase().includes(query)
                 )
             }
+            if (dateRange.start || dateRange.end) {
+                const startDate = dateRange.start ? new Date(`${dateRange.start}T00:00:00`) : null
+                const endDate = dateRange.end ? new Date(`${dateRange.end}T23:59:59.999`) : null
+                filteredData = filteredData.filter((l: LogEntry) => {
+                    const createdAt = new Date(l.created_at)
+                    if (Number.isNaN(createdAt.getTime())) {
+                        return false
+                    }
+                    if (startDate && createdAt < startDate) {
+                        return false
+                    }
+                    if (endDate && createdAt > endDate) {
+                        return false
+                    }
+                    return true
+                })
+            }
 
             setLogs(filteredData)
             calculateStats(filteredData)
         } catch (error) {
             console.error('Failed to load communication logs:', error)
             setLogs([])
+            setStats({ total: 0, sent: 0, failed: 0, sms: 0, email: 0 })
+            showToast(error instanceof Error ? error.message : 'Failed to load communication logs', 'error')
         } finally {
             setLoading(false)
         }
-    }, [typeFilter, statusFilter, searchQuery])
+    }, [dateRange.end, dateRange.start, searchQuery, showToast, statusFilter, typeFilter])
 
     useEffect(() => {
         loadLogs().catch((err: unknown) => console.error('Failed to load logs:', err))
@@ -97,6 +117,30 @@ export default function CommunicationLog() {
         return status === 'FAILED'
             ? 'bg-red-500 text-white shadow-lg'
             : 'bg-green-500 text-white shadow-lg'
+    }
+
+    const renderDeliveryStatus = (status: LogEntry['status']) => {
+        if (status === 'SENT') {
+            return (
+                <span className="inline-flex items-center gap-1 text-green-400 text-xs font-bold">
+                    <CheckCircle className="w-3 h-3" /> Sent
+                </span>
+            )
+        }
+
+        if (status === 'FAILED') {
+            return (
+                <span className="inline-flex items-center gap-1 text-red-400 text-xs font-bold">
+                    <XCircle className="w-3 h-3" /> Failed
+                </span>
+            )
+        }
+
+        return (
+            <span className="inline-flex items-center gap-1 text-amber-400 text-xs font-bold">
+                <MessageSquare className="w-3 h-3" /> Pending
+            </span>
+        )
     }
 
     return (
@@ -242,15 +286,7 @@ export default function CommunicationLog() {
                                                     )}
                                                 </td>
                                                 <td className="py-3 px-4">
-                                                    {log.status === 'SENT' ? (
-                                                        <span className="inline-flex items-center gap-1 text-green-400 text-xs font-bold">
-                                                            <CheckCircle className="w-3 h-3" /> Sent
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center gap-1 text-red-400 text-xs font-bold">
-                                                            <XCircle className="w-3 h-3" /> Failed
-                                                        </span>
-                                                    )}
+                                                    {renderDeliveryStatus(log.status)}
                                                 </td>
                                                 <td className="py-3 px-4 text-sm text-foreground/60">
                                                     {log.sent_by_name}

@@ -7,11 +7,14 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 import { PageHeader } from '../../../components/patterns/PageHeader'
 import { StatCard } from '../../../components/patterns/StatCard'
+import { useToast } from '../../../contexts/ToastContext'
 import { type CashFlowStatement, type FinancialForecast } from '../../../types/electron-api'
 import { exportToPDF } from '../../../utils/exporters'
 import { formatCurrencyFromCents } from '../../../utils/format'
+import { unwrapIPCResult } from '../../../utils/ipc'
 
 export default function CashFlow() {
+    const { showToast } = useToast()
     const [loading, setLoading] = useState(false)
     const [dateRange, setDateRange] = useState({
         start: new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10), // Start of year
@@ -26,24 +29,36 @@ export default function CashFlow() {
     const loadData = useCallback(async () => {
         setLoading(true)
         try {
-            const stmt = await globalThis.electronAPI.getCashFlowStatement(dateRange.start, dateRange.end)
-            setStatement(stmt && typeof stmt === 'object' && !('success' in stmt) ? stmt : null)
+            const stmt = unwrapIPCResult<CashFlowStatement>(
+                await globalThis.electronAPI.getCashFlowStatement(dateRange.start, dateRange.end),
+                'Failed to load cash flow statement'
+            )
+            setStatement(stmt)
 
-            const fc = await globalThis.electronAPI.getForecast(6)
-            setForecast(fc && typeof fc === 'object' && !('success' in fc) ? fc : null)
+            const fc = unwrapIPCResult<FinancialForecast>(
+                await globalThis.electronAPI.getForecast(6),
+                'Failed to load cash flow forecast'
+            )
+            setForecast(fc)
         } catch (error) {
             console.error(error)
+            showToast(error instanceof Error ? error.message : 'Failed to load cash flow data', 'error')
+            setStatement(null)
+            setForecast(null)
         } finally {
             setLoading(false)
         }
-    }, [dateRange])
+    }, [dateRange, showToast])
 
     useEffect(() => {
         loadData().catch((err: unknown) => console.error('Failed to load cash flow data', err))
     }, [loadData])
 
     const handleExport = async () => {
-        if (!statement) { return }
+        if (!statement) {
+            showToast('Generate a cash flow statement before exporting', 'warning')
+            return
+        }
         await exportToPDF({
             filename: `cash-flow-${dateRange.start}`,
             title: 'Statement of Cash Flows',
@@ -207,6 +222,18 @@ export default function CashFlow() {
                             <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl text-sm text-blue-300">
                                 <strong>Note:</strong> Projections are based on a 6-month simple moving average of fee collections. Future versions will include seasonality support.
                             </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'statement' && !statement && (
+                        <div className="premium-card text-center py-16 text-foreground/50">
+                            No cash flow statement available for the selected period.
+                        </div>
+                    )}
+
+                    {activeTab === 'forecast' && !forecast && (
+                        <div className="premium-card text-center py-16 text-foreground/50">
+                            No forecast data available.
                         </div>
                     )}
                 </>

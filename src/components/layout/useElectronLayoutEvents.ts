@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 
 import { printCurrentView } from '../../utils/print'
+import { unwrapIPCResult } from '../../utils/ipc'
 
 import type { useToast } from '../../contexts/ToastContext'
 import type { UpdateStatus } from '../../types/electron-api'
@@ -17,8 +18,11 @@ export function useElectronLayoutEvents(
         const unsubscribeBackup = globalThis.electronAPI.menuEvents.onBackupDatabase((filePath) => {
             void (async () => {
                 try {
-                    const result = await globalThis.electronAPI.system.createBackupTo(filePath)
-                    showToast(result.success ? 'Backup saved successfully' : 'Backup failed', result.success ? 'success' : 'error')
+                    unwrapIPCResult(
+                        await globalThis.electronAPI.system.createBackupTo(filePath),
+                        'Backup failed'
+                    )
+                    showToast('Backup saved successfully', 'success')
                 } catch (error) {
                     showToast(error instanceof Error ? error.message : 'Backup failed', 'error')
                 }

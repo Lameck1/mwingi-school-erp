@@ -9,9 +9,11 @@ import { Link, useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/patterns/PageHeader'
 import { StatCard } from '../../../components/patterns/StatCard'
 import { DataTable, type Column } from '../../../components/ui/Table/DataTable'
+import { useToast } from '../../../contexts/ToastContext'
 import { useAppStore } from '../../../stores'
 import { type Budget } from '../../../types/electron-api'
 import { formatCurrencyFromCents } from '../../../utils/format'
+import { unwrapArrayResult } from '../../../utils/ipc'
 
 const statusConfig = {
     DRAFT: { label: 'Draft', color: 'bg-gray-500/20 text-muted-foreground border-gray-500/30', icon: Edit },
@@ -25,6 +27,7 @@ const statusConfig = {
 export default function BudgetList() {
     const navigate = useNavigate()
     const { currentAcademicYear } = useAppStore()
+    const { showToast } = useToast()
 
     const [budgets, setBudgets] = useState<Budget[]>([])
     const [loading, setLoading] = useState(true)
@@ -39,9 +42,12 @@ export default function BudgetList() {
     const loadBudgets = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await globalThis.electronAPI.getBudgets({
-                ...(currentAcademicYear?.id ? { academic_year_id: currentAcademicYear.id } : {})
-            })
+            const data = unwrapArrayResult(
+                await globalThis.electronAPI.getBudgets({
+                    ...(currentAcademicYear?.id ? { academic_year_id: currentAcademicYear.id } : {})
+                }),
+                'Failed to load budgets'
+            )
             setBudgets(data)
 
             // Calculate summary
@@ -55,10 +61,19 @@ export default function BudgetList() {
             })
         } catch (error) {
             console.error('Failed to load budgets:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to load budgets', 'error')
+            setBudgets([])
+            setSummary({
+                totalBudgets: 0,
+                activeBudget: 0,
+                totalBudgeted: 0,
+                totalActual: 0,
+                variance: 0,
+            })
         } finally {
             setLoading(false)
         }
-    }, [currentAcademicYear])
+    }, [currentAcademicYear, showToast])
 
     useEffect(() => {
         loadBudgets().catch((err: unknown) => console.error('Failed to load budgets:', err))

@@ -6,6 +6,23 @@ import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 import { Select } from '../../components/ui/Select'
 import { useAuthStore } from '../../stores'
 import { type Stream } from '../../types/electron-api/AcademicAPI'
+import { getIPCFailureMessage, isIPCFailure, unwrapArrayResult } from '../../utils/ipc'
+
+const getResultMessage = (value: unknown, fallback: string): string => {
+    if (isIPCFailure(value)) {
+        return getIPCFailureMessage(value, fallback)
+    }
+    if (value && typeof value === 'object') {
+        const maybe = value as { error?: unknown; message?: unknown }
+        if (typeof maybe.error === 'string' && maybe.error.trim()) {
+            return maybe.error
+        }
+        if (typeof maybe.message === 'string' && maybe.message.trim()) {
+            return maybe.message
+        }
+    }
+    return fallback
+}
 
 export default function StudentForm() {
     const navigate = useNavigate()
@@ -43,42 +60,61 @@ export default function StudentForm() {
         const loadData = async () => {
             setLoading(true)
             try {
-                const streamsData = await globalThis.electronAPI.getStreams()
-                if (!Array.isArray(streamsData) && streamsData && 'success' in streamsData && streamsData.success === false) {
-                    throw new Error(streamsData.error || 'Failed to load streams')
-                }
-                setStreams(Array.isArray(streamsData) ? streamsData : [])
+                const streamsData = unwrapArrayResult(await globalThis.electronAPI.getStreams(), 'Failed to load streams')
+                setStreams(streamsData)
 
                 if (id) {
-                    const result = await globalThis.electronAPI.getStudentById(Number.parseInt(id, 10))
-                    if (result && !('success' in result)) {
-                        const student = result
-                        const dataUrl = await globalThis.electronAPI.getStudentPhotoDataUrl(Number.parseInt(id, 10))
-                        setPhotoDataUrl(dataUrl)
-                        const studentWithExtendedFields = student as typeof student & {
-                            guardian_relationship?: string | null
-                            notes?: string | null
-                        }
-                        setFormData({
-                            admission_number: student.admission_number || '',
-                            first_name: student.first_name || '',
-                            middle_name: student.middle_name || '',
-                            last_name: student.last_name || '',
-                            date_of_birth: student.date_of_birth || '',
-                            gender: student.gender || 'MALE',
-                            student_type: student.student_type || 'DAY_SCHOLAR',
-                            admission_date: student.admission_date || '',
-                            guardian_name: student.guardian_name || '',
-                            guardian_phone: student.guardian_phone || '',
-                            guardian_email: student.guardian_email || '',
-                            address: student.address || '',
-                            stream_id: student.stream_id?.toString() || '',
-                            guardian_relationship: studentWithExtendedFields.guardian_relationship || '',
-                            notes: studentWithExtendedFields.notes || ''
-                        })
-                    } else if (result && 'success' in result && result.success === false) {
-                        setError(result.error)
+                    const studentId = Number.parseInt(id, 10)
+                    if (!Number.isFinite(studentId) || studentId <= 0) {
+                        setError('Invalid student identifier')
+                        return
                     }
+
+                    const result = await globalThis.electronAPI.getStudentById(studentId)
+                    if (
+                        result &&
+                        typeof result === 'object' &&
+                        'success' in result &&
+                        (result as { success?: unknown }).success === false
+                    ) {
+                        setError(getResultMessage(result, 'Failed to load student record'))
+                        return
+                    }
+                    if (!result || typeof result !== 'object' || 'success' in result) {
+                        setError('Student record not found')
+                        return
+                    }
+
+                    const student = result
+                    const dataUrlResult = await globalThis.electronAPI.getStudentPhotoDataUrl(studentId)
+                    if (isIPCFailure(dataUrlResult)) {
+                        setError(getIPCFailureMessage(dataUrlResult, 'Failed to load student photo'))
+                        setPhotoDataUrl(null)
+                    } else {
+                        setPhotoDataUrl(typeof dataUrlResult === 'string' ? dataUrlResult : null)
+                    }
+
+                    const studentWithExtendedFields = student as typeof student & {
+                        guardian_relationship?: string | null
+                        notes?: string | null
+                    }
+                    setFormData({
+                        admission_number: student.admission_number || '',
+                        first_name: student.first_name || '',
+                        middle_name: student.middle_name || '',
+                        last_name: student.last_name || '',
+                        date_of_birth: student.date_of_birth || '',
+                        gender: student.gender || 'MALE',
+                        student_type: student.student_type || 'DAY_SCHOLAR',
+                        admission_date: student.admission_date || '',
+                        guardian_name: student.guardian_name || '',
+                        guardian_phone: student.guardian_phone || '',
+                        guardian_email: student.guardian_email || '',
+                        address: student.address || '',
+                        stream_id: student.stream_id?.toString() || '',
+                        guardian_relationship: studentWithExtendedFields.guardian_relationship || '',
+                        notes: studentWithExtendedFields.notes || ''
+                    })
                 }
             } catch (error) {
                 console.error('Failed to load data:', error)
@@ -116,8 +152,8 @@ export default function StudentForm() {
                     } else {
                         setError(result.error || 'Failed to upload photo')
                     }
-                } catch {
-                    setError('Photo upload failed')
+                } catch (error) {
+                    setError(error instanceof Error ? error.message : 'Photo upload failed')
                 } finally {
                     setSaving(false)
                 }
@@ -140,8 +176,8 @@ export default function StudentForm() {
                 } else {
                     setError(result.error || 'Failed to remove photo')
                 }
-            } catch {
-                setError('Remove photo failed')
+            } catch (error) {
+                setError(error instanceof Error ? error.message : 'Remove photo failed')
             } finally {
                 setSaving(false)
             }
@@ -161,28 +197,28 @@ export default function StudentForm() {
             const studentPayload = {
                 admission_number: formData.admission_number,
                 first_name: formData.first_name,
-                middle_name: formData.middle_name || null,
+                middle_name: formData.middle_name,
                 last_name: formData.last_name,
-                date_of_birth: formData.date_of_birth || null,
+                date_of_birth: formData.date_of_birth,
                 gender: formData.gender,
                 student_type: formData.student_type,
-                admission_date: formData.admission_date || null,
-                guardian_name: formData.guardian_name || null,
-                guardian_phone: formData.guardian_phone || null,
-                guardian_email: formData.guardian_email || null,
-                address: formData.address || null,
-                stream_id: Number.isFinite(parsedStreamId) ? parsedStreamId : null,
-                guardian_relationship: formData.guardian_relationship || null,
-                notes: formData.notes || null
+                admission_date: formData.admission_date,
+                guardian_name: formData.guardian_name,
+                guardian_phone: formData.guardian_phone,
+                guardian_email: formData.guardian_email,
+                address: formData.address,
+                stream_id: Number.isFinite(parsedStreamId) ? parsedStreamId : undefined,
+                guardian_relationship: formData.guardian_relationship,
+                notes: formData.notes
             } as Parameters<typeof globalThis.electronAPI.updateStudent>[1]
             type StudentMutationResult = { success: boolean; error?: string; id?: number }
             let mutationResult: StudentMutationResult
 
-            if (isEdit && id) {
-                mutationResult = await globalThis.electronAPI.updateStudent(
-                    Number.parseInt(id, 10),
-                    studentPayload
-                ) as StudentMutationResult
+                if (isEdit && id) {
+                    mutationResult = await globalThis.electronAPI.updateStudent(
+                        Number.parseInt(id, 10),
+                        studentPayload
+                    ) as StudentMutationResult
             } else {
                 if (!user?.id) {
                     throw new Error('User session not found. Please log in again.')
@@ -199,7 +235,7 @@ export default function StudentForm() {
             }
 
             if (!mutationResult.success) {
-                throw new Error(mutationResult.error || 'Failed to save student record')
+                throw new Error(getResultMessage(mutationResult, 'Failed to save student record'))
             }
 
             navigate('/students')
@@ -346,6 +382,19 @@ export default function StudentForm() {
                             </div>
 
                             <div>
+                                <label htmlFor="student-guardian-relationship" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Guardian Relationship</label>
+                                <input
+                                    id="student-guardian-relationship"
+                                    name="guardian_relationship"
+                                    value={formData.guardian_relationship}
+                                    onChange={handleChange}
+                                    required
+                                    className="input border-border/20"
+                                    placeholder="e.g. Parent, Aunt, Uncle"
+                                />
+                            </div>
+
+                            <div>
                                 <label htmlFor="student-guardian-phone" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Contact Phone</label>
                                 <div className="relative">
                                     <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40" />
@@ -354,7 +403,7 @@ export default function StudentForm() {
                                 </div>
                             </div>
 
-                            <div>
+                            <div className="md:col-span-2">
                                 <label htmlFor="student-guardian-email" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest block mb-2 ml-1">Email (Optional)</label>
                                 <div className="relative">
                                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40" />

@@ -9,6 +9,7 @@ import { useToast } from '../../../contexts/ToastContext'
 import { useAuthStore } from '../../../stores'
 import { type FixedAsset, type CreateAssetData, type AssetCategory } from '../../../types/electron-api/FixedAssetAPI'
 import { formatCurrencyFromCents, formatDate, shillingsToCents } from '../../../utils/format'
+import { unwrapArrayResult } from '../../../utils/ipc'
 
 export default function AssetRegister() {
     const { user } = useAuthStore()
@@ -33,22 +34,31 @@ export default function AssetRegister() {
     const loadAssets = useCallback(async (searchQuery: string) => {
         setLoading(true)
         try {
-            const data = await globalThis.electronAPI.getAssets({ search: searchQuery })
+            const data = unwrapArrayResult(
+                await globalThis.electronAPI.getAssets({ search: searchQuery }),
+                'Failed to load assets'
+            )
             setAssets(data)
         } catch (error) {
             console.error('Failed to load assets', error)
+            setAssets([])
+            showToast(error instanceof Error ? error.message : 'Failed to load assets', 'error')
         } finally {
             setLoading(false)
         }
-    }, [])
+    }, [showToast])
 
     const loadCategories = useCallback(async () => {
         try {
-            const data = await globalThis.electronAPI.getAssetCategories()
+            const data = unwrapArrayResult(
+                await globalThis.electronAPI.getAssetCategories(),
+                'Failed to load asset categories'
+            )
             setCategories(data.map((c: AssetCategory) => ({ id: c.id, name: c.category_name })))
         } catch (error) {
             console.error('Failed to load asset categories', error)
-            showToast('Failed to load asset categories', 'error')
+            setCategories([])
+            showToast(error instanceof Error ? error.message : 'Failed to load asset categories', 'error')
         }
     }, [showToast])
 
@@ -85,10 +95,10 @@ export default function AssetRegister() {
                 loadAssets(search).catch((err: unknown) => console.error('Failed to reload assets', err))
             } else {
                 const errorMessage = result.error || result.errors?.join(', ') || 'Unknown error'
-                alert('Failed to create asset: ' + errorMessage)
+                showToast(`Failed to create asset: ${errorMessage}`, 'error')
             }
-        } catch {
-            alert('Error creating asset')
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : 'Error creating asset', 'error')
         }
     }
 
@@ -116,7 +126,11 @@ export default function AssetRegister() {
                         type="text"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && loadAssets(search)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                void loadAssets(search)
+                            }
+                        }}
                         placeholder="Search assets..."
                         className="input pl-11"
                     />

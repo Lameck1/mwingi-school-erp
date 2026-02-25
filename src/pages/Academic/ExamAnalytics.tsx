@@ -9,6 +9,7 @@ import { Select } from '../../components/ui/Select'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore } from '../../stores'
 import { exportToPDF } from '../../utils/exporters'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 interface PerformanceSummary {
   mean_score: number
@@ -69,12 +70,13 @@ const ExamAnalytics = () => {
         globalThis.electronAPI.getStreams()
       ])
 
-      setExams(Array.isArray(examsData) ? examsData : [])
-      setStreams(Array.isArray(streamsData) ? streamsData : [])
+      setExams(unwrapArrayResult(examsData, 'Failed to load exams'))
+      setStreams(unwrapArrayResult(streamsData, 'Failed to load streams'))
     } catch (error) {
       console.error('Failed to load initial data:', error)
+      showToast(error instanceof Error ? error.message : 'Failed to load initial data', 'error')
     }
-  }, [currentAcademicYear, currentTerm])
+  }, [currentAcademicYear, currentTerm, showToast])
 
   useEffect(() => {
     loadInitialData().catch((err: unknown) => console.error('Failed to load initial data:', err))
@@ -108,10 +110,10 @@ const ExamAnalytics = () => {
         })
       ])
 
-      setPerformanceSummary(summary && typeof summary === 'object' && !('success' in summary) ? summary : null)
-      setGradeDistribution(Array.isArray(grades) ? grades : [])
-      setSubjectPerformance(Array.isArray(subjects) ? subjects : [])
-      setStrugglingStudents(Array.isArray(struggling) ? struggling : [])
+      setPerformanceSummary(unwrapIPCResult<PerformanceSummary>(summary, 'Failed to load performance summary'))
+      setGradeDistribution(unwrapArrayResult(grades, 'Failed to load grade distribution'))
+      setSubjectPerformance(unwrapArrayResult(subjects, 'Failed to load subject performance'))
+      setStrugglingStudents(unwrapArrayResult(struggling, 'Failed to load struggling students'))
     } catch (error) {
       console.error('Failed to analyze exam:', error)
       showToast('Failed to analyze exam data', 'error')

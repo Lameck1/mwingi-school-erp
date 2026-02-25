@@ -6,6 +6,7 @@ import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore } from '../../stores'
 import { type TransactionCategory } from '../../types/electron-api/FinanceAPI'
 import { shillingsToCents } from '../../utils/format'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 
 export default function RecordExpense() {
@@ -30,13 +31,15 @@ export default function RecordExpense() {
 
     const loadCategories = useCallback(async () => {
         try {
-            const categories = await globalThis.electronAPI.getTransactionCategories()
-            if (Array.isArray(categories)) {
-                setCategories(categories.filter((c: TransactionCategory) => c.category_type === 'EXPENSE'))
-            }
+            const categories = unwrapArrayResult(
+                await globalThis.electronAPI.getTransactionCategories(),
+                'Failed to load transaction categories'
+            )
+            setCategories(categories.filter((c: TransactionCategory) => c.category_type === 'EXPENSE'))
         } catch (error) {
             console.error('Failed to load categories:', error)
-            showToast('Failed to load categories', 'error')
+            setCategories([])
+            showToast(error instanceof Error ? error.message : 'Failed to load categories', 'error')
         }
     }, [showToast])
 
@@ -45,17 +48,24 @@ export default function RecordExpense() {
     }, [loadCategories])
 
     const handleCreateCategory = async () => {
-        if (!newCategory.trim()) { return }
+        const categoryName = newCategory.trim()
+        if (!categoryName) {
+            showToast('Category name is required', 'warning')
+            return
+        }
         try {
             setLoading(true)
-            await globalThis.electronAPI.createTransactionCategory(newCategory, 'EXPENSE')
+            unwrapIPCResult(
+                await globalThis.electronAPI.createTransactionCategory(categoryName, 'EXPENSE'),
+                'Failed to create transaction category'
+            )
             await loadCategories()
             setNewCategory('')
             setShowNewCategoryInput(false)
             showToast('Category created successfully', 'success')
         } catch (error) {
             console.error('Failed to create category:', error)
-            showToast('Failed to create category', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to create category', 'error')
         } finally {
             setLoading(false)
         }
@@ -74,7 +84,8 @@ export default function RecordExpense() {
 
         setSaving(true)
         try {
-            await globalThis.electronAPI.createTransaction({
+            unwrapIPCResult(
+                await globalThis.electronAPI.createTransaction({
                 transaction_date: formData.transaction_date,
                 transaction_type: formData.transaction_type,
                 amount: shillingsToCents(formData.amount), // Whole currency units
@@ -82,7 +93,9 @@ export default function RecordExpense() {
                 payment_method: formData.payment_method,
                 payment_reference: formData.payment_reference,
                 description: formData.description
-            }, user.id)
+                }, user.id),
+                'Failed to record expense'
+            )
 
             showToast('Expense recorded successfully', 'success')
             setFormData({
@@ -96,7 +109,7 @@ export default function RecordExpense() {
             })
         } catch (error) {
             console.error('Failed to record expense:', error)
-            showToast('Failed to record expense', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to record expense', 'error')
         } finally {
             setSaving(false)
         }

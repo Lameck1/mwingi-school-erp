@@ -9,6 +9,7 @@ import { Select } from '../../components/ui/Select'
 import { Tooltip } from '../../components/ui/Tooltip'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../stores'
+import { unwrapArrayResult } from '../../utils/ipc'
 
 type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED'
 
@@ -86,7 +87,7 @@ export default function Attendance() {
     const [saving, setSaving] = useState(false)
     const [summary, setSummary] = useState({ present: 0, absent: 0, late: 0, excused: 0, total: 0 })
 
-    const updateSummary = (statuses: AttendanceStatus[]) => {
+    const updateSummary = useCallback((statuses: AttendanceStatus[]) => {
         setSummary({
             present: statuses.filter(s => s === 'PRESENT').length,
             absent: statuses.filter(s => s === 'ABSENT').length,
@@ -94,48 +95,50 @@ export default function Attendance() {
             excused: statuses.filter(s => s === 'EXCUSED').length,
             total: statuses.length
         })
-    }
+    }, [])
 
-    const loadStreams = async () => {
+    const loadStreams = useCallback(async () => {
         try {
-            const data = await globalThis.electronAPI.getStreams()
-            if (!Array.isArray(data) && data && 'success' in data && data.success === false) {
-                console.warn('IPC Error loading streams:', data.error)
-                setStreams([])
-                return
-            }
-            setStreams(Array.isArray(data) ? data : [])
+            const data = unwrapArrayResult(
+                await globalThis.electronAPI.getStreams(),
+                'Failed to load streams'
+            )
+            setStreams(data)
         } catch (error) {
             console.error('Failed to load streams:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to load streams', 'error')
+            setStreams([])
         }
-    }
+    }, [showToast])
 
     const loadStudents = useCallback(async () => {
-        if (!selectedStream || selectedStream <= 0) { return }
-        if (!currentAcademicYear || !currentTerm) { return }
+        if (!selectedStream || selectedStream <= 0 || !currentAcademicYear || !currentTerm) {
+            setStudents([])
+            updateSummary([])
+            return
+        }
         setLoading(true)
         try {
             // Get enrolled students
-            const enrolled = await globalThis.electronAPI.getStudentsForAttendance(
-                selectedStream, currentAcademicYear.id, currentTerm.id
+            const enrolled = unwrapArrayResult(
+                await globalThis.electronAPI.getStudentsForAttendance(
+                    selectedStream, currentAcademicYear.id, currentTerm.id
+                ),
+                'Failed to load enrolled students'
             )
-            if (!Array.isArray(enrolled) && enrolled && 'success' in enrolled && enrolled.success === false) {
-                throw new Error(enrolled.error || 'Failed to load students')
-            }
 
             // Get existing attendance for this date
-            const existing = await globalThis.electronAPI.getAttendanceByDate(
-                Number(selectedStream),
-                selectedDate,
-                currentAcademicYear.id,
-                currentTerm.id
+            const existing = unwrapArrayResult(
+                await globalThis.electronAPI.getAttendanceByDate(
+                    Number(selectedStream),
+                    selectedDate,
+                    currentAcademicYear.id,
+                    currentTerm.id
+                ),
+                'Failed to load attendance history'
             )
-            if (!Array.isArray(existing) && existing && 'success' in existing && existing.success === false) {
-                throw new Error(existing.error || 'Failed to load attendance history')
-            }
-
-            const enrolledArr = Array.isArray(enrolled) ? enrolled : []
-            const existingArr = Array.isArray(existing) ? existing : []
+            const enrolledArr = enrolled
+            const existingArr = existing
 
             // Map students with their existing status or default to PRESENT
             const existingMap = new Map(existingArr.map((e) => [e.student_id, e]))
@@ -158,20 +161,21 @@ export default function Attendance() {
             }))
         } catch (error) {
             console.error('Failed to load students:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to load attendance data', 'error')
+            setStudents([])
+            updateSummary([])
         } finally {
             setLoading(false)
         }
-    }, [selectedStream, selectedDate, currentAcademicYear, currentTerm])
+    }, [selectedStream, selectedDate, currentAcademicYear, currentTerm, showToast, updateSummary])
 
     useEffect(() => {
         loadStreams().catch((err: unknown) => console.error('Failed to load streams:', err))
-    }, [])
+    }, [loadStreams])
 
     useEffect(() => {
-        if (selectedStream && currentAcademicYear && currentTerm) {
-            loadStudents().catch((err: unknown) => console.error('Failed to load students:', err))
-        }
-    }, [selectedStream, selectedDate, currentAcademicYear, currentTerm, loadStudents])
+        loadStudents().catch((err: unknown) => console.error('Failed to load students:', err))
+    }, [loadStudents])
 
     const setStatus = (studentId: number, status: AttendanceStatus) => {
         setStudents(prev => {
@@ -192,7 +196,18 @@ export default function Attendance() {
     }
 
     const handleSave = async () => {
-        if (!currentAcademicYear || !currentTerm || !user) { return }
+        if (!currentAcademicYear || !currentTerm) {
+            showToast('Set active academic year and term before saving attendance', 'error')
+            return
+        }
+        if (!user?.id) {
+            showToast('You must be signed in to save attendance', 'error')
+            return
+        }
+        if (students.length === 0) {
+            showToast('No attendance records to save', 'warning')
+            return
+        }
 
         setSaving(true)
         try {
@@ -213,7 +228,7 @@ export default function Attendance() {
             }
         } catch (error) {
             console.error('Failed to save attendance:', error)
-            showToast('Failed to save attendance', 'error')
+            showToast(error instanceof Error ? error.message : 'Failed to save attendance', 'error')
         } finally {
             setSaving(false)
         }

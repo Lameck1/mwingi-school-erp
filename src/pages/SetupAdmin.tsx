@@ -1,6 +1,7 @@
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { unwrapIPCResult } from '../utils/ipc'
 
 const SetupAdmin: React.FC = () => {
   const navigate = useNavigate()
@@ -19,7 +20,10 @@ const SetupAdmin: React.FC = () => {
   useEffect(() => {
     const checkExistingUsers = async () => {
       try {
-        const hasUsers = await globalThis.electronAPI.hasUsers()
+        const hasUsers = unwrapIPCResult<boolean>(
+          await globalThis.electronAPI.hasUsers(),
+          'Failed to determine setup state'
+        )
         if (hasUsers) {
           navigate('/login')
         }

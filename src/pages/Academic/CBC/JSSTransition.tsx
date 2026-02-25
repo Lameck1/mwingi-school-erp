@@ -5,9 +5,33 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { useToast } from '../../../contexts/ToastContext'
 import { useAuthStore } from '../../../stores';
 import { formatCurrencyFromCents } from '../../../utils/format';
+import { getIPCFailureMessage, isIPCFailure } from '../../../utils/ipc'
 import { reportRuntimeError } from '../../../utils/runtimeError'
 
 import type { EligibleStudent, JSSFeeStructure, TransitionResult } from '../../../types/electron-api/JSSAPI';
+
+const isSuccessResult = (value: unknown): value is { success: true; data?: unknown } => (
+  typeof value === 'object' &&
+  value !== null &&
+  'success' in value &&
+  (value as { success?: unknown }).success === true
+)
+
+const getResultMessage = (value: unknown, fallback: string): string => {
+  if (isIPCFailure(value)) {
+    return getIPCFailureMessage(value, fallback)
+  }
+  if (value && typeof value === 'object') {
+    const maybe = value as { error?: unknown; message?: unknown }
+    if (typeof maybe.error === 'string' && maybe.error.trim()) {
+      return maybe.error
+    }
+    if (typeof maybe.message === 'string' && maybe.message.trim()) {
+      return maybe.message
+    }
+  }
+  return fallback
+}
 
 
 const JSSTransition: React.FC = () => {
@@ -31,14 +55,20 @@ const JSSTransition: React.FC = () => {
     try {
       setLoading(true);
       const result = await globalThis.electronAPI.academic.getJSSEligibleStudents(filters.from_grade, filters.academic_year);
-      const students: EligibleStudent[] = result?.data ?? [];
-      setEligibleStudents(students);
+      if (!isSuccessResult(result)) {
+        setEligibleStudents([]);
+        showToast(getResultMessage(result, 'Failed to load eligible students'), 'error');
+        return;
+      }
+
+      setEligibleStudents(Array.isArray(result.data) ? result.data : []);
     } catch (error) {
-      reportRuntimeError(error, { area: 'Academic.JSSTransition', action: 'loadEligibleStudents' }, 'Error loading students')
+      const message = reportRuntimeError(error, { area: 'Academic.JSSTransition', action: 'loadEligibleStudents' }, 'Error loading students');
+      showToast(message, 'error');
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, showToast]);
 
   const loadFeeStructures = useCallback(async () => {
     try {
@@ -46,14 +76,22 @@ const JSSTransition: React.FC = () => {
       const results = await Promise.all(
         [7, 8, 9].map(grade => globalThis.electronAPI.academic.getJSSFeeStructure(grade, filters.academic_year))
       );
+
       const structures: JSSFeeStructure[] = results
-        .map(r => r?.data)
+        .filter((response) => isSuccessResult(response) && Boolean(response.data))
+        .map((response) => response.data as JSSFeeStructure)
         .filter((data): data is JSSFeeStructure => Boolean(data));
+
+      const failedResponse = results.find((response) => !isSuccessResult(response));
+      if (failedResponse) {
+        showToast(getResultMessage(failedResponse, 'Failed to load one or more JSS fee structures'), 'warning');
+      }
       setFeeStructures(structures);
     } catch (error) {
-      reportRuntimeError(error, { area: 'Academic.JSSTransition', action: 'loadFeeStructures' }, 'Error loading fee structures')
+      const message = reportRuntimeError(error, { area: 'Academic.JSSTransition', action: 'loadFeeStructures' }, 'Error loading fee structures');
+      showToast(message, 'error');
     }
-  }, [filters.academic_year]);
+  }, [filters.academic_year, showToast]);
 
   useEffect(() => {
     loadEligibleStudents().catch((err: unknown) => console.error('Failed to load students:', err));
@@ -105,14 +143,27 @@ const JSSTransition: React.FC = () => {
         processed_by: user.id
       });
 
-      const successful = result?.data?.successful ?? Array.from(selectedStudents);
-      const failed = result?.data?.failed ?? [];
-      const transitionSummary: TransitionResult = { successful, failed };
+      if (!isSuccessResult(result)) {
+        showToast(getResultMessage(result, 'Failed to process transition'), 'error');
+        setTransitionResult(null);
+        return;
+      }
+
+      if (!result.data) {
+        showToast('Transition completed without a result payload', 'error');
+        setTransitionResult(null);
+        return;
+      }
+
+      const transitionSummary: TransitionResult = result.data;
       
       setTransitionResult(transitionSummary);
       setSelectedStudents(new Set());
       
-      showToast(`Transition complete: ${transitionSummary.successful.length} student(s) promoted`, 'success')
+      showToast(
+        `Transition complete: ${transitionSummary.successful.length} promoted, ${transitionSummary.failed.length} failed`,
+        transitionSummary.failed.length > 0 ? 'warning' : 'success'
+      )
     } catch (error) {
       const message = reportRuntimeError(error, { area: 'Academic.JSSTransition', action: 'executeBatchTransition' }, 'Failed to process transition')
       showToast(message, 'error')

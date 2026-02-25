@@ -1,13 +1,16 @@
 import { Plus, Package, AlertTriangle, Search, ArrowUpRight, ArrowDownLeft, X, Loader2 } from 'lucide-react'
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 
 import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
+import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore } from '../../stores'
 import { type InventoryItem, type InventoryCategory, type Supplier } from '../../types/electron-api/InventoryAPI'
 import { formatCurrencyFromCents, shillingsToCents, centsToShillings } from '../../utils/format'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 export default function Inventory() {
     const { user } = useAuthStore()
+    const { showToast } = useToast()
     const [items, setItems] = useState<InventoryItem[]>([])
     const [categories, setCategories] = useState<InventoryCategory[]>([])
     const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -31,7 +34,23 @@ export default function Inventory() {
         quantity: 0, unit_cost: 0, description: '', reference_number: '', supplier_id: ''
     })
 
-    const loadData = async () => {
+    const resetStockMovement = (unitCost = 0) => {
+        setStockMovement({
+            quantity: 0,
+            unit_cost: unitCost,
+            description: '',
+            reference_number: '',
+            supplier_id: ''
+        })
+    }
+
+    const closeStockModal = () => {
+        setShowStockModal(false)
+        setSelectedItem(null)
+        resetStockMovement(0)
+    }
+
+    const loadData = useCallback(async () => {
         try {
             const [itemsData, lowStockData, catsData, suppliersData] = await Promise.all([
                 globalThis.electronAPI.getInventory(),
@@ -39,47 +58,62 @@ export default function Inventory() {
                 globalThis.electronAPI.getInventoryCategories(),
                 globalThis.electronAPI.getSuppliers()
             ])
-            setItems(itemsData)
-            setLowStock(lowStockData)
-            setCategories(catsData)
-            setSuppliers(suppliersData)
+
+            setItems(unwrapArrayResult(itemsData, 'Failed to load inventory items'))
+            setLowStock(unwrapArrayResult(lowStockData, 'Failed to load low-stock data'))
+            setCategories(unwrapArrayResult(catsData, 'Failed to load inventory categories'))
+            setSuppliers(unwrapArrayResult(suppliersData, 'Failed to load suppliers'))
         } catch (error) {
             console.error('Failed to load inventory:', error)
+            setItems([])
+            setLowStock([])
+            setCategories([])
+            setSuppliers([])
+            showToast(error instanceof Error ? error.message : 'Failed to load inventory', 'error')
         } finally { setLoading(false) }
-    }
+    }, [showToast])
 
-    useEffect(() => { void loadData() }, [])
+    useEffect(() => { void loadData() }, [loadData])
 
     const handleAddItem = async (e: React.SyntheticEvent) => {
         e.preventDefault()
         try {
-            await globalThis.electronAPI.createInventoryItem({
+            unwrapIPCResult(
+                await globalThis.electronAPI.createInventoryItem({
                 item_code: newItem.item_code,
                 item_name: newItem.item_name,
                 category_id: Number(newItem.category_id),
                 unit_of_measure: newItem.unit_of_measure,
                 reorder_level: newItem.reorder_level,
                 unit_cost: shillingsToCents(newItem.unit_cost)
-            })
+                }),
+                'Failed to add inventory item'
+            )
             setShowAddModal(false)
             setNewItem({
                 item_code: '', item_name: '', category_id: '',
                 unit_of_measure: 'Pieces', reorder_level: 10, unit_cost: 0
             })
             await loadData()
+            showToast('Inventory item created successfully', 'success')
         } catch (error) {
             console.error('Failed to add item:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to add item', 'error')
         }
     }
 
     const handleStockMovement = async (e: React.SyntheticEvent) => {
         e.preventDefault()
-        if (!selectedItem) { return }
+        if (!selectedItem) {
+            showToast('Select an inventory item before recording stock movement', 'warning')
+            return
+        }
 
         try {
             if (!user) { throw new Error('User not authenticated') }
 
-            await globalThis.electronAPI.recordStockMovement({
+            unwrapIPCResult(
+                await globalThis.electronAPI.recordStockMovement({
                 item_id: selectedItem.id,
                 movement_type: stockAction,
                 quantity: stockMovement.quantity,
@@ -88,20 +122,23 @@ export default function Inventory() {
                 description: stockMovement.description || undefined,
                 supplier_id: stockMovement.supplier_id ? Number(stockMovement.supplier_id) : undefined,
                 movement_date: new Date().toISOString()
-            } as Parameters<typeof globalThis.electronAPI.recordStockMovement>[0], user.id)
+                } as Parameters<typeof globalThis.electronAPI.recordStockMovement>[0], user.id),
+                'Failed to record stock movement'
+            )
 
-            setShowStockModal(false)
-            setStockMovement({ quantity: 0, unit_cost: 0, description: '', reference_number: '', supplier_id: '' })
+            closeStockModal()
             await loadData()
+            showToast(`Stock ${stockAction === 'IN' ? 'received' : 'issued'} successfully`, 'success')
         } catch (error) {
             console.error('Failed to record movement:', error)
+            showToast(error instanceof Error ? error.message : 'Failed to record stock movement', 'error')
         }
     }
 
     const openStockModal = (item: InventoryItem, action: 'IN' | 'OUT') => {
         setSelectedItem(item)
         setStockAction(action)
-        setStockMovement(prev => ({ ...prev, unit_cost: centsToShillings(item.unit_cost) }))
+        resetStockMovement(centsToShillings(item.unit_cost))
         setShowStockModal(true)
     }
 
@@ -323,7 +360,7 @@ export default function Inventory() {
                             <h2 className="text-xl font-bold text-foreground">
                                 {stockAction === 'IN' ? 'Restock' : 'Issue'} Content
                             </h2>
-                            <button onClick={() => setShowStockModal(false)} className="p-2 hover:bg-secondary/50 rounded-xl transition-colors" aria-label="Close stock movement modal"><X className="w-5 h-5 text-foreground/40" /></button>
+                            <button onClick={closeStockModal} className="p-2 hover:bg-secondary/50 rounded-xl transition-colors" aria-label="Close stock movement modal"><X className="w-5 h-5 text-foreground/40" /></button>
                         </div>
                         <p className="text-xs font-bold text-primary uppercase tracking-widest mb-6 px-1">{selectedItem?.item_name}</p>
                         <form onSubmit={handleStockMovement} className="space-y-4">
@@ -367,7 +404,7 @@ export default function Inventory() {
                                     className="input border-border/20" rows={2} placeholder="Brief reason for movement..." />
                             </div>
                             <div className="flex justify-end gap-3 mt-8">
-                                <button type="button" onClick={() => setShowStockModal(false)} className="btn bg-secondary/50 hover:bg-secondary text-foreground border-border/40 px-6">Cancel</button>
+                                <button type="button" onClick={closeStockModal} className="btn bg-secondary/50 hover:bg-secondary text-foreground border-border/40 px-6">Cancel</button>
                                 <button type="submit" className={`btn px-8 shadow-lg ${stockAction === 'IN' ? 'btn-primary shadow-primary/20' : 'bg-destructive hover:bg-destructive/80 text-white shadow-red-500/20'}`}>
                                     {stockAction === 'IN' ? 'Confirm Restock' : 'Confirm Issuance'}
                                 </button>
