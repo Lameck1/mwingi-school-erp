@@ -1,3 +1,4 @@
+import * as path from 'node:path'
 import { z } from 'zod'
 
 import { getDatabase } from '../../database'
@@ -59,6 +60,31 @@ const VENUE_TEMPLATE = [
     { id: 2, name: 'Classroom A' },
     { id: 3, name: 'Classroom B' }
 ]
+
+const EXPORT_PDF_EXTENSION = '.pdf'
+const EXPORT_PDF_MAX_FILENAME_LENGTH = 128
+
+function sanitizeExportPdfFilename(filename?: string): string {
+    const fallbackBase = `export_${Date.now()}`
+
+    if (!filename) {
+        return `${fallbackBase}${EXPORT_PDF_EXTENSION}`
+    }
+
+    let candidate = path.basename(filename.trim())
+    candidate = candidate
+        .replaceAll(/[^\w.-]/g, '_')
+        .replaceAll(/\.+/g, '.')
+        .replace(/^\.+/, '')
+        .replace(/\.pdf$/i, '')
+        .slice(0, EXPORT_PDF_MAX_FILENAME_LENGTH - EXPORT_PDF_EXTENSION.length)
+
+    if (!candidate || candidate === '.' || candidate === '..') {
+        candidate = fallbackBase
+    }
+
+    return `${candidate}${EXPORT_PDF_EXTENSION}`
+}
 
 export function registerAcademicHandlers() {
     const db = getDatabase()
@@ -190,7 +216,7 @@ export function registerAcademicHandlers() {
             `
 
             const buffer = await renderHtmlToPdfBuffer(finalHtml)
-            const resolvedFilename = filename || `export_${Date.now()}.pdf`
+            const resolvedFilename = sanitizeExportPdfFilename(filename)
             const filePath = resolveOutputPath(resolvedFilename, 'pdf')
             writePdfBuffer(filePath, buffer)
             return { success: true, filePath }

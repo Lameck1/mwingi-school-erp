@@ -35,6 +35,8 @@ const getLegacyService = () => container.resolve('ReportCardService')
 const UNKNOWN_ERROR = 'Unknown error'
 const REPORT_CARDS_DIR = 'report-cards'
 const REPORT_CARD_EXTENSION = '.pdf'
+const MAX_REPORT_CARD_FILENAME_LENGTH = 128
+const SAFE_PATH_SEGMENT = /^[A-Za-z0-9._-]+$/
 
 type SmtpConfig = {
   host: string
@@ -66,6 +68,71 @@ function validateReportCardOpenPath(filePath: string): { ok: true; resolvedPath:
   }
 
   return { ok: true, resolvedPath }
+}
+
+function sanitizeReportCardFilename(input: string, fallbackBaseName: string): string {
+  const fallback = fallbackBaseName
+    .replaceAll(/[^\w.-]/g, '_')
+    .replaceAll(/\.+/g, '.')
+    .replace(/^\.+/, '')
+    .replace(/\.pdf$/i, '')
+    .slice(0, MAX_REPORT_CARD_FILENAME_LENGTH - REPORT_CARD_EXTENSION.length)
+
+  const safeFallback = fallback.length > 0 ? fallback : `report_cards_${Date.now()}`
+
+  let candidate = path.basename(input.trim())
+  candidate = candidate
+    .replaceAll(/[^\w.-]/g, '_')
+    .replaceAll(/\.+/g, '.')
+    .replace(/^\.+/, '')
+    .replace(/\.pdf$/i, '')
+    .slice(0, MAX_REPORT_CARD_FILENAME_LENGTH - REPORT_CARD_EXTENSION.length)
+
+  if (!candidate || candidate === '.' || candidate === '..') {
+    candidate = safeFallback
+  }
+
+  if (!SAFE_PATH_SEGMENT.test(candidate)) {
+    candidate = safeFallback
+  }
+
+  return `${candidate}${REPORT_CARD_EXTENSION}`
+}
+
+function sanitizeReportCardFolder(folderName: string): string {
+  const segments = folderName
+    .split(/[\\/]+/)
+    .map(segment => segment.trim())
+    .filter(Boolean)
+
+  if (segments.length === 0) {
+    throw new Error('Invalid report card folder')
+  }
+
+  for (const segment of segments) {
+    if (segment === '.' || segment === '..' || !SAFE_PATH_SEGMENT.test(segment)) {
+      throw new Error('Invalid report card folder segment')
+    }
+  }
+
+  return segments.join(path.sep)
+}
+
+function resolveSafeReportCardOutputPath(filename: string, folderName: string): string {
+  const safeFolderName = sanitizeReportCardFolder(folderName)
+  const safeFilename = sanitizeReportCardFilename(filename, 'report_cards')
+  const resolvedPath = path.resolve(resolveOutputPath(safeFilename, safeFolderName))
+  const allowedRoot = resolveAllowedReportCardRoot()
+  const relativePath = path.relative(allowedRoot, resolvedPath)
+
+  if (!relativePath || relativePath === '.') {
+    throw new Error('Invalid report card output path')
+  }
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    throw new Error('Report card output path is outside allowed directory')
+  }
+
+  return resolvedPath
 }
 
 async function getSessionUserId(): Promise<number> {
@@ -241,8 +308,11 @@ function registerCbcMergeHandlers(): void {
       }
 
       const mergedBytes = await merged.save()
-      const outputFile = data.output_path || `report_cards_${data.exam_id}_${data.stream_id}.pdf`
-      const filePath = resolveOutputPath(outputFile, REPORT_CARDS_DIR)
+      const outputFile = sanitizeReportCardFilename(
+        data.output_path ?? `report_cards_${data.exam_id}_${data.stream_id}.pdf`,
+        `report_cards_${data.exam_id}_${data.stream_id}`
+      )
+      const filePath = resolveSafeReportCardOutputPath(outputFile, REPORT_CARDS_DIR)
       fs.writeFileSync(filePath, mergedBytes)
 
       return { success: true, message: 'Merged', filePath, failed }
@@ -275,7 +345,10 @@ function registerCbcDownloadHandlers(): void {
       }
 
       const mergedBytes = await merged.save()
-      const filePath = resolveOutputPath(`report_cards_${data.exam_id}_${data.stream_id}.pdf`, REPORT_CARDS_DIR)
+      const filePath = resolveSafeReportCardOutputPath(
+        `report_cards_${data.exam_id}_${data.stream_id}.pdf`,
+        REPORT_CARDS_DIR
+      )
       fs.writeFileSync(filePath, mergedBytes)
       return { success: true, filePath, failed }
     } catch (error) {
@@ -351,8 +424,11 @@ async function generateReportCardPdfs(reportCards: StudentReportCard[], folderLa
 
     const html = buildReportCardHtml(card, schoolInfo, studentPhoto)
     const buffer = await renderHtmlToPdfBuffer(html)
-    const filename = `${card.admission_number || card.student_id}_${Date.now()}.pdf`
-    const filePath = resolveOutputPath(filename, path.join(REPORT_CARDS_DIR, folderLabel))
+    const filename = sanitizeReportCardFilename(
+      `${card.admission_number || card.student_id}_${Date.now()}.pdf`,
+      `student_${card.student_id}_${Date.now()}`
+    )
+    const filePath = resolveSafeReportCardOutputPath(filename, path.join(REPORT_CARDS_DIR, folderLabel))
     writePdfBuffer(filePath, buffer)
     results.push({ studentId: card.student_id, filePath })
   }

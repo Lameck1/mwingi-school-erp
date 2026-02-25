@@ -99,7 +99,7 @@ export interface ElectronAPI extends
   // Namespaced sub-objects
   auth: AuthAPI
   settings: SettingsAPI
-  academic: AcademicAPI & JSSAPI & Pick<OperationsAPI, 'getCBCStrands' | 'getActiveCBCStrands' | 'linkFeeCategoryToStrand'>
+  academic: AcademicAPI & JSSAPI & Pick<OperationsAPI, 'getCBCStrands' | 'getActiveCBCStrands' | 'getCBCProfitabilityReport' | 'linkFeeCategoryToStrand'>
   finance: FinanceAPI & BudgetAPI & BankReconciliationAPI & GLAccountAPI & OpeningBalanceAPI & FixedAssetAPI & ExemptionAPI
   students: StudentAPI
   staff: StaffAPI & PayrollAPI

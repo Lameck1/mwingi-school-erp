@@ -28,7 +28,8 @@ export function createSystemAPI() {
     cancelApprovalRequest: (requestId: number, userId: number) => ipcRenderer.invoke('approval:cancel', requestId, userId),
 
     // Data Import
-    importData: (filePath: string, config: ImportConfig, userId: number) => ipcRenderer.invoke('data:import', filePath, config, userId),
+    pickImportFile: () => ipcRenderer.invoke('data:pickImportFile'),
+    importData: (fileToken: string, config: ImportConfig, userId: number) => ipcRenderer.invoke('data:import', fileToken, config, userId),
     getImportTemplate: (entityType: string) => ipcRenderer.invoke('data:getTemplate', entityType),
     downloadImportTemplate: (entityType: string) => ipcRenderer.invoke('data:downloadTemplate', entityType),
 

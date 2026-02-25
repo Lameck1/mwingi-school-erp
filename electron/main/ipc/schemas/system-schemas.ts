@@ -21,8 +21,12 @@ export const ImportConfigSchema = z.object({
     duplicateKey: z.string().optional()
 })
 
+const ImportTokenSchema = z.string().uuid('Import token must be a UUID')
+
+export const ImportPickFileSchema = z.void()
+
 export const ImportTuple = z.tuple([
-    z.string(), // filePath
+    ImportTokenSchema,
     ImportConfigSchema,
     z.number().optional()
 ])

@@ -13,15 +13,16 @@ export const ForecastSchema = z.number().int().positive()
 export const GLAccountFiltersSchema = z.object({
     search: z.string().optional(),
     type: z.string().optional(),
-    is_active: z.boolean().optional()
+    is_active: z.boolean().optional(),
+    isActive: z.boolean().optional()
 }).optional()
 
 export const GLAccountDataSchema = z.object({
     account_code: z.string().min(1),
     account_name: z.string().min(1),
-    account_type: z.enum(['ASSET', 'LIABILITY', 'EQUITY', 'INCOME', 'EXPENSE']),
+    account_type: z.enum(['ASSET', 'LIABILITY', 'EQUITY', 'INCOME', 'REVENUE', 'EXPENSE']),
     description: z.string().optional(),
-    is_active: z.union([z.literal(0), z.literal(1)]).optional()
+    is_active: z.union([z.literal(0), z.literal(1), z.boolean()]).optional()
 })
 // Missing normal_balance? Service might require it or it's optional. Error said "missing ... normal_balance".
 // I'll add normal_balance.
@@ -153,33 +154,17 @@ export const StudentOpeningBalanceSchema = z.object({
 
 export const ImportStudentBalanceTuple = z.tuple([
     z.array(StudentOpeningBalanceSchema).min(1),
-    FiscalYearSchema,
+    PositiveIntSchema,
     z.string(), // importSource
     z.number().optional()
 ])
 
 export const GLOpeningBalanceSchema = z.object({
-    gl_account_id: PositiveIntSchema,
+    gl_account_code: z.string().trim().min(1),
     debit_amount: z.number().nonnegative(),
     credit_amount: z.number().nonnegative(),
-    academic_year_id: FiscalYearSchema, // importGLOpeningBalances(balances: OpeningBalanceImport[]) where Import has academic_year_id?
-    description: z.string().optional(),
-    // Added based on lint error "missing... imported_from, imported_by_user_id"
-    // These might be injected by the service or handler??
-    // The handler calls `getService().importGLOpeningBalances(balances, actor.id)`.
-    // The service probably takes `(balances, userId)`.
-    // If the service expects `balances` to HAVE `imported_by_user_id`, then the handler must inject it.
-    // The lint error said: 
-    // Type '{ gl_account_id: number; ... }' is missing ... imported_from, imported_by_user_id
-    // This implies `OpeningBalanceImport` interface requires them.
-    // I should check `OpeningBalanceService` definition or just add them to schema (optional?) or map in handler.
-    // Since I can't check service easily without tool call, I'll assume I need to map them in handler.
-    // BUT validatedHandler passes what schema validates.
-    // So I will make them optional in schema or I will map in handler.
-    // Mapping in handler is better for `imported_by_user_id`.
-    // I will NOT add them to schema if they are internal.
-    // Wait, if I don't add them, the schema-validated object won't have them, and if I pass that object to service, TS complains.
-    // So I MUST map in handler.
+    academic_year_id: PositiveIntSchema,
+    description: z.string().optional()
 })
 
 export const ImportGLBalanceTuple = z.tuple([

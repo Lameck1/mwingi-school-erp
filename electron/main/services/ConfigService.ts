@@ -24,8 +24,18 @@ const CANONICAL_TO_LEGACY_KEYS: Record<string, string[]> = {
     smtp_pass: ['smtp.pass'],
 }
 
+const SENSITIVE_CANONICAL_KEYS = new Set<string>([
+    'sms_api_key',
+    'sms_api_secret',
+    'smtp_pass',
+])
+
 function toCanonicalConfigKey(key: string): string {
     return LEGACY_TO_CANONICAL_KEYS[key] ?? key
+}
+
+function shouldEncryptAtRest(key: string): boolean {
+    return SENSITIVE_CANONICAL_KEYS.has(key)
 }
 
 export class ConfigService {
@@ -61,9 +71,9 @@ export class ConfigService {
         const canonicalKey = toCanonicalConfigKey(key)
         const lookupKeys = [canonicalKey, ...(CANONICAL_TO_LEGACY_KEYS[canonicalKey] ?? [])]
 
-        let row: { value: string, is_encrypted: number } | undefined
+        let row: { key: string, value: string, is_encrypted: number } | undefined
         for (const lookupKey of lookupKeys) {
-            row = db.prepare('SELECT value, is_encrypted FROM system_config WHERE key = ?').get(lookupKey) as { value: string, is_encrypted: number } | undefined
+            row = db.prepare('SELECT key, value, is_encrypted FROM system_config WHERE key = ?').get(lookupKey) as { key: string, value: string, is_encrypted: number } | undefined
             if (row) {
                 break
             }
@@ -82,6 +92,14 @@ export class ConfigService {
             } else {
                 console.warn(`SafeStorage unavailable, cannot decrypt ${key}`)
                 return null
+            }
+        }
+
+        if (shouldEncryptAtRest(canonicalKey) && safeStorage.isEncryptionAvailable()) {
+            try {
+                ConfigService.saveConfig(canonicalKey, row.value, true)
+            } catch (error) {
+                console.warn(`Failed to opportunistically encrypt config for ${canonicalKey}:`, error)
             }
         }
 

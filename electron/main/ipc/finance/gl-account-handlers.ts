@@ -9,7 +9,7 @@ import type { GLAccountData } from '../../services/finance/GLAccountService';
 
 const getService = () => container.resolve('GLAccountService');
 
-function normalizeAccountType(type: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'INCOME' | 'EXPENSE'): GLAccountData['account_type'] {
+function normalizeAccountType(type: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'INCOME' | 'REVENUE' | 'EXPENSE'): GLAccountData['account_type'] {
   return type === 'INCOME' ? 'REVENUE' : type
 }
 
@@ -26,7 +26,7 @@ function normalizeCreateData(data: z.infer<typeof CreateGLAccountTuple>[0]): GLA
     normal_balance: normalizeNormalBalance(accountType)
   }
   if (data.description !== undefined) { normalized.description = data.description }
-  if (data.is_active !== undefined) { normalized.is_active = data.is_active === 1 }
+  if (data.is_active !== undefined) { normalized.is_active = data.is_active === true || data.is_active === 1 }
   return normalized
 }
 
@@ -40,7 +40,7 @@ function normalizeUpdateData(data: z.infer<typeof UpdateGLAccountTuple>[1]): Par
     normalized.normal_balance = normalizeNormalBalance(mappedType)
   }
   if (data.description !== undefined) { normalized.description = data.description }
-  if (data.is_active !== undefined) { normalized.is_active = data.is_active === 1 }
+  if (data.is_active !== undefined) { normalized.is_active = data.is_active === true || data.is_active === 1 }
   return normalized
 }
 
@@ -50,7 +50,8 @@ function normalizeFilters(filters: z.infer<typeof GLAccountFiltersSchema>) {
   }
   const normalized: { type?: string; isActive?: boolean } = {}
   if (filters.type !== undefined) { normalized.type = filters.type }
-  if (filters.is_active !== undefined) { normalized.isActive = filters.is_active }
+  const isActive = filters.is_active ?? filters.isActive
+  if (isActive !== undefined) { normalized.isActive = isActive }
   return normalized
 }
 

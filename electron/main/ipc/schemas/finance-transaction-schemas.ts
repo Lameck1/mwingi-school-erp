@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { DateStringSchema, PositiveIntSchema, FiscalYearSchema } from './finance-schemas'
+import { DateStringSchema, PositiveIntSchema } from './finance-schemas'
 
 // Shared
 const AmountSchema = z.number().positive() // cents? usually
@@ -34,7 +34,7 @@ export const FeeCategoryTuple = z.tuple([
 ])
 
 export const GetFeeStructureTuple = z.tuple([
-    FiscalYearSchema, // academicYearId
+    PositiveIntSchema, // academicYearId (DB id)
     PositiveIntSchema // termId
 ])
 
@@ -47,21 +47,21 @@ export const FeeStructureItemSchema = z.object({
 
 export const SaveFeeStructureTuple = z.tuple([
     z.array(FeeStructureItemSchema).min(1),
-    FiscalYearSchema,
+    PositiveIntSchema, // academicYearId (DB id)
     PositiveIntSchema, // termId
     z.number().optional()
 ])
 
 // Invoice Generation
 export const GenerateBatchTuple = z.tuple([
-    FiscalYearSchema,
+    PositiveIntSchema, // academicYearId (DB id)
     PositiveIntSchema,
     z.number().optional()
 ])
 
 export const GenerateStudentInvoiceTuple = z.tuple([
     PositiveIntSchema, // studentId
-    FiscalYearSchema,
+    PositiveIntSchema, // academicYearId (DB id)
     PositiveIntSchema,
     z.number().optional()
 ])

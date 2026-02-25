@@ -6,11 +6,12 @@ import {
     Upload,
     X
 } from 'lucide-react'
-import React, { useRef, useState } from 'react'
+import { useState } from 'react'
 
 import { Modal } from './Modal'
 import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore } from '../../stores'
+import { getIPCFailureMessage, isIPCFailure, unwrapIPCResult } from '../../utils/ipc'
 import { reportRuntimeError } from '../../utils/runtimeError'
 
 interface ImportDialogProps {
@@ -41,6 +42,8 @@ interface ImportMapping {
     required: boolean
 }
 
+const IMPORT_ENTITY_TYPES = new Set(['STUDENT', 'STAFF', 'FEE_STRUCTURE', 'INVENTORY', 'BANK_STATEMENT'] as const)
+
 const SUPPORTED_FILE_PATTERN = /\.(csv|xlsx|xls)$/i
 
 function isSupportedFile(fileName: string): boolean {
@@ -56,38 +59,79 @@ function mapTemplateToMappings(template: ImportTemplate): ImportMapping[] {
 }
 
 async function fetchTemplateMappings(entityType: string): Promise<ImportMapping[]> {
-    const template = await globalThis.electronAPI.system.getImportTemplate(entityType) as ImportTemplate
+    const template = unwrapIPCResult<ImportTemplate>(
+        await globalThis.electronAPI.system.getImportTemplate(entityType),
+        'Failed to load import template metadata'
+    )
     return mapTemplateToMappings(template)
 }
 
+function normalizeImportResult(payload: unknown): ImportResult {
+    if (
+        typeof payload === 'object' &&
+        payload !== null &&
+        typeof (payload as { success?: unknown }).success === 'boolean' &&
+        typeof (payload as { totalRows?: unknown }).totalRows === 'number' &&
+        typeof (payload as { imported?: unknown }).imported === 'number' &&
+        typeof (payload as { skipped?: unknown }).skipped === 'number' &&
+        Array.isArray((payload as { errors?: unknown }).errors)
+    ) {
+        const rawErrors = (payload as { errors: unknown[] }).errors
+        const errors = rawErrors
+            .filter((item): item is { row?: unknown; message?: unknown } =>
+                typeof item === 'object' && item !== null
+            )
+            .map((item) => ({
+                row: typeof item.row === 'number' ? item.row : 0,
+                message: typeof item.message === 'string' ? item.message : 'Unknown import error'
+            }))
+        return {
+            success: (payload as { success: boolean }).success,
+            totalRows: (payload as { totalRows: number }).totalRows,
+            imported: (payload as { imported: number }).imported,
+            skipped: (payload as { skipped: number }).skipped,
+            errors
+        }
+    }
+
+    if (isIPCFailure(payload)) {
+        return {
+            success: false,
+            totalRows: 0,
+            imported: 0,
+            skipped: 0,
+            errors: [{ row: 0, message: getIPCFailureMessage(payload, 'Import failed') }]
+        }
+    }
+
+    return {
+        success: false,
+        totalRows: 0,
+        imported: 0,
+        skipped: 0,
+        errors: [{ row: 0, message: 'Import failed due to unexpected response shape' }]
+    }
+}
+
 interface UploadStepProps {
-    fileInputRef: React.RefObject<HTMLInputElement | null>
-    onFileSelect: (event: React.ChangeEvent<HTMLInputElement>) => void
+    onPickFile: () => Promise<void>
     onDownloadTemplate: () => Promise<void>
 }
 
-function UploadStep({ fileInputRef, onFileSelect, onDownloadTemplate }: Readonly<UploadStepProps>) {
-    const openPicker = () => fileInputRef.current?.click()
-
+function UploadStep({ onPickFile, onDownloadTemplate }: Readonly<UploadStepProps>) {
     return (
         <div className="space-y-4">
             <button
                 type="button"
                 className="w-full border-2 border-dashed border-border rounded-xl p-10 text-center hover:border-primary/50 transition-colors cursor-pointer bg-secondary/50"
-                onClick={openPicker}
+                onClick={() => {
+                    void onPickFile()
+                }}
             >
                 <FileSpreadsheet className="w-12 h-12 mx-auto mb-4 text-primary" />
-                <p className="font-medium text-foreground mb-1">Click to upload CSV or Excel</p>
-                <p className="text-sm text-foreground/50">or drag and drop here</p>
+                <p className="font-medium text-foreground mb-1">Select CSV or Excel file</p>
+                <p className="text-sm text-foreground/50">A secure import token will be created in the main process</p>
             </button>
-            <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                className="hidden"
-                onChange={onFileSelect}
-                aria-label="Upload CSV or Excel file"
-            />
 
             <div className="flex justify-between items-center bg-blue-500/10 p-4 rounded-lg border border-blue-500/20">
                 <div className="flex items-center gap-3">
@@ -111,13 +155,14 @@ function UploadStep({ fileInputRef, onFileSelect, onDownloadTemplate }: Readonly
 }
 
 interface ReviewStepProps {
-    file: File
+    fileName: string
+    fileSizeBytes: number
     error: string | null
     onCancel: () => void
     onImport: () => Promise<void>
 }
 
-function ReviewStep({ file, error, onCancel, onImport }: Readonly<ReviewStepProps>) {
+function ReviewStep({ fileName, fileSizeBytes, error, onCancel, onImport }: Readonly<ReviewStepProps>) {
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-secondary/50 rounded-lg border border-border">
@@ -126,8 +171,8 @@ function ReviewStep({ file, error, onCancel, onImport }: Readonly<ReviewStepProp
                         <FileSpreadsheet className="w-5 h-5" />
                     </div>
                     <div>
-                        <p className="font-medium text-foreground">{file.name}</p>
-                        <p className="text-xs text-foreground/50">{(file.size / 1024).toFixed(1)} KB</p>
+                        <p className="font-medium text-foreground">{fileName}</p>
+                        <p className="text-xs text-foreground/50">{(fileSizeBytes / 1024).toFixed(1)} KB</p>
                     </div>
                 </div>
                 <button onClick={onCancel} className="p-1 hover:bg-secondary rounded-full text-foreground/50" aria-label="Remove file">
@@ -216,18 +261,18 @@ function ResultStep({ importResult, onDone }: Readonly<ResultStepProps>) {
 }
 
 interface ImportDialogController {
-    fileInputRef: React.RefObject<HTMLInputElement | null>
     step: ImportStep
-    file: File | null
+    selectedImportFile: { token: string; fileName: string; fileSizeBytes: number } | null
     error: string | null
     importResult: ImportResult | null
     handleClose: () => void
-    handleFileSelect: (event: React.ChangeEvent<HTMLInputElement>) => void
+    handlePickFile: () => Promise<void>
     handleDownloadTemplate: () => Promise<void>
     handleImport: () => Promise<void>
     reset: () => void
 }
 
+// eslint-disable-next-line max-lines-per-function
 function useImportDialogController(
     entityType: string,
     onClose: () => void,
@@ -236,22 +281,20 @@ function useImportDialogController(
     const { user } = useAuthStore()
     const { showToast } = useToast()
     const [step, setStep] = useState<ImportStep>('UPLOAD')
-    const [file, setFile] = useState<File | null>(null)
+    const [selectedImportFile, setSelectedImportFile] = useState<{ token: string; fileName: string; fileSizeBytes: number } | null>(null)
     const [importResult, setImportResult] = useState<ImportResult | null>(null)
     const [error, setError] = useState<string | null>(null)
-    const fileInputRef = useRef<HTMLInputElement>(null)
 
     const reset = () => {
-        setFile(null)
+        setSelectedImportFile(null)
         setStep('UPLOAD')
         setImportResult(null)
         setError(null)
     }
 
     return {
-        fileInputRef,
         step,
-        file,
+        selectedImportFile,
         error,
         importResult,
         reset,
@@ -259,16 +302,34 @@ function useImportDialogController(
             reset()
             onClose()
         },
-        handleFileSelect: (event) => {
-            const selected = event.target.files?.[0]
-            if (!selected) { return }
-            if (!isSupportedFile(selected.name)) {
-                setError('Please select a valid CSV or Excel file')
-                return
+        handlePickFile: async () => {
+            try {
+                const pickResult = await globalThis.electronAPI.system.pickImportFile()
+                if (!pickResult.success) {
+                    if (!pickResult.cancelled && pickResult.error) {
+                        setError(pickResult.error)
+                    }
+                    return
+                }
+                if (!pickResult.token || !pickResult.fileName || !pickResult.fileSizeBytes) {
+                    setError('File selection response was incomplete')
+                    return
+                }
+                if (!isSupportedFile(pickResult.fileName)) {
+                    setError('Please select a valid CSV or Excel file')
+                    return
+                }
+
+                setSelectedImportFile({
+                    token: pickResult.token,
+                    fileName: pickResult.fileName,
+                    fileSizeBytes: pickResult.fileSizeBytes
+                })
+                setError(null)
+                setStep('REVIEW')
+            } catch (pickError) {
+                setError(pickError instanceof Error ? pickError.message : 'Failed to select import file')
             }
-            setFile(selected)
-            setError(null)
-            setStep('REVIEW')
         },
         handleDownloadTemplate: async () => {
             try {
@@ -289,14 +350,25 @@ function useImportDialogController(
             }
         },
         handleImport: async () => {
-            if (!file) { return }
+            if (!selectedImportFile) { return }
             if (!user?.id) { setError('You must be signed in to import data'); return }
+            if (!IMPORT_ENTITY_TYPES.has(entityType as 'STUDENT' | 'STAFF' | 'FEE_STRUCTURE' | 'INVENTORY' | 'BANK_STATEMENT')) {
+                setError(`Unsupported import entity type: ${entityType}`)
+                setStep('REVIEW')
+                return
+            }
             setStep('IMPORTING')
             try {
                 const mappings = await fetchTemplateMappings(entityType)
-                const config = { entityType, mappings, skipDuplicates: true, duplicateKey: entityType === 'STUDENT' ? 'admission_number' : 'id' }
-                const importResponse = await globalThis.electronAPI.system.importData((file as File & { path: string }).path, config, user.id)
-                const result = importResponse as ImportResult
+                const normalizedEntityType = entityType as 'STUDENT' | 'STAFF' | 'FEE_STRUCTURE' | 'INVENTORY' | 'BANK_STATEMENT'
+                const config = {
+                    entityType: normalizedEntityType,
+                    mappings,
+                    skipDuplicates: true,
+                    duplicateKey: normalizedEntityType === 'STUDENT' ? 'admission_number' : 'id'
+                }
+                const importResponse = await globalThis.electronAPI.system.importData(selectedImportFile.token, config, user.id)
+                const result = normalizeImportResult(importResponse)
                 setImportResult(result)
                 setStep('RESULT')
                 if (result.success) { onSuccess(result) }
@@ -314,10 +386,18 @@ interface ImportDialogStepContentProps {
 
 function ImportDialogStepContent({ controller }: Readonly<ImportDialogStepContentProps>) {
     if (controller.step === 'UPLOAD') {
-        return <UploadStep fileInputRef={controller.fileInputRef} onFileSelect={controller.handleFileSelect} onDownloadTemplate={controller.handleDownloadTemplate} />
+        return <UploadStep onPickFile={controller.handlePickFile} onDownloadTemplate={controller.handleDownloadTemplate} />
     }
-    if (controller.step === 'REVIEW' && controller.file) {
-        return <ReviewStep file={controller.file} error={controller.error} onCancel={controller.reset} onImport={controller.handleImport} />
+    if (controller.step === 'REVIEW' && controller.selectedImportFile) {
+        return (
+            <ReviewStep
+                fileName={controller.selectedImportFile.fileName}
+                fileSizeBytes={controller.selectedImportFile.fileSizeBytes}
+                error={controller.error}
+                onCancel={controller.reset}
+                onImport={controller.handleImport}
+            />
+        )
     }
     if (controller.step === 'IMPORTING') {
         return <ImportingStep />

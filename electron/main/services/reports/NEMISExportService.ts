@@ -1,3 +1,5 @@
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
@@ -422,14 +424,15 @@ class NEMISExportManager implements INEMISExportManager {
       }
     }
 
-    // For STUDENTS type, we perform additional schema validation
-    const studentData = data as NEMISStudent[]
-    for (const student of studentData) {
-      const validation = this.validator.validateStudentData(student)
-      if (!validation.valid) {
-        return {
-          success: false,
-          message: 'Data validation failed'
+    if (exportType === 'STUDENTS') {
+      const studentData = data as NEMISStudent[]
+      for (const student of studentData) {
+        const validation = this.validator.validateStudentData(student)
+        if (!validation.valid) {
+          return {
+            success: false,
+            message: 'Data validation failed'
+          }
         }
       }
     }
@@ -446,7 +449,16 @@ class NEMISExportManager implements INEMISExportManager {
   private buildFilePath(config: NEMISExportConfig): string {
     const timestamp = Date.now()
     const fileExtension = config.format.toLowerCase()
-    return `nemis_exports/${config.export_type.toLowerCase()}_${timestamp}.${fileExtension}`
+    return path.join(
+      process.cwd(),
+      'nemis_exports',
+      `${config.export_type.toLowerCase()}_${timestamp}.${fileExtension}`
+    )
+  }
+
+  private persistExportFile(filePath: string, content: string): void {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true })
+    fs.writeFileSync(filePath, content, 'utf8')
   }
 
   async createExport(exportConfig: NEMISExportConfig, userId: number): Promise<ExportResult> {
@@ -461,21 +473,61 @@ class NEMISExportManager implements INEMISExportManager {
         return validationError
       }
 
-      this.formatExportData(exportConfig, extracted)
+      const formattedData = this.formatExportData(exportConfig, extracted)
       const filePath = this.buildFilePath(exportConfig)
 
-      const exportId = await this.exportRepo.createExportRecord({
-        export_type: exportConfig.export_type,
-        format: exportConfig.format,
-        record_count: extracted.length,
-        file_path: filePath,
-        exported_by: userId,
-        status: 'COMPLETED'
-      })
+      try {
+        this.persistExportFile(filePath, formattedData)
+      } catch (error) {
+        const failedExportId = await this.exportRepo.createExportRecord({
+          export_type: exportConfig.export_type,
+          format: exportConfig.format,
+          record_count: extracted.length,
+          file_path: filePath,
+          exported_by: userId,
+          status: 'FAILED'
+        })
+
+        logAudit(userId, 'NEMIS_EXPORT_FAILED', 'nemis_export', failedExportId, null, {
+          export_type: exportConfig.export_type,
+          record_count: extracted.length,
+          reason: error instanceof Error ? error.message : 'file_write_error'
+        })
+
+        return {
+          success: false,
+          message: `Failed to persist export file: ${error instanceof Error ? error.message : 'unknown error'}`,
+          export_id: failedExportId,
+          file_path: filePath,
+          record_count: extracted.length
+        }
+      }
+
+      let exportId: number
+      try {
+        exportId = await this.exportRepo.createExportRecord({
+          export_type: exportConfig.export_type,
+          format: exportConfig.format,
+          record_count: extracted.length,
+          file_path: filePath,
+          exported_by: userId,
+          status: 'COMPLETED'
+        })
+      } catch (error) {
+        try {
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath)
+          }
+        } catch {
+          // Best-effort rollback to avoid filesystem/db drift when record write fails.
+        }
+        throw error
+      }
 
       logAudit(userId, 'NEMIS_EXPORT', 'nemis_export', exportId, null, {
         export_type: exportConfig.export_type,
-        record_count: extracted.length
+        record_count: extracted.length,
+        file_path: filePath
       })
 
       return {

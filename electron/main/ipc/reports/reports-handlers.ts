@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { getDatabase } from '../../database'
+import { logAudit } from '../../database/utils/audit'
 import { container } from '../../services/base/ServiceContainer'
 import { REPORT_EXPENSE_TRANSACTION_TYPES, REPORT_INCOME_TRANSACTION_TYPES, OUTSTANDING_INVOICE_STATUSES, asSqlInList } from '../../utils/financeTransactionTypes'
 import { ROLES } from '../ipc-result'
@@ -285,42 +286,62 @@ DATE(transaction_date) as payment_date,
 function registerNemisExportHandlers(): void {
     const nemisService = container.resolve('NEMISExportService')
 
-    validatedHandler('reports:extractStudentData', ROLES.STAFF, ReportGenericFilterSchema, async (_event, filters) => {
+    validatedHandler('reports:extractStudentData', ROLES.STAFF, ReportGenericFilterSchema, async (_event, filters, actor) => {
         try {
+            let extractedData: unknown[] = []
+            let normalizedFilters: Record<string, unknown> | null = null
             if (!filters) {
-                return await nemisService.extractStudentData()
+                extractedData = await nemisService.extractStudentData() as unknown[]
+            } else {
+                const mappedFilters: {
+                    class_id?: number
+                    academic_year?: string
+                    status?: string
+                } = {}
+                if (filters.streamId !== undefined) {
+                    mappedFilters.class_id = filters.streamId
+                }
+                if (filters.academicYear !== undefined) {
+                    mappedFilters.academic_year = filters.academicYear
+                }
+                if (filters.status !== undefined) {
+                    mappedFilters.status = filters.status
+                }
+                normalizedFilters = mappedFilters
+                extractedData = await nemisService.extractStudentData(mappedFilters) as unknown[]
             }
-            const mappedFilters: {
-                class_id?: number
-                academic_year?: string
-                status?: string
-            } = {}
-            if (filters.streamId !== undefined) {
-                mappedFilters.class_id = filters.streamId
-            }
-            if (filters.academicYear !== undefined) {
-                mappedFilters.academic_year = filters.academicYear
-            }
-            if (filters.status !== undefined) {
-                mappedFilters.status = filters.status
-            }
-            return await nemisService.extractStudentData(mappedFilters)
+
+            logAudit(actor.id, 'NEMIS_EXTRACT_STUDENT_DATA', 'nemis_export', null, null, {
+                filters: normalizedFilters,
+                row_count: extractedData.length
+            })
+            return extractedData
         } catch (error) {
             throw new Error(error instanceof Error ? error.message : 'Failed to extract student data')
         }
     })
 
-    validatedHandler('reports:extractStaffData', ROLES.STAFF, z.void(), async () => {
+    validatedHandler('reports:extractStaffData', ROLES.STAFF, z.void(), async (_event, _data, actor) => {
         try {
-            return await nemisService.extractStaffData()
+            const extractedData = await nemisService.extractStaffData()
+            logAudit(actor.id, 'NEMIS_EXTRACT_STAFF_DATA', 'nemis_export', null, null, {
+                filters: null,
+                row_count: extractedData.length
+            })
+            return extractedData
         } catch (error) {
             throw new Error(error instanceof Error ? error.message : 'Failed to extract staff data')
         }
     })
 
-    validatedHandler('reports:extractEnrollmentData', ROLES.STAFF, z.string().min(4), async (_event, academicYear) => {
+    validatedHandler('reports:extractEnrollmentData', ROLES.STAFF, z.string().min(4), async (_event, academicYear, actor) => {
         try {
-            return await nemisService.extractEnrollmentData(academicYear)
+            const extractedData = await nemisService.extractEnrollmentData(academicYear)
+            logAudit(actor.id, 'NEMIS_EXTRACT_ENROLLMENT_DATA', 'nemis_export', null, null, {
+                filters: { academic_year: academicYear },
+                row_count: extractedData.length
+            })
+            return extractedData
         } catch (error) {
             throw new Error(error instanceof Error ? error.message : 'Failed to extract enrollment data')
         }

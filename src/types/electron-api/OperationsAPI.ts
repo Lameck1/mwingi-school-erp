@@ -56,6 +56,20 @@ export interface ExpenseSummary {
   percentage?: number;
 }
 
+export interface CBCProfitabilityRow {
+  strand_id: number;
+  strand_name: string;
+  fiscal_year: number;
+  term: number;
+  revenue_cents: number;
+  expenses_cents: number;
+  net_profit_cents: number;
+  profit_margin_percent: number;
+  student_count: number;
+  cost_per_student_cents: number;
+  revenue_per_student_cents: number;
+}
+
 export interface GrantSummary {
   grant: Grant;
   utilization_records: Array<{
@@ -91,6 +105,7 @@ export interface OperationsAPI {
   // CBC Strands
   getCBCStrands: () => Promise<{ success: boolean; data: CBCStrand[]; message?: string }>
   getActiveCBCStrands: () => Promise<{ success: boolean; data: CBCStrand[]; message?: string }>
+  getCBCProfitabilityReport: (fiscalYear: number, term?: number) => Promise<{ success: boolean; data: CBCProfitabilityRow[]; message?: string }>
   linkFeeCategoryToStrand: (feeCategoryId: number, strandId: number, allocationPercentage: number, userId: number) => Promise<{ success: boolean; data?: number; message?: string }>
 
   // Operations - Boarding

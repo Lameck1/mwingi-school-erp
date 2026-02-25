@@ -1,14 +1,36 @@
-import * as fs from 'fs'
-import * as path from 'path'
+import { randomUUID } from 'node:crypto'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 
 import { dialog, BrowserWindow } from '../../electron-env'
 import { dataImportService } from '../../services/data/DataImportService'
 import { ROLES } from '../ipc-result'
-import { ImportTuple, TemplateTypeSchema } from '../schemas/system-schemas'
+import { ImportTuple, ImportPickFileSchema, TemplateTypeSchema } from '../schemas/system-schemas'
 import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 import type { ImportConfig } from '../../services/data/DataImportService'
 import type { z } from 'zod'
+
+const ALLOWED_IMPORT_EXTENSIONS = ['.csv', '.xlsx', '.xls']
+const MAX_IMPORT_FILE_SIZE_BYTES = 25 * 1024 * 1024
+const IMPORT_TOKEN_TTL_MS = 10 * 60 * 1000
+
+interface ImportTokenEntry {
+    absolutePath: string
+    extension: string
+    sizeBytes: number
+    expiresAtMs: number
+}
+
+const importFileTokenStore = new Map<string, ImportTokenEntry>()
+
+function cleanupExpiredImportTokens(referenceTimeMs: number = Date.now()): void {
+    for (const [token, entry] of importFileTokenStore.entries()) {
+        if (entry.expiresAtMs <= referenceTimeMs) {
+            importFileTokenStore.delete(token)
+        }
+    }
+}
 
 function normalizeImportConfig(config: z.infer<typeof ImportTuple>[1]): ImportConfig {
     const normalizedMappings: ImportConfig['mappings'] = config.mappings.map((mapping) => {
@@ -39,56 +61,154 @@ function normalizeImportConfig(config: z.infer<typeof ImportTuple>[1]): ImportCo
     return normalized
 }
 
+function getImportFileMetadata(targetPath: string): {
+    absolutePath: string
+    extension: string
+    fileSizeBytes: number
+} {
+    const absolutePath = path.resolve(targetPath)
+    const extension = path.extname(absolutePath).toLowerCase()
+    const stats = fs.statSync(absolutePath)
+
+    if (!stats.isFile()) {
+        throw new Error('Selected import path is not a file')
+    }
+
+    return { absolutePath, extension, fileSizeBytes: stats.size }
+}
+
+function getExtensionValidationError(extension: string): string | null {
+    if (!ALLOWED_IMPORT_EXTENSIONS.includes(extension)) {
+        return `Invalid file type '${extension}'. Allowed: ${ALLOWED_IMPORT_EXTENSIONS.join(', ')}`
+    }
+    return null
+}
+
+function getFileSizeValidationError(fileSizeBytes: number): string | null {
+    if (fileSizeBytes > MAX_IMPORT_FILE_SIZE_BYTES) {
+        const sizeMb = (fileSizeBytes / (1024 * 1024)).toFixed(1)
+        const maxMb = (MAX_IMPORT_FILE_SIZE_BYTES / (1024 * 1024)).toFixed(0)
+        return `File too large (${sizeMb} MB). Maximum allowed size is ${maxMb} MB`
+    }
+    return null
+}
+
+function buildImportValidationFailure(message: string) {
+    return {
+        success: false,
+        totalRows: 0,
+        imported: 0,
+        skipped: 0,
+        errors: [{ row: 0, message }]
+    }
+}
+
 export function registerDataImportHandlers(): void {
-    // Import from file
+    validatedHandler('data:pickImportFile', ROLES.ADMIN_ONLY, ImportPickFileSchema, async (event) => {
+        cleanupExpiredImportTokens()
+        try {
+            const win = BrowserWindow.fromWebContents(event.sender)
+            const pickResult = await dialog.showOpenDialog(win, {
+                title: 'Select Import File',
+                properties: ['openFile'],
+                filters: [
+                    { name: 'Data Files', extensions: ['csv', 'xlsx', 'xls'] },
+                    { name: 'CSV', extensions: ['csv'] },
+                    { name: 'Excel', extensions: ['xlsx', 'xls'] }
+                ]
+            })
+
+            if (pickResult.canceled) {
+                return { success: false, cancelled: true, error: 'Cancelled' }
+            }
+
+            const selectedPath = pickResult.filePaths[0]
+            if (!selectedPath) {
+                return { success: false, cancelled: true, error: 'No file selected' }
+            }
+
+            const { absolutePath, extension, fileSizeBytes } = getImportFileMetadata(selectedPath)
+            const extensionError = getExtensionValidationError(extension)
+            if (extensionError) {
+                return { success: false, cancelled: false, error: extensionError }
+            }
+
+            const sizeError = getFileSizeValidationError(fileSizeBytes)
+            if (sizeError) {
+                return { success: false, cancelled: false, error: sizeError }
+            }
+
+            const token = randomUUID()
+            const expiresAtMs = Date.now() + IMPORT_TOKEN_TTL_MS
+            importFileTokenStore.set(token, {
+                absolutePath,
+                extension,
+                sizeBytes: fileSizeBytes,
+                expiresAtMs
+            })
+
+            return {
+                success: true,
+                token,
+                fileName: path.basename(absolutePath),
+                fileSizeBytes,
+                extension,
+                expiresAtMs
+            }
+        } catch (error) {
+            return {
+                success: false,
+                cancelled: false,
+                error: error instanceof Error ? error.message : 'Unable to open import file picker'
+            }
+        }
+    })
+
     validatedHandlerMulti('data:import', ROLES.ADMIN_ONLY, ImportTuple, (
-        event,
-        [filePath, config, _legacyId],
+        _event,
+        [fileToken, config, legacyId],
         actorCtx
     ) => {
-        if (_legacyId !== undefined && _legacyId !== actorCtx.id) {
+        if (legacyId !== undefined && legacyId !== actorCtx.id) {
             throw new Error('Unauthorized: renderer user mismatch')
         }
+
+        cleanupExpiredImportTokens()
+        const tokenEntry = importFileTokenStore.get(fileToken)
+        if (!tokenEntry) {
+            return buildImportValidationFailure('Import token is invalid or has expired. Please pick the file again.')
+        }
+
         try {
-            const resolved = path.resolve(filePath)
-            const allowedExtensions = ['.csv', '.xlsx', '.xls']
-            const ext = path.extname(resolved).toLowerCase()
-            if (!allowedExtensions.includes(ext)) {
-                return {
-                    success: false,
-                    totalRows: 0,
-                    imported: 0,
-                    skipped: 0,
-                    errors: [{ row: 0, message: `Invalid file type '${ext}'. Allowed: ${allowedExtensions.join(', ')}` }]
-                }
+            const { absolutePath, extension, fileSizeBytes } = getImportFileMetadata(tokenEntry.absolutePath)
+            const extensionError = getExtensionValidationError(extension)
+            if (extensionError) {
+                return buildImportValidationFailure(extensionError)
             }
-            const buffer = fs.readFileSync(resolved)
+            const sizeError = getFileSizeValidationError(fileSizeBytes)
+            if (sizeError) {
+                return buildImportValidationFailure(sizeError)
+            }
+
+            const buffer = fs.readFileSync(absolutePath)
             return dataImportService.importFromFile(
                 buffer,
-                filePath,
+                path.basename(absolutePath),
                 normalizeImportConfig(config),
                 actorCtx.id
             )
         } catch (error) {
-            return {
-                success: false,
-                totalRows: 0,
-                imported: 0,
-                skipped: 0,
-                errors: [{
-                    row: 0,
-                    message: error instanceof Error ? error.message : 'File read error'
-                }]
-            }
+            return buildImportValidationFailure(error instanceof Error ? error.message : 'File read error')
+        } finally {
+            // Single-use token to prevent replay with stale or swapped file paths.
+            importFileTokenStore.delete(fileToken)
         }
     })
 
-    // Get Template
     validatedHandler('data:getTemplate', ROLES.ADMIN_ONLY, TemplateTypeSchema, (_event, entityType) => {
         return dataImportService.getImportTemplate(entityType)
     })
 
-    // Download Template
     validatedHandler('data:downloadTemplate', ROLES.ADMIN_ONLY, TemplateTypeSchema, async (event, entityType) => {
         try {
             const buffer = await dataImportService.generateTemplateFile(entityType)

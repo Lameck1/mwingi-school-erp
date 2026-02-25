@@ -385,9 +385,25 @@ export interface AttendanceEntry {
 
 // ── Data Import ──
 export interface ImportConfig {
-  entityType: string
-  mapping?: Record<string, string>
-  skipHeader?: boolean
+  entityType: 'STUDENT' | 'STAFF' | 'FEE_STRUCTURE' | 'INVENTORY' | 'BANK_STATEMENT'
+  mappings: Array<{
+    sourceColumn: string
+    targetField: string
+    required?: boolean
+  }>
+  skipDuplicates?: boolean
+  duplicateKey?: string
+}
+
+export interface PickImportFileResult {
+  success: boolean
+  cancelled?: boolean
+  token?: string
+  fileName?: string
+  fileSizeBytes?: number
+  extension?: string
+  expiresAtMs?: number
+  error?: string
 }
 
 // ── Communications: Messaging ──

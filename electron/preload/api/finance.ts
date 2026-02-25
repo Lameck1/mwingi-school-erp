@@ -182,9 +182,32 @@ function createGLAPI() {
 
 function createOpeningBalanceAPI() {
   return {
-    importStudentOpeningBalances: (balances: Array<{ student_id: number; amount: number }>, academicYearId: number, importSource: string, userId: number) =>
+    importStudentOpeningBalances: (
+      balances: Array<{
+        student_id: number
+        admission_number: string
+        student_name: string
+        opening_balance: number
+        balance_type: 'DEBIT' | 'CREDIT'
+        description?: string
+      }>,
+      academicYearId: number,
+      importSource: string,
+      userId: number
+    ) =>
       ipcRenderer.invoke('opening-balance:import-student', balances, academicYearId, importSource, userId),
-    importGLOpeningBalances: (balances: Array<{ gl_account_code: string; debit_amount: number; credit_amount: number }>, userId: number) =>
+    importGLOpeningBalances: (
+      balances: Array<{
+        academic_year_id: number
+        gl_account_code: string
+        debit_amount: number
+        credit_amount: number
+        description?: string
+        imported_from?: string
+        imported_by_user_id?: number
+      }>,
+      userId: number
+    ) =>
       ipcRenderer.invoke('opening-balance:import-gl', balances, userId),
   }
 }

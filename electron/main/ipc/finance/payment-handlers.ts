@@ -224,7 +224,7 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
                   AND student_id = ?
                   AND invoice_id = ?
                   AND amount = ?
-                  AND payment_method = 'CASH'
+                  AND payment_method = 'CREDIT'
                   AND payment_reference = 'CREDIT_BALANCE'
                   AND recorded_by_user_id = ?
                   AND transaction_date = ?

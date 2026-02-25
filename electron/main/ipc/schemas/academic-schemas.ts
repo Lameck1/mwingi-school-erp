@@ -222,10 +222,17 @@ export const ReportCardEmailSchema = z.object({
     include_sms: z.boolean()
 })
 
+const SafeReportCardFilenameSchema = z.string()
+    .trim()
+    .min(5, 'Output filename is required')
+    .max(128, 'Output filename is too long')
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*\.[Pp][Dd][Ff]$/, 'Output filename must be a safe .pdf name')
+    .refine((value) => !value.includes('..'), 'Output filename cannot contain path traversal')
+
 export const ReportCardMergeSchema = z.object({
     exam_id: z.number(),
     stream_id: z.number(),
-    output_path: z.string()
+    output_path: SafeReportCardFilenameSchema.optional()
 })
 
 export const ReportCardDownloadSchema = z.object({
@@ -341,9 +348,16 @@ export const PerformanceStrugglingSchema = z.tuple([z.number(), z.number(), z.nu
 export const PerformanceTrendsSchema = z.tuple([z.number(), z.number(), z.number().optional()])
 
 // ==================== Schedules & PDF ====================
+const SafeExportPdfFilenameSchema = z.string()
+    .trim()
+    .min(5, 'Filename is required')
+    .max(128, 'Filename is too long')
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*\.[Pp][Dd][Ff]$/, 'Filename must be a safe .pdf name')
+    .refine((value) => !value.includes('..'), 'Filename cannot contain path traversal')
+
 export const ExportPdfSchema = z.object({
     html: z.string().optional(),
-    filename: z.string().optional(),
+    filename: SafeExportPdfFilenameSchema.optional(),
     title: z.string().optional(),
     content: z.string().optional(),
 })
