@@ -38,10 +38,21 @@ Workflow: `.github/workflows/build.yml`.
 - `npm run typecheck:node`
 - `npm run lint:eslint:strict`
 - `npm run lint:architecture`
+- `npm run docs:consistency`
+- `npm run ipc:manifest:check`
+- `npm run audit:checklist`
 - `npx vitest run --reporter=verbose`
 - `npx vitest run --coverage`
+- `npm run coverage:critical`
 - `npm run audit:prod` (blocking)
 - `npm run audit:full:json` (non-blocking evidence artifact)
+- Windows parity job on `windows-latest`:
+  - `npm run typecheck:renderer`
+  - `npm run typecheck:node`
+  - `npm run lint:eslint:strict`
+  - `npm run lint:architecture`
+  - `npm run build:vite`
+  - `npx vitest run electron/main/ipc/__tests__/ipc-contract-parity.test.ts electron/main/ipc/data/__tests__/import-handlers.test.ts --reporter=verbose`
 
 ### Release Tags (`v*`)
 
@@ -50,7 +61,13 @@ Workflow: `.github/workflows/build.yml`.
 - Signed packaging matrix build
 - GitHub release publication
 
-## 5. Incident and Failure Triage
+## 6. Audit Remediation Tracking
+
+- Remediation tracker: `REMEDIATION_CHECKLIST.md` (repository root).
+- Checklist is CI-gated with `npm run audit:checklist` when open `AUDIT-F*` issues exist.
+- PRs addressing audit findings must include finding IDs and verification evidence in `.github/PULL_REQUEST_TEMPLATE.md`.
+
+## 7. Incident and Failure Triage
 
 ### Migration Verification Failure
 

@@ -2,8 +2,8 @@
 
 ## Prerequisites
 
-- Node.js 18+
-- NPM 9+
+- Node.js 20 (recommended: `v20.17.0`)
+- NPM 10 (recommended: `10.8.2`)
 - Windows, macOS, or Linux
 
 ## Installation
@@ -44,7 +44,7 @@ To build the executable installer:
 npm run electron:build
 ```
 
-The output files (Installer.exe, etc.) will be in the `dist` folder.
+The output files (Installer.exe, etc.) will be in the `release` folder.
 
 ## Initial Login
 

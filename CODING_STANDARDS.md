@@ -35,9 +35,11 @@ Both must pass before merge/release.
 
 - Unit/integration tests: `npx vitest run --reporter=verbose`
 - Coverage gate: `npx vitest run --coverage`
+- Critical-module coverage gate: `npm run coverage:critical`
 - Release smoke E2E: `npx playwright test tests/e2e/smoke.spec.ts`
 
-Coverage thresholds remain strict (`80/80/75/80`) and are scoped to critical runtime/security modules in `vitest.config.ts`.
+Global coverage thresholds are enforced at `45/42/30/45` (`lines/functions/branches/statements`) in `vitest.config.ts`.
+Critical module floors are additionally enforced at `60/55/45/60` by `scripts/check-critical-coverage.cjs`.
 
 ## Security and Dependency Gates
 

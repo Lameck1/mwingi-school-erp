@@ -34,16 +34,22 @@ module.exports = {
     },
     {
       name: 'no-orphans',
-      severity: 'warn',
+      severity: 'error',
       comment: 'Unused/orphaned modules usually indicate dead code.',
       from: {
         orphan: true,
         pathNot: [
           String.raw`\.d\.ts$`,
+          String.raw`\.types\.(ts|tsx)$`,
+          String.raw`-types\.(ts|tsx)$`,
+          String.raw`[\\/]types\.ts$`,
           String.raw`\.test\.(ts|tsx)$`,
           String.raw`\.spec\.(ts|tsx)$`,
+          '^src/types/',
           '^scripts/',
           '^tests/',
+          '^electron/main/database/migrations/archive/',
+          String.raw`^electron[\\/]main[\\/]ipc[\\/]schemas[\\/]common-schemas\.ts$`,
           String.raw`^src/main\.tsx$`,
           String.raw`^electron/main/index\.ts$`,
           String.raw`^electron/preload/index\.ts$`,

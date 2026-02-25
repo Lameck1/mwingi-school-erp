@@ -14,9 +14,13 @@
 - Runs quality gates only:
   - renderer/node typechecks
   - strict ESLint + architecture lint
+  - docs/workflow consistency + IPC manifest drift checks
+  - remediation checklist presence gate (`audit:checklist`)
   - Vitest (verbose + coverage)
+  - critical module coverage floor check
   - production runtime audit (blocking)
   - full audit (non-blocking artifact)
+  - Windows parity checks (typecheck + lint + targeted smoke)
 - No signed installers are produced.
 
 ### Tagged Releases (`v*`)

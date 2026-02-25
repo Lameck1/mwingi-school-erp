@@ -10,7 +10,7 @@ export default defineConfig({
         exclude: ['**/node_modules/**', '**/dist/**', '**/dist-electron/**'],
         coverage: {
             provider: 'v8',
-            reporter: ['text', 'json', 'html', 'lcov'],
+            reporter: ['text', 'json', 'json-summary', 'html', 'lcov'],
             include: [
                 'electron/main/ipc/**/*.ts',
                 'electron/main/services/**/*.ts',
@@ -33,10 +33,10 @@ export default defineConfig({
                 '**/migrations/archive/**'
             ],
             thresholds: {
-                lines: 25,
-                functions: 20,
-                branches: 15,
-                statements: 25
+                lines: 45,
+                functions: 42,
+                branches: 30,
+                statements: 45
             },
             reportsDirectory: './coverage'
         },
