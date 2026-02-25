@@ -196,7 +196,26 @@ describe('finance IPC handlers', () => {
       CREATE TABLE fee_category (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         category_name TEXT,
-        gl_account_id INTEGER
+        description TEXT,
+        gl_account_id INTEGER,
+        is_active BOOLEAN DEFAULT 1
+      );
+
+      CREATE TABLE stream (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        stream_name TEXT NOT NULL,
+        level_order INTEGER NOT NULL,
+        is_active BOOLEAN DEFAULT 1
+      );
+
+      CREATE TABLE fee_structure (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        academic_year_id INTEGER NOT NULL,
+        term_id INTEGER NOT NULL,
+        stream_id INTEGER NOT NULL,
+        student_type TEXT NOT NULL,
+        fee_category_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL
       );
 
       CREATE TABLE transaction_category (
@@ -288,7 +307,7 @@ describe('finance IPC handlers', () => {
       INSERT INTO ledger_transaction (
         transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit,
         student_id, invoice_id, payment_method, payment_reference, description, recorded_by_user_id, created_at, is_voided
-      ) VALUES ('TXN-CREDIT-EXIST-1', date('now'), 'FEE_PAYMENT', 1, 3000, 'CREDIT', 1, 1, 'CASH', 'CREDIT_BALANCE', 'Payment via Credit Balance', 9, datetime('now'), 0)
+      ) VALUES ('TXN-CREDIT-EXIST-1', date('now'), 'FEE_PAYMENT', 1, 3000, 'CREDIT', 1, 1, 'CREDIT', 'CREDIT_BALANCE', 'Payment via Credit Balance', 9, datetime('now'), 0)
     `).run()
 
     const handler = handlerMap.get('payment:payWithCredit')!
@@ -714,5 +733,66 @@ describe('finance IPC handlers', () => {
 
     expect(result.success).toBe(false)
     expect(result.error).toContain('Due date cannot be earlier')
+  })
+
+  it('fee:saveStructure accepts academic year id values and persists rows', async () => {
+    db.prepare(`INSERT INTO stream (id, stream_name, level_order, is_active) VALUES (1, 'Pre-Primary 1', 1, 1)`).run()
+
+    const handler = handlerMap.get('fee:saveStructure')
+    expect(handler).toBeDefined()
+
+    const result = await handler!(
+      {},
+      [{ stream_id: 1, student_type: 'DAY_SCHOLAR', fee_category_id: 1, amount: 120000 }],
+      1,
+      1,
+      9
+    ) as { success: boolean; error?: string }
+
+    expect(result.success).toBe(true)
+
+    const row = db.prepare(`
+      SELECT academic_year_id, term_id, stream_id, student_type, fee_category_id, amount
+      FROM fee_structure
+      WHERE academic_year_id = ? AND term_id = ?
+    `).get(1, 1) as {
+      academic_year_id: number
+      term_id: number
+      stream_id: number
+      student_type: string
+      fee_category_id: number
+      amount: number
+    } | undefined
+
+    expect(row).toBeDefined()
+    expect(row?.academic_year_id).toBe(1)
+    expect(row?.term_id).toBe(1)
+    expect(row?.amount).toBe(120000)
+  })
+
+  it('fee:getStructure returns rows for academic year id values', async () => {
+    db.prepare(`INSERT INTO stream (id, stream_name, level_order, is_active) VALUES (2, 'Grade 1', 2, 1)`).run()
+    db.prepare(`
+      INSERT INTO fee_structure (academic_year_id, term_id, stream_id, student_type, fee_category_id, amount)
+      VALUES (1, 1, 2, 'BOARDER', 1, 95000)
+    `).run()
+
+    const handler = handlerMap.get('fee:getStructure')
+    expect(handler).toBeDefined()
+
+    const result = await handler!({}, 1, 1) as Array<{
+      academic_year_id: number
+      term_id: number
+      stream_id: number
+      student_type: string
+      fee_category_id: number
+      amount: number
+    }>
+
+    expect(Array.isArray(result)).toBe(true)
+    expect(result).toHaveLength(1)
+    expect(result[0]?.academic_year_id).toBe(1)
+    expect(result[0]?.term_id).toBe(1)
+    expect(result[0]?.amount).toBe(95000)
   })
 })

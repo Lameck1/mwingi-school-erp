@@ -1,17 +1,37 @@
 import Database from 'better-sqlite3'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
-import { NEMISExportService } from '../../reports/NEMISExportService'
+const fsMock = vi.hoisted(() => ({
+  mkdirSync: vi.fn(),
+  writeFileSync: vi.fn(),
+  existsSync: vi.fn(() => false),
+  unlinkSync: vi.fn()
+}))
 
-vi.mock('../../../../database/utils/audit', () => ({
+vi.mock('node:fs', () => ({
+  mkdirSync: fsMock.mkdirSync,
+  writeFileSync: fsMock.writeFileSync,
+  existsSync: fsMock.existsSync,
+  unlinkSync: fsMock.unlinkSync
+}))
+
+vi.mock('../../../database/utils/audit', () => ({
   logAudit: vi.fn()
 }))
+
+import { NEMISExportService } from '../../reports/NEMISExportService'
 
 describe('NEMISExportService', () => {
   let db: Database.Database
   let service: NEMISExportService
 
   beforeEach(() => {
+    fsMock.mkdirSync.mockReset()
+    fsMock.writeFileSync.mockReset()
+    fsMock.existsSync.mockReset()
+    fsMock.unlinkSync.mockReset()
+    fsMock.existsSync.mockReturnValue(false)
+
     db = new Database(':memory:')
 
     db.exec(`
@@ -231,5 +251,34 @@ describe('NEMISExportService', () => {
     const report = await service.generateNEMISReport()
     expect(report.student_count).toBe(2)
     expect(report.enrollment_count).toBe(2)
+  })
+
+  it('persists export file before marking export completed', async () => {
+    const result = await service.createExport({ export_type: 'STAFF', format: 'CSV' }, 1)
+    expect(result.success).toBe(true)
+    expect(result.file_path).toContain('nemis_exports')
+    expect(fsMock.writeFileSync).toHaveBeenCalledTimes(1)
+
+    const latest = db.prepare('SELECT status, file_path FROM nemis_export ORDER BY id DESC LIMIT 1').get() as {
+      status: string
+      file_path: string
+    } | undefined
+    expect(latest?.status).toBe('COMPLETED')
+    expect(latest?.file_path).toBe(result.file_path)
+  })
+
+  it('records failed status when export file write fails', async () => {
+    fsMock.writeFileSync.mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+
+    const result = await service.createExport({ export_type: 'STAFF', format: 'CSV' }, 1)
+    expect(result.success).toBe(false)
+    expect(result.message).toContain('Failed to persist export file')
+
+    const statusRows = db.prepare('SELECT status FROM nemis_export ORDER BY id DESC LIMIT 1').all() as Array<{ status: string }>
+    expect(statusRows[0]?.status).toBe('FAILED')
+    const completedCount = db.prepare("SELECT COUNT(*) as count FROM nemis_export WHERE status = 'COMPLETED'").get() as { count: number }
+    expect(completedCount.count).toBe(0)
   })
 })

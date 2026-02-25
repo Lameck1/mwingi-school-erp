@@ -11,6 +11,11 @@ let hasActiveSession = true
 const academicYears = [{ id: 1, year_name: '2026' }]
 const terms = [{ id: 1, term_number: 1, year_name: '2026' }]
 const exams = [{ id: 10, name: 'Midterm' }]
+const pdfMocks = vi.hoisted(() => ({
+  renderHtmlToPdfBufferMock: vi.fn(async () => Buffer.from('pdf')),
+  resolveOutputPathMock: vi.fn(() => 'C:/tmp/export.pdf'),
+  writePdfBufferMock: vi.fn()
+}))
 
 const dbMock = {
   prepare: vi.fn((sql: string) => ({
@@ -85,9 +90,9 @@ vi.mock('../../../database', () => ({
 }))
 
 vi.mock('../../../utils/pdf', () => ({
-  renderHtmlToPdfBuffer: vi.fn(async () => Buffer.from('pdf')),
-  resolveOutputPath: vi.fn(() => 'C:/tmp/export.pdf'),
-  writePdfBuffer: vi.fn()
+  renderHtmlToPdfBuffer: pdfMocks.renderHtmlToPdfBufferMock,
+  resolveOutputPath: pdfMocks.resolveOutputPathMock,
+  writePdfBuffer: pdfMocks.writePdfBufferMock
 }))
 
 import { registerAcademicHandlers } from '../academic-handlers'
@@ -98,6 +103,9 @@ describe('academic handler legacy aliases and validation', () => {
     sessionUserId = 41
     sessionRole = 'TEACHER'
     hasActiveSession = true
+    pdfMocks.renderHtmlToPdfBufferMock.mockClear()
+    pdfMocks.resolveOutputPathMock.mockClear()
+    pdfMocks.writePdfBufferMock.mockClear()
     registerAcademicHandlers()
   })
 
@@ -132,5 +140,29 @@ describe('academic handler legacy aliases and validation', () => {
     const result = await handlerMap.get('academic-year:getAll')!({}) as { success: boolean; error?: string }
     expect(result.success).toBe(false)
     expect(result.error).toContain('Unauthorized')
+  })
+
+  it('rejects unsafe report export filename traversal payloads', async () => {
+    const result = await handlerMap.get('report:exportPdf')!(
+      {},
+      { content: '<p>ok</p>', filename: '../escape.pdf' }
+    ) as { success: boolean; error?: string }
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('Validation failed')
+    expect(pdfMocks.resolveOutputPathMock).not.toHaveBeenCalled()
+    expect(pdfMocks.writePdfBufferMock).not.toHaveBeenCalled()
+  })
+
+  it('normalizes and persists valid report export filenames', async () => {
+    const result = await handlerMap.get('report:exportPdf')!(
+      {},
+      { content: '<p>ok</p>', filename: 'summary_2026.pdf' }
+    ) as { success: boolean; filePath?: string }
+
+    expect(result.success).toBe(true)
+    expect(result.filePath).toBe('C:/tmp/export.pdf')
+    expect(pdfMocks.resolveOutputPathMock).toHaveBeenCalledWith('summary_2026.pdf', 'pdf')
+    expect(pdfMocks.writePdfBufferMock).toHaveBeenCalledOnce()
   })
 })

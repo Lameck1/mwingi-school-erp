@@ -5,7 +5,16 @@ type IpcHandler = (event: unknown, ...args: unknown[]) => Promise<unknown>
 const handlerMap = new Map<string, IpcHandler>()
 let sessionUserId = 21
 let sessionRole = 'ADMIN'
-const validIsoDate = new Date().toISOString();
+const validIsoDate = new Date().toISOString()
+
+const mockState = vi.hoisted(() => ({
+  selectedPath: 'C:/tmp/students.xlsx',
+  importToken: '11111111-1111-4111-8111-111111111111',
+  readFileSyncMock: vi.fn(() => Buffer.from('id,name\n1,Test')),
+  statSyncMock: vi.fn(() => ({ isFile: () => true, size: 120 })),
+  showOpenDialogMock: vi.fn(async () => ({ canceled: false, filePaths: ['C:/tmp/students.xlsx'] })),
+  showSaveDialogMock: vi.fn(async () => ({ filePath: 'C:/tmp/template.xlsx' }))
+}))
 
 const { importServiceMock } = vi.hoisted(() => ({
   importServiceMock: {
@@ -35,9 +44,14 @@ vi.mock('keytar', () => ({
   }
 }))
 
+vi.mock('node:crypto', () => ({
+  randomUUID: vi.fn(() => mockState.importToken)
+}))
+
 vi.mock('node:fs', () => ({
-  readFileSync: vi.fn(() => Buffer.from('id,name\n1,Test')),
+  readFileSync: mockState.readFileSyncMock,
   writeFileSync: vi.fn(),
+  statSync: mockState.statSyncMock,
 }))
 
 vi.mock('../../../electron-env', () => ({
@@ -51,7 +65,8 @@ vi.mock('../../../electron-env', () => ({
     fromWebContents: vi.fn(() => ({})),
   },
   dialog: {
-    showSaveDialog: vi.fn(async () => ({ filePath: 'C:/tmp/template.xlsx' })),
+    showOpenDialog: mockState.showOpenDialogMock,
+    showSaveDialog: mockState.showSaveDialogMock,
   }
 }))
 
@@ -66,28 +81,70 @@ describe('data import IPC handlers', () => {
     handlerMap.clear()
     sessionUserId = 21
     sessionRole = 'ADMIN'
+    mockState.readFileSyncMock.mockClear()
+    mockState.statSyncMock.mockClear()
+    mockState.showOpenDialogMock.mockReset()
+    mockState.showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [mockState.selectedPath] })
     importServiceMock.importFromFile.mockClear()
     registerDataImportHandlers()
   })
 
-  it('data:import rejects renderer actor mismatch in import audit trail', async () => {
+  it('data:pickImportFile issues a tokenized import selection', async () => {
+    const handler = handlerMap.get('data:pickImportFile')
+    expect(handler).toBeDefined()
+
+    const result = await handler!({}) as {
+      success: boolean
+      token?: string
+      fileName?: string
+      extension?: string
+    }
+
+    expect(result.success).toBe(true)
+    expect(result.token).toBe(mockState.importToken)
+    expect(result.fileName).toBe('students.xlsx')
+    expect(result.extension).toBe('.xlsx')
+  })
+
+  it('data:import rejects unknown or expired tokens', async () => {
     const handler = handlerMap.get('data:import')
     expect(handler).toBeDefined()
 
-    const result = await handler!({}, 'C:/tmp/students.xlsx', { entityType: 'STUDENT', mappings: [] }, 3) as {
-      success: boolean
-      errors?: Array<{ message: string }>
-    }
+    const result = await handler!(
+      {},
+      '22222222-2222-4222-8222-222222222222',
+      { entityType: 'STUDENT', mappings: [] },
+      21
+    ) as { success: boolean; errors?: Array<{ message: string }> }
 
     expect(result.success).toBe(false)
-    expect((result as any).error).toContain('renderer user mismatch')
+    expect(result.errors?.[0]?.message).toContain('invalid or has expired')
+    expect(importServiceMock.importFromFile).not.toHaveBeenCalled()
+  })
+
+  it('data:import rejects renderer actor mismatch in import audit trail', async () => {
+    const pickHandler = handlerMap.get('data:pickImportFile')
+    const importHandler = handlerMap.get('data:import')
+    expect(pickHandler).toBeDefined()
+    expect(importHandler).toBeDefined()
+
+    const picked = await pickHandler!({}) as { token?: string }
+    const result = await importHandler!(
+      {},
+      picked.token,
+      { entityType: 'STUDENT', mappings: [] },
+      3
+    ) as { success: boolean; error?: string }
+
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('renderer user mismatch')
     expect(importServiceMock.importFromFile).not.toHaveBeenCalled()
   })
 
   it('data:import enforces admin role', async () => {
     sessionRole = 'TEACHER'
     const handler = handlerMap.get('data:import')!
-    const result = await handler({}, 'C:/tmp/students.xlsx', { entityType: 'STUDENT', mappings: [] }, 21) as {
+    const result = await handler({}, mockState.importToken, { entityType: 'STUDENT', mappings: [] }, 21) as {
       success: boolean
       error?: string
     }
@@ -95,5 +152,30 @@ describe('data import IPC handlers', () => {
     expect(result.success).toBe(false)
     expect(result.error).toContain('Unauthorized')
     expect(importServiceMock.importFromFile).not.toHaveBeenCalled()
+  })
+
+  it('data:import reads only token-selected file paths', async () => {
+    const pickHandler = handlerMap.get('data:pickImportFile')
+    const importHandler = handlerMap.get('data:import')
+    expect(pickHandler).toBeDefined()
+    expect(importHandler).toBeDefined()
+
+    const picked = await pickHandler!({}) as { token?: string }
+    const result = await importHandler!(
+      {},
+      picked.token,
+      { entityType: 'STUDENT', mappings: [] },
+      21
+    ) as { success: boolean }
+
+    expect(result.success).toBe(true)
+    const firstReadArg = mockState.readFileSyncMock.mock.calls[0]?.[0]
+    expect(String(firstReadArg)).toContain('students.xlsx')
+    expect(importServiceMock.importFromFile).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      'students.xlsx',
+      expect.objectContaining({ entityType: 'STUDENT' }),
+      21
+    )
   })
 })

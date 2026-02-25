@@ -61,6 +61,14 @@ vi.mock('../../../services/base/ServiceContainer', () => ({
   }
 }))
 
+const { logAuditMock } = vi.hoisted(() => ({
+  logAuditMock: vi.fn()
+}))
+
+vi.mock('../../../database/utils/audit', () => ({
+  logAudit: logAuditMock
+}))
+
 import { registerReportsHandlers } from '../reports-handlers'
 
 describe('reports IPC handlers', () => {
@@ -69,6 +77,10 @@ describe('reports IPC handlers', () => {
     sessionData.userId = 9
     sessionData.role = 'TEACHER'
     nemisServiceMock.createExport.mockClear()
+    nemisServiceMock.extractStudentData.mockClear()
+    nemisServiceMock.extractStaffData.mockClear()
+    nemisServiceMock.extractEnrollmentData.mockClear()
+    logAuditMock.mockClear()
     db = new Database(':memory:')
     db.exec(`
     CREATE TABLE IF NOT EXISTS fee_category (
@@ -269,5 +281,64 @@ describe('reports IPC handlers', () => {
     expect(result.success).toBe(false)
     expect(result.error).toContain('renderer user mismatch')
     expect(nemisServiceMock.createExport).not.toHaveBeenCalled()
+  })
+
+  it('reports:extractStudentData writes audit metadata with filters and row count', async () => {
+    sessionData.role = 'PRINCIPAL'
+    nemisServiceMock.extractStudentData.mockResolvedValueOnce([{ id: 1 }, { id: 2 }])
+    const handler = handlerMap.get('reports:extractStudentData')
+    expect(handler).toBeDefined()
+
+    const result = await handler!({}, { streamId: 4, academicYear: '2026', status: 'ACTIVE' }) as Array<{ id: number }>
+    expect(result).toHaveLength(2)
+    expect(logAuditMock).toHaveBeenCalledWith(
+      9,
+      'NEMIS_EXTRACT_STUDENT_DATA',
+      'nemis_export',
+      null,
+      null,
+      expect.objectContaining({
+        filters: expect.objectContaining({
+          class_id: 4,
+          academic_year: '2026',
+          status: 'ACTIVE'
+        }),
+        row_count: 2
+      })
+    )
+  })
+
+  it('reports:extractStaffData and reports:extractEnrollmentData write audit metadata', async () => {
+    sessionData.role = 'PRINCIPAL'
+    nemisServiceMock.extractStaffData.mockResolvedValueOnce([{ id: 'S1' }])
+    nemisServiceMock.extractEnrollmentData.mockResolvedValueOnce([{ class_name: 'Grade 1' }])
+
+    const staffHandler = handlerMap.get('reports:extractStaffData')
+    const enrollmentHandler = handlerMap.get('reports:extractEnrollmentData')
+    expect(staffHandler).toBeDefined()
+    expect(enrollmentHandler).toBeDefined()
+
+    await staffHandler!({})
+    await enrollmentHandler!({}, '2026')
+
+    expect(logAuditMock).toHaveBeenCalledWith(
+      9,
+      'NEMIS_EXTRACT_STAFF_DATA',
+      'nemis_export',
+      null,
+      null,
+      expect.objectContaining({ row_count: 1 })
+    )
+    expect(logAuditMock).toHaveBeenCalledWith(
+      9,
+      'NEMIS_EXTRACT_ENROLLMENT_DATA',
+      'nemis_export',
+      null,
+      null,
+      expect.objectContaining({
+        filters: expect.objectContaining({ academic_year: '2026' }),
+        row_count: 1
+      })
+    )
   })
 })

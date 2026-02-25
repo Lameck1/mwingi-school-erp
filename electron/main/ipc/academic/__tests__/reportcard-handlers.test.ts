@@ -12,15 +12,17 @@ const mockState = vi.hoisted(() => ({
   documentsRoot: 'C:/Users/test/Documents',
   existingPaths: new Set<string>(),
   openPathMock: vi.fn(async () => ''),
-  showSaveDialogMock: vi.fn()
+  showSaveDialogMock: vi.fn(),
+  readFileSyncMock: vi.fn(() => Buffer.from('pdf-bytes')),
+  writeFileSyncMock: vi.fn()
 }))
 
 const allowedRoot = path.resolve(path.join(mockState.documentsRoot, 'MwingiSchoolERP', 'report-cards'))
 
 vi.mock('node:fs', () => ({
   existsSync: vi.fn((targetPath: string) => mockState.existingPaths.has(path.resolve(targetPath))),
-  readFileSync: vi.fn(),
-  writeFileSync: vi.fn()
+  readFileSync: mockState.readFileSyncMock,
+  writeFileSync: mockState.writeFileSyncMock
 }))
 
 vi.mock('../../../security/session', () => ({
@@ -116,6 +118,8 @@ describe('report-card open file security', () => {
     sessionRole = 'TEACHER'
     mockState.openPathMock.mockReset()
     mockState.openPathMock.mockResolvedValue('')
+    mockState.readFileSyncMock.mockClear()
+    mockState.writeFileSyncMock.mockClear()
     registerReportCardHandlers()
   })
 
@@ -168,5 +172,35 @@ describe('report-card open file security', () => {
     expect(result.success).toBe(false)
     expect(result.error).toContain('Unauthorized')
     expect(mockState.openPathMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects unsafe merge output filenames', async () => {
+    const handler = handlerMap.get('report-card:mergePDFs')
+    expect(handler).toBeDefined()
+
+    const traversal = await handler!({}, { exam_id: 1, stream_id: 1, output_path: '../x.pdf' }) as { success: boolean; error?: string }
+    const absolute = await handler!({}, { exam_id: 1, stream_id: 1, output_path: 'C:/temp/x.pdf' }) as { success: boolean; error?: string }
+    const empty = await handler!({}, { exam_id: 1, stream_id: 1, output_path: '.pdf' }) as { success: boolean; error?: string }
+
+    expect(traversal.success).toBe(false)
+    expect(absolute.success).toBe(false)
+    expect(empty.success).toBe(false)
+    expect(traversal.error).toContain('Validation failed')
+    expect(absolute.error).toContain('Validation failed')
+    expect(empty.error).toContain('Validation failed')
+  })
+
+  it('accepts a safe merge output filename', async () => {
+    const handler = handlerMap.get('report-card:mergePDFs')
+    expect(handler).toBeDefined()
+
+    const result = await handler!({}, { exam_id: 1, stream_id: 1, output_path: 'report_2026.pdf' }) as {
+      success: boolean
+      filePath?: string
+    }
+
+    expect(result.success).toBe(true)
+    expect(result.filePath).toContain('report_2026.pdf')
+    expect(mockState.writeFileSyncMock).toHaveBeenCalled()
   })
 })
