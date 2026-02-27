@@ -56,11 +56,14 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     touchSession: () => {
         const state = get()
         if (state.isAuthenticated && state.user) {
-            const lastActivity = Date.now()
-            set({ lastActivity })
-            globalThis.electronAPI.auth.setSession({ user: state.user, lastActivity }).catch((error) => {
-                console.error(SESSION_PERSIST_ERROR, error)
-            })
+            const now = Date.now()
+            const elapsed = state.lastActivity ? now - state.lastActivity : Infinity
+            set({ lastActivity: now })
+            if (elapsed > 60_000) {
+                globalThis.electronAPI.auth.setSession({ user: state.user, lastActivity: now }).catch((error) => {
+                    console.error(SESSION_PERSIST_ERROR, error)
+                })
+            }
         }
     },
     checkSession: () => {
@@ -117,20 +120,40 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }
 }))
 
+const DASHBOARD_CACHE_TTL_MS = 2 * 60 * 1000 // 2 minutes
+
+export interface DashboardCache {
+    dashboardData: { totalStudents: number; totalStaff: number; feeCollected: number; outstandingBalance: number } | null
+    feeCollectionData: { month: string; total: number }[]
+    feeCategories: { name: string; value: number }[]
+    recentActivities: unknown[]
+    kpiData: unknown
+    timestamp: number
+}
+
 interface AppState {
     currentAcademicYear: AcademicYear | null
     currentTerm: Term | null
     schoolSettings: SchoolSettings | null
+    dashboardCache: DashboardCache | null
     setCurrentAcademicYear(year: AcademicYear): void
     setCurrentTerm(term: Term): void
     setSchoolSettings(settings: SchoolSettings): void
+    setDashboardCache(cache: Omit<DashboardCache, 'timestamp'>): void
+    isDashboardCacheValid(): boolean
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
     currentAcademicYear: null,
     currentTerm: null,
     schoolSettings: null,
+    dashboardCache: null,
     setCurrentAcademicYear: (year) => set({ currentAcademicYear: year }),
     setCurrentTerm: (term) => set({ currentTerm: term }),
     setSchoolSettings: (settings) => set({ schoolSettings: settings }),
+    setDashboardCache: (cache) => set({ dashboardCache: { ...cache, timestamp: Date.now() } }),
+    isDashboardCacheValid: () => {
+        const c = get().dashboardCache
+        return c !== null && (Date.now() - c.timestamp) < DASHBOARD_CACHE_TTL_MS
+    },
 }))

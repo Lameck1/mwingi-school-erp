@@ -14,7 +14,7 @@ import { Tooltip as UITooltip } from '../components/ui/Tooltip'
 import { useToast } from '../contexts/ToastContext'
 import { useFinancialKPIs, type KpiDashboard } from '../hooks/useFinancialKPIs'
 import { useAppStore } from '../stores'
-import { type AuditLogEntry } from '../types/electron-api/AuditAPI'
+import { type AuditLogEntry, type PaginatedAuditLogs } from '../types/electron-api/AuditAPI'
 import { type FeeCollectionItem } from '../types/electron-api/ReportsAPI'
 import { formatCurrencyFromCents, formatDateTime } from '../utils/format'
 import { unwrapArrayResult, unwrapIPCResult } from '../utils/ipc'
@@ -23,7 +23,7 @@ const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#334155', '#ec4899']
 const COLOR_CLASSES = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-slate-700', 'bg-pink-500']
 
 export default function Dashboard() {
-    const { currentTerm, currentAcademicYear } = useAppStore()
+    const { currentTerm, currentAcademicYear, dashboardCache, isDashboardCacheValid, setDashboardCache } = useAppStore()
     const { showToast } = useToast()
     const [dashboardData, setDashboardData] = useState<{
         totalStudents: number
@@ -39,16 +39,27 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
+        if (isDashboardCacheValid() && dashboardCache) {
+            setDashboardData(dashboardCache.dashboardData)
+            setFeeCollectionData(dashboardCache.feeCollectionData)
+            setFeeCategories(dashboardCache.feeCategories)
+            setRecentActivities(dashboardCache.recentActivities as AuditLogEntry[])
+            setKpiData(dashboardCache.kpiData as KpiDashboard | null)
+            setLoading(false)
+            return
+        }
+
         const loadDashboardData = async () => {
             try {
-                const [data, feeData, categoryData, logs] = await Promise.all([
+                const [data, feeData, categoryData, logs, kpis] = await Promise.all([
                     globalThis.electronAPI.getDashboardData(),
                     globalThis.electronAPI.getFeeCollectionReport(
                         new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
                         new Date().toISOString().slice(0, 10)
                     ),
                     globalThis.electronAPI.getFeeCategoryBreakdown(),
-                    globalThis.electronAPI.getAuditLog(6)
+                    globalThis.electronAPI.getAuditLog(6),
+                    fetchKpiDashboard()
                 ])
 
                 const safeDashboardData = unwrapIPCResult<{
@@ -59,14 +70,8 @@ export default function Dashboard() {
                 }>(data, 'Failed to load dashboard metrics')
                 const safeFeeData = unwrapArrayResult(feeData, 'Failed to load fee collection data')
                 const safeFeeCategories = unwrapArrayResult(categoryData, 'Failed to load fee category breakdown')
-                const safeRecentActivities = unwrapArrayResult(logs, 'Failed to load recent activity log')
-
-                setDashboardData(safeDashboardData)
-                setFeeCategories(safeFeeCategories)
-                setRecentActivities(safeRecentActivities)
-
-                const kpis = await fetchKpiDashboard()
-                setKpiData(kpis)
+                const rawLogs = unwrapIPCResult<AuditLogEntry[] | PaginatedAuditLogs>(logs, 'Failed to load recent activity log')
+                const safeRecentActivities: AuditLogEntry[] = Array.isArray(rawLogs) ? rawLogs : rawLogs.rows
 
                 const monthlyData: Record<string, number> = {}
                 safeFeeData.forEach((item: FeeCollectionItem) => {
@@ -77,10 +82,21 @@ export default function Dashboard() {
                     const amount = Number(item.amount) || 0
                     monthlyData[month] = (monthlyData[month] || 0) + amount
                 })
+                const computedFeeCollection = Object.entries(monthlyData).map(([month, total]) => ({ month, total }))
 
-                setFeeCollectionData(
-                    Object.entries(monthlyData).map(([month, total]) => ({ month, total }))
-                )
+                setDashboardData(safeDashboardData)
+                setFeeCategories(safeFeeCategories)
+                setRecentActivities(safeRecentActivities)
+                setKpiData(kpis)
+                setFeeCollectionData(computedFeeCollection)
+
+                setDashboardCache({
+                    dashboardData: safeDashboardData,
+                    feeCollectionData: computedFeeCollection,
+                    feeCategories: safeFeeCategories,
+                    recentActivities: safeRecentActivities,
+                    kpiData: kpis,
+                })
             } catch (error) {
                 console.error('Failed to load dashboard data:', error)
                 showToast(error instanceof Error ? error.message : 'Failed to load dashboard data', 'error')
@@ -89,7 +105,7 @@ export default function Dashboard() {
             }
         }
         void loadDashboardData()
-    }, [fetchKpiDashboard, showToast])
+    }, [fetchKpiDashboard, showToast, dashboardCache, isDashboardCacheValid, setDashboardCache])
 
 
 
