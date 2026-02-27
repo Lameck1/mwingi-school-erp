@@ -33,13 +33,13 @@ export default function ProcurementDashboard() {
     const [isCapitalAsset, setIsCapitalAsset] = useState<boolean>(false)
     const [assetCategoryId, setAssetCategoryId] = useState<string>('')
 
-    const [budgets, setBudgets] = useState<any[]>([])
-    const [assetCategories, setAssetCategories] = useState<any[]>([])
+    const [budgets, setBudgets] = useState<Array<{ id: number, budget_name: string, line_items: Array<{ id: number, category_name: string, description: string, available_balance: number }> }>>([])
+    const [assetCategories, setAssetCategories] = useState<Array<{ id: number, category_name: string }>>([])
 
     useEffect(() => {
         if (isCreateOpen) {
-            void window.electronAPI.getBudgets().then(res => setBudgets(res || []))
-            void window.electronAPI.getAssetCategories().then(res => setAssetCategories(res || []))
+            void window.electronAPI.getBudgets().then(res => setBudgets((res || []) as unknown as Array<{ id: number, budget_name: string, line_items: Array<{ id: number, category_name: string, description: string, available_balance: number }> }>))
+            void window.electronAPI.getAssetCategories().then(res => setAssetCategories((res || []) as unknown as Array<{ id: number, category_name: string }>))
         }
     }, [isCreateOpen])
 
@@ -90,7 +90,7 @@ export default function ProcurementDashboard() {
     }
 
     const handleCreateRequisition = async () => {
-        const payload: any = {
+        const payload = {
             department: dept.trim(),
             description: desc.trim(),
             budget_line_id: budgetLineId ? Number(budgetLineId) : undefined,
@@ -103,7 +103,7 @@ export default function ProcurementDashboard() {
                     asset_category_id: isCapitalAsset && assetCategoryId ? Number(assetCategoryId) : undefined
                 }
             ]
-        }
+        } as unknown as Parameters<typeof createRequisition>[0]
         try {
             const res = await createRequisition(payload) as { success?: boolean; id?: number; error?: string }
             if (!res || res.success === false || !res.id) {
@@ -371,9 +371,9 @@ export default function ProcurementDashboard() {
                         <label className="label">Budget Line (Optional)</label>
                         <select className="input" value={budgetLineId} onChange={e => setBudgetLineId(e.target.value)}>
                             <option value="">-- No Budget Line / Select Budget --</option>
-                            {budgets.map((b: any) => (
+                            {budgets.map((b) => (
                                 <optgroup key={b.id} label={b.budget_name}>
-                                    {(b.line_items || []).map((li: any) => (
+                                    {(b.line_items || []).map((li) => (
                                         <option key={li.id} value={li.id}>{li.category_name} - {li.description} (Avl: Kes {Number(li.available_balance || 0).toLocaleString()})</option>
                                     ))}
                                 </optgroup>
@@ -399,7 +399,7 @@ export default function ProcurementDashboard() {
                             {isCapitalAsset && (
                                 <select className="input h-8 py-1 text-sm flex-1" value={assetCategoryId} onChange={e => setAssetCategoryId(e.target.value)}>
                                     <option value="">-- Select Asset Category --</option>
-                                    {assetCategories.map((c: any) => (
+                                    {assetCategories.map((c) => (
                                         <option key={c.id} value={c.id}>{c.category_name}</option>
                                     ))}
                                 </select>

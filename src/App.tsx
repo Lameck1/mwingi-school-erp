@@ -97,7 +97,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
     return isAuthenticated ? <>{children}</> : <Navigate to="/login" />
 }
-
+// eslint-disable-next-line max-lines-per-function
 function AppRoutes() {
     return (
         <HashRouter>

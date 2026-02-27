@@ -84,6 +84,7 @@ describe('settings handlers', () => {
         logo_path TEXT,
         mpesa_paybill TEXT,
         sms_sender_id TEXT,
+        school_type TEXT NOT NULL DEFAULT 'PUBLIC',
         updated_at TEXT
       );
 
@@ -95,10 +96,10 @@ describe('settings handlers', () => {
       );
 
       INSERT INTO school_settings (
-        id, school_name, school_motto, address, phone, email, logo_path, mpesa_paybill, sms_sender_id, updated_at
+        id, school_name, school_motto, address, phone, email, logo_path, mpesa_paybill, sms_sender_id, school_type, updated_at
       ) VALUES (
         1, 'Mwingi Adventist School', 'Excellence', 'Old Address', '0700000000',
-        'old@example.com', NULL, NULL, NULL, datetime('now')
+        'old@example.com', NULL, NULL, NULL, 'PUBLIC', datetime('now')
       );
     `)
 

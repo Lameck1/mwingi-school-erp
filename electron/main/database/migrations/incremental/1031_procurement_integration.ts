@@ -9,20 +9,25 @@ import type Database from 'better-sqlite3'
  */
 export function up(db: Database.Database): void {
     // 1. Update budget_line_item
-    db.exec(`
-        -- Add committed_amount column
-        ALTER TABLE budget_line_item ADD COLUMN committed_amount INTEGER NOT NULL DEFAULT 0;
-        
-        -- Although we added actual_amount and variance in 0010_core_schema_part3,
-        -- SQLite doesn't let us easily ALTER to add a VIRTUAL column that depends on a new column.
-        -- So we will drop the generated variance column from our schema conceptual model 
-        -- and re-add actual_amount natively if needed, but since it already exists, we will map it
-        -- in the BudgetService queries instead of redefining it here.
-    `)
+    try {
+        db.prepare(`
+            -- Add committed_amount column
+            ALTER TABLE budget_line_item ADD COLUMN committed_amount INTEGER NOT NULL DEFAULT 0
+        `).run()
+    } catch (e) {
+        if (!(e instanceof Error) || !e.message.includes('duplicate column name')) {throw e}
+    }
 
     // 2. Update requisition_item
-    db.exec(`
-        ALTER TABLE requisition_item ADD COLUMN is_capital_asset BOOLEAN NOT NULL DEFAULT 0;
-        ALTER TABLE requisition_item ADD COLUMN asset_category_id INTEGER REFERENCES asset_category(id);
-    `)
+    try {
+        db.prepare(`ALTER TABLE requisition_item ADD COLUMN is_capital_asset BOOLEAN NOT NULL DEFAULT 0`).run()
+    } catch (e) {
+        if (!(e instanceof Error) || !e.message.includes('duplicate column name')) {throw e}
+    }
+
+    try {
+        db.prepare(`ALTER TABLE requisition_item ADD COLUMN asset_category_id INTEGER REFERENCES asset_category(id)`).run()
+    } catch (e) {
+        if (!(e instanceof Error) || !e.message.includes('duplicate column name')) {throw e}
+    }
 }

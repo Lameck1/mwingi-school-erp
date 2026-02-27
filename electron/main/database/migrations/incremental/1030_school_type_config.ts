@@ -1,11 +1,16 @@
 import type Database from 'better-sqlite3'
 
 export const up = (db: Database.Database): void => {
-    // Add school_type column to school_settings
-    db.prepare(`
-        ALTER TABLE school_settings
-        ADD COLUMN school_type TEXT NOT NULL DEFAULT 'PUBLIC' CHECK(school_type IN ('PUBLIC', 'PRIVATE'))
-    `).run()
+    try {
+        db.prepare(`
+            ALTER TABLE school_settings
+            ADD COLUMN school_type TEXT NOT NULL DEFAULT 'PUBLIC' CHECK(school_type IN ('PUBLIC', 'PRIVATE'))
+        `).run()
+    } catch (e) {
+        if (!(e instanceof Error) || !e.message.includes('duplicate column name')) {
+            throw e
+        }
+    }
 }
 
 export const down = (db: Database.Database): void => {

@@ -2,18 +2,18 @@ import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../database', () => ({
-    getDatabase: () => { throw new Error('Must inject db') }
+  getDatabase: () => { throw new Error('Must inject db') }
 }))
 
 vi.mock('../../../database/utils/audit', () => ({
-    logAudit: vi.fn()
+  logAudit: vi.fn()
 }))
 
 import { ProcurementService } from '../ProcurementService'
 
 function createTestDb(): Database.Database {
-    const db = new Database(':memory:')
-    db.exec(`
+  const db = new Database(':memory:')
+  db.exec(`
     CREATE TABLE user (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL,
@@ -140,141 +140,149 @@ function createTestDb(): Database.Database {
     );
   `)
 
-    db.exec(`
+  db.exec(`
     INSERT INTO user (username, password_hash, full_name, role) VALUES ('clerk', 'h', 'Clerk', 'ACCOUNTS_CLERK');
     INSERT INTO user (username, password_hash, full_name, role) VALUES ('principal', 'h', 'Principal', 'PRINCIPAL');
     INSERT INTO supplier (supplier_name, contact_name, phone) VALUES ('ABC Supplies', 'John', '0712345678');
   `)
 
-    return db
+  return db
 }
 
 describe('ProcurementService', () => {
-    let db: Database.Database
-    let service: ProcurementService
+  let db: Database.Database
+  let service: ProcurementService
 
-    beforeEach(() => {
-        db = createTestDb()
-        service = new ProcurementService(db)
-    })
+  beforeEach(() => {
+    db = createTestDb()
+    service = new ProcurementService(db)
+  })
 
-    afterEach(() => {
-        db.close()
-    })
+  afterEach(() => {
+    db.close()
+  })
 
-    it('creates a requisition with line items', () => {
-        const result = service.createRequisition({
-            department: 'Science',
-            description: 'Lab chemicals restock',
-            jss_account_type: 'OPERATIONS',
-            items: [
-                { description: 'Sodium Chloride 500g', quantity: 10, estimated_unit_cost: 500 },
-                { description: 'Beakers 250ml', quantity: 5, estimated_unit_cost: 1200 },
-            ]
-        }, 1)
+  it('creates a requisition with line items', () => {
+    const result = service.createRequisition({
+      department: 'Science',
+      description: 'Lab chemicals restock',
+      jss_account_type: 'OPERATIONS',
+      items: [
+        { description: 'Sodium Chloride 500g', quantity: 10, estimated_unit_cost: 500 },
+        { description: 'Beakers 250ml', quantity: 5, estimated_unit_cost: 1200 },
+      ]
+    }, 1)
 
-        expect(result.success).toBe(true)
-        const req = service.getRequisition(result.id as number)
-        expect(req?.total_amount).toBe(10 * 500 + 5 * 1200) // 11,000
-        expect(req?.status).toBe('DRAFT')
-        expect(req?.jss_account_type).toBe('OPERATIONS')
-    })
+    expect(result.success).toBe(true)
+    const req = service.getRequisition(result.id as number)
+    expect(req?.total_amount).toBe(10 * 500 + 5 * 1200) // 11,000
+    expect(req?.status).toBe('DRAFT')
+    expect(req?.jss_account_type).toBe('OPERATIONS')
+  })
 
-    it('enforces full lifecycle: Draft → Submit → Approve → Commit → PO', () => {
-        const { id: reqId } = service.createRequisition({
-            department: 'Admin',
-            description: 'Office supplies',
-            items: [{ description: 'Paper A4', quantity: 20, estimated_unit_cost: 600 }]
-        }, 1) as { id: number }
+  it('enforces full lifecycle: Draft → Submit → Approve → Commit → PO', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin',
+      description: 'Office supplies',
+      items: [{ description: 'Paper A4', quantity: 20, estimated_unit_cost: 600 }]
+    }, 1) as { id: number }
 
-        expect(service.submitRequisition(reqId, 1).success).toBe(true)
-        expect(service.getRequisition(reqId)?.status).toBe('SUBMITTED')
+    expect(service.submitRequisition(reqId, 1).success).toBe(true)
+    expect(service.getRequisition(reqId)?.status).toBe('SUBMITTED')
 
-        expect(service.approveRequisition(reqId, 2).success).toBe(true)
-        expect(service.getRequisition(reqId)?.status).toBe('APPROVED')
+    expect(service.approveRequisition(reqId, 2).success).toBe(true)
+    expect(service.getRequisition(reqId)?.status).toBe('APPROVED')
 
-        expect(service.commitBudget(reqId, 2).success).toBe(true)
-        expect(service.getRequisition(reqId)?.status).toBe('COMMITTED')
-        expect(service.getCommitment(reqId)?.committed_amount).toBe(12000)
+    expect(service.commitBudget(reqId, 2).success).toBe(true)
+    expect(service.getRequisition(reqId)?.status).toBe('COMMITTED')
+    expect(service.getCommitment(reqId)?.committed_amount).toBe(12000)
 
-        const poResult = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1)
-        expect(poResult.success).toBe(true)
-        expect(service.getPurchaseOrder(poResult.id as number)?.status).toBe('ISSUED')
-    })
+    const poResult = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1)
+    expect(poResult.success).toBe(true)
+    expect(service.getPurchaseOrder(poResult.id as number)?.status).toBe('ISSUED')
+  })
 
-    it('blocks PO creation without prior budget commitment', () => {
-        const { id: reqId } = service.createRequisition({
-            department: 'Admin',
-            description: 'Test',
-            items: [{ description: 'Item', quantity: 1, estimated_unit_cost: 100 }]
-        }, 1) as { id: number }
+  it('blocks PO creation without prior budget commitment', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin',
+      description: 'Test',
+      items: [{ description: 'Item', quantity: 1, estimated_unit_cost: 100 }]
+    }, 1) as { id: number }
 
-        service.submitRequisition(reqId, 1)
-        service.approveRequisition(reqId, 2)
-        // Skip commitment
+    service.submitRequisition(reqId, 1)
+    service.approveRequisition(reqId, 2)
+    // Skip commitment
 
-        const poResult = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1)
-        expect(poResult.success).toBe(false)
-        expect(poResult.error).toContain('COMMITTED')
-    })
+    const poResult = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1)
+    expect(poResult.success).toBe(false)
+    expect(poResult.error).toContain('COMMITTED')
+  })
 
-    it('processes GRN and updates PO status', () => {
-        // Full setup: Req → Submit → Approve → Commit → PO
-        const { id: reqId } = service.createRequisition({
-            department: 'Kitchen',
-            description: 'Foodstuffs',
-            items: [{ description: 'Rice 50kg', quantity: 10, estimated_unit_cost: 5000 }]
-        }, 1) as { id: number }
-        service.submitRequisition(reqId, 1)
-        service.approveRequisition(reqId, 2)
-        service.commitBudget(reqId, 2)
-        const { id: poId } = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1) as { id: number }
+  it('processes GRN and updates PO status', () => {
+    // Full setup: Req → Submit → Approve → Commit → PO
+    const { id: reqId } = service.createRequisition({
+      department: 'Kitchen',
+      description: 'Foodstuffs',
+      items: [{ description: 'Rice 50kg', quantity: 10, estimated_unit_cost: 5000 }]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId, 1)
+    service.approveRequisition(reqId, 2)
+    service.commitBudget(reqId, 2)
+    const { id: poId } = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1) as { id: number }
 
-        // Get the PO item
-        const poItems = db.prepare('SELECT id, quantity FROM purchase_order_item WHERE purchase_order_id = ?').all(poId) as Array<{ id: number; quantity: number }>
+    // Get the PO item
+    const poItems = db.prepare('SELECT id, quantity FROM purchase_order_item WHERE purchase_order_id = ?').all(poId) as Array<{ id: number; quantity: number }>
 
-        // Receive all goods
-        const grnResult = service.createGrn({
-            purchase_order_id: poId,
-            received_date: '2026-02-25',
-            items: [{ po_item_id: poItems[0]!.id, quantity_received: 10, quantity_accepted: 10 }]
-        }, 1)
+    // Receive all goods
+    const grnResult = service.createGrn({
+      purchase_order_id: poId,
+      received_date: '2026-02-25',
+      items: [{ po_item_id: poItems[0]!.id, quantity_received: 10, quantity_accepted: 10 }]
+    }, 1)
 
-        expect(grnResult.success).toBe(true)
-        expect(service.getPurchaseOrder(poId)?.status).toBe('FULLY_RECEIVED')
-    })
+    expect(grnResult.success).toBe(true)
+    expect(service.getPurchaseOrder(poId)?.status).toBe('FULLY_RECEIVED')
+  })
 
-    it('creates and approves payment voucher', () => {
-        const { id: reqId } = service.createRequisition({
-            department: 'Admin',
-            description: 'Stationery',
-            items: [{ description: 'Pens', quantity: 100, estimated_unit_cost: 20 }]
-        }, 1) as { id: number }
-        service.submitRequisition(reqId, 1)
-        service.approveRequisition(reqId, 2)
-        service.commitBudget(reqId, 2)
-        const { id: poId } = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1) as { id: number }
+  it('creates and approves payment voucher', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin',
+      description: 'Stationery',
+      items: [{ description: 'Pens', quantity: 100, estimated_unit_cost: 20 }]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId, 1)
+    service.approveRequisition(reqId, 2)
+    service.commitBudget(reqId, 2)
+    const { id: poId } = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1) as { id: number }
 
-        const voucherResult = service.createPaymentVoucher({
-            purchase_order_id: poId, supplier_id: 1, amount: 2000,
-            payment_method: 'BANK_TRANSFER'
-        }, 1)
-        expect(voucherResult.success).toBe(true)
+    const poItems = db.prepare('SELECT id, quantity FROM purchase_order_item WHERE purchase_order_id = ?').all(poId) as Array<{ id: number; quantity: number }>
 
-        const approveResult = service.approvePaymentVoucher(voucherResult.id as number, 2)
-        expect(approveResult.success).toBe(true)
-    })
+    const grnResult = service.createGrn({
+      purchase_order_id: poId,
+      received_date: '2026-02-25',
+      items: [{ po_item_id: poItems[0]!.id, quantity_received: 100, quantity_accepted: 100 }]
+    }, 1)
 
-    it('rejects requisition with reason', () => {
-        const { id: reqId } = service.createRequisition({
-            department: 'Sports',
-            description: 'Balls',
-            items: [{ description: 'Footballs', quantity: 5, estimated_unit_cost: 3000 }]
-        }, 1) as { id: number }
+    const voucherResult = service.createPaymentVoucher({
+      purchase_order_id: poId, supplier_id: 1, amount: 2000,
+      payment_method: 'BANK_TRANSFER', grn_id: grnResult.id as number
+    }, 1)
+    expect(voucherResult.success).toBe(true)
 
-        service.submitRequisition(reqId, 1)
-        const rejectResult = service.rejectRequisition(reqId, 'Budget constraints', 2)
-        expect(rejectResult.success).toBe(true)
-        expect(service.getRequisition(reqId)?.status).toBe('REJECTED')
-    })
+    const approveResult = service.approvePaymentVoucher(voucherResult.id as number, 2)
+    expect(approveResult.success).toBe(true)
+  })
+
+  it('rejects requisition with reason', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Sports',
+      description: 'Balls',
+      items: [{ description: 'Footballs', quantity: 5, estimated_unit_cost: 3000 }]
+    }, 1) as { id: number }
+
+    service.submitRequisition(reqId, 1)
+    const rejectResult = service.rejectRequisition(reqId, 'Budget constraints', 2)
+    expect(rejectResult.success).toBe(true)
+    expect(service.getRequisition(reqId)?.status).toBe('REJECTED')
+  })
 })

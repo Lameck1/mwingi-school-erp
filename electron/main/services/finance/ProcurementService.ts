@@ -400,12 +400,12 @@ class ProcurementService {
                         FROM requisition_item ri
                         JOIN purchase_order_item poi ON poi.requisition_item_id = ri.id
                         WHERE poi.id = ?
-                    `).get(item.po_item_id) as any
+                    `).get(item.po_item_id) as { id: number; description: string; estimated_unit_cost: number; is_capital_asset: number; asset_category_id: number | null } | undefined
 
                     if (reqItem && reqItem.is_capital_asset && reqItem.asset_category_id) {
                         for (let i = 0; i < item.quantity_accepted; i++) {
                             const assetName = `${reqItem.description} (Auto-provisioned via GRN ${grnNumber})`
-                            this.fixedAssetService.create({
+                            void this.fixedAssetService.create({
                                 asset_name: assetName,
                                 category_id: reqItem.asset_category_id,
                                 acquisition_date: data.received_date,
@@ -467,7 +467,7 @@ class ProcurementService {
                 SELECT pr.budget_line_id
                 FROM purchase_requisition pr
                 WHERE pr.id = ?
-            `).get(po.requisition_id) as any
+            `).get(po.requisition_id) as { budget_line_id: number | null } | undefined
 
             if (req && req.budget_line_id) {
                 const utilizeResult = this.budgetService.utilizeFunds(req.budget_line_id, data.amount)
