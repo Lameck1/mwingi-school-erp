@@ -35,6 +35,7 @@ import { up as procurementP2PUp } from './incremental/1028_procurement_p2p_workf
 import { up as mpesaReconciliationUp } from './incremental/1029_mpesa_reconciliation.js'
 import { up as schoolTypeConfigUp } from './incremental/1030_school_type_config.js'
 import { up as procurementIntegrationUp } from './incremental/1031_procurement_integration.js'
+import { up as performanceIndexesUp } from './incremental/1032_performance_indexes.js'
 
 import type * as Database from 'better-sqlite3'
 
@@ -98,6 +99,7 @@ const migrations: Migration[] = [
     { name: '1029_mpesa_reconciliation', fn: mpesaReconciliationUp },
     { name: '1030_school_type_config', fn: schoolTypeConfigUp },
     { name: '1031_procurement_integration', fn: procurementIntegrationUp },
+    { name: '1032_performance_indexes', fn: performanceIndexesUp },
 ]
 
 export function getRegisteredMigrationNames(): string[] {

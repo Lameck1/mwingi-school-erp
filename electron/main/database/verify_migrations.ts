@@ -1,4 +1,4 @@
-import fs from 'node:fs'
+import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -22,7 +22,7 @@ function isIncrementalMigrationName(name: string): boolean {
   return Number(match[1]) >= 1000
 }
 
-function resolveIncrementalMigrationPath(): string | null {
+async function resolveIncrementalMigrationPath(): Promise<string | null> {
   const candidates = [
     path.join(moduleDir, 'migrations', 'incremental'),
     path.join(moduleDir, 'database', 'migrations', 'incremental'),
@@ -30,21 +30,22 @@ function resolveIncrementalMigrationPath(): string | null {
   ]
 
   for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
+    try {
+      await fsp.access(candidate)
       return candidate
-    }
+    } catch { /* not found, try next */ }
   }
 
   return null
 }
 
-function listIncrementalMigrationFiles(): string[] | null {
-  const incrementalPath = resolveIncrementalMigrationPath()
+async function listIncrementalMigrationFiles(): Promise<string[] | null> {
+  const incrementalPath = await resolveIncrementalMigrationPath()
   if (!incrementalPath) {
     return null
   }
 
-  const entries = fs.readdirSync(incrementalPath)
+  const entries = await fsp.readdir(incrementalPath)
   const names = entries
     .filter((name) => /^\d+_.+\.(ts|js)$/.test(name) && !name.endsWith('.d.ts'))
     .map((name) => name.replace(/\.(ts|js)$/, ''))
@@ -67,11 +68,11 @@ export function computeMigrationDriftFromSets(
   return { fileOnly, registryOnly, appliedButUnregistered }
 }
 
-function computeMigrationDrift(appliedNames: string[]): MigrationDriftResult {
+async function computeMigrationDrift(appliedNames: string[]): Promise<MigrationDriftResult> {
   const registryNames = getRegisteredMigrationNames()
     .filter((name) => isIncrementalMigrationName(name))
     .sort((left, right) => left.localeCompare(right))
-  const fileNames = listIncrementalMigrationFiles()
+  const fileNames = await listIncrementalMigrationFiles()
 
   if (!fileNames) {
     // Bundled runtimes may not carry migration source files on disk.
@@ -102,7 +103,7 @@ function assertNoMigrationDrift(drift: MigrationDriftResult): void {
   throw new Error('Migration registry/file drift detected. See logs for details.')
 }
 
-export function verifyMigrations() {
+export async function verifyMigrations() {
   log.info('Verifying database migrations...')
 
   try {
@@ -125,7 +126,7 @@ export function verifyMigrations() {
       migrations.forEach(m => log.info(`  [${m.id}] ${m.name} (Applied at: ${m.applied_at})`))
     }
 
-    const drift = computeMigrationDrift(migrations.map((migration) => migration.name))
+    const drift = await computeMigrationDrift(migrations.map((migration) => migration.name))
     assertNoMigrationDrift(drift)
 
     // 2. Check for critical tables

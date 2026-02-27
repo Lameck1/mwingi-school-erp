@@ -8,6 +8,7 @@ export const REVERSIBLE_INCREMENTAL_MIGRATIONS = new Set<string>([
   '1021_accounting_periods',
   '1022_expand_journal_entry_types',
   '1023_add_department_to_journal_entry',
+  '1032_performance_indexes',
 ])
 
 export const IRREVERSIBLE_INCREMENTAL_MIGRATIONS = new Set<string>([

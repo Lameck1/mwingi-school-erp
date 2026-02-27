@@ -17,13 +17,16 @@ export function isDatabaseInitialized(): boolean {
     return db !== null
 }
 
+let cachedDbPath: string | null = null
 export function getDatabasePath(): string {
+    if (cachedDbPath) { return cachedDbPath }
     const userDataPath = app.getPath('userData')
     const dbDir = path.join(userDataPath, 'data')
     if (!fs.existsSync(dbDir)) {
         fs.mkdirSync(dbDir, { recursive: true })
     }
-    return path.join(dbDir, 'school_erp_clean_v3.db')
+    cachedDbPath = path.join(dbDir, 'school_erp_clean_v3.db')
+    return cachedDbPath
 }
 
 async function loadDatabaseClass(): Promise<typeof Database> {

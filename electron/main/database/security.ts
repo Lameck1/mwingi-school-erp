@@ -5,13 +5,17 @@ import * as path from 'node:path'
 import { safeStorage, app } from '../electron-env'
 
 const KEY_FILE_NAME = 'secure.key.enc'
+let cachedKey: string | null = null
 
 /**
  * Retrieves the encryption key for the database.
  * If a key exists, it decrypts and returns it.
  * If not, it generates a new one, encrypts it, saves it, and returns it.
+ * The result is cached in memory after the first call.
  */
 export function getEncryptionKey(): string {
+    if (cachedKey) { return cachedKey }
+
     const userDataPath = app.getPath('userData')
     const keyPath = path.join(userDataPath, KEY_FILE_NAME)
 
@@ -22,6 +26,7 @@ export function getEncryptionKey(): string {
             
             if (safeStorage.isEncryptionAvailable()) {
                 const decryptedKey = safeStorage.decryptString(encryptedKey)
+                cachedKey = decryptedKey
                 return decryptedKey
             } else {
                 throw new Error('SafeStorage is not available on this system cannot decrypt key.')
@@ -33,6 +38,7 @@ export function getEncryptionKey(): string {
             if (safeStorage.isEncryptionAvailable()) {
                 const encryptedKey = safeStorage.encryptString(newKey)
                 fs.writeFileSync(keyPath, encryptedKey, { mode: 0o600 })
+                cachedKey = newKey
                 return newKey
             } else {
                 throw new Error('Encryption not available on this device.')
