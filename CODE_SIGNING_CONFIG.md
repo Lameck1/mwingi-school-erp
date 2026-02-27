@@ -41,3 +41,14 @@ If either secret is missing on a tag build, CI fails before packaging.
 - macOS hardened runtime remains enabled (`build.mac.hardenedRuntime: true`).
 - Linux targets are packaged but do not currently use package-signing keys in this repo.
 - Certificate lifecycle (rotation/renewal/revocation) must be handled in repository secrets management procedures.
+
+## Local Development Builds
+
+Since production builds enforce code signing (`forceCodeSigning: true`), local builds on developer machines without certificates will fail.
+
+To build locally for testing/debugging, use:
+
+- `npm run build:local`: Generates an **unpacked** directory in `release/win-unpacked` (fastest for testing).
+- `npm run build:unsigned`: Generates a full **installer** (.exe) but without signing (may trigger Windows SmartScreen warnings).
+
+Both scripts pass `-c.win.forceCodeSigning=false` to `electron-builder` to bypass enforcement.
