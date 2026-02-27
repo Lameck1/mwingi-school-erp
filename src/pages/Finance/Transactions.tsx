@@ -1,4 +1,4 @@
-import { ClipboardList, Filter, Download, Calendar, Tag } from 'lucide-react'
+import { ClipboardList, Filter, Download, Calendar, Tag, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 
 import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
@@ -6,13 +6,14 @@ import { useToast } from '../../contexts/ToastContext'
 import { type Transaction, type TransactionCategory } from '../../types/electron-api/FinanceAPI'
 import { normalizeFilters } from '../../utils/filters'
 import { formatCurrencyFromCents, formatDate } from '../../utils/format'
-import { unwrapArrayResult } from '../../utils/ipc'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 
 export default function Transactions() {
     const { showToast } = useToast()
 
     const [transactions, setTransactions] = useState<Transaction[]>([])
+    const [totalCount, setTotalCount] = useState(0)
     const [categories, setCategories] = useState<TransactionCategory[]>([])
     const [loading, setLoading] = useState(true)
     const [filter, setFilter] = useState({
@@ -22,6 +23,8 @@ export default function Transactions() {
         endDate: ''
     })
     const [appliedFilter, setAppliedFilter] = useState(filter)
+    const [currentPage, setCurrentPage] = useState(1)
+    const itemsPerPage = 25
 
     const loadCategories = useCallback(async () => {
         try {
@@ -34,35 +37,42 @@ export default function Transactions() {
         }
     }, [showToast])
 
-    const loadTransactions = useCallback(async () => {
+    const loadTransactions = useCallback(async (page = currentPage) => {
         setLoading(true)
         try {
-            const filters: Record<string, unknown> = {}
+            const filters: Record<string, unknown> = { page, pageSize: itemsPerPage }
             if (appliedFilter.startDate) { filters['startDate'] = appliedFilter.startDate }
             if (appliedFilter.endDate) { filters['endDate'] = appliedFilter.endDate }
             if (appliedFilter.category_id) { filters['categoryId'] = Number(appliedFilter.category_id) }
-            const data = await globalThis.electronAPI.getTransactions(normalizeFilters(filters))
-            setTransactions(unwrapArrayResult(data, 'Failed to load transactions'))
+            const result = unwrapIPCResult<{ rows: Transaction[]; totalCount: number }>
+                (await globalThis.electronAPI.getTransactions(normalizeFilters(filters)), 'Failed to load transactions')
+            setTransactions(result.rows)
+            setTotalCount(result.totalCount)
         } catch (error) {
             console.error('Failed to load transactions:', error)
             setTransactions([])
+            setTotalCount(0)
             showToast(error instanceof Error ? error.message : 'Failed to synchronize transaction ledger', 'error')
         } finally {
             setLoading(false)
         }
-    }, [appliedFilter, showToast])
+    }, [appliedFilter, showToast, currentPage])
 
     useEffect(() => {
         loadCategories().catch((err: unknown) => console.error('Failed to load transaction categories', err))
     }, [loadCategories])
 
     useEffect(() => {
-        loadTransactions().catch((err: unknown) => console.error('Failed to load transactions', err))
-    }, [loadTransactions])
+        loadTransactions(currentPage).catch((err: unknown) => console.error('Failed to load transactions', err))
+    }, [loadTransactions, currentPage])
 
     const handleApplyFilter = () => {
         setAppliedFilter(filter)
+        setCurrentPage(1)
     }
+
+    const totalPages = Math.ceil(totalCount / itemsPerPage)
+    const paginatedTransactions = transactions
 
     const getCategoryName = (categoryId: number): string => {
         const cat = categories.find(c => c.id === categoryId)
@@ -126,7 +136,7 @@ export default function Transactions() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-border/10">
-                        {transactions.map((txn) => (
+                        {paginatedTransactions.map((txn) => (
                             <tr key={txn.id} className="group hover:bg-secondary/20 transition-colors">
                                 <td className="py-4 px-6">
                                     <span className="font-mono text-[11px] font-bold text-primary/60 tracking-wider">#{txn.reference}</span>
@@ -225,6 +235,37 @@ export default function Transactions() {
             <div className="card overflow-hidden transition-all duration-300">
                 {renderTransactionsTable()}
             </div>
+
+            {totalPages > 1 && (
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mt-8 pt-8 border-t border-border/20 px-2">
+                    <p className="text-xs font-medium text-foreground/40">
+                        Displaying records <span className="text-foreground">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-foreground">{Math.min(currentPage * itemsPerPage, totalCount)}</span> of <span className="text-foreground">{totalCount}</span>
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            title="Previous page"
+                            className="p-3 bg-secondary/50 hover:bg-secondary text-foreground rounded-xl disabled:opacity-20 transition-all border border-border/40"
+                        >
+                            <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        <div className="flex items-center gap-1 px-4">
+                            <span className="text-sm font-bold text-foreground">{currentPage}</span>
+                            <span className="text-sm font-bold text-foreground/20">/</span>
+                            <span className="text-sm font-bold text-foreground/40">{totalPages}</span>
+                        </div>
+                        <button
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            title="Next page"
+                            className="p-3 bg-secondary/50 hover:bg-secondary/80 text-foreground rounded-xl disabled:opacity-20 transition-all border border-border/40"
+                        >
+                            <ChevronRight className="w-5 h-5" />
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

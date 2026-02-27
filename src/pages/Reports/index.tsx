@@ -94,14 +94,14 @@ export default function Reports() {
         setLoading(true)
         try {
             // Load student statistics
-            const currentStudents = unwrapArrayResult(
-                await globalThis.electronAPI.getStudents({}),
+            const studentsResult = unwrapIPCResult<{ rows: Array<{ student_type?: string }>; totalCount: number }>(
+                await globalThis.electronAPI.getStudents({ pageSize: 200 }),
                 'Failed to load students'
             )
-            const dayScholars = currentStudents.filter((s) => s.student_type === 'DAY_SCHOLAR').length
-            const boarders = currentStudents.filter((s) => s.student_type === 'BOARDER').length
+            const dayScholars = studentsResult.rows.filter((s) => s.student_type === 'DAY_SCHOLAR').length
+            const boarders = studentsResult.rows.filter((s) => s.student_type === 'BOARDER').length
             setStudentStats({
-                totalStudents: currentStudents.length,
+                totalStudents: studentsResult.totalCount,
                 dayScholars,
                 boarders
             })

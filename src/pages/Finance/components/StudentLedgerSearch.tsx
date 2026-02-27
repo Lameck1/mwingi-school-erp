@@ -4,7 +4,7 @@ import React, { useState } from 'react'
 import { useToast } from '../../../contexts/ToastContext'
 import { type Student } from '../../../types/electron-api/StudentAPI'
 import { formatCurrencyFromCents } from '../../../utils/format'
-import { unwrapArrayResult } from '../../../utils/ipc'
+import { unwrapIPCResult } from '../../../utils/ipc'
 
 interface StudentLedgerSearchProps {
     onSelectStudent: (student: Student) => void
@@ -25,11 +25,11 @@ export const StudentLedgerSearch: React.FC<StudentLedgerSearchProps> = ({ onSele
         }
         setLoading(true)
         try {
-            const results = unwrapArrayResult(
+            const result = unwrapIPCResult<{ rows: Student[] }>(
                 await globalThis.electronAPI.getStudents({ search: searchTerm }),
                 'Student lookup failed'
             )
-            setStudents(results)
+            setStudents(result.rows)
         } catch (error) {
             console.error('Search failed:', error)
             showToast(error instanceof Error ? error.message : 'Student lookup failed', 'error')

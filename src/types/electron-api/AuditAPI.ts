@@ -12,6 +12,22 @@ export interface AuditLogEntry {
 
 type IPCResult<T> = T | { success: false; error: string; errors?: string[] };
 
+export interface AuditLogFilters {
+  limit?: number
+  page?: number
+  pageSize?: number
+  action?: string
+  table?: string
+  search?: string
+}
+
+export interface PaginatedAuditLogs {
+  rows: AuditLogEntry[]
+  totalCount: number
+  page: number
+  pageSize: number
+}
+
 export interface AuditAPI {
-  getAuditLog: (limit?: number) => Promise<IPCResult<AuditLogEntry[]>>
+  getAuditLog: (limitOrFilters?: number | AuditLogFilters) => Promise<IPCResult<AuditLogEntry[] | PaginatedAuditLogs>>
 }

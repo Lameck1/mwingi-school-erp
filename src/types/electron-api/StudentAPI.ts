@@ -34,6 +34,15 @@ export interface StudentFilters {
   stream_id?: number
   is_active?: boolean
   search?: string
+  page?: number
+  pageSize?: number
+}
+
+export interface PaginatedStudents {
+  rows: Student[]
+  totalCount: number
+  page: number
+  pageSize: number
 }
 
 export interface AttendanceStudent {
@@ -66,7 +75,7 @@ export interface AttendanceEntry {
 type IPCResult<T> = T | { success: false; error: string; errors?: string[] };
 
 export interface StudentAPI {
-  getStudents(filters?: StudentFilters): Promise<IPCResult<Student[]>>
+  getStudents(filters?: StudentFilters): Promise<IPCResult<PaginatedStudents>>
   getStudentById(id: number): Promise<IPCResult<Student>>
   createStudent(data: Partial<Student>, userId?: number): Promise<{ success: boolean; id: number; invoiceGenerated?: boolean; invoiceNumber?: string; invoiceError?: string }>
   updateStudent(id: number, data: Partial<Student>): Promise<{ success: boolean }>

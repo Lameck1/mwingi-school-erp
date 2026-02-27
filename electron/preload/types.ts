@@ -32,6 +32,8 @@ export interface StudentFilters {
   stream_id?: number | undefined
   is_active?: boolean | undefined
   search?: string | undefined
+  page?: number | undefined
+  pageSize?: number | undefined
 }
 
 // ── Staff ──

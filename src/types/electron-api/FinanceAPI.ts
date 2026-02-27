@@ -239,7 +239,7 @@ export interface FinanceAPI {
   getTransactionCategories: () => Promise<IPCResult<TransactionCategory[]>>
   createTransactionCategory: (_name: string, _type: string) => Promise<TransactionCategory>
   createTransaction: (_data: { amount: number; description: string; transaction_date: string; category_id: number; transaction_type?: string | undefined; payment_method?: string | undefined; payment_reference?: string | undefined; reference?: string | undefined }, _userId: number) => Promise<Transaction>
-  getTransactions: (_filters?: { category_id?: number | undefined; start_date?: string | undefined; end_date?: string | undefined; transaction_type?: string | undefined }) => Promise<IPCResult<Transaction[]>>
+  getTransactions: (_filters?: { category_id?: number | undefined; start_date?: string | undefined; end_date?: string | undefined; transaction_type?: string | undefined; page?: number; pageSize?: number }) => Promise<IPCResult<{ rows: Transaction[]; totalCount: number; page: number; pageSize: number }>>
   getTransactionSummary: (_startDate: string, _endDate: string) => Promise<IPCResult<{ totalIncome: number; totalExpense: number; netBalance: number }>>
 
   // Invoices

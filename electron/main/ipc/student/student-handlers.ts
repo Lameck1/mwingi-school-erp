@@ -231,37 +231,68 @@ function registerStudentReadHandlers(db: ReturnType<typeof getDatabase>): void {
     `
 
   validatedHandler('student:getAll', ROLES.STAFF, StudentFiltersSchema, (_event, filters) => {
-    let query = `SELECT s.*, st.stream_name, e.student_type as current_type,
-        (SELECT COALESCE(SUM((${normalizedInvoiceAmountSql}) - COALESCE(amount_paid, 0)), 0)
-         FROM fee_invoice
-         WHERE student_id = s.id
-           AND UPPER(COALESCE(status, 'PENDING')) NOT IN ('CANCELLED', 'VOIDED')
-           AND COALESCE(is_voided, 0) = 0
-        ) - COALESCE(s.credit_balance, 0) as balance
-      FROM student s
-      LEFT JOIN enrollment e ON s.id = e.student_id AND e.id = (
-        SELECT MAX(id) FROM enrollment WHERE student_id = s.id
-      )
-      LEFT JOIN stream st ON e.stream_id = st.id
-      WHERE 1=1`
+    const page = filters?.page ?? 1
+    const pageSize = Math.min(filters?.pageSize ?? 50, 200)
+    const offset = (page - 1) * pageSize
+
+    let whereClause = 'WHERE 1=1'
     const params: unknown[] = []
 
     if (filters?.search) {
-      query += ' AND (s.admission_number LIKE ? OR s.first_name LIKE ? OR s.last_name LIKE ?)'
+      whereClause += ' AND (s.admission_number LIKE ? OR s.first_name LIKE ? OR s.last_name LIKE ?)'
       params.push(`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`)
     }
     if (filters?.streamId) {
-      query += ' AND e.stream_id = ?'
+      whereClause += ' AND e.stream_id = ?'
       params.push(filters.streamId)
     }
     if (filters?.isActive !== undefined) {
-      query += ' AND s.is_active = ?'
+      whereClause += ' AND s.is_active = ?'
       params.push(toDbActiveFlag(filters.isActive))
     }
 
-    query += ' ORDER BY s.admission_number'
-    const students = db.prepare(query).all(...params) as Student[]
-    return students.map((student) => ({ ...student, gender: fromDbGender(student.gender) })) as Student[]
+    const countQuery = `
+      WITH latest_enrollment AS (
+        SELECT student_id, MAX(id) AS eid FROM enrollment GROUP BY student_id
+      )
+      SELECT COUNT(*) as total
+      FROM student s
+      LEFT JOIN latest_enrollment le ON s.id = le.student_id
+      LEFT JOIN enrollment e ON e.id = le.eid
+      LEFT JOIN stream st ON e.stream_id = st.id
+      ${whereClause}`
+
+    const totalCount = (db.prepare(countQuery).get(...params) as { total: number })?.total ?? 0
+
+    const dataQuery = `
+      WITH latest_enrollment AS (
+        SELECT student_id, MAX(id) AS eid FROM enrollment GROUP BY student_id
+      ),
+      student_balance AS (
+        SELECT student_id,
+          COALESCE(SUM(
+            (${normalizedInvoiceAmountSql}) - COALESCE(amount_paid, 0)
+          ), 0) AS invoice_balance
+        FROM fee_invoice
+        WHERE COALESCE(status, 'PENDING') NOT IN ('CANCELLED', 'VOIDED')
+          AND COALESCE(is_voided, 0) = 0
+        GROUP BY student_id
+      )
+      SELECT s.*, st.stream_name, e.student_type as current_type,
+        COALESCE(sb.invoice_balance, 0) - COALESCE(s.credit_balance, 0) as balance
+      FROM student s
+      LEFT JOIN latest_enrollment le ON s.id = le.student_id
+      LEFT JOIN enrollment e ON e.id = le.eid
+      LEFT JOIN stream st ON e.stream_id = st.id
+      LEFT JOIN student_balance sb ON s.id = sb.student_id
+      ${whereClause}
+      ORDER BY s.admission_number
+      LIMIT ? OFFSET ?`
+
+    const dataParams = [...params, pageSize, offset]
+    const students = db.prepare(dataQuery).all(...dataParams) as Student[]
+    const rows = students.map((student) => ({ ...student, gender: fromDbGender(student.gender) })) as Student[]
+    return { rows, totalCount, page, pageSize }
   })
 
   validatedHandler('student:getById', ROLES.STAFF, z.number(), (_event, id) => {
@@ -330,7 +361,7 @@ function registerStudentWriteHandlers(db: ReturnType<typeof getDatabase>): void 
   validatedHandlerMulti('student:uploadPhoto', ROLES.STAFF, StudentPhotoUploadSchema, async (_event, [studentId, dataUrl], actorCtx) => {
     try {
       // Save image to userData/images/students/
-      const filePath = saveImageFromDataUrl(dataUrl, 'students', `student_${studentId}`)
+      const filePath = await saveImageFromDataUrl(dataUrl, 'students', `student_${studentId}`)
 
       // Update DB
       db.prepare('UPDATE student SET photo_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
@@ -347,7 +378,7 @@ function registerStudentWriteHandlers(db: ReturnType<typeof getDatabase>): void 
     try {
       const row = db.prepare('SELECT photo_path FROM student WHERE id = ?').get(studentId) as { photo_path?: string } | undefined
       if (row?.photo_path) {
-        deleteImage(row.photo_path)
+        await deleteImage(row.photo_path)
       }
       db.prepare('UPDATE student SET photo_path = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(studentId)
       logAudit(actorCtx.id, 'UPDATE', 'student', studentId, { photo_path: row?.photo_path }, { photo_path: null })

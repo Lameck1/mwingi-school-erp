@@ -160,29 +160,39 @@ export function registerTransactionsHandlers(): void {
     })
 
     validatedHandler('transaction:getAll', ROLES.FINANCE, TransactionFiltersSchema, (_event, filters) => {
-        let query = `SELECT t.*, c.category_name, u.full_name as recorded_by 
-                     FROM ledger_transaction t
-                     LEFT JOIN transaction_category c ON t.category_id = c.id
-                     LEFT JOIN user u ON t.recorded_by_user_id = u.id
-                     WHERE t.is_voided = 0`
+        const page = filters?.page ?? 1
+        const pageSize = Math.min(filters?.pageSize ?? 50, 500)
+        const offset = (page - 1) * pageSize
 
+        let whereClause = `WHERE t.is_voided = 0`
         const params: unknown[] = []
 
         if (filters?.startDate && filters.endDate) {
-            query += ` AND t.transaction_date BETWEEN ? AND ?`
+            whereClause += ` AND t.transaction_date BETWEEN ? AND ?`
             params.push(filters.startDate, filters.endDate)
         }
         if (filters?.type) {
-            query += ` AND t.transaction_type = ?`
+            whereClause += ` AND t.transaction_type = ?`
             params.push(filters.type)
         }
         if (filters?.categoryId) {
-            query += ` AND t.category_id = ?`
+            whereClause += ` AND t.category_id = ?`
             params.push(filters.categoryId)
         }
 
-        query += ` ORDER BY t.transaction_date DESC`
-        return db.prepare(query).all(...params)
+        const countQuery = `SELECT COUNT(*) as total FROM ledger_transaction t ${whereClause}`
+        const totalCount = (db.prepare(countQuery).get(...params) as { total: number })?.total ?? 0
+
+        const dataQuery = `SELECT t.*, c.category_name, u.full_name as recorded_by 
+                     FROM ledger_transaction t
+                     LEFT JOIN transaction_category c ON t.category_id = c.id
+                     LEFT JOIN user u ON t.recorded_by_user_id = u.id
+                     ${whereClause}
+                     ORDER BY t.transaction_date DESC
+                     LIMIT ? OFFSET ?`
+
+        const rows = db.prepare(dataQuery).all(...params, pageSize, offset)
+        return { rows, totalCount, page, pageSize }
     })
 
     validatedHandlerMulti('transaction:getSummary', ROLES.FINANCE, TransactionSummaryInputSchema, (_event, [startDate, endDate], _actor) => {

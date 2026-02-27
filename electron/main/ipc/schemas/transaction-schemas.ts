@@ -24,7 +24,9 @@ export const TransactionFiltersSchema = z.object({
     startDate: z.string().optional(),
     endDate: z.string().optional(),
     type: z.string().optional(),
-    categoryId: z.number().optional()
+    categoryId: z.number().optional(),
+    page: z.number().int().min(1).optional(),
+    pageSize: z.number().int().min(1).max(500).optional(),
 }).optional()
 
 export const TransactionSummaryInputSchema = z.tuple([

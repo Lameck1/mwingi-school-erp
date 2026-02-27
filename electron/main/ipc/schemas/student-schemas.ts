@@ -3,7 +3,9 @@ import { z } from 'zod'
 export const StudentFiltersSchema = z.object({
     search: z.string().optional(),
     streamId: z.number().optional(),
-    isActive: z.boolean().optional()
+    isActive: z.boolean().optional(),
+    page: z.number().int().min(1).optional(),
+    pageSize: z.number().int().min(1).max(200).optional(),
 }).optional()
 
 export const StudentCreateSchema = z.object({

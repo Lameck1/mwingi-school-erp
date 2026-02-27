@@ -24,6 +24,7 @@ export default function Students() {
     const { showToast } = useToast()
     const { schoolSettings } = useAppStore()
     const [students, setStudents] = useState<Student[]>([])
+    const [totalCount, setTotalCount] = useState(0)
     const [printingId, setPrintingId] = useState<number | null>(null)
     const [streams, setStreams] = useState<Stream[]>([])
     const [loading, setLoading] = useState(true)
@@ -39,36 +40,41 @@ export default function Students() {
         searchRef.current = search
     }, [search])
 
-    const loadStudents = useCallback(async () => {
+    const loadStudents = useCallback(async (page = currentPage) => {
         setLoading(true)
         try {
-            const data = unwrapArrayResult(
+            const result = unwrapIPCResult<{ rows: Student[]; totalCount: number; page: number; pageSize: number }>(
                 await globalThis.electronAPI.getStudents(normalizeFilters({
                 streamId: filters.streamId || undefined,
                 isActive: filters.isActive ?? undefined,
-                search: searchRef.current || undefined
+                search: searchRef.current || undefined,
+                page,
+                pageSize: itemsPerPage,
                 }) as Parameters<typeof globalThis.electronAPI.getStudents>[0]),
                 'Failed to load students'
             )
-            setStudents(data)
+            setStudents(result.rows)
+            setTotalCount(result.totalCount)
         } catch (error) {
             console.error('Failed to load students:', error)
             setStudents([])
+            setTotalCount(0)
             showToast(error instanceof Error ? error.message : 'Failed to load students', 'error')
         } finally {
             setLoading(false)
         }
-    }, [filters, showToast])
+    }, [filters, showToast, currentPage])
 
     const loadData = useCallback(async () => {
         try {
             const streamsData = unwrapArrayResult(await globalThis.electronAPI.getStreams(), 'Failed to load streams')
             setStreams(streamsData)
-            await loadStudents()
+            await loadStudents(1)
         } catch (error) {
             console.error('Failed to load data:', error)
             setStreams([])
             setStudents([])
+            setTotalCount(0)
             setLoading(false)
             showToast(error instanceof Error ? error.message : 'Failed to load data', 'error')
         }
@@ -101,18 +107,12 @@ export default function Students() {
         setCurrentPage(1)
     }, [search, filters.streamId, filters.isActive])
 
-    const filteredStudents = students
-    const totalPages = Math.ceil(filteredStudents.length / itemsPerPage)
-    const paginatedStudents = filteredStudents.slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
-    )
-
     useEffect(() => {
-        if (totalPages > 0 && currentPage > totalPages) {
-            setCurrentPage(totalPages)
-        }
-    }, [currentPage, totalPages])
+        loadStudents(currentPage).catch((err: unknown) => console.error('Failed to load students page', err))
+    }, [currentPage, loadStudents])
+
+    const paginatedStudents = students
+    const totalPages = Math.ceil(totalCount / itemsPerPage)
 
 
 
@@ -247,7 +247,7 @@ export default function Students() {
                     )
                 }
 
-                if (filteredStudents.length === 0) {
+                if (paginatedStudents.length === 0) {
                     return (
                         <div className="card text-center py-24">
                             <Users className="w-20 h-20 mx-auto mb-6 text-foreground/5" />
@@ -404,7 +404,7 @@ export default function Students() {
             {totalPages > 1 && (
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mt-8 pt-8 border-t border-border/20 px-2">
                     <p className="text-xs font-medium text-foreground/40">
-                        Displaying records <span className="text-foreground">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-foreground">{Math.min(currentPage * itemsPerPage, filteredStudents.length)}</span> of <span className="text-foreground">{filteredStudents.length}</span>
+                        Displaying records <span className="text-foreground">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-foreground">{Math.min(currentPage * itemsPerPage, totalCount)}</span> of <span className="text-foreground">{totalCount}</span>
                     </p>
                     <div className="flex items-center gap-2">
                         <button
