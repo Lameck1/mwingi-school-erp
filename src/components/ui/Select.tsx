@@ -88,6 +88,7 @@ export function Select({
     const selectedLabel = selectedOption ? selectedOption.label : placeholder
 
     useEffect(() => {
+        if (!isOpen) { return }
         const handleClickOutside = (event: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
                 setIsOpen(false)
@@ -95,7 +96,7 @@ export function Select({
         }
         document.addEventListener('mousedown', handleClickOutside)
         return () => document.removeEventListener('mousedown', handleClickOutside)
-    }, [])
+    }, [isOpen])
 
     useEffect(() => {
         buttonRef.current?.setAttribute('aria-expanded', String(isOpen))

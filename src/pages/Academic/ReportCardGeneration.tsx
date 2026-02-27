@@ -203,12 +203,12 @@ const ReportCardGeneration: React.FC = () => {
     })
 
     try {
-      const students = unwrapArrayResult(
-        await globalThis.electronAPI.getStudents({ stream_id: selectedStream, is_active: true }),
+      const studentsResult = unwrapIPCResult<{ rows: unknown[]; totalCount: number }>(
+        await globalThis.electronAPI.getStudents({ stream_id: selectedStream, is_active: true, pageSize: 200 }),
         'Failed to load students for selected stream'
       )
 
-      setProgress(prev => ({ ...prev, total: students.length }))
+      setProgress(prev => ({ ...prev, total: studentsResult.totalCount }))
 
       const results = await runBatchReportCardGeneration(selectedExam, selectedStream)
 

@@ -18,6 +18,7 @@ export function Dropdown({ trigger, items, align = 'right' }: Readonly<DropdownP
     const containerRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
+        if (!isOpen) { return }
         const handleClickOutside = (event: MouseEvent) => {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
                 setIsOpen(false)
@@ -25,7 +26,7 @@ export function Dropdown({ trigger, items, align = 'right' }: Readonly<DropdownP
         }
         document.addEventListener('mousedown', handleClickOutside)
         return () => document.removeEventListener('mousedown', handleClickOutside)
-    }, [])
+    }, [isOpen])
 
     return (
         <div className="relative" ref={containerRef}>

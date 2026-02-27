@@ -4,7 +4,7 @@ import {
     CreditCard, Settings, Sun, Moon, LogOut,
     Calculator, Package, Search
 } from 'lucide-react'
-import { type ComponentType, useEffect, useState } from 'react'
+import { type ComponentType, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { useTheme } from '../../contexts/ThemeContext'
@@ -85,7 +85,7 @@ export function CommandPalette() {
         }
     }, [])
 
-    const systemItems: PaletteItem[] = [
+    const systemItems: PaletteItem[] = useMemo(() => [
         { id: 'toggle-theme', label: 'Toggle Theme', icon: theme === 'dark' ? Sun : Moon, action: toggleTheme },
         {
             id: 'logout',
@@ -97,7 +97,7 @@ export function CommandPalette() {
             },
             danger: true
         }
-    ]
+    ], [theme, toggleTheme, logout, navigate])
 
     const executeItem = (item: PaletteItem) => {
         if (item.path) {

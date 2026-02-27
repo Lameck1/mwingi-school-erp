@@ -97,10 +97,10 @@ const AwardsManagement = () => {
       ])
 
       const categoriesData = unwrapArrayResult(categoryData, 'Failed to load award categories')
-      const studentsData = unwrapArrayResult(studentData, 'Failed to load students')
+      const studentsResult = unwrapIPCResult<{ rows: Student[] }>(studentData, 'Failed to load students')
 
       setCategories(categoriesData)
-      setStudents(studentsData.map((s: Student) => ({
+      setStudents(studentsResult.rows.map((s: Student) => ({
         id: s.id,
         name: s.full_name || `${s.first_name} ${s.last_name}`,
         admission_number: s.admission_number

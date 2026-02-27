@@ -11,7 +11,7 @@ import { useToast } from '../../../contexts/ToastContext'
 import { useAppStore } from '../../../stores'
 import { type Student, type StudentCostResult } from '../../../types/electron-api'
 import { formatCurrencyFromCents } from '../../../utils/format'
-import { unwrapArrayResult, unwrapIPCResult } from '../../../utils/ipc'
+import { unwrapIPCResult } from '../../../utils/ipc'
 
 export default function StudentCostAnalysis() {
     const { showToast } = useToast()
@@ -24,7 +24,8 @@ export default function StudentCostAnalysis() {
     const loadStudents = useCallback(async () => {
         try {
             const data = await globalThis.electronAPI.getStudents({ is_active: true })
-            setStudents(unwrapArrayResult(data, 'Failed to load students'))
+            const result = unwrapIPCResult<{ rows: Student[] }>(data, 'Failed to load students')
+            setStudents(result.rows)
         } catch (error) {
             console.error(error)
             showToast(error instanceof Error ? error.message : 'Failed to load students', 'error')

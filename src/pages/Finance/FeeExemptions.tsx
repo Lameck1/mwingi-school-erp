@@ -75,13 +75,13 @@ export default function FeeExemptions() {
             const exemptions = unwrapArrayResult(exemptionsRes, 'Failed to load exemptions')
             const years = unwrapArrayResult(yearsRes, 'Failed to load academic years')
             const categories = unwrapArrayResult(categoriesRes, 'Failed to load fee categories')
-            const studentsList = unwrapArrayResult(studentsRes, 'Failed to load students')
+            const studentsResult = unwrapIPCResult<{ rows: Student[] }>(studentsRes, 'Failed to load students')
             const statsData = unwrapIPCResult<ExemptionStats>(statsRes, 'Failed to load exemption stats')
 
             setExemptions(exemptions)
             setAcademicYears(years)
             setFeeCategories(categories)
-            setStudents(studentsList)
+            setStudents(studentsResult.rows)
             setStats(statsData)
 
             // Set current year as default

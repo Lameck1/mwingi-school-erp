@@ -49,8 +49,13 @@ export function useMpesaReconciliation() {
     }, [])
 
     const fetchSummary = useCallback(async () => {
-        const data = await window.electronAPI.finance.getMpesaSummary()
-        setSummary(data)
+        try {
+            const data = await window.electronAPI.finance.getMpesaSummary()
+            setSummary(data)
+        } catch (err: unknown) {
+            console.error('Failed to fetch M-Pesa summary:', err)
+            setError(err instanceof Error ? err.message : 'Failed to fetch reconciliation summary')
+        }
     }, [])
 
     const refreshData = useCallback(() => {
