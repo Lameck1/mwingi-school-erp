@@ -1,4 +1,4 @@
-import { Calculator, Play, AlertCircle, ChevronLeft, Eye, Printer, MessageSquare, Loader2, Calendar, CheckCircle2, CreditCard, RotateCcw, Trash2, RefreshCw, Users, TrendingDown, Wallet, FileSpreadsheet, ShieldCheck, Lock } from 'lucide-react'
+import { Calculator, Play, AlertCircle, ChevronLeft, Eye, Printer, MessageSquare, Loader2, Calendar, CheckCircle2, CreditCard, RotateCcw, Trash2, RefreshCw, Users, TrendingDown, Wallet, FileSpreadsheet, ShieldCheck, Lock, Download } from 'lucide-react'
 import { useState, useEffect, useMemo, useCallback } from 'react'
 
 import { normalizePayrollStatus, type PayrollUiStatus } from './payrollStatus'
@@ -11,6 +11,7 @@ import { formatCurrencyFromCents } from '../../utils/format'
 import { unwrapArrayResult } from '../../utils/ipc'
 import { printDocument } from '../../utils/print'
 import { reportRuntimeError } from '../../utils/runtimeError'
+import { usePayrollExports } from '../../hooks/usePayrollExports'
 
 type PayrollConfirmAction = 'confirm' | 'markPaid' | 'revert' | 'delete' | 'recalculate' | 'bulkNotify'
 
@@ -29,6 +30,8 @@ export default function PayrollRun() {
     const [notifying, setNotifying] = useState(false)
     const [actionLoading, setActionLoading] = useState<PayrollConfirmAction | ''>('')
     const [confirmAction, setConfirmAction] = useState<PayrollConfirmAction | null>(null)
+
+    const { exportP10Csv, isExportingP10, generatePayslip } = usePayrollExports()
 
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -265,9 +268,25 @@ export default function PayrollRun() {
         const a = document.createElement('a')
         a.href = url
         a.download = `payroll-${selectedPeriod?.period_name?.replaceAll(/\s+/g, '-') || 'export'}.csv`
-        a.click()
         URL.revokeObjectURL(url)
     }, [payrollData, selectedPeriod?.period_name])
+
+    const handleExportP10 = useCallback(async () => {
+        if (!selectedPeriod?.id) {
+            return
+        }
+        const csvContent = await exportP10Csv(selectedPeriod.id)
+        if (csvContent) {
+            const blob = new Blob([csvContent], { type: 'text/csv' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `P10-${selectedPeriod?.period_name?.replaceAll(/\s+/g, '-') || 'export'}.csv`
+            a.click()
+            URL.revokeObjectURL(url)
+            showToast('P10 successfully exported', 'success')
+        }
+    }, [exportP10Csv, selectedPeriod?.id, selectedPeriod?.period_name, showToast])
 
     const getHistoryStatusColor = (s: unknown) => {
         const normalizedStatus = normalizePayrollStatus(s)
@@ -333,6 +352,17 @@ export default function PayrollRun() {
                 <FileSpreadsheet className="w-4 h-4" />
                 Export CSV
             </button>
+            {(status === 'CONFIRMED' || status === 'PAID') && periodId && (
+                <button
+                    onClick={() => void handleExportP10()}
+                    disabled={isExportingP10 || payrollData.length === 0}
+                    className="btn btn-secondary flex items-center gap-2 py-2 px-4 text-xs font-bold text-amber-500 border-amber-500/20 hover:bg-amber-500/10"
+                    title="Export KRA iTax P10 Format"
+                >
+                    {isExportingP10 ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    Export P10 (iTax)
+                </button>
+            )}
             {(status === 'CONFIRMED' || status === 'PAID') && (
                 <button
                     onClick={() => requestActionConfirmation('bulkNotify')}
@@ -816,26 +846,18 @@ export default function PayrollRun() {
     }
 
     async function handlePrintPayslip(staffEntry: PayrollEntry) {
-        printDocument({
-            title: `Payslip - ${staffEntry.staff_name} - ${selectedPeriod?.period_name}`,
-            template: 'payslip',
-            data: {
-                ...staffEntry,
-                periodName: selectedPeriod?.period_name,
-                basicSalary: staffEntry.basic_salary,
-                grossSalary: staffEntry.gross_salary,
-                netSalary: staffEntry.net_salary,
-                totalDeductions: staffEntry.total_deductions,
-                allowancesList: [],
-                deductionsList: [
-                    { name: 'PAYE', amount: staffEntry.paye },
-                    { name: 'NSSF', amount: staffEntry.nssf },
-                    { name: 'SHIF', amount: staffEntry.shif },
-                    { name: 'Housing Levy', amount: staffEntry.housing_levy },
-                ]
-            },
-            schoolSettings: schoolSettings ? { ...schoolSettings } : {}
-        })
+        try {
+            const { printPayslipForStaff } = await import('./utils/printPayslip')
+            await printPayslipForStaff(
+                staffEntry,
+                selectedPeriod?.period_name,
+                generatePayslip,
+                printDocument,
+                schoolSettings ?? {}
+            )
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Failed to print payslip', 'error')
+        }
     }
 }
 

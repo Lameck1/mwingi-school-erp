@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import { useCallback, useEffect, useState } from 'react';
 
-import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
+import { PageHeader } from '../../../components/patterns/PageHeader'
 import { formatCurrencyFromCents } from '../../../utils/format';
 import { getIPCFailureMessage, isIPCFailure } from '../../../utils/ipc'
 
@@ -75,26 +75,28 @@ export default function BalanceSheetPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-6">
-        <HubBreadcrumb crumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Balance Sheet' }]} />
-        <h1 className="text-xl md:text-3xl font-bold text-foreground">Balance Sheet</h1>
-        <p className="text-muted-foreground mt-1">Statement of Financial Position</p>
+    <div className="space-y-8 pb-10 h-full flex flex-col">
+      <div className="flex justify-between items-start">
+        <PageHeader
+          title="Balance Sheet"
+          subtitle="Statement of Financial Position"
+          breadcrumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Balance Sheet' }]}
+        />
       </div>
 
-      <div className="bg-card rounded-lg shadow p-4 mb-6">
+      <div className="card p-4 mb-6">
         <div className="flex items-center gap-4">
           <label htmlFor="field-57" className="text-sm font-medium text-foreground/70">As of Date:</label>
           <input id="field-57"
             type="date"
             value={asOfDate}
             onChange={(e) => setAsOfDate(e.target.value)}
-            className="px-3 py-2 border border-border rounded-md bg-input text-foreground"
+            className="input w-auto"
             aria-label="As of date"
           />
           <button
             onClick={() => { void loadBalanceSheet() }}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/80"
+            className="btn btn-primary"
           >
             Generate
           </button>
@@ -102,14 +104,14 @@ export default function BalanceSheetPage() {
       </div>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-6">
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-6">
           <p className="text-red-500">{error}</p>
         </div>
       )}
 
       {balanceSheet && (
-        <div className="bg-card rounded-lg shadow">
-          <div className={`p-4 border-b ${balanceSheet.is_balanced ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+        <div className="card overflow-hidden">
+          <div className={`p-4 border-b border-border/20 ${balanceSheet.is_balanced ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
             <h3 className="font-semibold">
               {balanceSheet.is_balanced ? '✓ Balanced' : '✗ Out of Balance'}
             </h3>
@@ -117,40 +119,40 @@ export default function BalanceSheetPage() {
 
           <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
             <div>
-              <h2 className="text-xl font-bold mb-4">ASSETS</h2>
+              <h2 className="text-xl font-bold mb-4 text-foreground">ASSETS</h2>
               {balanceSheet.assets.map((account) => (
-                <div key={account.account_code} className="flex justify-between py-2">
+                <div key={account.account_code} className="flex justify-between py-2 text-foreground/80 hover:bg-white/[0.02] px-2 rounded -mx-2">
                   <span>{account.account_name}</span>
-                  <span>{formatCurrencyFromCents(account.balance)}</span>
+                  <span className="font-mono">{formatCurrencyFromCents(account.balance)}</span>
                 </div>
               ))}
-              <div className="flex justify-between py-3 border-t-2 font-bold">
+              <div className="flex justify-between py-3 border-t-2 border-border/40 font-bold text-foreground px-2 -mx-2 mt-2">
                 <span>Total Assets</span>
-                <span>{formatCurrencyFromCents(balanceSheet.total_assets)}</span>
+                <span className="font-mono">{formatCurrencyFromCents(balanceSheet.total_assets)}</span>
               </div>
             </div>
 
             <div>
-              <h2 className="text-xl font-bold mb-4">LIABILITIES & EQUITY</h2>
+              <h2 className="text-xl font-bold mb-4 text-foreground">LIABILITIES & EQUITY</h2>
               {balanceSheet.liabilities.map((account) => (
-                <div key={account.account_code} className="flex justify-between py-2">
+                <div key={account.account_code} className="flex justify-between py-2 text-foreground/80 hover:bg-white/[0.02] px-2 rounded -mx-2">
                   <span>{account.account_name}</span>
-                  <span>{formatCurrencyFromCents(account.balance)}</span>
+                  <span className="font-mono">{formatCurrencyFromCents(account.balance)}</span>
                 </div>
               ))}
               {balanceSheet.equity.map((account) => (
-                <div key={account.account_code} className="flex justify-between py-2">
+                <div key={account.account_code} className="flex justify-between py-2 text-foreground/80 hover:bg-white/[0.02] px-2 rounded -mx-2">
                   <span>{account.account_name}</span>
-                  <span>{formatCurrencyFromCents(account.balance)}</span>
+                  <span className="font-mono">{formatCurrencyFromCents(account.balance)}</span>
                 </div>
               ))}
-              <div className="flex justify-between py-2 italic text-muted-foreground">
+              <div className="flex justify-between py-2 italic text-foreground/50 px-2 -mx-2">
                 <span>Current Year Net Income</span>
-                <span>{formatCurrencyFromCents(balanceSheet.net_income)}</span>
+                <span className="font-mono">{formatCurrencyFromCents(balanceSheet.net_income)}</span>
               </div>
-              <div className="flex justify-between py-3 border-t-2 font-bold">
+              <div className="flex justify-between py-3 border-t-2 border-border/40 font-bold text-foreground px-2 -mx-2 mt-2">
                 <span>Total</span>
-                <span>{formatCurrencyFromCents(balanceSheet.total_liabilities + balanceSheet.total_equity + balanceSheet.net_income)}</span>
+                <span className="font-mono">{formatCurrencyFromCents(balanceSheet.total_liabilities + balanceSheet.total_equity + balanceSheet.net_income)}</span>
               </div>
             </div>
           </div>

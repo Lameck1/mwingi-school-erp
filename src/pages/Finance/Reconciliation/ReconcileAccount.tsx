@@ -1,5 +1,6 @@
 import { Upload, ArrowRightLeft, CreditCard } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { parseStatementCSV, validateMatchSelection } from './reconcile.logic'
 import { PageHeader } from '../../../components/patterns/PageHeader'
@@ -13,6 +14,7 @@ const IMPORT_FILE_ERROR = 'Select a CSV file to import'
 
 export default function ReconcileAccount() {
     const { showToast } = useToast()
+    const navigate = useNavigate()
 
     const [accounts, setAccounts] = useState<BankAccount[]>([])
     const [selectedAccount, setSelectedAccount] = useState<number | null>(null)
@@ -291,6 +293,26 @@ export default function ReconcileAccount() {
                 breadcrumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Reconciliation' }]}
             />
 
+            {accounts.length === 0 && (
+                <div className="p-4 border border-border/40 rounded-xl bg-secondary/10 flex items-center justify-between">
+                    <div>
+                        <p className="text-sm font-medium text-foreground">
+                            No bank accounts found.
+                        </p>
+                        <p className="text-xs text-foreground/60">
+                            Create a bank account first to import statements and start matching.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/bank-accounts')}
+                        className="btn btn-primary"
+                    >
+                        Add Bank Account
+                    </button>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="space-y-2">
                     <label htmlFor="field-107" className="label">Bank Account</label>
@@ -302,6 +324,7 @@ export default function ReconcileAccount() {
                             setSelectedAccount(value ? Number(value) : null)
                         }}
                         className="input"
+                        disabled={accounts.length === 0}
                     >
                         {accounts.map((account) => (
                             <option key={account.id} value={account.id}>{account.account_name} ({account.bank_name})</option>
@@ -318,6 +341,7 @@ export default function ReconcileAccount() {
                             setSelectedStatement(statement || null)
                         }}
                         className="input"
+                        disabled={!selectedAccount || statements.length === 0}
                     >
                         <option value="">Select Statement</option>
                         {statements.map((statement) => (
@@ -332,6 +356,7 @@ export default function ReconcileAccount() {
                         type="button"
                         className="btn btn-secondary w-full flex items-center justify-center gap-2"
                         onClick={openImportModal}
+                        disabled={!selectedAccount}
                     >
                         <Upload className="w-4 h-4" />
                         Import Statement (CSV)

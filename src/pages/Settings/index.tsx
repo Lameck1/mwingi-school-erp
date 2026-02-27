@@ -39,7 +39,8 @@ export default function Settings() {
         sms_api_key: '',
         sms_api_secret: '',
         sms_sender_id: '',
-        mpesa_paybill: ''
+        mpesa_paybill: '',
+        school_type: 'PUBLIC'
     })
 
     const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null)
@@ -122,7 +123,8 @@ export default function Settings() {
                 sms_api_key: schoolSettings.sms_api_key || '',
                 sms_api_secret: schoolSettings.sms_api_secret || '',
                 sms_sender_id: schoolSettings.sms_sender_id || '',
-                mpesa_paybill: schoolSettings.mpesa_paybill || ''
+                mpesa_paybill: schoolSettings.mpesa_paybill || '',
+                school_type: schoolSettings.school_type || 'PUBLIC'
             })
         }
     }, [schoolSettings])
@@ -159,6 +161,7 @@ export default function Settings() {
             if (formData.phone) { updatePayload.phone = formData.phone }
             if (formData.email) { updatePayload.email = formData.email }
             if (formData.mpesa_paybill) { updatePayload.mpesa_paybill = formData.mpesa_paybill }
+            updatePayload.school_type = formData.school_type as 'PUBLIC' | 'PRIVATE'
             unwrapIPCResult(
                 await globalThis.electronAPI.updateSettings(updatePayload),
                 'Failed to update school settings'
@@ -371,7 +374,19 @@ export default function Settings() {
                                     </div>
                                 </div>
 
-                                <div className="md:col-span-2 space-y-2">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="school_type">Institution Type *</label>
+                                    <select
+                                        id="school_type"
+                                        value={formData.school_type}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, school_type: e.target.value }))}
+                                        className="input w-full"
+                                    >
+                                        <option value="PUBLIC">Public School (MoE Compliant)</option>
+                                        <option value="PRIVATE">Private Institution</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
                                     <label className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1" htmlFor="school_name">Official School Name *</label>
                                     <input id="school_name" type="text" value={formData.school_name}
                                         onChange={(e) => setFormData(prev => ({ ...prev, school_name: e.target.value }))}

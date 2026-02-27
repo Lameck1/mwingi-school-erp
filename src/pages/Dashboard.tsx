@@ -12,6 +12,7 @@ import {
 
 import { Tooltip as UITooltip } from '../components/ui/Tooltip'
 import { useToast } from '../contexts/ToastContext'
+import { useFinancialKPIs, type KpiDashboard } from '../hooks/useFinancialKPIs'
 import { useAppStore } from '../stores'
 import { type AuditLogEntry } from '../types/electron-api/AuditAPI'
 import { type FeeCollectionItem } from '../types/electron-api/ReportsAPI'
@@ -33,6 +34,8 @@ export default function Dashboard() {
     const [feeCollectionData, setFeeCollectionData] = useState<{ month: string; total: number }[]>([])
     const [feeCategories, setFeeCategories] = useState<{ name: string; value: number }[]>([])
     const [recentActivities, setRecentActivities] = useState<AuditLogEntry[]>([])
+    const { fetchKpiDashboard } = useFinancialKPIs()
+    const [kpiData, setKpiData] = useState<KpiDashboard | null>(null)
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
@@ -62,6 +65,9 @@ export default function Dashboard() {
                 setFeeCategories(safeFeeCategories)
                 setRecentActivities(safeRecentActivities)
 
+                const kpis = await fetchKpiDashboard()
+                setKpiData(kpis)
+
                 const monthlyData: Record<string, number> = {}
                 safeFeeData.forEach((item: FeeCollectionItem) => {
                     const date = new Date(item.payment_date)
@@ -83,7 +89,7 @@ export default function Dashboard() {
             }
         }
         void loadDashboardData()
-    }, [showToast])
+    }, [fetchKpiDashboard, showToast])
 
 
 
@@ -174,6 +180,36 @@ export default function Dashboard() {
                     </div>
                 ))}
             </div>
+
+            {/* Financial Performance KPIs */}
+            {kpiData && (
+                <div className="mt-8">
+                    <h2 className="text-xl font-bold text-foreground mb-4">Financial Performance Indicators</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {kpiData.metrics.map(metric => {
+                            let displayValue: string | number = metric.value
+                            if (metric.unit === '%') {
+                                displayValue = `${metric.value}%`
+                            } else if (metric.unit === 'KES') {
+                                displayValue = formatCurrencyFromCents(metric.value * 100)
+                            } else if (metric.unit === ':1') {
+                                displayValue = `${metric.value}:1`
+                            }
+                            return (
+                                <div key={metric.name} className="card p-5 border-l-4 border-primary">
+                                    <p className="text-sm text-foreground/60 font-medium">{metric.label}</p>
+                                    <div className="mt-2 flex items-baseline gap-2">
+                                        <span className="text-2xl font-bold text-foreground">{displayValue}</span>
+                                    </div>
+                                    {metric.target && (
+                                        <p className="mt-1 text-xs text-foreground/50">Target: {metric.target}{metric.unit === '%' ? '%' : ''}</p>
+                                    )}
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            )}
 
             {/* Analytics Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

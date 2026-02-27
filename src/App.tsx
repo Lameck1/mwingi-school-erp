@@ -60,6 +60,8 @@ const TransportRouteManagement = lazy(() => import('./pages/Operations/Transport
 const StudentCostAnalysis = lazy(() => import('./pages/Finance/StudentCost/StudentCostAnalysis'))
 const GrantTracking = lazy(() => import('./pages/Finance/Grants/GrantTracking'))
 const ReconcileAccount = lazy(() => import('./pages/Finance/Reconciliation/ReconcileAccount'))
+const MpesaReconciliation = lazy(() => import('./pages/Finance/Reconciliation/MpesaReconciliation'))
+const ProcurementDashboard = lazy(() => import('./pages/Finance/Procurement/ProcurementDashboard'))
 const ApprovalQueue = lazy(() => import('./pages/Finance/Approvals/ApprovalQueue'))
 const AssetRegister = lazy(() => import('./pages/Finance/FixedAssets/AssetRegister'))
 const Depreciation = lazy(() => import('./pages/Finance/FixedAssets/Depreciation'))
@@ -72,6 +74,9 @@ const Integrations = lazy(() => import('./pages/Settings/Integrations'))
 const MessageTemplates = lazy(() => import('./pages/Settings/MessageTemplates'))
 const GLAccountManagement = lazy(() => import('./pages/Finance/Settings/GLAccountManagement').then(m => ({ default: m.GLAccountManagement })))
 const OpeningBalanceImport = lazy(() => import('./pages/Finance/Settings/OpeningBalanceImport').then(m => ({ default: m.OpeningBalanceImport })))
+const FeePoliciesConfig = lazy(() => import('./pages/Finance/Settings/FeePoliciesConfig'))
+const VirementManagement = lazy(() => import('./pages/Finance/VirementManagement'))
+
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
     const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
@@ -80,10 +85,10 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
     const isSessionLoaded = useAuthStore((state) => state.isSessionLoaded)
 
     React.useEffect(() => {
-        if (!isSessionLoaded) {return}
-        if (!isAuthenticated) {return}
+        if (!isSessionLoaded) { return }
+        if (!isAuthenticated) { return }
         const valid = checkSession()
-        if (valid) {touchSession()}
+        if (valid) { touchSession() }
     }, [isSessionLoaded, isAuthenticated, checkSession, touchSession])
 
     if (!isSessionLoaded) {
@@ -96,6 +101,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
     return (
         <HashRouter>
+            <React.Suspense fallback={<div className="p-6 text-sm text-foreground/60">Loading…</div>}>
                 <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route path="/setup" element={<SetupAdmin />} />
@@ -121,6 +127,23 @@ function AppRoutes() {
                         <Route path="record-income" element={<RecordIncome />} />
                         <Route path="financial-reports" element={<FinancialReports />} />
                         <Route path="fee-structure" element={<FeeStructure />} />
+                        <Route path="asset-hire" element={<AssetHire />} />
+                        <Route path="fee-exemptions" element={<FeeExemptions />} />
+                        <Route path="finance/gl-accounts" element={<GLAccountManagement />} />
+                        <Route path="finance/opening-balances" element={<OpeningBalanceImport />} />
+                        <Route path="finance/settings/fee-policies" element={<FeePoliciesConfig />} />
+                        <Route path="finance/balance-sheet" element={<BalanceSheet />} />
+                        <Route path="finance/profit-and-loss" element={<ProfitAndLoss />} />
+                        <Route path="finance/trial-balance" element={<TrialBalance />} />
+                        <Route path="finance/fixed-assets" element={<AssetRegister />} />
+                        <Route path="finance/depreciation" element={<Depreciation />} />
+                        <Route path="finance/reconciliation" element={<ReconcileAccount />} />
+                        <Route path="finance/reconciliation/mpesa" element={<MpesaReconciliation />} />
+                        <Route path="finance/virement-rules" element={<VirementManagement />} />
+                        <Route path="finance/procurement" element={<ProcurementDashboard />} />
+                        <Route path="finance/transaction-approvals" element={<ApprovalQueue />} />
+                        <Route path="finance/grants" element={<GrantTracking />} />
+                        <Route path="finance/student-cost" element={<StudentCostAnalysis />} />
                         <Route path="staff" element={<Staff />} />
                         <Route path="payroll-run" element={<PayrollRun />} />
                         <Route path="inventory" element={<Inventory />} />
@@ -147,20 +170,7 @@ function AppRoutes() {
                         <Route path="academic/analytics/most-improved" element={<MostImproved />} />
                         <Route path="academic/awards" element={<AwardsManagement />} />
                         <Route path="academic/schedule" element={<ExamScheduler />} />
-                        <Route path="asset-hire" element={<AssetHire />} />
-                        <Route path="fee-exemptions" element={<FeeExemptions />} />
                         <Route path="academic/report-card-generation" element={<ReportCardGeneration />} />
-                        <Route path="finance/gl-accounts" element={<GLAccountManagement />} />
-                        <Route path="finance/opening-balances" element={<OpeningBalanceImport />} />
-                        <Route path="finance/balance-sheet" element={<BalanceSheet />} />
-                        <Route path="finance/profit-and-loss" element={<ProfitAndLoss />} />
-                        <Route path="finance/trial-balance" element={<TrialBalance />} />
-                        <Route path="finance/fixed-assets" element={<AssetRegister />} />
-                        <Route path="finance/depreciation" element={<Depreciation />} />
-                        <Route path="finance/reconciliation" element={<ReconcileAccount />} />
-                        <Route path="finance/transaction-approvals" element={<ApprovalQueue />} />
-                        <Route path="finance/grants" element={<GrantTracking />} />
-                        <Route path="finance/student-cost" element={<StudentCostAnalysis />} />
                         <Route path="academic/cbc-strands" element={<CBCStrandManagement />} />
                         <Route path="academic/jss-transition" element={<JSSTransition />} />
                         <Route path="operations/boarding" element={<BoardingProfitability />} />
@@ -169,6 +179,7 @@ function AppRoutes() {
                         <Route path="settings/message-templates" element={<MessageTemplates />} />
                     </Route>
                 </Routes>
+            </React.Suspense>
         </HashRouter>
     )
 }
@@ -182,13 +193,13 @@ export default function App() {
 
     return (
         <ErrorBoundary>
-        <ThemeProvider>
-            <ToastProvider>
-                <OfflineIndicator />
-                <PrintPreviewHost />
-                <AppRoutes />
-            </ToastProvider>
-        </ThemeProvider>
+            <ThemeProvider>
+                <ToastProvider>
+                    <OfflineIndicator />
+                    <PrintPreviewHost />
+                    <AppRoutes />
+                </ToastProvider>
+            </ThemeProvider>
         </ErrorBoundary>
     )
 }

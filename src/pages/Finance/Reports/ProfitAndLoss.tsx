@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import { useCallback, useEffect, useState } from 'react';
 
-import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb'
+import { PageHeader } from '../../../components/patterns/PageHeader'
 import { formatCurrencyFromCents } from '../../../utils/format';
 import { getIPCFailureMessage, isIPCFailure } from '../../../utils/ipc'
 
@@ -80,34 +80,36 @@ export default function ProfitAndLossPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <div className="mb-6">
-            <HubBreadcrumb crumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Profit & Loss' }]} />
-        <h1 className="text-xl md:text-3xl font-bold text-foreground">Profit & Loss Statement</h1>
-        <p className="text-muted-foreground mt-1">Income Statement</p>
+    <div className="space-y-8 pb-10 h-full flex flex-col">
+      <div className="flex justify-between items-start">
+        <PageHeader
+          title="Profit & Loss Statement"
+          subtitle="Income Statement"
+          breadcrumbs={[{ label: 'Finance', href: '/finance' }, { label: 'Profit & Loss' }]}
+        />
       </div>
 
-      <div className="bg-card rounded-lg shadow p-4 mb-6">
+      <div className="card p-4 mb-6">
         <div className="flex items-center gap-4">
           <label htmlFor="field-64" className="text-sm font-medium text-foreground/70">Period:</label>
           <input id="field-64"
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="px-3 py-2 border border-border rounded-md bg-input text-foreground"
+            className="input w-auto"
             aria-label="Start date"
           />
-          <span className="text-muted-foreground">to</span>
+          <span className="text-foreground/50 text-sm">to</span>
           <input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="px-3 py-2 border border-border rounded-md bg-input text-foreground"
+            className="input w-auto"
             aria-label="End date"
           />
           <button
             onClick={() => { void loadProfitAndLoss() }}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/80"
+            className="btn btn-primary"
           >
             Generate
           </button>
@@ -115,15 +117,15 @@ export default function ProfitAndLossPage() {
       </div>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-6">
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-6">
           <p className="text-red-500">{error}</p>
         </div>
       )}
 
       {profitAndLoss && (
-        <div className="bg-card rounded-lg shadow">
-          <div className="p-4 border-b bg-secondary">
-            <h3 className="font-semibold text-lg">
+        <div className="card overflow-hidden">
+          <div className="p-4 border-b border-border/20 bg-secondary/30">
+            <h3 className="font-semibold text-lg text-foreground">
               {format(new Date(profitAndLoss.period_start), 'MMM dd, yyyy')} - {' '}
               {format(new Date(profitAndLoss.period_end), 'MMM dd, yyyy')}
             </h3>
@@ -132,60 +134,60 @@ export default function ProfitAndLossPage() {
           <div className="p-6">
             {/* Revenue Section */}
             <div className="mb-8">
-              <h2 className="text-xl font-bold mb-4 text-green-600 dark:text-green-400">REVENUE</h2>
-              <div className="space-y-2">
+              <h2 className="text-sm font-bold tracking-widest text-emerald-500 uppercase mb-4">Revenue</h2>
+              <div className="space-y-1">
                 {profitAndLoss.revenue_by_category.map((item) => (
-                  <div key={`${item.category}-${item.amount}`} className="flex justify-between py-2 border-b border-border/30">
+                  <div key={`${item.category}-${item.amount}`} className="flex justify-between py-2 border-b border-border/10 hover:bg-white/[0.02] px-2 rounded -mx-2">
                     <div className="flex-1">
-                      <span className="text-foreground">{item.category}</span>
-                      <span className="text-muted-foreground text-sm ml-2">({formatPercentage(item.percentage)})</span>
+                      <span className="text-foreground/80">{item.category}</span>
+                      <span className="text-foreground/40 text-sm ml-2 font-mono">({formatPercentage(item.percentage)})</span>
                     </div>
-                    <div className="text-foreground font-medium">
+                    <div className="text-foreground font-mono">
                       {formatCurrencyFromCents(item.amount)}
                     </div>
                   </div>
                 ))}
-                <div className="flex justify-between py-3 border-t-2 border-foreground font-bold">
+                <div className="flex justify-between py-3 border-t-2 border-border/20 font-bold text-foreground px-2 -mx-2 mt-2">
                   <span>Total Revenue</span>
-                  <span className="text-green-600 dark:text-green-400">{formatCurrencyFromCents(profitAndLoss.total_revenue)}</span>
+                  <span className="text-emerald-500 font-mono">{formatCurrencyFromCents(profitAndLoss.total_revenue)}</span>
                 </div>
               </div>
             </div>
 
             {/* Expenses Section */}
             <div className="mb-8">
-              <h2 className="text-xl font-bold mb-4 text-red-600 dark:text-red-400">EXPENSES</h2>
-              <div className="space-y-2">
+              <h2 className="text-sm font-bold tracking-widest text-red-500 uppercase mb-4">Expenses</h2>
+              <div className="space-y-1">
                 {profitAndLoss.expenses_by_category.map((item) => (
-                  <div key={`${item.category}-${item.amount}`} className="flex justify-between py-2 border-b border-border/30">
+                  <div key={`${item.category}-${item.amount}`} className="flex justify-between py-2 border-b border-border/10 hover:bg-white/[0.02] px-2 rounded -mx-2">
                     <div className="flex-1">
-                      <span className="text-foreground">{item.category}</span>
-                      <span className="text-muted-foreground text-sm ml-2">({formatPercentage(item.percentage)})</span>
+                      <span className="text-foreground/80">{item.category}</span>
+                      <span className="text-foreground/40 text-sm ml-2 font-mono">({formatPercentage(item.percentage)})</span>
                     </div>
-                    <div className="text-foreground font-medium">
+                    <div className="text-foreground font-mono">
                       {formatCurrencyFromCents(item.amount)}
                     </div>
                   </div>
                 ))}
-                <div className="flex justify-between py-3 border-t-2 border-foreground font-bold">
+                <div className="flex justify-between py-3 border-t-2 border-border/20 font-bold text-foreground px-2 -mx-2 mt-2">
                   <span>Total Expenses</span>
-                  <span className="text-red-600 dark:text-red-400">{formatCurrencyFromCents(profitAndLoss.total_expenses)}</span>
+                  <span className="text-red-500 font-mono">{formatCurrencyFromCents(profitAndLoss.total_expenses)}</span>
                 </div>
               </div>
             </div>
 
             {/* Net Profit/Loss */}
-            <div className={`p-4 rounded-lg ${profitAndLoss.net_profit >= 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+            <div className={`p-6 rounded-xl border ${profitAndLoss.net_profit >= 0 ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
               <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold">
+                <h2 className="text-xl font-bold text-foreground">
                   {profitAndLoss.net_profit >= 0 ? 'NET PROFIT' : 'NET LOSS'}
                 </h2>
-                <div className={`text-2xl font-bold ${profitAndLoss.net_profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                <div className={`text-2xl font-bold font-mono ${profitAndLoss.net_profit >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
                   {formatCurrencyFromCents(Math.abs(profitAndLoss.net_profit))}
                 </div>
               </div>
               {profitAndLoss.total_revenue > 0 && (
-                <div className="text-sm text-muted-foreground mt-2">
+                <div className="text-sm text-foreground/50 mt-2 font-mono">
                   Profit Margin: {formatPercentage((profitAndLoss.net_profit / profitAndLoss.total_revenue) * 100)}
                 </div>
               )}

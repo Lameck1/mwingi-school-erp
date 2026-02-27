@@ -17,6 +17,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 
 import { PageHeader } from '../../components/patterns/PageHeader'
+import { useAppStore } from '../../stores'
 
 interface HubCard {
     title: string
@@ -34,7 +35,8 @@ const sections: HubCard[] = [
             { label: 'Fee Payments', path: '/fee-payment' },
             { label: 'Invoices', path: '/invoices' },
             { label: 'Fee Structure', path: '/fee-structure' },
-            { label: 'Fee Exemptions', path: '/fee-exemptions' }
+            { label: 'Fee Exemptions', path: '/fee-exemptions' },
+            { label: 'Fee Policies', path: '/finance/settings/fee-policies' }
         ]
     },
     {
@@ -68,8 +70,17 @@ const sections: HubCard[] = [
             { label: 'Opening Balances', path: '/finance/opening-balances' },
             { label: 'Bank Accounts', path: '/bank-accounts' },
             { label: 'Reconciliation', path: '/finance/reconciliation' },
+            { label: 'M-Pesa Reconciliation', path: '/finance/reconciliation/mpesa' },
             { label: 'Approvals', path: '/approvals' },
             { label: 'Approvals Queue', path: '/finance/transaction-approvals' }
+        ]
+    },
+    {
+        title: 'Procurement',
+        description: 'Requisitions, POs, GRNs, and vouchers',
+        icon: Package,
+        links: [
+            { label: 'Procurement', path: '/finance/procurement' }
         ]
     },
     {
@@ -92,6 +103,7 @@ const iconMap: Record<string, React.ElementType> = {
     'Invoices': FileText,
     'Fee Structure': TableProperties,
     'Fee Exemptions': Percent,
+    'Fee Policies': FileText,
     'Record Income': TrendingUp,
     'Record Expense': TrendingDown,
     'Transactions': FileText,
@@ -104,8 +116,10 @@ const iconMap: Record<string, React.ElementType> = {
     'Opening Balances': DollarSign,
     'Bank Accounts': CreditCard,
     'Reconciliation': CheckCircle,
+    'M-Pesa Reconciliation': CreditCard,
     'Approvals': CheckCircle,
     'Approvals Queue': CheckCircle,
+    'Procurement': Package,
     'Financial Reports': BarChart3,
     'Balance Sheet': FileText,
     'Profit & Loss': TrendingUp,
@@ -116,6 +130,7 @@ const iconMap: Record<string, React.ElementType> = {
 
 export default function FinanceHub() {
     const navigate = useNavigate()
+    const { schoolSettings } = useAppStore()
 
     return (
         <div className="space-y-8">
@@ -142,19 +157,28 @@ export default function FinanceHub() {
                             </div>
                         </div>
                         <div className="p-3 space-y-0.5">
-                            {section.links.map((link) => {
-                                const LinkIcon = iconMap[link.label] || FileText
-                                return (
-                                    <button
-                                        key={link.path}
-                                        onClick={() => navigate(link.path)}
-                                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-foreground/70 hover:bg-primary/10 hover:text-primary transition-colors text-left"
-                                    >
-                                        <LinkIcon className="w-4 h-4 opacity-60" />
-                                        <span className="font-medium">{link.label}</span>
-                                    </button>
-                                )
-                            })}
+                            {section.links
+                                .filter(link => {
+                                    if (schoolSettings?.school_type === 'PRIVATE') {
+                                        if (link.label === 'JSS Virements' || link.label === 'Grant Tracking') {
+                                            return false
+                                        }
+                                    }
+                                    return true
+                                })
+                                .map((link) => {
+                                    const LinkIcon = iconMap[link.label] || FileText
+                                    return (
+                                        <button
+                                            key={link.path}
+                                            onClick={() => navigate(link.path)}
+                                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-foreground/70 hover:bg-primary/10 hover:text-primary transition-colors text-left"
+                                        >
+                                            <LinkIcon className="w-4 h-4 opacity-60" />
+                                            <span className="font-medium">{link.label}</span>
+                                        </button>
+                                    )
+                                })}
                         </div>
                     </div>
                 ))}
