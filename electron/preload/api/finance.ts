@@ -13,6 +13,27 @@ function createFeeAPI() {
   }
 }
 
+function createFeePolicyAPI() {
+  return {
+    createInstallmentPolicy: (data: unknown) => ipcRenderer.invoke('feePolicy:createInstallmentPolicy', data),
+    getPoliciesForTerm: (academicYearId: number, streamId?: number, studentType?: string) =>
+      ipcRenderer.invoke('feePolicy:getPoliciesForTerm', { academicYearId, streamId, studentType }),
+    getInstallmentSchedule: (policyId: number) => ipcRenderer.invoke('feePolicy:getSchedule', policyId),
+    deactivatePolicy: (policyId: number) => ipcRenderer.invoke('feePolicy:deactivatePolicy', policyId),
+    getVoteHeadBalances: (invoiceId: number) => ipcRenderer.invoke('feePolicy:getVoteHeadBalances', invoiceId)
+  }
+}
+
+function createVirementAPI() {
+  return {
+    validateExpenditure: (expenseAccountType: string, fundingCategoryId: number) => ipcRenderer.invoke('virement:validateExpenditure', { expenseAccountType, fundingCategoryId }),
+    requestVirement: (fromAccount: string, toAccount: string, amount: number, reason: string) => ipcRenderer.invoke('virement:request', { fromAccount, toAccount, amount, reason }),
+    reviewVirement: (requestId: number, decision: string, reviewNotes: string) => ipcRenderer.invoke('virement:review', { requestId, decision, reviewNotes }),
+    getPendingRequests: () => ipcRenderer.invoke('virement:getPendingRequests'),
+    getAccountSummaries: () => ipcRenderer.invoke('virement:getAccountSummaries')
+  }
+}
+
 function createInvoiceAPI() {
   return {
     generateBatchInvoices: (yearId: number, termId: number, userId: number) => ipcRenderer.invoke('invoice:generateBatch', yearId, termId, userId),
@@ -241,6 +262,33 @@ function createReportAPI() {
   }
 }
 
+function createMpesaAPI() {
+  return {
+    importMpesaTransactions: (rows: ReadonlyArray<Record<string, unknown>>, source: 'CSV' | 'API' | 'MANUAL', fileName?: string) => ipcRenderer.invoke('mpesa:import', rows, source, fileName),
+    getUnmatchedMpesaTransactions: () => ipcRenderer.invoke('mpesa:getUnmatched'),
+    getMpesaTransactionsByStatus: (status: 'PENDING' | 'MATCHED' | 'FAILED' | 'IGNORED') => ipcRenderer.invoke('mpesa:getByStatus', status),
+    manualMatchMpesaTransaction: (transactionId: number, studentId: number) => ipcRenderer.invoke('mpesa:manualMatch', transactionId, studentId),
+    getMpesaSummary: () => ipcRenderer.invoke('mpesa:getSummary'),
+  }
+}
+
+function createProcurementAPI() {
+  return {
+    createRequisition: (data: unknown) => ipcRenderer.invoke('procurement:createRequisition', data),
+    submitRequisition: (id: number) => ipcRenderer.invoke('procurement:submitRequisition', id),
+    approveRequisition: (id: number) => ipcRenderer.invoke('procurement:approveRequisition', id),
+    rejectRequisition: (id: number, reason: string) => ipcRenderer.invoke('procurement:rejectRequisition', id, reason),
+    getRequisitionsByStatus: (status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'COMMITTED' | 'CANCELLED') => ipcRenderer.invoke('procurement:getRequisitionsByStatus', status),
+    commitBudget: (requisitionId: number) => ipcRenderer.invoke('procurement:commitBudget', requisitionId),
+    createPurchaseOrder: (data: unknown) => ipcRenderer.invoke('procurement:createPurchaseOrder', data),
+    createGrn: (data: unknown) => ipcRenderer.invoke('procurement:createGrn', data),
+    createPaymentVoucher: (data: unknown) => ipcRenderer.invoke('procurement:createPaymentVoucher', data),
+    approvePaymentVoucher: (id: number) => ipcRenderer.invoke('procurement:approvePaymentVoucher', id),
+    getPoByRequisition: (requisitionId: number) => ipcRenderer.invoke('procurement:getPoByRequisition', requisitionId),
+    getPoSummary: (poId: number) => ipcRenderer.invoke('procurement:getPoSummary', poId),
+  }
+}
+
 function createExportAPI() {
   return {
     exportToPDF: (data: ExportPDFData) => ipcRenderer.invoke(CHANNEL_EXPORT_PDF, data),
@@ -253,6 +301,8 @@ export function createFinanceAPI() {
     ...createInvoiceAPI(),
     ...createPaymentAPI(),
     ...createCashFlowAPI(),
+    ...createFeePolicyAPI(),
+    ...createVirementAPI(),
     ...createCreditAPI(),
     ...createProrationAPI(),
     ...createScholarshipAPI(),
@@ -267,5 +317,7 @@ export function createFinanceAPI() {
     ...createExemptionAPI(),
     ...createReportAPI(),
     ...createExportAPI(),
+    ...createMpesaAPI(),
+    ...createProcurementAPI(),
   }
 }

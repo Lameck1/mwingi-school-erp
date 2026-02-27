@@ -11,6 +11,7 @@ const SettingsUpdateFieldsSchema = z.object({
     sms_api_key: z.string().optional(),
     sms_api_secret: z.string().optional(),
     sms_sender_id: z.string().optional(),
+    school_type: z.enum(['PUBLIC', 'PRIVATE']).optional(),
 })
 
 export const SchoolSettingsSchema = SettingsUpdateFieldsSchema

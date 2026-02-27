@@ -58,4 +58,9 @@ export interface PayrollAPI {
   getStaffAllowances: (_staffId: number) => Promise<StaffAllowance[]>
   addStaffAllowance: (_staffId: number, _allowanceName: string, _amount: number) => Promise<{ success: boolean; id?: number }>
   deleteStaffAllowance: (_allowanceId: number) => Promise<{ success: boolean }>
+
+  // Exports
+  generateP10Csv: (periodId: number) => Promise<{ success: boolean; data?: string; error?: string }>
+  getPayrollIdsForPeriod: (periodId: number) => Promise<{ success: boolean; data?: number[]; error?: string }>
+  generatePayslip: (payrollId: number) => Promise<{ success: boolean; data?: unknown; error?: string }>
 }

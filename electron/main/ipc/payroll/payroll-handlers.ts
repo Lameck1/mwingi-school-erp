@@ -4,6 +4,8 @@ import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
 import { DoubleEntryJournalService } from '../../services/accounting/DoubleEntryJournalService'
 import { SystemAccounts } from '../../services/accounting/SystemAccounts'
+import { P10ExportService } from '../../services/payroll/P10ExportService'
+import { PayslipGenerationService } from '../../services/payroll/PayslipGenerationService'
 import { PayrollJournalService } from '../../services/finance/PayrollJournalService'
 import { ROLES } from '../ipc-result'
 import { PayrollRunSchema, PayrollConfirmSchema, PayrollMarkPaidSchema, PayrollRevertSchema, StaffAllowanceAddSchema, StaffAllowanceDeleteSchema } from '../schemas/payroll-schemas'
@@ -41,6 +43,7 @@ interface PayrollComputationResult {
     gross_salary: number
     nssf: number
     housing_levy: number
+    employer_housing_levy: number
     shif: number
     paye: number
     total_deductions: number
@@ -50,6 +53,7 @@ interface PayrollComputationResult {
 interface PayrollStatutoryComputation {
     nssf: number
     housingLevy: number
+    employerHousingLevy: number
     shif: number
     paye: number
     totalDeductions: number
@@ -141,17 +145,21 @@ const calculateStatutoryDeductions = (
 
     const housingLevyRate = findRate(rates, 'HOUSING_LEVY')?.rate || 0.015
     const housingLevy = gross * housingLevyRate
+    // Employer matches employee Housing Levy contribution 1:1
+    const employerHousingLevy = housingLevy
 
     const shifRate = findRate(rates, 'SHIF')?.rate || 0.0275
     const shif = gross * shifRate
 
-    const taxablePay = gross - nssf
+    // Per 2024/2025 Kenyan tax law: NSSF, SHIF, and Housing Levy are
+    // allowable deductions that reduce taxable pay before PAYE computation.
+    const taxablePay = Math.max(0, gross - nssf - shif - housingLevy)
     const rawPaye = calculatePaye(taxablePay, payeBands)
     const personalRelief = findRate(rates, 'PERSONAL_RELIEF')?.fixed_amount || 2400
     const paye = Math.max(0, rawPaye - personalRelief)
 
     const totalDeductions = Math.round(nssf + housingLevy + shif + paye)
-    return { nssf, housingLevy, shif, paye, totalDeductions }
+    return { nssf, housingLevy, employerHousingLevy, shif, paye, totalDeductions }
 }
 
 const computeStaffPayroll = ({
@@ -176,6 +184,7 @@ const computeStaffPayroll = ({
     // Convert statutory results back to cents for consistent storage
     const nssfCents = Math.round(statutory.nssf * 100)
     const housingLevyCents = Math.round(statutory.housingLevy * 100)
+    const employerHousingLevyCents = Math.round(statutory.employerHousingLevy * 100)
     const shifCents = Math.round(statutory.shif * 100)
     const payeCents = Math.round(statutory.paye * 100)
     const totalDeductionsCents = nssfCents + housingLevyCents + shifCents + payeCents
@@ -186,6 +195,7 @@ const computeStaffPayroll = ({
 
     deductionStmt.run([payrollId, 'NSSF', nssfCents])
     deductionStmt.run([payrollId, 'Housing Levy', housingLevyCents])
+    deductionStmt.run([payrollId, 'Employer Housing Levy', employerHousingLevyCents])
     deductionStmt.run([payrollId, 'SHIF', shifCents])
     deductionStmt.run([payrollId, 'PAYE', payeCents])
 
@@ -205,6 +215,7 @@ const computeStaffPayroll = ({
         gross_salary: grossCents,
         nssf: nssfCents,
         housing_levy: housingLevyCents,
+        employer_housing_levy: employerHousingLevyCents,
         shif: shifCents,
         paye: payeCents,
         total_deductions: totalDeductionsCents,
@@ -468,6 +479,33 @@ export function registerPayrollHandlers(): void {
     const journalService = new DoubleEntryJournalService(db)
     registerPayrollStatusHandlers(db, journalService)
     registerStaffAllowanceHandlers(db)
+
+    const p10Service = new P10ExportService(db)
+    const payslipService = new PayslipGenerationService(db)
+
+    validatedHandler('payroll:generateP10Csv', ROLES.FINANCE, z.number(), (_event, periodId) => {
+        try {
+            return { success: true, data: p10Service.generateP10Csv(periodId) }
+        } catch (error) {
+            return { success: false, error: (error as Error).message }
+        }
+    })
+
+    validatedHandler('payroll:getPayrollIdsForPeriod', PAYROLL_VIEW_ROLES, z.number(), (_event, periodId) => {
+        try {
+            return { success: true, data: payslipService.getPayrollIdsForPeriod(periodId) }
+        } catch (error) {
+            return { success: false, error: (error as Error).message }
+        }
+    })
+
+    validatedHandler('payroll:generatePayslip', PAYROLL_VIEW_ROLES, z.number(), (_event, payrollId) => {
+        try {
+            return { success: true, data: payslipService.generatePayslip(payrollId) }
+        } catch (error) {
+            return { success: false, error: (error as Error).message }
+        }
+    })
 }
 
 

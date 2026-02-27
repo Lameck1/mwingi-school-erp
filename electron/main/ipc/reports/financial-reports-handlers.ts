@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { ChangesInNetAssetsService } from '../../services/reports/ChangesInNetAssetsService'
+import { KpiDashboardService } from '../../services/reports/KpiDashboardService'
 import { container } from '../../services/base/ServiceContainer'
 import { ROLES } from '../ipc-result'
 import {
@@ -29,6 +31,7 @@ export function registerFinancialReportsHandlers(): void {
   registerBalanceSheetHandlers(journalService)
   registerProfitAndLossHandlers(plService)
   registerTrialBalanceAndLedgerHandlers(journalService, obService)
+  registerIpsasAndKpiHandlers()
 }
 
 function registerBalanceSheetHandlers(journalService: IJournalService): void {
@@ -94,6 +97,26 @@ function registerTrialBalanceAndLedgerHandlers(journalService: IJournalService, 
       return { success: true, data: await obService.getStudentLedger(studentId, yearId, start, end) }
     } catch (error) {
       throw new Error(`Failed to generate student ledger: ${(error as Error).message}`)
+    }
+  })
+}
+
+function registerIpsasAndKpiHandlers(): void {
+  validatedHandlerMulti('reports:getChangesInNetAssets', ROLES.FINANCE, ReportDateRangeSchema, async (_event, [startDate, endDate]) => {
+    try {
+      const service = new ChangesInNetAssetsService()
+      return { success: true, data: service.generateReport(startDate, endDate) }
+    } catch (error) {
+      throw new Error(`Failed to generate Changes in Net Assets: ${(error as Error).message}`)
+    }
+  })
+
+  validatedHandler('reports:getKpiDashboard', ROLES.MANAGEMENT, z.void(), async () => {
+    try {
+      const service = new KpiDashboardService()
+      return { success: true, data: service.generateDashboard() }
+    } catch (error) {
+      throw new Error(`Failed to generate KPI Dashboard: ${(error as Error).message}`)
     }
   })
 }

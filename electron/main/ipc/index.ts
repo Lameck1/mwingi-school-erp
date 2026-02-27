@@ -41,6 +41,8 @@ import { registerStudentHandlers } from './student/student-handlers'
 import { registerSystemHandlers } from './system/system-handlers'
 import { registerTransactionsHandlers } from './transactions/transactions-handlers'
 import { registerApprovalHandlers } from './workflow/approval-handlers'
+import { setupMpesaHandlers } from './finance/mpesa-handlers'
+import { setupProcurementHandlers } from './finance/procurement-handlers'
 
 const IPC_HANDLER_REGISTRARS: ReadonlyArray<() => void> = [
     registerAuthHandlers,
@@ -84,7 +86,9 @@ const IPC_HANDLER_REGISTRARS: ReadonlyArray<() => void> = [
     registerFinanceApprovalHandlers,
     registerFinancialReportsHandlers,
     registerPeriodLockingHandlers,
-    registerSystemHandlers
+    registerSystemHandlers,
+    setupMpesaHandlers,
+    setupProcurementHandlers
 ]
 
 export function registerAllIpcHandlers(): void {

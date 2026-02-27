@@ -38,13 +38,15 @@ export function registerSettingsHandlers(): void {
                 logo_path = COALESCE(?, logo_path),
                 mpesa_paybill = COALESCE(?, mpesa_paybill),
                 sms_sender_id = COALESCE(?, sms_sender_id),
+                school_type = COALESCE(?, school_type),
                 updated_at = CURRENT_TIMESTAMP 
             WHERE id = 1
         `)
 
         stmt.run(
             settings['school_name'], settings['school_motto'], settings['address'], settings['phone'],
-            settings['email'], settings['logo_path'], settings['mpesa_paybill'], settings['sms_sender_id']
+            settings['email'], settings['logo_path'], settings['mpesa_paybill'], settings['sms_sender_id'],
+            settings['school_type']
         )
 
         // Route SMS credentials through encrypted ConfigService (F03 remediation)

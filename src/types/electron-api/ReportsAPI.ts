@@ -65,6 +65,40 @@ export interface TrialBalanceReport {
   is_balanced: boolean
 }
 
+export interface KpiMetric {
+  name: string
+  value: number
+  label: string
+  unit: string
+  trend?: 'UP' | 'DOWN' | 'STABLE'
+  target?: number
+}
+
+export interface KpiDashboard {
+  generated_at: string
+  metrics: KpiMetric[]
+}
+
+export interface NetAssetsChange {
+  category: string
+  opening_balance: number
+  additions: number
+  disposals: number
+  revaluations: number
+  closing_balance: number
+}
+
+export interface ChangesInNetAssetsReport {
+  report_date: string
+  period_start: string
+  period_end: string
+  opening_net_assets: number
+  surplus_deficit: number
+  asset_changes: NetAssetsChange[]
+  liability_changes: NetAssetsChange[]
+  closing_net_assets: number
+}
+
 export interface ReportCardStudentEntry {
   student_id: number
   student_name: string
@@ -174,6 +208,8 @@ export interface ReportsAPI {
   getBalanceSheet: (asOfDate: string) => Promise<{ success: boolean; data: BalanceSheetReport; error?: string }>
   getTrialBalance: (startDate: string, endDate: string) => Promise<{ success: boolean; data: TrialBalanceReport; error?: string }>
   getComparativeProfitAndLoss: (currentStart: string, currentEnd: string, priorStart: string, priorEnd: string) => Promise<{ success: boolean; data: ProfitAndLossReport; error?: string }>
+  getChangesInNetAssets: (startDate: string, endDate: string) => Promise<{ success: boolean; data: ChangesInNetAssetsReport; error?: string }>
+  getKpiDashboard: () => Promise<{ success: boolean; data: KpiDashboard; error?: string }>
 
   // Scheduled Reports
   getScheduledReports: () => Promise<IPCResult<ScheduledReport[]>>

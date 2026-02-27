@@ -22,5 +22,8 @@ export function createStaffAPI() {
     revertPayrollToDraft: (periodId: number, userId: number) => ipcRenderer.invoke('payroll:revertToDraft', periodId, userId),
     deletePayroll: (periodId: number, userId: number) => ipcRenderer.invoke('payroll:delete', periodId, userId),
     recalculatePayroll: (periodId: number, userId: number) => ipcRenderer.invoke('payroll:recalculate', periodId, userId),
+    generateP10Csv: (periodId: number) => ipcRenderer.invoke('payroll:generateP10Csv', periodId),
+    getPayrollIdsForPeriod: (periodId: number) => ipcRenderer.invoke('payroll:getPayrollIdsForPeriod', periodId),
+    generatePayslip: (payrollId: number) => ipcRenderer.invoke('payroll:generatePayslip', payrollId),
   }
 }

@@ -10,6 +10,7 @@ export interface SchoolSettings {
   sms_api_key?: string | null
   sms_api_secret?: string | null
   sms_sender_id?: string | null
+  school_type: 'PUBLIC' | 'PRIVATE'
   created_at: string
   updated_at: string
 }

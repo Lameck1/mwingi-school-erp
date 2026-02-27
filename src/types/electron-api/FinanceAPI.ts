@@ -136,10 +136,91 @@ export interface FinanceApprovalRequest {
 
 type IPCResult<T> = T | { success: false; error: string; errors?: string[] };
 
+// M-Pesa reconciliation types
+export interface MpesaTransaction {
+  id: number
+  transaction_receipt: string
+  transaction_date: string
+  amount: number
+  receiver_party_public_name: string
+  sender_party_public_name: string
+  sender_msisdn: string
+  account_reference: string
+  match_status: 'PENDING' | 'MATCHED' | 'FAILED' | 'IGNORED'
+  match_confidence_score: number | null
+  matched_student_id: number | null
+  student_name?: string
+  student_admission_number?: string
+  is_duplicate: boolean
+  created_at: string
+}
+
+export interface MpesaSummary {
+  totalSummary: {
+    total_processed: number
+    total_matched: number
+    total_pending: number
+    total_failed: number
+    total_ignored: number
+    total_duplicates: number
+    total_amount_processed: number
+  }
+}
+
+export type JssAccountType = 'TUITION' | 'OPERATIONS' | 'INFRASTRUCTURE'
+
 export interface FinanceAPI {
   // Fee Categories
   getFeeCategories: () => Promise<IPCResult<FeeCategory[]>>
   createFeeCategory: (_name: string, _description: string) => Promise<FeeCategory>
+
+  // Fee Policies & Vote Heads
+  createInstallmentPolicy: (data: {
+    policy_name: string
+    academic_year_id: number
+    stream_id?: number
+    student_type: 'DAY_SCHOLAR' | 'BOARDER' | 'ALL'
+    schedules: Array<{ installment_number: number; percentage: number; due_date: string; description?: string }>
+  }) => Promise<{ success: boolean; id?: number; error?: string }>
+  getPoliciesForTerm: (academicYearId: number, streamId?: number, studentType?: string) => Promise<{
+    success: boolean; data?: Array<{
+      id: number
+      policy_name: string
+      academic_year_id: number
+      stream_id: number | null
+      student_type: 'DAY_SCHOLAR' | 'BOARDER' | 'ALL'
+      number_of_installments: number
+      is_active: number
+      created_at: string
+    }>; error?: string
+  }>
+  getInstallmentSchedule: (policyId: number) => Promise<{
+    success: boolean; data?: Array<{
+      id?: number
+      installment_number: number
+      percentage: number
+      due_date: string
+      description?: string
+    }>; error?: string
+  }>
+  deactivatePolicy: (policyId: number) => Promise<{ success: boolean; error?: string }>
+  getVoteHeadBalances: (invoiceId: number) => Promise<{
+    success: boolean; data?: Array<{
+      fee_category_id: number
+      category_name: string
+      total_charged: number
+      total_paid: number
+      outstanding: number
+    }>; error?: string
+  }>
+
+  // Virement Services (JSS)
+  // JSS Virement types
+  validateExpenditure: (expenseAccountType: JssAccountType, fundingCategoryId: number) => Promise<{ success: boolean; data?: { allowed: boolean; reason?: string; from_account: JssAccountType; to_account: JssAccountType }; error?: string }>
+  requestVirement: (fromAccount: string, toAccount: string, amount: number, reason: string) => Promise<{ success: boolean; id?: number; error?: string }>
+  reviewVirement: (requestId: number, decision: string, reviewNotes: string) => Promise<{ success: boolean; error?: string }>
+  getPendingVirementRequests: () => Promise<{ success: boolean; data?: Array<{ id: number; from_account_type: JssAccountType; to_account_type: JssAccountType; amount: number; reason: string; status: 'PENDING' | 'APPROVED' | 'REJECTED'; requested_by_user_id: number; reviewed_by_user_id: number | null; created_at: string }>; error?: string }>
+  getVirementAccountSummaries: () => Promise<{ success: boolean; data?: Array<{ account_type: JssAccountType; total_invoiced: number; total_collected: number; total_expenditure: number; balance: number }>; error?: string }>
 
   // Fee Structure
   getFeeStructure: (_academicYearId: number, _termId: number) => Promise<IPCResult<FeeStructure[]>>
@@ -175,6 +256,31 @@ export interface FinanceAPI {
   approveTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) => Promise<{ success: boolean; error?: string; message?: string }>
   rejectTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) => Promise<{ success: boolean; error?: string; message?: string }>
   // Manual Fixes
+
+  // M-Pesa Reconciliation
+  importMpesaTransactions: (rows: ReadonlyArray<Record<string, unknown>>, source: 'CSV' | 'API' | 'MANUAL', fileName?: string) => Promise<{ success: boolean; batchId?: number; summary?: MpesaSummary; error?: string }>
+  getUnmatchedMpesaTransactions: () => Promise<MpesaTransaction[]>
+  getMpesaTransactionsByStatus: (status: 'PENDING' | 'MATCHED' | 'FAILED' | 'IGNORED') => Promise<MpesaTransaction[]>
+  manualMatchMpesaTransaction: (transactionId: number, studentId: number) => Promise<{ success: boolean; error?: string }>
+  getMpesaSummary: () => Promise<MpesaSummary>
+
+  // Procurement P2P
+  createRequisition: (data: unknown) => Promise<{ success: boolean; id?: number; error?: string }>
+  submitRequisition: (id: number) => Promise<{ success: boolean; error?: string }>
+  approveRequisition: (id: number) => Promise<{ success: boolean; error?: string }>
+  rejectRequisition: (id: number, reason: string) => Promise<{ success: boolean; error?: string }>
+  getRequisitionsByStatus: (status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'COMMITTED' | 'CANCELLED') => Promise<unknown[]>
+  commitBudget: (requisitionId: number) => Promise<{ success: boolean; id?: number; error?: string }>
+  createPurchaseOrder: (data: unknown) => Promise<{ success: boolean; id?: number; error?: string }>
+  createGrn: (data: unknown) => Promise<{ success: boolean; id?: number; error?: string }>
+  createPaymentVoucher: (data: unknown) => Promise<{ success: boolean; id?: number; error?: string }>
+  approvePaymentVoucher: (id: number) => Promise<{ success: boolean; error?: string }>
+  getPoByRequisition: (requisitionId: number) => Promise<{ id: number; po_number: string; requisition_id: number; supplier_id: number; total_amount: number; status: 'ISSUED' | 'PARTIALLY_RECEIVED' | 'FULLY_RECEIVED' | 'CANCELLED' } | undefined>
+  getPoSummary: (poId: number) => Promise<{
+    po: { id: number; po_number: string; requisition_id: number; supplier_id: number; total_amount: number; status: 'ISSUED' | 'PARTIALLY_RECEIVED' | 'FULLY_RECEIVED' | 'CANCELLED' }
+    items: Array<{ id: number; description: string; quantity: number; unit_of_measure: string; unit_cost: number; total_cost: number; received_quantity: number; outstanding: number }>
+    latest_grn?: { id: number; status: 'PENDING_INSPECTION' | 'ACCEPTED' | 'PARTIALLY_ACCEPTED' | 'REJECTED' } | null
+  } | undefined>
 }
 
 // Scholarship Types

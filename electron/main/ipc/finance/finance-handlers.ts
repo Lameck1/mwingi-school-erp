@@ -2,6 +2,8 @@ import { createGetOrCreateCategoryId, type FinanceContext } from './finance-hand
 import { registerInvoiceHandlers, registerFeeStructureHandlers } from './invoice-handlers'
 import { registerPaymentHandlers, registerReceiptHandlers } from './payment-handlers'
 import { registerCreditHandlers, registerProrationHandlers, registerScholarshipHandlers } from './scholarship-handlers'
+import { registerFeePolicyHandlers } from './fee-policy-handlers'
+import { registerVirementHandlers } from './virement-handlers'
 import { getDatabase } from '../../database'
 import { container } from '../../services/base/ServiceContainer'
 import { CashFlowService } from '../../services/finance/CashFlowService'
@@ -36,4 +38,6 @@ export function registerFinanceHandlers(): void {
     registerProrationHandlers()
     registerScholarshipHandlers()
     registerReceiptHandlers(db)
+    registerFeePolicyHandlers()
+    registerVirementHandlers()
 }
