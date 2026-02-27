@@ -67,7 +67,7 @@ export function registerSettingsHandlers(): void {
         try {
             console.warn('[IPC] settings:uploadLogo - Processing upload...')
             // Save image to userData/images/logos/
-            const filePath = saveImageFromDataUrl(dataUrl, 'logos', 'school_logo')
+            const filePath = await saveImageFromDataUrl(dataUrl, 'logos', 'school_logo')
             console.warn('[IPC] settings:uploadLogo - Saved to:', filePath)
 
             // Update DB
@@ -85,7 +85,7 @@ export function registerSettingsHandlers(): void {
         try {
             const row = db.prepare('SELECT logo_path FROM school_settings WHERE id = 1').get() as { logo_path?: string } | undefined
             if (row?.logo_path) {
-                deleteImage(row.logo_path)
+                await deleteImage(row.logo_path)
             }
             db.prepare('UPDATE school_settings SET logo_path = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = 1').run()
             return { success: true }

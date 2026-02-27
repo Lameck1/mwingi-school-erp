@@ -5,7 +5,17 @@ export const BackupCreateToSchema = z.string().min(1)
 export const BackupRestoreSchema = z.string().min(1)
 
 // Audit Schemas
-export const AuditGetLogSchema = z.number().or(z.string()).optional()
+export const AuditGetLogSchema = z.union([
+    z.number().or(z.string()).optional(),
+    z.object({
+        limit: z.number().optional(),
+        page: z.number().int().min(1).optional(),
+        pageSize: z.number().int().min(1).max(500).optional(),
+        action: z.string().optional(),
+        table: z.string().optional(),
+        search: z.string().optional(),
+    })
+])
 
 // Import Schemas
 export const ImportMappingSchema = z.object({

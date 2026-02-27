@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import * as fs from 'node:fs'
+import * as fsp from 'node:fs/promises'
 import * as path from 'node:path'
 
 import { dialog, BrowserWindow } from '../../electron-env'
@@ -61,14 +61,14 @@ function normalizeImportConfig(config: z.infer<typeof ImportTuple>[1]): ImportCo
     return normalized
 }
 
-function getImportFileMetadata(targetPath: string): {
+async function getImportFileMetadata(targetPath: string): Promise<{
     absolutePath: string
     extension: string
     fileSizeBytes: number
-} {
+}> {
     const absolutePath = path.resolve(targetPath)
     const extension = path.extname(absolutePath).toLowerCase()
-    const stats = fs.statSync(absolutePath)
+    const stats = await fsp.stat(absolutePath)
 
     if (!stats.isFile()) {
         throw new Error('Selected import path is not a file')
@@ -127,7 +127,7 @@ export function registerDataImportHandlers(): void {
                 return { success: false, cancelled: true, error: 'No file selected' }
             }
 
-            const { absolutePath, extension, fileSizeBytes } = getImportFileMetadata(selectedPath)
+            const { absolutePath, extension, fileSizeBytes } = await getImportFileMetadata(selectedPath)
             const extensionError = getExtensionValidationError(extension)
             if (extensionError) {
                 return { success: false, cancelled: false, error: extensionError }
@@ -164,7 +164,7 @@ export function registerDataImportHandlers(): void {
         }
     })
 
-    validatedHandlerMulti('data:import', ROLES.ADMIN_ONLY, ImportTuple, (
+    validatedHandlerMulti('data:import', ROLES.ADMIN_ONLY, ImportTuple, async (
         _event,
         [fileToken, config, legacyId],
         actorCtx
@@ -180,7 +180,7 @@ export function registerDataImportHandlers(): void {
         }
 
         try {
-            const { absolutePath, extension, fileSizeBytes } = getImportFileMetadata(tokenEntry.absolutePath)
+            const { absolutePath, extension, fileSizeBytes } = await getImportFileMetadata(tokenEntry.absolutePath)
             const extensionError = getExtensionValidationError(extension)
             if (extensionError) {
                 return buildImportValidationFailure(extensionError)
@@ -190,7 +190,7 @@ export function registerDataImportHandlers(): void {
                 return buildImportValidationFailure(sizeError)
             }
 
-            const buffer = fs.readFileSync(absolutePath)
+            const buffer = await fsp.readFile(absolutePath)
             return dataImportService.importFromFile(
                 buffer,
                 path.basename(absolutePath),
@@ -221,7 +221,7 @@ export function registerDataImportHandlers(): void {
             })
 
             if (filePath) {
-                fs.writeFileSync(filePath, buffer)
+                await fsp.writeFile(filePath, buffer)
                 return { success: true, filePath }
             }
             return { success: false, error: 'Cancelled' }
