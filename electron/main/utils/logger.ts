@@ -14,7 +14,7 @@ electronLog.transports.file.maxSize = 5 * 1024 * 1024 // 5 MB
 electronLog.transports.file.format = '[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}'
 
 // ── Console transport ─────────────────────────────────────────────
-electronLog.transports.console.level = 'debug'
+electronLog.transports.console.level = process.env['NODE_ENV'] === 'production' ? 'warn' : 'debug'
 
 /**
  * Redirect `console.error` and `console.warn` to electron-log so they

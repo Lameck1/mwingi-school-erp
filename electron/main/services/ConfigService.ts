@@ -4,7 +4,7 @@ import { safeStorage } from '../electron-env'
 const LEGACY_TO_CANONICAL_KEYS: Record<string, string> = {
     'sms.api_key': 'sms_api_key',
     'sms.api_secret': 'sms_api_secret',
-    'sms.username': 'sms_api_secret',
+    'sms.username': 'sms_username',
     'sms.sender_id': 'sms_sender_id',
     'sms.provider': 'sms_provider',
     'smtp.host': 'smtp_host',
@@ -15,7 +15,8 @@ const LEGACY_TO_CANONICAL_KEYS: Record<string, string> = {
 
 const CANONICAL_TO_LEGACY_KEYS: Record<string, string[]> = {
     sms_api_key: ['sms.api_key'],
-    sms_api_secret: ['sms.api_secret', 'sms.username'],
+    sms_api_secret: ['sms.api_secret'],
+    sms_username: ['sms.username'],
     sms_sender_id: ['sms.sender_id'],
     sms_provider: ['sms.provider'],
     smtp_host: ['smtp.host'],
@@ -39,6 +40,11 @@ function shouldEncryptAtRest(key: string): boolean {
 }
 
 export class ConfigService {
+    private static cache = new Map<string, string | null>()
+
+    static clearCache(): void {
+        this.cache.clear()
+    }
 
     // Save configuration (encrypt if needed)
     static saveConfig(key: string, value: string, isEncrypted: boolean = false): boolean {
@@ -62,29 +68,40 @@ export class ConfigService {
         `)
 
         stmt.run(canonicalKey, storedValue, isEncrypted ? 1 : 0)
+        this.cache.set(canonicalKey, value)
         return true
     }
 
     // Get configuration
     static getConfig(key: string): string | null {
-        const db = getDatabase()
         const canonicalKey = toCanonicalConfigKey(key)
-        const lookupKeys = [canonicalKey, ...(CANONICAL_TO_LEGACY_KEYS[canonicalKey] ?? [])]
-
-        let row: { key: string, value: string, is_encrypted: number } | undefined
-        for (const lookupKey of lookupKeys) {
-            row = db.prepare('SELECT key, value, is_encrypted FROM system_config WHERE key = ?').get(lookupKey) as { key: string, value: string, is_encrypted: number } | undefined
-            if (row) {
-                break
-            }
+        if (this.cache.has(canonicalKey)) {
+            return this.cache.get(canonicalKey) ?? null
         }
 
-        if (!row) {return null}
+        const db = getDatabase()
+        const lookupKeys = [canonicalKey, ...(CANONICAL_TO_LEGACY_KEYS[canonicalKey] ?? [])]
+
+        const placeholders = lookupKeys.map(() => '?').join(', ')
+        const rows = db.prepare(`SELECT key, value, is_encrypted FROM system_config WHERE key IN (${placeholders})`).all(...lookupKeys) as { key: string, value: string, is_encrypted: number }[]
+        const rowMap = new Map(rows.map(r => [r.key, r]))
+        let row: { key: string, value: string, is_encrypted: number } | undefined
+        for (const lookupKey of lookupKeys) {
+            row = rowMap.get(lookupKey)
+            if (row) { break }
+        }
+
+        if (!row) {
+            this.cache.set(canonicalKey, null)
+            return null
+        }
 
         if (row.is_encrypted) {
             if (safeStorage.isEncryptionAvailable()) {
                 try {
-                    return safeStorage.decryptString(Buffer.from(row.value, 'base64'))
+                    const decrypted = safeStorage.decryptString(Buffer.from(row.value, 'base64'))
+                    this.cache.set(canonicalKey, decrypted)
+                    return decrypted
                 } catch (e) {
                     console.error(`Failed to decrypt config for ${key}:`, e)
                     return null
@@ -103,6 +120,7 @@ export class ConfigService {
             }
         }
 
+        this.cache.set(canonicalKey, row.value)
         return row.value
     }
 

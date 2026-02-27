@@ -1,4 +1,4 @@
-import * as fs from 'node:fs'
+import * as fsp from 'node:fs/promises'
 import * as path from 'node:path'
 
 import { app, screen } from '../electron-env'
@@ -27,27 +27,34 @@ export class WindowStateManager {
     private readonly stateFilePath: string
     private saveTimeout: ReturnType<typeof setTimeout> | null = null
 
-    constructor(windowName: string = 'main') {
-        this.stateFilePath = path.join(app.getPath('userData'), `window-state-${windowName}.json`)
-        this.state = this.loadState()
+    private constructor(stateFilePath: string, state: WindowState) {
+        this.stateFilePath = stateFilePath
+        this.state = state
+    }
+
+    /**
+     * Async factory — replaces the former sync constructor.
+     */
+    static async create(windowName: string = 'main'): Promise<WindowStateManager> {
+        const stateFilePath = path.join(app.getPath('userData'), `window-state-${windowName}.json`)
+        const state = await WindowStateManager.loadState(stateFilePath)
+        return new WindowStateManager(stateFilePath, state)
     }
 
     /**
      * Load state from file
      */
-    private loadState(): WindowState {
+    private static async loadState(stateFilePath: string): Promise<WindowState> {
         try {
-            if (fs.existsSync(this.stateFilePath)) {
-                const data = fs.readFileSync(this.stateFilePath, 'utf-8')
-                const savedState = JSON.parse(data) as WindowState
+            const data = await fsp.readFile(stateFilePath, 'utf-8')
+            const savedState = JSON.parse(data) as WindowState
 
-                // Validate state is within screen bounds
-                if (this.isValidState(savedState)) {
-                    return savedState
-                }
+            // Validate state is within screen bounds
+            if (WindowStateManager.isValidState(savedState)) {
+                return savedState
             }
-        } catch (error) {
-            console.error('Failed to load window state:', error)
+        } catch {
+            // File doesn't exist or is invalid — use defaults
         }
 
         return { ...DEFAULT_STATE }
@@ -56,7 +63,7 @@ export class WindowStateManager {
     /**
      * Validate that window position is visible on a screen
      */
-    private isValidState(state: WindowState): boolean {
+    private static isValidState(state: WindowState): boolean {
         const displays = screen.getAllDisplays()
 
         return displays.some((display: Display) => {
@@ -79,11 +86,9 @@ export class WindowStateManager {
         }
 
         this.saveTimeout = setTimeout(() => {
-            try {
-                fs.writeFileSync(this.stateFilePath, JSON.stringify(this.state, null, 2))
-            } catch (error) {
+            fsp.writeFile(this.stateFilePath, JSON.stringify(this.state, null, 2)).catch((error) => {
                 console.error('Failed to save window state:', error)
-            }
+            })
         }, 500)
     }
 
