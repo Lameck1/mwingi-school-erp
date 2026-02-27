@@ -28,24 +28,38 @@ export type AuthSession = z.infer<typeof AuthSessionSchema>
 const SERVICE = 'mwingi-school-erp'
 const ACCOUNT = 'session'
 
+let cachedSession: AuthSession | null = null
+let cacheTimestamp = 0
+const SESSION_CACHE_TTL_MS = 30_000
+
 export async function getSession(): Promise<AuthSession | null> {
+  const now = Date.now()
+  if (cachedSession && (now - cacheTimestamp) < SESSION_CACHE_TTL_MS) {
+    return cachedSession
+  }
   try {
     const raw = await keytar.getPassword(SERVICE, ACCOUNT)
-    if (!raw) { return null }
+    if (!raw) { cachedSession = null; cacheTimestamp = now; return null }
     const parsed = JSON.parse(raw)
     const result = AuthSessionSchema.safeParse(parsed)
     if (!result.success) {
       console.warn('Session Validation Failed:', result.error)
+      cachedSession = null; cacheTimestamp = now
       return null
     }
-    return result.data
+    cachedSession = result.data
+    cacheTimestamp = now
+    return cachedSession
   } catch (error) {
     console.warn('Failed to load session from keytar:', error)
+    cachedSession = null; cacheTimestamp = now
     return null
   }
 }
 
 export async function setSession(session: AuthSession): Promise<void> {
+  cachedSession = session
+  cacheTimestamp = Date.now()
   try {
     await keytar.setPassword(SERVICE, ACCOUNT, JSON.stringify(session))
   } catch (error) {
@@ -54,6 +68,8 @@ export async function setSession(session: AuthSession): Promise<void> {
 }
 
 export async function clearSession(): Promise<void> {
+  cachedSession = null
+  cacheTimestamp = 0
   try {
     await keytar.deletePassword(SERVICE, ACCOUNT)
   } catch (error) {

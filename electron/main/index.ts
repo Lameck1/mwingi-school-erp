@@ -22,9 +22,6 @@ import type { BrowserWindow as BrowserWindowType, Event as ElectronEvent, Handle
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-// Disable GPU acceleration for better compatibility
-app.disableHardwareAcceleration()
-
 // Prevent multiple instances — concurrent SQLite writes cause corruption
 const gotTheLock = app.requestSingleInstanceLock()
 if (!gotTheLock) {
@@ -46,8 +43,8 @@ async function initializeAutoUpdater(window: BrowserWindowType): Promise<unknown
     return new AutoUpdateManager(window)
 }
 
-function createWindow() {
-    const windowState = new WindowStateManager('main')
+async function createWindow() {
+    const windowState = await WindowStateManager.create('main')
     const state = windowState.getState()
 
     const win = new BrowserWindow({
@@ -86,12 +83,13 @@ function createWindow() {
         win.show()
     })
 
-    // Pipe renderer logs to main process using the Event object API.
-    win.webContents.on('console-message', (event: ElectronEvent & { message: string }) => {
-        const message = event.message
-        if (message && message.length > 0) {
-            log.warn(`[Renderer] ${message}`)
-        }
+    // Pipe renderer logs to main process, mapped to the correct log level.
+    win.webContents.on('console-message', (_event: ElectronEvent, level: number, message: string) => {
+        if (!message || message.length === 0) { return }
+        const tag = `[Renderer] ${message}`
+        if (level >= 3) { log.error(tag) }
+        else if (level === 2) { log.warn(tag) }
+        else { log.debug(tag) }
     })
 
     // Security: Block external navigation attempts
@@ -148,7 +146,7 @@ async function bootstrap(): Promise<void> {
                 ...details.responseHeaders,
                 'Content-Security-Policy': [
                     VITE_DEV_SERVER_URL
-                        ? "default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws: http: https:; object-src 'none'; frame-src 'self' blob:"
+                        ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws://localhost:* http://localhost:*; object-src 'none'; frame-src 'self' blob:"
                         : "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://api.africastalking.com https://api.twilio.com https://api.sendgrid.com; object-src 'none'; frame-src 'self' blob:"
                 ]
             }
@@ -161,7 +159,7 @@ async function bootstrap(): Promise<void> {
         await initializeDatabase()
 
         // Verify migrations
-        verifyMigrations()
+        await verifyMigrations()
 
         // Verify System Accounts
         verifySystemAccounts()
@@ -203,11 +201,11 @@ async function bootstrap(): Promise<void> {
         reportScheduler.initialize()
 
         // Create window
-        createWindow()
+        await createWindow()
 
         app.on('activate', () => {
             if (BrowserWindow.getAllWindows().length === 0) {
-                createWindow()
+                void createWindow().catch((err) => log.error('Failed to create window:', err))
             }
         })
     }
@@ -235,6 +233,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+    BackupService.stopScheduler()
     reportScheduler.shutdown()
     closeDatabase()
 })
@@ -245,6 +244,7 @@ function scheduleGracefulShutdown(): void {
     shutdownScheduled = true
     setTimeout(() => {
         log.warn('Shutting down after critical error...')
+        try { closeDatabase() } catch { /* best-effort flush */ }
         app.quit()
     }, 3000)
 }

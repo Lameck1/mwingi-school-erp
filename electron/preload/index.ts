@@ -90,10 +90,6 @@ const authAPI = {
   }
 }
 
-// Hydrate runtime role as soon as preload starts. If it fails we keep
-// least-privilege default ('AUDITOR').
-void authAPI.getSession().catch(() => {})
-
 const namespacedAPI = {
   ...runtimeRoleAPI,
   auth: authAPI
