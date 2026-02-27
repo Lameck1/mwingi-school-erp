@@ -34,10 +34,12 @@ export interface BudgetLineItem {
     description: string
     budgeted_amount: number
     actual_amount: number
+    committed_amount: number
     variance: number
     notes: string | null
     category_name?: string
     category_type?: 'INCOME' | 'EXPENSE'
+    available_balance?: number
 }
 
 export interface BudgetFilters {
@@ -230,10 +232,14 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
 
     async getBudgetWithLineItems(budgetId: number): Promise<Budget | null> {
         const budget = await this.findById(budgetId)
-        if (!budget) {return null}
+        if (!budget) { return null }
 
         const lineItems = this.db.prepare(`
-      SELECT bli.*, tc.category_name, tc.category_type
+      SELECT 
+        bli.*, 
+        tc.category_name, 
+        tc.category_type,
+        (bli.budgeted_amount - COALESCE(bli.actual_amount, 0) - COALESCE(bli.committed_amount, 0)) as available_balance
       FROM budget_line_item bli
       JOIN transaction_category tc ON bli.category_id = tc.id
       WHERE bli.budget_id = ?
@@ -245,8 +251,8 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
 
     async submitForApproval(budgetId: number, userId: number): Promise<{ success: boolean; errors?: string[] }> {
         const budget = await this.findById(budgetId)
-        if (!budget) {return { success: false, errors: [BUDGET_NOT_FOUND_ERROR] }}
-        if (budget.status !== 'DRAFT') {return { success: false, errors: ['Only draft budgets can be submitted'] }}
+        if (!budget) { return { success: false, errors: [BUDGET_NOT_FOUND_ERROR] } }
+        if (budget.status !== 'DRAFT') { return { success: false, errors: ['Only draft budgets can be submitted'] } }
 
         this.db.prepare(`UPDATE budget SET status = 'SUBMITTED', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(budgetId)
         logAudit(userId, 'SUBMIT', 'budget', budgetId, { status: 'DRAFT' }, { status: 'SUBMITTED' })
@@ -255,8 +261,8 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
 
     async approve(budgetId: number, userId: number): Promise<{ success: boolean; errors?: string[] }> {
         const budget = await this.findById(budgetId)
-        if (!budget) {return { success: false, errors: [BUDGET_NOT_FOUND_ERROR] }}
-        if (budget.status !== 'SUBMITTED') {return { success: false, errors: ['Only submitted budgets can be approved'] }}
+        if (!budget) { return { success: false, errors: [BUDGET_NOT_FOUND_ERROR] } }
+        if (budget.status !== 'SUBMITTED') { return { success: false, errors: ['Only submitted budgets can be approved'] } }
 
         this.db.prepare(`
       UPDATE budget 
@@ -289,5 +295,73 @@ export class BudgetService extends BaseService<Budget, CreateBudgetData, Partial
                 errors: [error instanceof Error ? error.message : 'Unknown error']
             }
         }
+    }
+
+    // ── FUNDS MANAGEMENT (PROCUREMENT INTEGRATION) ────────────────────
+
+    commitFunds(lineItemId: number, amount: number): { success: boolean; error?: string } {
+        if (amount <= 0) { return { success: false, error: 'Commitment amount must be positive' } }
+
+        return this.db.transaction(() => {
+            const item = this.db.prepare(`
+                SELECT budgeted_amount, actual_amount, committed_amount 
+                FROM budget_line_item WHERE id = ?
+            `).get(lineItemId) as { budgeted_amount: number; actual_amount: number; committed_amount: number } | undefined
+
+            if (!item) { return { success: false, error: 'Budget line item not found' } }
+
+            const available = item.budgeted_amount - item.actual_amount - item.committed_amount
+            if (amount > available) {
+                return { success: false, error: `Insufficient budget. Requested: ${amount}, Available: ${available}` }
+            }
+
+            this.db.prepare('UPDATE budget_line_item SET committed_amount = committed_amount + ? WHERE id = ?').run(amount, lineItemId)
+            return { success: true }
+        })()
+    }
+
+    utilizeFunds(lineItemId: number, amount: number): { success: boolean; error?: string } {
+        if (amount <= 0) { return { success: false, error: 'Utilization amount must be positive' } }
+
+        return this.db.transaction(() => {
+            const item = this.db.prepare(`
+                SELECT budgeted_amount, actual_amount, committed_amount 
+                FROM budget_line_item WHERE id = ?
+                    `).get(lineItemId) as { budgeted_amount: number; actual_amount: number; committed_amount: number } | undefined
+
+            if (!item) { return { success: false, error: 'Budget line item not found' } }
+
+            // Utilizing funds moves them from committed -> actual
+            // BUT if amount > committed_amount, it means the PO invoice was for more than originally committed.
+            // In that case, we drain committed to 0, and what's left comes out of the available buffer.
+            const committedToReduce = Math.min(amount, item.committed_amount)
+
+            this.db.prepare(`
+                UPDATE budget_line_item 
+                SET committed_amount = committed_amount - ?,
+                    actual_amount = actual_amount + ?
+                WHERE id = ?
+            `).run(committedToReduce, amount, lineItemId)
+
+            return { success: true }
+        })()
+    }
+
+    releaseCommitment(lineItemId: number, amount: number): { success: boolean; error?: string } {
+        if (amount <= 0) { return { success: false, error: 'Release amount must be positive' } }
+
+        return this.db.transaction(() => {
+            const item = this.db.prepare(`
+                SELECT committed_amount 
+                FROM budget_line_item WHERE id = ?
+            `).get(lineItemId) as { committed_amount: number } | undefined
+
+            if (!item) { return { success: false, error: 'Budget line item not found' } }
+
+            const toRelease = Math.min(amount, item.committed_amount)
+
+            this.db.prepare('UPDATE budget_line_item SET committed_amount = committed_amount - ? WHERE id = ?').run(toRelease, lineItemId)
+            return { success: true }
+        })()
     }
 }

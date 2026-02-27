@@ -11,6 +11,7 @@ import {
 } from '../../utils/feeInvoiceSql'
 import { OUTSTANDING_INVOICE_STATUSES } from '../../utils/financeTransactionTypes'
 import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalService'
+import { VoteHeadSpreadingService } from './VoteHeadSpreadingService'
 
 import type {
   ApprovalQueueItem,
@@ -47,6 +48,8 @@ export class PaymentProcessor {
   private readonly invoiceOutstandingStatusPredicate: string
   private idempotencyColumnAvailable: boolean | null = null
   private feeCategoryPriorityColumnAvailable: boolean | null = null
+  private voteHeadService: VoteHeadSpreadingService | null = null
+  private paymentItemAllocationAvailable: boolean | null = null
 
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
@@ -190,10 +193,29 @@ export class PaymentProcessor {
       return
     }
     // Hard check: Table MUST exist. If not, this will throw, which is correct (Data Safeguard).
-    this.db.prepare(`
+    const result = this.db.prepare(`
       INSERT INTO payment_invoice_allocation (transaction_id, invoice_id, applied_amount)
       VALUES (?, ?, ?)
     `).run(transactionId, invoiceId, appliedAmount)
+
+    // Spread across invoice items by vote-head priority (if migration 1026 has been applied)
+    this.spreadAcrossVoteHeads(result.lastInsertRowid as number, invoiceId, appliedAmount)
+  }
+
+  private spreadAcrossVoteHeads(paymentAllocationId: number, invoiceId: number, appliedAmount: number): void {
+    if (this.paymentItemAllocationAvailable === null) {
+      const tables = this.db.prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'payment_item_allocation'"
+      ).get() as { name: string } | undefined
+      this.paymentItemAllocationAvailable = !!tables
+    }
+    if (!this.paymentItemAllocationAvailable) {
+      return
+    }
+    if (!this.voteHeadService) {
+      this.voteHeadService = new VoteHeadSpreadingService(this.db)
+    }
+    this.voteHeadService.spreadPaymentOverItems(paymentAllocationId, invoiceId, appliedAmount)
   }
 
   private applyPaymentToSpecificInvoice(transactionId: number, invoiceId: number, amount: number): number {
@@ -520,11 +542,11 @@ export class VoidProcessor implements IPaymentVoidProcessor {
       let remainingShortfall = shortfall
 
       for (const txn of recentCreditTxns) {
-        if (remainingShortfall <= 0) {break}
+        if (remainingShortfall <= 0) { break }
 
         const allocations = this.getPaymentAllocations(txn.id)
         for (const alloc of allocations) {
-          if (remainingShortfall <= 0) {break}
+          if (remainingShortfall <= 0) { break }
 
           const reverseAmount = Math.min(alloc.applied_amount, remainingShortfall)
           this.reverseInvoiceAllocation(alloc.invoice_id, reverseAmount)

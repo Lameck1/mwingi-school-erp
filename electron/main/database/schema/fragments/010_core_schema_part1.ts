@@ -6,6 +6,7 @@ export const CORE_SCHEMA_PART1 = [
       school_name TEXT NOT NULL DEFAULT 'Mwingi Adventist School',
       school_motto TEXT, address TEXT, phone TEXT, email TEXT, logo_path TEXT,
       mpesa_paybill TEXT, sms_api_key TEXT, sms_api_secret TEXT, sms_sender_id TEXT,
+      school_type TEXT NOT NULL DEFAULT 'PUBLIC' CHECK(school_type IN ('PUBLIC', 'PRIVATE')),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     

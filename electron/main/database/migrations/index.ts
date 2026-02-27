@@ -28,6 +28,13 @@ import { up as accountingPeriodsUp } from './incremental/1021_accounting_periods
 import { up as expandJournalTypesUp } from './incremental/1022_expand_journal_entry_types.js'
 import { up as addDepartmentToJournalUp } from './incremental/1023_add_department_to_journal_entry.js'
 import { up as loginRateLimitUp } from './incremental/1024_login_rate_limit.js'
+import { up as devDatabaseHealthRemediationUp } from './incremental/1025_dev_database_health_remediation.js'
+import { up as voteHeadAndInstallmentsUp } from './incremental/1026_vote_head_and_installments.js'
+import { up as jssThreeAccountUp } from './incremental/1027_jss_three_account_architecture.js'
+import { up as procurementP2PUp } from './incremental/1028_procurement_p2p_workflow.js'
+import { up as mpesaReconciliationUp } from './incremental/1029_mpesa_reconciliation.js'
+import { up as schoolTypeConfigUp } from './incremental/1030_school_type_config.js'
+import { up as procurementIntegrationUp } from './incremental/1031_procurement_integration.js'
 
 import type * as Database from 'better-sqlite3'
 
@@ -84,6 +91,13 @@ const migrations: Migration[] = [
     { name: '1022_expand_journal_entry_types', fn: expandJournalTypesUp },
     { name: '1023_add_department_to_journal_entry', fn: addDepartmentToJournalUp },
     { name: '1024_login_rate_limit', fn: loginRateLimitUp },
+    { name: '1025_dev_database_health_remediation', fn: devDatabaseHealthRemediationUp },
+    { name: '1026_vote_head_and_installments', fn: voteHeadAndInstallmentsUp },
+    { name: '1027_jss_three_account_architecture', fn: jssThreeAccountUp },
+    { name: '1028_procurement_p2p_workflow', fn: procurementP2PUp },
+    { name: '1029_mpesa_reconciliation', fn: mpesaReconciliationUp },
+    { name: '1030_school_type_config', fn: schoolTypeConfigUp },
+    { name: '1031_procurement_integration', fn: procurementIntegrationUp },
 ]
 
 export function getRegisteredMigrationNames(): string[] {
