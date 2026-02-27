@@ -10,13 +10,13 @@ export interface SchoolInfo {
 /**
  * Fetch school name, motto, and logo (as base64 data URL) for PDF embedding.
  */
-export function getSchoolInfo(): SchoolInfo {
+export async function getSchoolInfo(): Promise<SchoolInfo> {
     const db = getDatabase()
     const row = db.prepare(
         'SELECT school_name, school_motto, logo_path FROM school_settings WHERE id = 1'
     ).get() as { school_name?: string; school_motto?: string; logo_path?: string } | undefined
 
-    const logoDataUrl = row?.logo_path ? getImageAsBase64DataUrl(row.logo_path) : null
+    const logoDataUrl = row?.logo_path ? await getImageAsBase64DataUrl(row.logo_path) : null
 
     return {
         name: row?.school_name || 'School',

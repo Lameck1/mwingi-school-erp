@@ -1,4 +1,5 @@
 import * as fs from 'node:fs'
+import * as fsp from 'node:fs/promises'
 import * as path from 'node:path'
 
 import { app } from '../electron-env'
@@ -30,7 +31,7 @@ function parseDataUrl(dataUrl: string): { buffer: Buffer; ext: string } {
  * Save an image from a base64 data URL to disk.
  * Returns the absolute path of the saved file.
  */
-export function saveImageFromDataUrl(dataUrl: string, subfolder: string, filename: string): string {
+export async function saveImageFromDataUrl(dataUrl: string, subfolder: string, filename: string): Promise<string> {
     const { buffer, ext } = parseDataUrl(dataUrl)
 
     // Limit file size to 5MB
@@ -42,7 +43,7 @@ export function saveImageFromDataUrl(dataUrl: string, subfolder: string, filenam
     const finalFilename = `${filename}.${ext}`
     const filePath = path.join(dir, finalFilename)
 
-    fs.writeFileSync(filePath, buffer)
+    await fsp.writeFile(filePath, buffer)
     return filePath
 }
 
@@ -50,16 +51,19 @@ export function saveImageFromDataUrl(dataUrl: string, subfolder: string, filenam
  * Read an image file from disk and return it as a base64 data URL.
  * Returns null if the file does not exist.
  */
-export function getImageAsBase64DataUrl(imagePath: string): string | null {
+export async function getImageAsBase64DataUrl(imagePath: string): Promise<string | null> {
     if (!imagePath) { return null }
 
     let finalPath = imagePath
-    if (!fs.existsSync(finalPath)) {
+    try {
+        await fsp.access(finalPath)
+    } catch {
         // Fallback: Check relative to userData/images
         const fallbackPath = path.join(app.getPath('userData'), 'images', imagePath)
-        if (fs.existsSync(fallbackPath)) {
+        try {
+            await fsp.access(fallbackPath)
             finalPath = fallbackPath
-        } else {
+        } catch {
             // Second fallback: if it's just a filename in a subfolder
             return null
         }
@@ -75,15 +79,18 @@ export function getImageAsBase64DataUrl(imagePath: string): string | null {
         svg: 'image/svg+xml',
     }
     const mime = mimeMap[ext] || 'image/png'
-    const buffer = fs.readFileSync(imagePath)
+    const buffer = await fsp.readFile(finalPath)
     return `data:${mime};base64,${buffer.toString('base64')}`
 }
 
 /**
  * Delete an image file from disk.
  */
-export function deleteImage(imagePath: string): void {
-    if (imagePath && fs.existsSync(imagePath)) {
-        fs.unlinkSync(imagePath)
+export async function deleteImage(imagePath: string): Promise<void> {
+    if (!imagePath) { return }
+    try {
+        await fsp.unlink(imagePath)
+    } catch {
+        // File may already be deleted
     }
 }

@@ -413,14 +413,14 @@ function registerLegacyReportCardHandlers(): void {
 }
 
 async function generateReportCardPdfs(reportCards: StudentReportCard[], folderLabel: string): Promise<Array<{ studentId: number; filePath: string }>> {
-  const schoolInfo = getSchoolInfo()
+  const schoolInfo = await getSchoolInfo()
   const db = getDatabase()
   const results: Array<{ studentId: number; filePath: string }> = []
 
   for (const card of reportCards) {
     // Fetch student photo path
     const studentRow = db.prepare('SELECT photo_path FROM student WHERE id = ?').get(card.student_id) as { photo_path?: string } | undefined
-    const studentPhoto = studentRow?.photo_path ? getImageAsBase64DataUrl(studentRow.photo_path) : undefined
+    const studentPhoto = studentRow?.photo_path ? await getImageAsBase64DataUrl(studentRow.photo_path) : undefined
 
     const html = buildReportCardHtml(card, schoolInfo, studentPhoto)
     const buffer = await renderHtmlToPdfBuffer(html)

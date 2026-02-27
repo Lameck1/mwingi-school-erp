@@ -53,7 +53,7 @@ AND(${NORMALIZED_INVOICE_AMOUNT_SQL} - COALESCE(fi.amount_paid, 0)) > 0`
             params.push(termId)
         }
 
-        query += ` ORDER BY balance DESC`
+        query += ` ORDER BY balance DESC LIMIT 500`
         return db.prepare(query).all(...params)
     })
 }

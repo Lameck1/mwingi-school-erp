@@ -555,13 +555,13 @@ export class ReportCardService {
                 first_name: student.first_name,
                 last_name: student.last_name,
                 stream_name: student.stream_name || 'N/A',
-                photo: student.photo_path ? getImageAsBase64DataUrl(student.photo_path) : null
+                photo: student.photo_path ? await getImageAsBase64DataUrl(student.photo_path) : null
             },
             ...(schoolSettings ? {
                 school: {
                     name: schoolSettings.school_name,
                     motto: schoolSettings.school_motto,
-                    logo: schoolSettings.logo_path ? getImageAsBase64DataUrl(schoolSettings.logo_path) : null,
+                    logo: schoolSettings.logo_path ? await getImageAsBase64DataUrl(schoolSettings.logo_path) : null,
                     address: schoolSettings.address,
                     email: schoolSettings.email,
                     phone: schoolSettings.phone

@@ -388,14 +388,21 @@ export class SystemMaintenanceService {
             VALUES (?, ?, ?, ?, ?, ?, ?)
         `)
 
-        for (const student of students) {
-            // Find subjects allocated to this student's stream
-            const allocatedSubjects = db.prepare(`
-                SELECT subject_id FROM subject_allocation 
-                WHERE academic_year_id = ? AND term_id = ? AND stream_id = ?
-            `).all(period.yearId, period.termId, student.stream_id) as Array<{ subject_id: number }>
+        const allAllocations = db.prepare(`
+            SELECT stream_id, subject_id FROM subject_allocation
+            WHERE academic_year_id = ? AND term_id = ?
+        `).all(period.yearId, period.termId) as Array<{ stream_id: number; subject_id: number }>
+        const allocationsByStream = new Map<number, number[]>()
+        for (const row of allAllocations) {
+            const list = allocationsByStream.get(row.stream_id) ?? []
+            list.push(row.subject_id)
+            allocationsByStream.set(row.stream_id, list)
+        }
 
-            for (const { subject_id } of allocatedSubjects) {
+        for (const student of students) {
+            const allocatedSubjectIds = allocationsByStream.get(student.stream_id) ?? []
+
+            for (const subject_id of allocatedSubjectIds) {
                 const subject = subjects.find(s => s.id === subject_id)
                 if (!subject) { continue }
 

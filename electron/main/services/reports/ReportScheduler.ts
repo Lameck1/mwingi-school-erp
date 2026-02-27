@@ -86,6 +86,7 @@ export class ReportScheduler {
     private async checkAndRunReports(): Promise<void> {
         try {
             const schedules = this.getActiveSchedules()
+            if (schedules.length === 0) { return }
             const now = new Date()
 
             for (const schedule of schedules) {
