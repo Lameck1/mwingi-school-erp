@@ -61,7 +61,7 @@ export class GrantTrackingService {
     }
 
     private columnExists(tableName: string, columnName: string): boolean {
-        const columns = this.db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>
+        const columns = this.db.prepare(`PRAGMA table_info("${tableName}")`).all() as Array<{ name: string }>
         return columns.some(column => column.name === columnName)
     }
 

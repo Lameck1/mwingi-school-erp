@@ -26,6 +26,17 @@ export interface RetentionPurgeSummary {
 const SAFE_IDENTIFIER = /^[A-Za-z_]\w*$/
 const SECONDS_PER_DAY = 24 * 60 * 60
 
+const PURGEABLE_TABLES = new Set<string>([
+  'audit_log',
+  'notification',
+  'sms_log',
+  'email_log',
+  'login_attempt',
+  'report_schedule_log',
+  'attendance',
+  'backup_log',
+])
+
 export class RetentionService {
   private readonly db: Database.Database
   private readonly nowProvider: () => Date
@@ -70,6 +81,9 @@ export class RetentionService {
     if (!SAFE_IDENTIFIER.test(tableName)) {
       return { table: tableName, deleted: 0, skipped: true, reason: 'Unsafe table name' }
     }
+    if (!PURGEABLE_TABLES.has(tableName)) {
+      return { table: tableName, deleted: 0, skipped: true, reason: 'Table not in purge allowlist' }
+    }
 
     if (!this.tableExists(tableName)) {
       return { table: tableName, deleted: 0, skipped: true, reason: 'Table missing' }
@@ -82,9 +96,9 @@ export class RetentionService {
 
     const cutoffUnix = Math.floor(this.nowProvider().getTime() / 1000) - (config.retention_days * SECONDS_PER_DAY)
     const purgeSql = `
-      DELETE FROM ${tableName}
-      WHERE ${dateColumn} IS NOT NULL
-        AND datetime(${dateColumn}) < datetime(?, 'unixepoch')
+      DELETE FROM "${tableName}"
+      WHERE "${dateColumn}" IS NOT NULL
+        AND datetime("${dateColumn}") < datetime(?, 'unixepoch')
     `
     const deleted = this.db.prepare(purgeSql).run(cutoffUnix).changes
 
@@ -109,7 +123,7 @@ export class RetentionService {
   }
 
   private resolveDateColumn(tableName: string): string | null {
-    const columns = this.db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>
+    const columns = this.db.prepare(`PRAGMA table_info("${tableName}")`).all() as Array<{ name: string }>
     const names = new Set(columns.map((column) => column.name))
     if (names.has('created_at')) {
       return 'created_at'
