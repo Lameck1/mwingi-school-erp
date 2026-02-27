@@ -1,5 +1,5 @@
 import * as crypto from 'node:crypto'
-import * as fs from 'node:fs'
+import * as fsp from 'node:fs/promises'
 import * as path from 'node:path'
 
 import { isDatabaseInitialized, getDatabasePath, backupDatabase, closeDatabase } from '../database'
@@ -26,33 +26,30 @@ export class BackupService {
         return path.join(dir, `.${base}.tmp-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`)
     }
 
-    private static replaceFileAtomically(tempPath: string, targetPath: string): void {
+    private static async replaceFileAtomically(tempPath: string, targetPath: string): Promise<void> {
         const previousPath = `${targetPath}.previous-${Date.now()}`
         let movedPrevious = false
 
         try {
-            if (fs.existsSync(targetPath)) {
-                fs.renameSync(targetPath, previousPath)
+            try {
+                await fsp.access(targetPath)
+                await fsp.rename(targetPath, previousPath)
                 movedPrevious = true
-            }
+            } catch { /* targetPath doesn't exist, nothing to move */ }
 
-            fs.renameSync(tempPath, targetPath)
+            await fsp.rename(tempPath, targetPath)
 
-            if (movedPrevious && fs.existsSync(previousPath)) {
-                fs.unlinkSync(previousPath)
+            if (movedPrevious) {
+                try { await fsp.unlink(previousPath) } catch { /* ignore cleanup */ }
             }
         } catch (error) {
-            if (movedPrevious && fs.existsSync(previousPath)) {
-                if (fs.existsSync(targetPath)) {
-                    try { fs.unlinkSync(targetPath) } catch { /* ignore restore cleanup errors */ }
-                }
-                try { fs.renameSync(previousPath, targetPath) } catch { /* ignore restore rollback errors */ }
+            if (movedPrevious) {
+                try { await fsp.unlink(targetPath) } catch { /* ignore restore cleanup errors */ }
+                try { await fsp.rename(previousPath, targetPath) } catch { /* ignore restore rollback errors */ }
             }
             throw error
         } finally {
-            if (fs.existsSync(tempPath)) {
-                try { fs.unlinkSync(tempPath) } catch { /* ignore temp cleanup errors */ }
-            }
+            try { await fsp.unlink(tempPath) } catch { /* ignore temp cleanup errors */ }
         }
     }
 
@@ -80,12 +77,17 @@ export class BackupService {
     }
 
     static async init() {
-        if (!fs.existsSync(this.BACKUP_DIR)) {
-            fs.mkdirSync(this.BACKUP_DIR, { recursive: true })
-        }
+        await fsp.mkdir(this.BACKUP_DIR, { recursive: true })
 
         // Start Auto-Backup Scheduler
         this.startScheduler()
+    }
+
+    static stopScheduler() {
+        if (this.schedulerInterval) {
+            clearInterval(this.schedulerInterval)
+            this.schedulerInterval = null
+        }
     }
 
     private static startScheduler() {
@@ -93,7 +95,7 @@ export class BackupService {
         // Check every hour
         this.schedulerInterval = setInterval(() => {
             void (async () => {
-            const backups = this.listBackups()
+            const backups = await this.listBackups()
             if (backups.length === 0) {
                 log.info('No backups found. Creating initial auto-backup...')
                 await this.createBackup('auto')
@@ -124,16 +126,11 @@ export class BackupService {
 
             log.info(`Starting backup to ${backupPath}...`)
             await backupDatabase(tempPath)
-            if (!this.verifyBackupIntegrity(tempPath)) {
+            if (!(await this.verifyBackupIntegrity(tempPath))) {
                 throw new Error('Created backup failed integrity validation')
             }
-            this.replaceFileAtomically(tempPath, backupPath)
+            await this.replaceFileAtomically(tempPath, backupPath)
             log.info('Backup completed.')
-
-            // Validate encryption? 
-            // The backup uses the same key as the source DB automatically with better-sqlite3 backup API?
-            // "If the destination database does not exist, it is created with the same page size and encryption settings as the source database."
-            // So yes, it is encrypted.
 
             await this.cleanupOldBackups()
 
@@ -164,17 +161,15 @@ export class BackupService {
 
         try {
             const dir = path.dirname(resolved)
-            if (!fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true })
-            }
+            await fsp.mkdir(dir, { recursive: true })
             const tempPath = this.createTempPath(targetPath)
 
             log.info(`Starting backup to ${targetPath}...`)
             await backupDatabase(tempPath)
-            if (!this.verifyBackupIntegrity(tempPath)) {
+            if (!(await this.verifyBackupIntegrity(tempPath))) {
                 throw new Error('Created backup failed integrity validation')
             }
-            this.replaceFileAtomically(tempPath, targetPath)
+            await this.replaceFileAtomically(tempPath, targetPath)
             log.info('Backup completed.')
 
             return { success: true, path: targetPath }
@@ -184,21 +179,23 @@ export class BackupService {
         }
     }
 
-    static listBackups(): BackupInfo[] {
-        if (!fs.existsSync(this.BACKUP_DIR)) {return []}
+    static async listBackups(): Promise<BackupInfo[]> {
+        try {
+            await fsp.access(this.BACKUP_DIR)
+        } catch {
+            return []
+        }
 
         try {
-            const files = fs.readdirSync(this.BACKUP_DIR)
-                .filter(f => f.endsWith('.sqlite'))
-                .map(f => {
-                    const stats = fs.statSync(path.join(this.BACKUP_DIR, f))
-                    return {
-                        filename: f,
-                        size: stats.size,
-                        created_at: stats.mtime
-                    }
+            const entries = await fsp.readdir(this.BACKUP_DIR)
+            const sqliteFiles = entries.filter(f => f.endsWith('.sqlite'))
+            const files: BackupInfo[] = await Promise.all(
+                sqliteFiles.map(async (f) => {
+                    const stats = await fsp.stat(path.join(this.BACKUP_DIR, f))
+                    return { filename: f, size: stats.size, created_at: stats.mtime }
                 })
-                .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
+            )
+            files.sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
             return files
         } catch (e) {
             log.error('Failed to list backups', e)
@@ -207,7 +204,7 @@ export class BackupService {
     }
 
     private static async cleanupOldBackups() {
-        const backups = this.listBackups()
+        const backups = await this.listBackups()
         if (backups.length === 0) {
             return
         }
@@ -240,7 +237,7 @@ export class BackupService {
                 continue
             }
             try {
-                fs.unlinkSync(path.join(this.BACKUP_DIR, backup.filename))
+                await fsp.unlink(path.join(this.BACKUP_DIR, backup.filename))
                 log.info(`Deleted old backup: ${backup.filename}`)
             } catch (e) {
                 log.error(`Failed to delete old backup ${backup.filename}`, e)
@@ -248,19 +245,18 @@ export class BackupService {
         }
     }
 
-    private static loadSqliteDriver() {
+    private static async loadSqliteDriver() {
         try {
-             
-            const cipherModule = require('better-sqlite3-multiple-ciphers')
+            const cipherModule = await import('better-sqlite3-multiple-ciphers')
             return cipherModule.default || cipherModule
         } catch {
-             
-            return require('better-sqlite3')
+            const fallback = await import('better-sqlite3')
+            return fallback.default || fallback
         }
     }
 
-    private static tryIntegrityCheck(backupPath: string, key?: string): boolean {
-        const DatabaseDriver = this.loadSqliteDriver()
+    private static async tryIntegrityCheck(backupPath: string, key?: string): Promise<boolean> {
+        const DatabaseDriver = await this.loadSqliteDriver()
         type SqliteHandle = {
             pragma(cmd: string, opts?: { simple: boolean }): unknown
             close(): void
@@ -288,13 +284,13 @@ export class BackupService {
         }
     }
 
-    private static verifyBackupIntegrity(backupPath: string): boolean {
+    private static async verifyBackupIntegrity(backupPath: string): Promise<boolean> {
         try {
             const key = getEncryptionKey()
-            if (this.tryIntegrityCheck(backupPath, key)) {
+            if (await this.tryIntegrityCheck(backupPath, key)) {
                 return true
             }
-            if (this.tryIntegrityCheck(backupPath)) {
+            if (await this.tryIntegrityCheck(backupPath)) {
                 return true
             }
             log.warn(`Backup ${backupPath} failed integrity checks for encrypted and plain modes`)
@@ -313,10 +309,10 @@ export class BackupService {
         const dbPath = getDatabasePath()
         const tempRestorePath = this.createTempPath(dbPath)
 
-        if (!fs.existsSync(backupPath)) {throw new Error('Backup file not found')}
+        try { await fsp.access(backupPath) } catch { throw new Error('Backup file not found') }
 
         // Integrity check before restore
-        if (!this.verifyBackupIntegrity(backupPath)) {
+        if (!(await this.verifyBackupIntegrity(backupPath))) {
             log.error('Restore aborted: backup file failed integrity check')
             return false
         }
@@ -334,25 +330,11 @@ export class BackupService {
             closeDatabase()
 
             // Restore through temp swap to avoid partial file replacement.
-            fs.copyFileSync(backupPath, tempRestorePath)
-            this.replaceFileAtomically(tempRestorePath, dbPath)
+            await fsp.copyFile(backupPath, tempRestorePath)
+            await this.replaceFileAtomically(tempRestorePath, dbPath)
 
             // Also copy WAL/SHM sidecar files from backup if they exist
-            const walPath = `${backupPath}-wal`
-            const shmPath = `${backupPath}-shm`
-            const targetWalPath = `${dbPath}-wal`
-            const targetShmPath = `${dbPath}-shm`
-
-            if (fs.existsSync(walPath)) {
-                fs.copyFileSync(walPath, targetWalPath)
-            } else if (fs.existsSync(targetWalPath)) {
-                fs.unlinkSync(targetWalPath)
-            }
-            if (fs.existsSync(shmPath)) {
-                fs.copyFileSync(shmPath, targetShmPath)
-            } else if (fs.existsSync(targetShmPath)) {
-                fs.unlinkSync(targetShmPath)
-            }
+            await this.restoreSidecarFiles(backupPath, dbPath)
 
             // Relaunch app to re-init DB with restored data
             app.relaunch()
@@ -361,11 +343,18 @@ export class BackupService {
             return true
         } catch (e) {
             log.error('Restore failed:', e)
-            if (fs.existsSync(tempRestorePath)) {
-                try { fs.unlinkSync(tempRestorePath) } catch { /* ignore cleanup errors */ }
-            }
+            try { await fsp.unlink(tempRestorePath) } catch { /* ignore cleanup errors */ }
             return false
         }
     }
-}
 
+    private static async restoreSidecarFiles(backupPath: string, dbPath: string): Promise<void> {
+        for (const ext of ['-wal', '-shm']) {
+            const src = `${backupPath}${ext}`
+            const dest = `${dbPath}${ext}`
+            try { await fsp.access(src); await fsp.copyFile(src, dest) } catch {
+                try { await fsp.unlink(dest) } catch { /* no sidecar to clean */ }
+            }
+        }
+    }
+}

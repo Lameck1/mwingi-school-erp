@@ -18,7 +18,7 @@ export function registerBackupHandlers(): void {
         return { ...result, cancelled: false }
     })
 
-    validatedHandler('backup:getList', ROLES.ADMIN_ONLY, z.void(), () => {
+    validatedHandler('backup:getList', ROLES.ADMIN_ONLY, z.void(), async () => {
         return BackupService.listBackups()
     })
 
