@@ -3,6 +3,8 @@ import { DoubleEntryJournalService } from '../accounting/DoubleEntryJournalServi
 import { SystemAccounts } from '../accounting/SystemAccounts'
 import { BaseService } from '../base/BaseService'
 
+export type TransactionType = 'IN' | 'OUT' | 'ADJUSTMENT'
+
 export interface InventoryItem {
     id: number
     item_code: string
@@ -24,7 +26,7 @@ export interface InventoryItem {
 export interface StockTransaction {
     id: number
     item_id: number
-    transaction_type: 'IN' | 'OUT' | 'ADJUSTMENT'
+    transaction_type: TransactionType
     quantity: number
     unit_price: number
     transaction_date: string
@@ -77,7 +79,7 @@ export interface Supplier {
 type AdjustStockArgs = [
     itemId: number,
     quantity: number,
-    type: 'IN' | 'OUT' | 'ADJUSTMENT',
+    type: TransactionType,
     userId: number,
     notes?: string,
     unitCost?: number
@@ -110,6 +112,7 @@ interface InventoryItemRow {
 export class InventoryService extends BaseService<InventoryItem, CreateInventoryItemData, Partial<CreateInventoryItemData>, InventoryFilters> {
     protected getTableName(): string { return 'inventory_item' }
     protected getPrimaryKey(): string { return 'id' }
+    protected override getTableAlias(): string { return 'i' }
 
     protected buildSelectQuery(): string {
         return `
@@ -220,7 +223,7 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
 
     // Custom Methods
 
-    private computeStockLevels(item: InventoryItem, quantity: number, type: 'IN' | 'OUT' | 'ADJUSTMENT'): StockComputation {
+    private computeStockLevels(item: InventoryItem, quantity: number, type: TransactionType): StockComputation {
         const currentStock = item.current_stock
 
         if (type === 'ADJUSTMENT') {
@@ -239,6 +242,22 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
         }
     }
 
+    /**
+     * Determine GL account codes and journal entry type for a stock movement.
+     */
+    private resolveJournalAccounts(change: number, type: TransactionType): { debitCode: string; creditCode: string; jeType: string } {
+        if (change > 0) {
+            const creditCode = type === 'IN' ? SystemAccounts.ACCOUNTS_PAYABLE : SystemAccounts.INVENTORY_EXPENSE
+            const jeType = type === 'IN' ? 'STOCK_PURCHASE' : 'STOCK_ADJUSTMENT_GAIN'
+            return { debitCode: SystemAccounts.INVENTORY_ASSET, creditCode, jeType }
+        }
+        return {
+            debitCode: SystemAccounts.INVENTORY_EXPENSE,
+            creditCode: SystemAccounts.INVENTORY_ASSET,
+            jeType: type === 'OUT' ? 'STOCK_USAGE' : 'STOCK_ADJUSTMENT_LOSS',
+        }
+    }
+
     async adjustStock(...[itemId, quantity, type, userId, notes, unitCost]: AdjustStockArgs): Promise<{ success: boolean; error?: string }> {
         const item = await this.findById(itemId)
         if (!item) { return { success: false, error: 'Item not found' } }
@@ -248,15 +267,12 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
         if (finalQty < 0) { return { success: false, error: 'Insufficient stock' } }
 
         // Use provided unit cost for IN/ADJUSTMENT, otherwise fallback to item's current cost
-        // For OUT, we typically use the item's current cost (FIFO/LIFO/Avg not strictly implemented here, assuming standard cost)
         const movementCost = (type === 'IN' && unitCost !== undefined) ? unitCost : item.unit_cost
 
         this.db.transaction(() => {
-            // Update stock level
             this.db.prepare('UPDATE inventory_item SET current_stock = ? WHERE id = ?')
                 .run(finalQty, itemId)
 
-            // If it's an IN movement with a new cost, update the item's unit cost (Last Price)
             if (type === 'IN' && unitCost !== undefined && unitCost > 0) {
                 this.db.prepare('UPDATE inventory_item SET unit_cost = ? WHERE id = ?')
                     .run(unitCost, itemId)
@@ -269,42 +285,18 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
                 ) VALUES (?, ?, ?, ?, ?, CURRENT_DATE, ?)
             `).run(itemId, type, Math.abs(change), movementCost, notes || null, userId)
 
-            // Create Journal Entry
-            // Determine accounting impact
+            // Create Journal Entry for the accounting impact
             const value = Math.abs(change) * movementCost;
             if (value > 0) {
                 const journalService = new DoubleEntryJournalService(this.db);
-                let debitCode: string;
-                let creditCode: string;
-                let jeType: string;
-
-                if (change > 0) {
-                    // Asset Increase (Debit Inventory)
-                    debitCode = SystemAccounts.INVENTORY_ASSET;
-
-                    if (type === 'IN') {
-                        // Purchase (Credit AP)
-                        creditCode = SystemAccounts.ACCOUNTS_PAYABLE;
-                        jeType = 'STOCK_PURCHASE';
-                    } else {
-                        // Adjustment Gain (Credit Expense/Gain)
-                        creditCode = SystemAccounts.INVENTORY_EXPENSE;
-                        jeType = 'STOCK_ADJUSTMENT_GAIN';
-                    }
-                } else {
-                    // Asset Decrease (Credit Inventory)
-                    creditCode = SystemAccounts.INVENTORY_ASSET;
-                    // Debit Expense (Usage/Loss)
-                    debitCode = SystemAccounts.INVENTORY_EXPENSE;
-                    jeType = type === 'OUT' ? 'STOCK_USAGE' : 'STOCK_ADJUSTMENT_LOSS';
-                }
+                const { debitCode, creditCode, jeType } = this.resolveJournalAccounts(change, type)
 
                 journalService.createJournalEntrySync({
                     entry_date: new Date().toISOString(),
                     entry_type: jeType,
                     description: `Stock ${type}: ${item.item_name} (Qty: ${Math.abs(change)})`,
                     created_by_user_id: userId,
-                    ...(item.supplier_id !== null ? { supplier_id: item.supplier_id } : {}),
+                    ...(item.supplier_id == null ? {} : { supplier_id: item.supplier_id }),
                     lines: [
                         {
                             gl_account_code: debitCode,

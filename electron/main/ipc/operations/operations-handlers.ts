@@ -31,7 +31,7 @@ export const registerOperationsHandlers = () => {
       expense_type: params.expense_type,
       description: params.description,
       recorded_by: actor.id,
-      ...(params.payment_method !== undefined ? { payment_method: params.payment_method } : {})
+      ...(params.payment_method === undefined ? {} : { payment_method: params.payment_method })
     }
 
     return boardingService.recordBoardingExpense(sanitizedParams)
@@ -60,8 +60,8 @@ export const registerOperationsHandlers = () => {
       distance_km: params.distance_km,
       estimated_students: params.estimated_students,
       budget_per_term_cents: params.budget_per_term_cents,
-      ...(params.driver_id !== undefined ? { driver_id: params.driver_id } : {}),
-      ...(params.vehicle_registration !== undefined ? { vehicle_registration: params.vehicle_registration } : {})
+      ...(params.driver_id === undefined ? {} : { driver_id: params.driver_id }),
+      ...(params.vehicle_registration === undefined ? {} : { vehicle_registration: params.vehicle_registration })
     })
   })
 

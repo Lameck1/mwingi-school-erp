@@ -28,6 +28,14 @@ interface GLAccountOption {
     label: string
 }
 
+interface ExpenseFormState {
+    facility_id: string
+    expense_type: string
+    amount: string
+    description: string
+    gl_account_code: string
+}
+
 const resolveTermNumber = (termName?: string, termNumber?: number): number | null => {
     if (typeof termNumber === 'number' && Number.isInteger(termNumber) && termNumber > 0) {
         return termNumber
@@ -35,14 +43,116 @@ const resolveTermNumber = (termName?: string, termNumber?: number): number | nul
     if (!termName) {
         return null
     }
-    const parsed = Number.parseInt(termName.replace(/\D/g, ''), 10)
+    const parsed = Number.parseInt(termName.replaceAll(/\D/g, ''), 10)
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+const renderOccupancyRate = (row: BoardingFacility) => {
+    const rate = row.capacity > 0 ? (row.current_occupancy / row.capacity) * 100 : 0
+    let badgeClass = 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400'
+    if (rate >= 90) {
+        badgeClass = 'bg-green-500/15 text-green-600 dark:text-green-400'
+    } else if (rate >= 70) {
+        badgeClass = 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
+    }
+    return (
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeClass}`}>
+            {rate.toFixed(1)}%
+        </span>
+    )
+}
+
+const renderActiveStatus = (row: BoardingFacility) => (
+    <span className={`px-2 py-1 rounded-full text-xs ${row.is_active ? 'bg-green-500/15 text-green-600 dark:text-green-400' : 'bg-gray-100 text-foreground'}`}>
+        {row.is_active ? 'Active' : 'Inactive'}
+    </span>
+)
+
+interface RecordExpenseModalProps {
+    isOpen: boolean
+    onClose: () => void
+    onSubmit: (e: React.SyntheticEvent) => void
+    expenseForm: ExpenseFormState
+    setExpenseForm: React.Dispatch<React.SetStateAction<ExpenseFormState>>
+    facilities: BoardingFacility[]
+    expenseAccounts: GLAccountOption[]
+}
+
+function RecordExpenseModal({ isOpen, onClose, onSubmit, expenseForm, setExpenseForm, facilities, expenseAccounts }: Readonly<RecordExpenseModalProps>) {
+    return (
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Record Boarding Expense"
+        >
+            <form onSubmit={onSubmit} className="space-y-4">
+                <Select
+                    label="Facility"
+                    value={expenseForm.facility_id}
+                    onChange={(val) => setExpenseForm({ ...expenseForm, facility_id: String(val) })}
+                    options={facilities.map(f => ({ value: f.id, label: f.name }))}
+                />
+                
+                <Select
+                    label="Expense Type"
+                    value={expenseForm.expense_type}
+                    onChange={(val) => setExpenseForm({ ...expenseForm, expense_type: String(val) })}
+                    options={[
+                        { value: 'FOOD', label: 'Food' },
+                        { value: 'UTILITIES', label: 'Utilities' },
+                        { value: 'BEDDING', label: 'Bedding' },
+                        { value: 'STAFF', label: 'Staff' },
+                        { value: 'MAINTENANCE', label: 'Maintenance' },
+                        { value: 'OTHER', label: 'Other' }
+                    ]}
+                />
+
+                <div className="space-y-1.5">
+                    <label htmlFor="boarding-expense-amount" className="text-xs font-bold text-foreground/60 px-1">Amount (KES)</label>
+                    <Input
+                        id="boarding-expense-amount"
+                        type="number"
+                        value={expenseForm.amount}
+                        onChange={(e) => setExpenseForm({...expenseForm, amount: e.target.value})}
+                        required
+                    />
+                </div>
+
+                <div className="space-y-1.5">
+                    <label htmlFor="boarding-expense-description" className="text-xs font-bold text-foreground/60 px-1">Description</label>
+                    <Input
+                        id="boarding-expense-description"
+                        value={expenseForm.description}
+                        onChange={(e) => setExpenseForm({...expenseForm, description: e.target.value})}
+                        required
+                    />
+                </div>
+
+                <Select
+                    label="Expense GL Account"
+                    value={expenseForm.gl_account_code}
+                    onChange={(val) => setExpenseForm({ ...expenseForm, gl_account_code: String(val) })}
+                    options={expenseAccounts.map((account) => ({ value: account.code, label: account.label }))}
+                />
+
+                <div className="flex justify-end gap-2 pt-4">
+                    <button type="button" onClick={onClose} className="btn btn-secondary">
+                        Cancel
+                    </button>
+                    <button type="submit" className="btn btn-primary">
+                        Record Expense
+                    </button>
+                </div>
+            </form>
+        </Modal>
+    )
 }
 
 export default function BoardingProfitability() {
     const { showToast } = useToast()
-    const { currentAcademicYear, currentTerm } = useAppStore()
-    const { user } = useAuthStore()
+    const currentAcademicYear = useAppStore((s) => s.currentAcademicYear)
+    const currentTerm = useAppStore((s) => s.currentTerm)
+    const user = useAuthStore((s) => s.user)
     const [loading, setLoading] = useState(false)
     const [facilities, setFacilities] = useState<BoardingFacility[]>([])
     const [summary, setSummary] = useState<BoardingSummary | null>(null)
@@ -50,13 +160,7 @@ export default function BoardingProfitability() {
     
     // Expense Recording State
     const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false)
-    const [expenseForm, setExpenseForm] = useState<{
-        facility_id: string;
-        expense_type: string;
-        amount: string;
-        description: string;
-        gl_account_code: string;
-    }>({
+    const [expenseForm, setExpenseForm] = useState<ExpenseFormState>({
         facility_id: '',
         expense_type: 'FOOD',
         amount: '',
@@ -82,8 +186,8 @@ export default function BoardingProfitability() {
         try {
             // Fetch facilities with their profitability data
             const [facilitiesRaw, glAccountsRaw] = await Promise.all([
-                globalThis.electronAPI.getBoardingFacilities(),
-                globalThis.electronAPI.getGLAccounts({ type: 'EXPENSE', isActive: true })
+                globalThis.electronAPI.operations.getBoardingFacilities(),
+                globalThis.electronAPI.finance.getGLAccounts({ type: 'EXPENSE', isActive: true })
             ])
             const facilitiesData = unwrapArrayResult(facilitiesRaw, 'Failed to load boarding facilities')
             setFacilities(facilitiesData)
@@ -153,7 +257,7 @@ export default function BoardingProfitability() {
                 return
             }
             unwrapIPCResult(
-                await globalThis.electronAPI.recordBoardingExpense({
+                await globalThis.electronAPI.operations.recordBoardingExpense({
                 ...expenseForm,
                 facility_id: Number.parseInt(expenseForm.facility_id, 10),
                 amount_cents: shillingsToCents(expenseForm.amount),
@@ -180,30 +284,13 @@ export default function BoardingProfitability() {
             key: 'occupancy_rate',
             header: 'Occupancy Rate', 
             accessorKey: 'occupancy_rate',
-            cell: (row: BoardingFacility) => {
-                const rate = row.capacity > 0 ? (row.current_occupancy / row.capacity) * 100 : 0
-                let badgeClass = 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400'
-                if (rate >= 90) {
-                    badgeClass = 'bg-green-500/15 text-green-600 dark:text-green-400'
-                } else if (rate >= 70) {
-                    badgeClass = 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
-                }
-                return (
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${badgeClass}`}>
-                        {rate.toFixed(1)}%
-                    </span>
-                )
-            }
+            cell: renderOccupancyRate
         },
         {
             key: 'is_active',
             header: 'Status',
             accessorKey: 'is_active',
-            cell: (row: BoardingFacility) => (
-                <span className={`px-2 py-1 rounded-full text-xs ${row.is_active ? 'bg-green-500/15 text-green-600 dark:text-green-400' : 'bg-gray-100 text-foreground'}`}>
-                    {row.is_active ? 'Active' : 'Inactive'}
-                </span>
-            )
+            cell: renderActiveStatus
         }
     ]
 
@@ -261,72 +348,15 @@ export default function BoardingProfitability() {
                 />
             </div>
 
-            {/* Record Expense Modal */}
-            <Modal
+            <RecordExpenseModal
                 isOpen={isExpenseModalOpen}
                 onClose={closeExpenseModal}
-                title="Record Boarding Expense"
-            >
-                <form onSubmit={handleRecordExpense} className="space-y-4">
-                    <Select
-                        label="Facility"
-                        value={expenseForm.facility_id}
-                        onChange={(val) => setExpenseForm({ ...expenseForm, facility_id: String(val) })}
-                        options={facilities.map(f => ({ value: f.id, label: f.name }))}
-                    />
-                    
-                    <Select
-                        label="Expense Type"
-                        value={expenseForm.expense_type}
-                        onChange={(val) => setExpenseForm({ ...expenseForm, expense_type: String(val) })}
-                        options={[
-                            { value: 'FOOD', label: 'Food' },
-                            { value: 'UTILITIES', label: 'Utilities' },
-                            { value: 'BEDDING', label: 'Bedding' },
-                            { value: 'STAFF', label: 'Staff' },
-                            { value: 'MAINTENANCE', label: 'Maintenance' },
-                            { value: 'OTHER', label: 'Other' }
-                        ]}
-                    />
-
-                    <div className="space-y-1.5">
-                        <label htmlFor="boarding-expense-amount" className="text-xs font-bold text-foreground/60 px-1">Amount (KES)</label>
-                        <Input
-                            id="boarding-expense-amount"
-                            type="number"
-                            value={expenseForm.amount}
-                            onChange={(e) => setExpenseForm({...expenseForm, amount: e.target.value})}
-                            required
-                        />
-                    </div>
-
-                    <div className="space-y-1.5">
-                        <label htmlFor="boarding-expense-description" className="text-xs font-bold text-foreground/60 px-1">Description</label>
-                        <Input
-                            id="boarding-expense-description"
-                            value={expenseForm.description}
-                            onChange={(e) => setExpenseForm({...expenseForm, description: e.target.value})}
-                            required
-                        />
-                    </div>
-
-                    <Select
-                        label="Expense GL Account"
-                        value={expenseForm.gl_account_code}
-                        onChange={(val) => setExpenseForm({ ...expenseForm, gl_account_code: String(val) })}
-                        options={expenseAccounts.map((account) => ({ value: account.code, label: account.label }))}
-                    />
-
-                    <div className="flex justify-end gap-2 pt-4">
-                        <button type="button" onClick={closeExpenseModal} className="btn btn-secondary">
-                            Cancel
-                        </button>
-                        <button type="submit" className="btn btn-primary">
-                            Record Expense
-                        </button>
-                    </div>
-                </form>
-            </Modal>
+                onSubmit={handleRecordExpense}
+                expenseForm={expenseForm}
+                setExpenseForm={setExpenseForm}
+                facilities={facilities}
+                expenseAccounts={expenseAccounts}
+            />
         </div>
     )
 }

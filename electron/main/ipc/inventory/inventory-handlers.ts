@@ -51,8 +51,8 @@ export function registerInventoryHandlers() {
             reorder_level: data.reorder_level,
             unit_cost: data.unit_cost,
             unit_price: data.unit_price,
-            ...(data.supplier_id !== undefined ? { supplier_id: data.supplier_id } : {}),
-            ...(data.description !== undefined ? { description: data.description } : {})
+            ...(data.supplier_id === undefined ? {} : { supplier_id: data.supplier_id }),
+            ...(data.description === undefined ? {} : { description: data.description })
         }
         return svc().create(normalized, actor.id)
     })

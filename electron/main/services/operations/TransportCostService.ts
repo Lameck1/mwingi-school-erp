@@ -100,7 +100,7 @@ export class TransportCostService {
 
     const fiscalYear = Number.parseInt(current.year_name, 10)
     if (!Number.isFinite(fiscalYear)) {
-      throw new Error(`Active academic year '${current.year_name}' is not numeric`)
+      throw new TypeError(`Active academic year '${current.year_name}' is not numeric`)
     }
 
     return {
@@ -119,7 +119,7 @@ export class TransportCostService {
   }
 
   private assertValidGLAccount(glAccountCode: string): void {
-    if (!glAccountCode || !glAccountCode.trim()) {
+    if (!glAccountCode?.trim()) {
       throw new Error('GL account code is required')
     }
 

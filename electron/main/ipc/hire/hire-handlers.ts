@@ -156,8 +156,8 @@ export function registerHireHandlers(): void {
             client_id: data.client_id,
             hire_date: data.hire_date,
             total_amount: data.total_amount,
-            ...(data.return_date !== undefined ? { return_date: data.return_date } : {}),
-            ...(data.status !== undefined ? { status: data.status } : {})
+            ...(data.return_date === undefined ? {} : { return_date: data.return_date }),
+            ...(data.status === undefined ? {} : { status: data.status })
         }
         return svc().createBooking(normalized, actor.id)
     })
