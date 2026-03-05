@@ -824,6 +824,10 @@ export class DoubleEntryJournalService {
    * Helper: Check if approval required
    */
   private checkApprovalRequiredSync(data: JournalEntryData): boolean {
+    if (!this.tableExists('approval_rule')) {
+      return false;
+    }
+
     const totalAmount = data.lines.reduce((sum, line) => sum + line.debit_amount, 0);
 
     const rule = this.db.prepare(`

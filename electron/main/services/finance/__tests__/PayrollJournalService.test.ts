@@ -49,8 +49,8 @@ function seedGLAccounts(db: Database.Database): void {
 function seedPayrollData(db: Database.Database): number {
   // Create payroll period
   const period = db.prepare(`
-    INSERT INTO payroll_period (period_name, start_date, end_date, status)
-    VALUES ('June 2025', '2025-06-01', '2025-06-30', 'APPROVED')
+    INSERT INTO payroll_period (period_name, start_date, end_date, status, month, year)
+    VALUES ('June 2025', '2025-06-01', '2025-06-30', 'APPROVED', 6, 2025)
   `).run()
   const periodId = period.lastInsertRowid as number
 
@@ -59,8 +59,8 @@ function seedPayrollData(db: Database.Database): number {
   db.prepare(`INSERT INTO staff (staff_number, first_name, last_name, department, job_title) VALUES ('S002', 'Bob', 'Ochieng', 'Admin', 'Clerk')`).run()
 
   // Create payroll records
-  db.prepare('INSERT INTO payroll (period_id, staff_id, basic_salary, gross_salary, net_salary) VALUES (?, 1, 5000000, 5500000, 4200000)').run(periodId)
-  db.prepare('INSERT INTO payroll (period_id, staff_id, basic_salary, gross_salary, net_salary) VALUES (?, 2, 3500000, 3800000, 3000000)').run(periodId)
+  db.prepare('INSERT INTO payroll (period_id, staff_id, basic_salary, gross_salary, total_deductions, net_salary) VALUES (?, 1, 5000000, 5500000, 1300000, 4200000)').run(periodId)
+  db.prepare('INSERT INTO payroll (period_id, staff_id, basic_salary, gross_salary, total_deductions, net_salary) VALUES (?, 2, 3500000, 3800000, 800000, 3000000)').run(periodId)
 
   // Create deductions
   const p1 = db.prepare('SELECT id FROM payroll WHERE staff_id = 1 AND period_id = ?').get(periodId) as { id: number }
@@ -199,8 +199,8 @@ describe('postStatutoryDeductions', () => {
   it('returns no deductions message for empty period', async () => {
     // Period with no payroll records
     const period = db.prepare(`
-      INSERT INTO payroll_period (period_name, start_date, end_date, status)
-      VALUES ('Empty Period', '2025-07-01', '2025-07-31', 'APPROVED')
+      INSERT INTO payroll_period (period_name, start_date, end_date, status, month, year)
+      VALUES ('Empty Period', '2025-07-01', '2025-07-31', 'APPROVED', 7, 2025)
     `).run()
     const periodId = period.lastInsertRowid as number
 
@@ -360,8 +360,8 @@ describe('postSalaryExpense – edge cases', () => {
   it('returns success with 0 journal entries for period with no payroll records', async () => {
     // seed period without payroll records
     const period = db.prepare(`
-      INSERT INTO payroll_period (period_name, start_date, end_date, status)
-      VALUES ('Empty Month', '2025-07-01', '2025-07-31', 'APPROVED')
+      INSERT INTO payroll_period (period_name, start_date, end_date, status, month, year)
+      VALUES ('Empty Month', '2025-07-01', '2025-07-31', 'APPROVED', 7, 2025)
     `).run()
     const result = await svc.postSalaryExpense(period.lastInsertRowid as number, 1)
     expect(result.success).toBe(true)
@@ -388,12 +388,12 @@ describe('postSalaryPayment', () => {
   it('returns error for zero net salary', async () => {
     // Create period + payroll record with net_salary = 0
     const period = db.prepare(`
-      INSERT INTO payroll_period (period_name, start_date, end_date, status)
-      VALUES ('Zero Net', '2025-08-01', '2025-08-31', 'APPROVED')
+      INSERT INTO payroll_period (period_name, start_date, end_date, status, month, year)
+      VALUES ('Zero Net', '2025-08-01', '2025-08-31', 'APPROVED', 8, 2025)
     `).run()
     db.prepare(`INSERT INTO staff (staff_number, first_name, last_name, department, job_title) VALUES ('S999', 'Zero', 'Pay', 'Admin', 'Temp')`).run()
     const staffId = (db.prepare(`SELECT id FROM staff WHERE staff_number = 'S999'`).get() as { id: number }).id
-    db.prepare(`INSERT INTO payroll (period_id, staff_id, basic_salary, gross_salary, net_salary) VALUES (?, ?, 0, 0, 0)`).run(period.lastInsertRowid, staffId)
+    db.prepare(`INSERT INTO payroll (period_id, staff_id, basic_salary, gross_salary, total_deductions, net_salary) VALUES (?, ?, 0, 0, 0, 0)`).run(period.lastInsertRowid, staffId)
 
     const result = await svc.postSalaryPayment(period.lastInsertRowid as number, SystemAccounts.BANK, '2025-08-15', 1)
     expect(result.success).toBe(false)
@@ -452,12 +452,12 @@ describe('getDeductionAccountCode mapping', () => {
 describe('postStatutoryDeductions – edge cases', () => {
   it('returns success with empty array when no deductions exist', async () => {
     const period = db.prepare(`
-      INSERT INTO payroll_period (period_name, start_date, end_date, status)
-      VALUES ('No Ded Month', '2025-09-01', '2025-09-30', 'APPROVED')
+      INSERT INTO payroll_period (period_name, start_date, end_date, status, month, year)
+      VALUES ('No Ded Month', '2025-09-01', '2025-09-30', 'APPROVED', 9, 2025)
     `).run()
     db.prepare(`INSERT INTO staff (staff_number, first_name, last_name, department, job_title) VALUES ('S888', 'NoDed', 'Staff', 'Admin', 'None')`).run()
     const staffId = (db.prepare(`SELECT id FROM staff WHERE staff_number = 'S888'`).get() as { id: number }).id
-    db.prepare(`INSERT INTO payroll (period_id, staff_id, basic_salary, gross_salary, net_salary) VALUES (?, ?, 100000, 100000, 100000)`).run(period.lastInsertRowid, staffId)
+    db.prepare(`INSERT INTO payroll (period_id, staff_id, basic_salary, gross_salary, total_deductions, net_salary) VALUES (?, ?, 100000, 100000, 0, 100000)`).run(period.lastInsertRowid, staffId)
 
     const result = await svc.postStatutoryDeductions(period.lastInsertRowid as number, 1)
     expect(result.success).toBe(true)
@@ -770,15 +770,15 @@ describe('getExpenseAccountCode – department mapping', () => {
   it('postSalaryPayment returns failure when total net salary is zero', async () => {
     // Create a period with payroll records having 0 net salary
     const period = db.prepare(`
-      INSERT INTO payroll_period (period_name, start_date, end_date, status)
-      VALUES ('Zero Net', '2025-07-01', '2025-07-31', 'APPROVED')
+      INSERT INTO payroll_period (period_name, start_date, end_date, status, month, year)
+      VALUES ('Zero Net', '2025-07-01', '2025-07-31', 'APPROVED', 7, 2025)
     `).run()
     const periodId = period.lastInsertRowid as number
 
     db.prepare('INSERT INTO staff (staff_number, first_name, last_name, department, job_title) VALUES (?, ?, ?, ?, ?)')
       .run('S-ZERO', 'Zero', 'Net', 'Admin', 'Clerk')
     const staff = db.prepare("SELECT id FROM staff WHERE staff_number = 'S-ZERO'").get() as { id: number }
-    db.prepare('INSERT INTO payroll (period_id, staff_id, basic_salary, gross_salary, net_salary) VALUES (?, ?, 0, 0, 0)')
+    db.prepare('INSERT INTO payroll (period_id, staff_id, basic_salary, gross_salary, total_deductions, net_salary) VALUES (?, ?, 0, 0, 0, 0)')
       .run(periodId, staff.id)
 
     const result = await svc.postSalaryPayment(periodId, '1020', '2025-07-31', 1)
@@ -852,8 +852,8 @@ describe('postSalaryPayment – null total_net from SUM', () => {
   it('handles period with no payroll records (SUM returns null)', async () => {
     // Create period but don't add any payroll records
     const period = db.prepare(`
-      INSERT INTO payroll_period (period_name, start_date, end_date, status)
-      VALUES ('No Payroll', '2025-10-01', '2025-10-31', 'APPROVED')
+      INSERT INTO payroll_period (period_name, start_date, end_date, status, month, year)
+      VALUES ('No Payroll', '2025-10-01', '2025-10-31', 'APPROVED', 10, 2025)
     `).run()
     const periodId = period.lastInsertRowid as number
     // SUM(net_salary) with no rows returns { total_net: null }

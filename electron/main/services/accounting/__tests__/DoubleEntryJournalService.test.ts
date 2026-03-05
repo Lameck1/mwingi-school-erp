@@ -24,7 +24,7 @@ type JED = JEDType
 let DoubleEntryJournalService: typeof DEJSType
 
 const TABLES = [
-  'user', 'audit_log', 'gl_account', 'journal_entry', 'journal_entry_line',
+  'user', 'audit_log', 'gl_account', 'supplier', 'journal_entry', 'journal_entry_line',
   'approval_rule', 'transaction_approval',
   'approval_workflow', 'approval_request', 'approval_history',
   'accounting_period',
@@ -78,6 +78,8 @@ beforeEach(async () => {
   applySchema(db, [...TABLES])
   seedTestUser(db)
   seedSystemAccounts(db)
+  // Seed suppliers referenced by FK in journal_entry tests
+  db.prepare("INSERT INTO supplier (supplier_name) VALUES ('Test Supplier')").run()
   mockLogAudit.mockReset()
 
   const mod = await import('../DoubleEntryJournalService')
@@ -731,7 +733,7 @@ describe('schema-variant branches', () => {
   })
 
   it('canonical approval inserts approval_rule_id when column exists, skips history when absent', () => {
-    db.exec('ALTER TABLE approval_request ADD COLUMN approval_rule_id INTEGER')
+    // approval_rule_id now exists in shared helper DDL
     db.pragma('foreign_keys = OFF')
     db.exec('DROP TABLE IF EXISTS approval_history')
     db.pragma('foreign_keys = ON')
@@ -751,16 +753,15 @@ describe('schema-variant branches', () => {
   })
 
   it('includes supplier_id and source_ledger_txn_id columns when present', () => {
-    db.exec('ALTER TABLE journal_entry ADD COLUMN supplier_id INTEGER')
-    db.exec('ALTER TABLE journal_entry ADD COLUMN source_ledger_txn_id INTEGER')
+    // supplier_id and source_ledger_txn_id now exist in shared helper DDL
     // New service instance to reset the cached sourceLedgerColumnAvailable
     const svc2 = new DoubleEntryJournalService(db)
-    const result = svc2.createJournalEntrySync(makeEntry({ supplier_id: 99, source_ledger_txn_id: 42 }))
+    const result = svc2.createJournalEntrySync(makeEntry({ supplier_id: 1, source_ledger_txn_id: 42 }))
     expect(result.success).toBe(true)
 
     const row = db.prepare('SELECT supplier_id, source_ledger_txn_id FROM journal_entry WHERE id = ?')
       .get(result.entry_id!) as Record<string, unknown>
-    expect(row.supplier_id).toBe(99)
+    expect(row.supplier_id).toBe(1)
     expect(row.source_ledger_txn_id).toBe(42)
   })
 })
@@ -941,18 +942,16 @@ describe('getBalanceSheet – liability and equity categorization', () => {
    *  Branch coverage: supplier_id / source_ledger_txn_id columns (L274, L280)
    * ================================================================== */
   it('createJournalEntrySync persists supplier_id and source_ledger_txn_id when columns exist', () => {
-    db.exec('ALTER TABLE journal_entry ADD COLUMN supplier_id INTEGER')
-    db.exec('ALTER TABLE journal_entry ADD COLUMN source_ledger_txn_id INTEGER')
-    const result = svc.createJournalEntrySync(makeEntry({ supplier_id: 42, source_ledger_txn_id: 99 } as any))
+    // supplier_id and source_ledger_txn_id now exist in shared helper DDL
+    const result = svc.createJournalEntrySync(makeEntry({ supplier_id: 1, source_ledger_txn_id: 99 } as any))
     expect(result.success).toBe(true)
     const row = db.prepare('SELECT supplier_id, source_ledger_txn_id FROM journal_entry WHERE id = ?').get(result.entry_id!) as any
-    expect(row.supplier_id).toBe(42)
+    expect(row.supplier_id).toBe(1)
     expect(row.source_ledger_txn_id).toBe(99)
   })
 
   it('createJournalEntrySync uses null for undefined supplier_id / source_ledger_txn_id when columns exist', () => {
-    db.exec('ALTER TABLE journal_entry ADD COLUMN supplier_id INTEGER')
-    db.exec('ALTER TABLE journal_entry ADD COLUMN source_ledger_txn_id INTEGER')
+    // supplier_id and source_ledger_txn_id now exist in shared helper DDL
     const result = svc.createJournalEntrySync(makeEntry())
     expect(result.success).toBe(true)
     const row = db.prepare('SELECT supplier_id, source_ledger_txn_id FROM journal_entry WHERE id = ?').get(result.entry_id!) as any

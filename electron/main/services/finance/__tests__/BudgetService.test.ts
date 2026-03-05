@@ -75,12 +75,12 @@ const SCHEMA = `
 
   CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    action TEXT NOT NULL,
-    table_name TEXT,
+    user_id INTEGER NOT NULL,
+    action_type TEXT NOT NULL,
+    table_name TEXT NOT NULL,
     record_id INTEGER,
-    old_data TEXT,
-    new_data TEXT,
+    old_values TEXT,
+    new_values TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 `

@@ -20,7 +20,6 @@ export interface InventoryItem {
     description: string | null
     is_active: boolean
     created_at: string
-    updated_at: string
 }
 
 export interface StockTransaction {
@@ -106,7 +105,6 @@ interface InventoryItemRow {
     description: string | null;
     is_active: number;
     created_at: string;
-    updated_at: string;
 }
 
 export class InventoryService extends BaseService<InventoryItem, CreateInventoryItemData, Partial<CreateInventoryItemData>, InventoryFilters> {
@@ -138,8 +136,7 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
             supplier_id: r.supplier_id,
             description: r.description,
             is_active: Boolean(r.is_active),
-            created_at: r.created_at,
-            updated_at: r.updated_at
+            created_at: r.created_at
         }
     }
 
@@ -160,8 +157,8 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
         return this.db.prepare(`
             INSERT INTO inventory_item (
                 item_code, item_name, category_id, unit_of_measure, reorder_level, unit_cost,
-                unit_price, supplier_id, description, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                unit_price, supplier_id, description
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             data.item_code, data.item_name, data.category_id,
             data.unit_of_measure, data.reorder_level || 0, data.unit_cost || 0,
@@ -202,7 +199,7 @@ export class InventoryService extends BaseService<InventoryItem, CreateInventory
 
         if (sets.length > 0) {
             params.push(id)
-            this.db.prepare(`UPDATE inventory_item SET ${sets.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...params)
+            this.db.prepare(`UPDATE inventory_item SET ${sets.join(', ')} WHERE id = ?`).run(...params)
         }
     }
 

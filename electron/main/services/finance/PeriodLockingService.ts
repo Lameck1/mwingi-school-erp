@@ -7,7 +7,7 @@ const FINANCIAL_PERIOD_NOT_FOUND = 'Financial period not found'
 
 export interface FinancialPeriod {
   id: number
-  name: string
+  name?: string
   period_name?: string
   start_date: string
   end_date: string

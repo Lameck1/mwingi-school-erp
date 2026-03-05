@@ -24,7 +24,6 @@ export interface FixedAsset {
     last_depreciation_date: string | null
     created_by_user_id: number
     created_at: string
-    updated_at: string
     // Computed
     category_name?: string
 }
@@ -226,7 +225,7 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
 
         if (sets.length > 0) {
             params.push(id)
-            this.db.prepare(`UPDATE fixed_asset SET ${sets.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...params)
+            this.db.prepare(`UPDATE fixed_asset SET ${sets.join(', ')} WHERE id = ?`).run(...params)
         }
     }
 

@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 
+import { applySchema, seedTestUser } from '../../__tests__/helpers/schema'
 import { PeriodLockingService } from '../PeriodLockingService'
 
 type DbRow = Record<string, any>
@@ -11,115 +12,15 @@ describe('PeriodLockingService', () => {
 
   beforeEach(() => {
     db = new Database(':memory:')
-    
+    applySchema(db, ['financial_period', 'audit_log'])
+    seedTestUser(db, 10)
+
     db.exec(`
-    CREATE TABLE IF NOT EXISTS fee_category (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, category_name TEXT NOT NULL UNIQUE,
-      description TEXT, is_active BOOLEAN DEFAULT 1, priority INTEGER DEFAULT 99,
-      gl_account_id INTEGER
-    );
-    CREATE TABLE IF NOT EXISTS invoice_item (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, invoice_id INTEGER NOT NULL,
-      fee_category_id INTEGER NOT NULL, description TEXT NOT NULL, amount INTEGER NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS receipt (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, receipt_number TEXT NOT NULL UNIQUE,
-      transaction_id INTEGER NOT NULL UNIQUE, receipt_date DATE NOT NULL,
-      student_id INTEGER NOT NULL, amount INTEGER NOT NULL, amount_in_words TEXT,
-      payment_method TEXT NOT NULL, payment_reference TEXT, printed_count INTEGER DEFAULT 0,
-      created_by_user_id INTEGER NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-          CREATE TABLE IF NOT EXISTS gl_account (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            account_code TEXT NOT NULL UNIQUE,
-            account_name TEXT NOT NULL,
-            account_type TEXT NOT NULL,
-            normal_balance TEXT NOT NULL,
-            is_active BOOLEAN DEFAULT 1
-          );
-          INSERT OR IGNORE INTO gl_account (account_code, account_name, account_type, normal_balance) VALUES ('1100', 'Accounts Receivable', 'ASSET', 'DEBIT');
-          INSERT OR IGNORE INTO gl_account (account_code, account_name, account_type, normal_balance) VALUES ('2020', 'Student Credit Balance', 'LIABILITY', 'CREDIT');
-          INSERT OR IGNORE INTO gl_account (account_code, account_name, account_type, normal_balance) VALUES ('1010', 'Cash', 'ASSET', 'DEBIT');
-          INSERT OR IGNORE INTO gl_account (account_code, account_name, account_type, normal_balance) VALUES ('1020', 'Bank', 'ASSET', 'DEBIT');
-          INSERT OR IGNORE INTO gl_account (account_code, account_name, account_type, normal_balance) VALUES ('4010', 'Tuition Revenue', 'REVENUE', 'CREDIT');
-          
-          CREATE TABLE IF NOT EXISTS journal_entry (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            entry_ref TEXT NOT NULL UNIQUE,
-            entry_date DATE NOT NULL,
-            entry_type TEXT NOT NULL,
-            description TEXT NOT NULL,
-            student_id INTEGER,
-            staff_id INTEGER,
-            term_id INTEGER,
-            is_posted BOOLEAN DEFAULT 0,
-            posted_by_user_id INTEGER,
-            posted_at DATETIME,
-            is_voided BOOLEAN DEFAULT 0,
-            voided_reason TEXT,
-            voided_by_user_id INTEGER,
-            voided_at DATETIME,
-            requires_approval BOOLEAN DEFAULT 0,
-            approval_status TEXT DEFAULT 'PENDING',
-            approved_by_user_id INTEGER,
-            approved_at DATETIME,
-            created_by_user_id INTEGER NOT NULL,
-            source_ledger_txn_id INTEGER,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-          );
-          CREATE TABLE IF NOT EXISTS journal_entry_line (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            journal_entry_id INTEGER NOT NULL,
-            line_number INTEGER NOT NULL,
-            gl_account_id INTEGER NOT NULL,
-            debit_amount INTEGER DEFAULT 0,
-            credit_amount INTEGER DEFAULT 0,
-            description TEXT
-          );
-          CREATE TABLE IF NOT EXISTS approval_rule (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            rule_name TEXT NOT NULL UNIQUE,
-            description TEXT,
-            transaction_type TEXT NOT NULL,
-            min_amount INTEGER,
-            max_amount INTEGER,
-            days_since_transaction INTEGER,
-            required_role_id INTEGER,
-            is_active BOOLEAN DEFAULT 1,
-            created_by_user_id INTEGER NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-          );
-
-      CREATE TABLE financial_period (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        start_date DATE NOT NULL,
-        end_date DATE NOT NULL,
-        status TEXT DEFAULT 'OPEN',
-        locked_at DATETIME,
-        locked_by INTEGER,
-        closed_at DATETIME,
-        closed_by INTEGER
-      );
-
-      CREATE TABLE audit_log (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        action_type TEXT NOT NULL,
-        table_name TEXT NOT NULL,
-        record_id INTEGER,
-        old_values TEXT,
-        new_values TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      -- Create test periods
-      INSERT INTO financial_period (name, start_date, end_date, status)
+      INSERT INTO financial_period (period_name, period_type, start_date, end_date, status)
       VALUES 
-        ('Term 1 2026', '2026-01-01', '2026-03-31', 'OPEN'),
-        ('Term 2 2026', '2026-04-01', '2026-06-30', 'OPEN'),
-        ('Term 3 2025', '2025-09-01', '2025-12-31', 'LOCKED');
+        ('Term 1 2026', 'QUARTERLY', '2026-01-01', '2026-03-31', 'OPEN'),
+        ('Term 2 2026', 'QUARTERLY', '2026-04-01', '2026-06-30', 'OPEN'),
+        ('Term 3 2025', 'QUARTERLY', '2025-09-01', '2025-12-31', 'LOCKED');
     `)
 
     service = new PeriodLockingService(db)
@@ -291,7 +192,7 @@ describe('PeriodLockingService', () => {
       const periods = service.getAllPeriods()
 
       expect(periods).toHaveLength(3)
-      expect(periods[0]).toHaveProperty('name')
+      expect(periods[0]).toHaveProperty('period_name')
       expect(periods[0]).toHaveProperty('status')
       expect(periods[0]).toHaveProperty('start_date')
       expect(periods[0]).toHaveProperty('end_date')
@@ -325,7 +226,7 @@ describe('PeriodLockingService', () => {
     it('should return the period containing the given date', () => {
       const period = service.getPeriodForDate('2026-02-15')
       expect(period).not.toBeNull()
-      expect(period!.name).toBe('Term 1 2026')
+      expect(period!.period_name).toBe('Term 1 2026')
     })
 
     it('should return null when no period matches the date', () => {
@@ -410,17 +311,15 @@ describe('PeriodLockingService', () => {
   })
 
   describe('periodName fallback (period_name field)', () => {
-    it('uses period_name when name is empty', () => {
+    it('uses period_name from production schema', () => {
       db.exec(`
-        INSERT INTO financial_period (id, name, start_date, end_date, status)
-        VALUES (10, '', '2027-01-01', '2027-03-31', 'OPEN')
+        INSERT INTO financial_period (id, period_name, period_type, start_date, end_date, status)
+        VALUES (10, 'Special Period', 'QUARTERLY', '2027-01-01', '2027-03-31', 'OPEN')
       `)
-      // period_name column doesn't exist in our test schema but name is ''
-      // periodName uses name || period_name || fallback
+      // Production has period_name, not name. periodName() falls back to period_name.
       const result = service.lockPeriod(10, 10)
       expect(result.success).toBe(true)
-      // Will fall back to 'Period #10' since both name and period_name are falsy
-      expect(result.message).toContain('Period')
+      expect(result.message).toContain('Special Period')
     })
   })
 
