@@ -111,15 +111,7 @@ function createSchema(db: Database.Database) {
       record_id INTEGER,
       old_values TEXT,
       new_values TEXT,
-      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    -- Approval rules (queried by checkApprovalRequired)
-    CREATE TABLE approval_rule (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      transaction_type TEXT NOT NULL,
-      min_amount INTEGER,
-      is_active BOOLEAN DEFAULT 1
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     -- Seed data -----------------------------------------------------------

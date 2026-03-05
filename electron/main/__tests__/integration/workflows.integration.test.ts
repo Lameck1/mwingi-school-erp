@@ -284,7 +284,7 @@ describe('Workflows Integration Tests', () => {
         record_id INTEGER,
         old_values TEXT,
         new_values TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
       -- Insert test data

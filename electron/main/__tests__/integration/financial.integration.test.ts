@@ -248,15 +248,17 @@ function createSchema(db: Database.Database) {
       record_id INTEGER,
       old_values TEXT,
       new_values TEXT,
-      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
-    
-    -- Payment Allocation (needed for safe voiding tests)
+
     CREATE TABLE payment_invoice_allocation (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        transaction_id INTEGER NOT NULL, 
-        invoice_id INTEGER NOT NULL,
-        applied_amount INTEGER NOT NULL
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      transaction_id INTEGER NOT NULL,
+      invoice_id INTEGER NOT NULL,
+      applied_amount INTEGER NOT NULL CHECK (applied_amount > 0),
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (transaction_id) REFERENCES ledger_transaction(id) ON DELETE CASCADE,
+      FOREIGN KEY (invoice_id) REFERENCES fee_invoice(id) ON DELETE CASCADE
     );
 
 
