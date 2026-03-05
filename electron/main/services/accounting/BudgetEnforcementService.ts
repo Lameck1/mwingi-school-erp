@@ -108,10 +108,20 @@ export class BudgetEnforcementService {
     amount: number
   ): NonNullable<BudgetValidationResult['budget_status']> {
     const remaining = allocatedAmount - spent;
-    const utilizationPercentage = (spent / allocatedAmount) * 100;
+    let utilizationPercentage: number;
+    if (allocatedAmount === 0) {
+      utilizationPercentage = spent > 0 ? 100 : 0;
+    } else {
+      utilizationPercentage = (spent / allocatedAmount) * 100;
+    }
     const afterSpent = spent + amount;
     const afterRemaining = allocatedAmount - afterSpent;
-    const afterUtilization = (afterSpent / allocatedAmount) * 100;
+    let afterUtilization: number;
+    if (allocatedAmount === 0) {
+      afterUtilization = afterSpent > 0 ? 100 : 0;
+    } else {
+      afterUtilization = (afterSpent / allocatedAmount) * 100;
+    }
 
     return {
       allocated: allocatedAmount,

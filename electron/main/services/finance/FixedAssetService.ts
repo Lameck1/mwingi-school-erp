@@ -101,6 +101,15 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
     }
 
     override async create(data: CreateAssetData, userId: number): Promise<{ success: boolean; id: number; errors?: string[] }> {
+        return this.createSync(data, userId)
+    }
+
+    /**
+     * Synchronous asset creation — safe to call inside a better-sqlite3 transaction.
+     * The async `create()` delegates here; use directly when you need the result
+     * without a Promise wrapper (e.g. inside another sync transaction).
+     */
+    createSync(data: CreateAssetData, userId: number): { success: boolean; id: number; errors?: string[] } {
         const errors = this.validateCreate(data)
         if (errors) {
             return { success: false, id: 0, errors }
@@ -287,9 +296,12 @@ export class FixedAssetService extends BaseService<FixedAsset, CreateAssetData, 
             return { success: false, error: 'Selected asset category is non-depreciable' }
         }
 
-        const categoryRate = category.depreciation_rate !== null
-            ? category.depreciation_rate / 100
-            : (category.useful_life_years > 0 ? 1 / category.useful_life_years : 0)
+        let categoryRate: number
+        if (category.depreciation_rate === null) {
+            categoryRate = category.useful_life_years > 0 ? 1 / category.useful_life_years : 0
+        } else {
+            categoryRate = category.depreciation_rate / 100
+        }
         if (categoryRate <= 0) {
             return { success: false, error: 'Invalid depreciation setup for asset category' }
         }

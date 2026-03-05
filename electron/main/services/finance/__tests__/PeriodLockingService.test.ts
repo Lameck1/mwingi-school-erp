@@ -320,5 +320,133 @@ describe('PeriodLockingService', () => {
       expect(result.allowed).toBe(true)
     })
   })
+
+  describe('getPeriodForDate', () => {
+    it('should return the period containing the given date', () => {
+      const period = service.getPeriodForDate('2026-02-15')
+      expect(period).not.toBeNull()
+      expect(period!.name).toBe('Term 1 2026')
+    })
+
+    it('should return null when no period matches the date', () => {
+      const period = service.getPeriodForDate('2028-01-01')
+      expect(period).toBeFalsy()
+    })
+  })
+
+  describe('lockPeriod – error branch', () => {
+    it('returns failure when database throws', () => {
+      db.close()
+      const freshDb = new Database(':memory:')
+      // no tables → will throw
+      const brokenService = new PeriodLockingService(freshDb)
+      const result = brokenService.lockPeriod(1, 10)
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Failed to lock period')
+      freshDb.close()
+    })
+  })
+
+  describe('unlockPeriod – error branch', () => {
+    it('returns failure when database throws', () => {
+      const freshDb = new Database(':memory:')
+      const brokenService = new PeriodLockingService(freshDb)
+      const result = brokenService.unlockPeriod(1, 10)
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Failed to unlock period')
+      freshDb.close()
+    })
+  })
+
+  describe('closePeriod – error branch', () => {
+    it('returns failure when database throws', () => {
+      const freshDb = new Database(':memory:')
+      const brokenService = new PeriodLockingService(freshDb)
+      const result = brokenService.closePeriod(1, 10)
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Failed to close period')
+      freshDb.close()
+    })
+  })
+
+  describe('isTransactionAllowed – closed period', () => {
+    it('should block transaction in a closed period', () => {
+      // Close period id=1 via lock then close
+      service.lockPeriod(1, 10)
+      service.closePeriod(1, 10)
+      const result = service.isTransactionAllowed('2026-02-15')
+      expect(result.allowed).toBe(false)
+      expect(result.reason).toContain('closed')
+    })
+  })
+
+  describe('isTransactionAllowed – error branch', () => {
+    it('returns not allowed when database throws', () => {
+      const freshDb = new Database(':memory:')
+      const brokenService = new PeriodLockingService(freshDb)
+      const result = brokenService.isTransactionAllowed('2026-02-15')
+      expect(result.allowed).toBe(false)
+      expect(result.reason).toContain('Error')
+      freshDb.close()
+    })
+  })
+
+  describe('getAllPeriods – error branch', () => {
+    it('returns empty array when database throws', () => {
+      const freshDb = new Database(':memory:')
+      const brokenService = new PeriodLockingService(freshDb)
+      const periods = brokenService.getAllPeriods()
+      expect(periods).toEqual([])
+      freshDb.close()
+    })
+
+    it('returns empty array when filter param and database throws', () => {
+      const freshDb = new Database(':memory:')
+      const brokenService = new PeriodLockingService(freshDb)
+      const periods = brokenService.getAllPeriods('OPEN')
+      expect(periods).toEqual([])
+      freshDb.close()
+    })
+  })
+
+  describe('periodName fallback (period_name field)', () => {
+    it('uses period_name when name is empty', () => {
+      db.exec(`
+        INSERT INTO financial_period (id, name, start_date, end_date, status)
+        VALUES (10, '', '2027-01-01', '2027-03-31', 'OPEN')
+      `)
+      // period_name column doesn't exist in our test schema but name is ''
+      // periodName uses name || period_name || fallback
+      const result = service.lockPeriod(10, 10)
+      expect(result.success).toBe(true)
+      // Will fall back to 'Period #10' since both name and period_name are falsy
+      expect(result.message).toContain('Period')
+    })
+  })
+
+  describe('lockPeriod – non-existent period', () => {
+    it('handles non-existent period in unlock', () => {
+      const result = service.unlockPeriod(999, 10)
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('not found')
+    })
+
+    it('handles non-existent period in close', () => {
+      const result = service.closePeriod(999, 10)
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('not found')
+    })
+  })
+
+  describe('getPeriodForDate – catch branch', () => {
+    it('returns null when database query throws', () => {
+      db.close()
+      const brokenService = new PeriodLockingService(db)
+      const result = brokenService.getPeriodForDate('2026-02-15')
+      expect(result).toBeNull()
+      // Re-open a db so afterEach close doesn't throw
+      db = new Database(':memory:')
+    })
+  })
 })
 

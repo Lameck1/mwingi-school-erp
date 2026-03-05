@@ -1,6 +1,7 @@
 import { DoubleEntryJournalService } from '../../services/accounting/DoubleEntryJournalService'
 import { type ExemptionService } from '../../services/finance/ExemptionService'
 import { type PaymentService } from '../../services/finance/PaymentService'
+
 import { getErrorMessage } from '../ipc-result'
 
 import type { InvoiceItemCreation } from './types'
@@ -67,7 +68,7 @@ export const UNKNOWN_ERROR_OCCURRED_MESSAGE = 'Unknown error occurred'
 
 export const getTodayDate = (): string => new Date().toISOString().slice(0, 10)
 
-export { getErrorMessage }
+export { getErrorMessage } from '../ipc-result'
 
 export const createGetOrCreateCategoryId = (db: FinanceDb): ((name: string, type?: CategoryType) => number) => {
     return (name: string, type: CategoryType = 'INCOME') => {

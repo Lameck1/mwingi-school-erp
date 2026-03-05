@@ -186,4 +186,70 @@ describe('MpesaReconciliationService', () => {
         // +254711222333 → 0711222333 should match Jane Smith's +254711222333
         expect(result.total_matched).toBe(1)
     })
+
+    it('importTransactions with empty array returns error', () => {
+        const result = service.importTransactions([], 1)
+        expect(result.success).toBe(false)
+        expect(result.error).toBe('No transactions to import')
+        expect(result.total_imported).toBe(0)
+    })
+
+    it('manualMatch returns error for non-existent transaction', () => {
+        const result = service.manualMatch(999, 1, 1)
+        expect(result.success).toBe(false)
+        expect(result.error).toBe('Transaction not found')
+    })
+
+    it('manualMatch returns error for already matched transaction', () => {
+        service.importTransactions([
+            { mpesa_receipt_number: 'MATCH01', transaction_date: '2026-02-25', phone_number: '0712345678', amount: 5000 },
+        ], 1)
+        const txn = db.prepare("SELECT id FROM mpesa_transaction WHERE mpesa_receipt_number = 'MATCH01'").get() as { id: number }
+        // Already auto-matched by phone
+        const result = service.manualMatch(txn.id, 2, 1)
+        expect(result.success).toBe(false)
+        expect(result.error).toContain('already')
+    })
+
+    it('getTransactionsByStatus returns filtered results', () => {
+        service.importTransactions([
+            { mpesa_receipt_number: 'S1', transaction_date: '2026-02-25', phone_number: '0712345678', amount: 1000 },
+            { mpesa_receipt_number: 'S2', transaction_date: '2026-02-25', phone_number: '0799999999', amount: 2000 },
+        ], 1)
+
+        const matched = service.getTransactionsByStatus('MATCHED')
+        expect(matched.length).toBe(1)
+        expect(matched[0]!.mpesa_receipt_number).toBe('S1')
+
+        const unmatched = service.getTransactionsByStatus('UNMATCHED')
+        expect(unmatched.length).toBe(1)
+        expect(unmatched[0]!.mpesa_receipt_number).toBe('S2')
+    })
+
+    it('phone alias auto-match works after manual match', () => {
+        // Import unmatched transaction
+        service.importTransactions([
+            { mpesa_receipt_number: 'ALIAS01', transaction_date: '2026-02-25', phone_number: '0733000111', amount: 5000 },
+        ], 1)
+        const unmatched = service.getUnmatchedTransactions()
+        // Manually match it → creates phone alias
+        service.manualMatch(unmatched[0]!.id, 1, 1)
+
+        // Now import another from same phone → should auto-match via alias
+        const result = service.importTransactions([
+            { mpesa_receipt_number: 'ALIAS02', transaction_date: '2026-02-26', phone_number: '0733000111', amount: 3000 },
+        ], 1)
+        expect(result.total_matched).toBe(1)
+        const txn = db.prepare("SELECT match_method, match_confidence FROM mpesa_transaction WHERE mpesa_receipt_number = 'ALIAS02'").get() as { match_method: string; match_confidence: number }
+        expect(txn.match_method).toBe('AUTO_PHONE')
+        expect(txn.match_confidence).toBe(0.9)
+    })
+
+    it('normalizes 254 prefix (without +) to 0-prefix for matching', () => {
+        const result = service.importTransactions([
+            { mpesa_receipt_number: 'NO_PLUS', transaction_date: '2026-02-25', phone_number: '254712345678', amount: 4000 },
+        ], 1)
+        // 254712345678 → 0712345678 should match ADM001
+        expect(result.total_matched).toBe(1)
+    })
 })

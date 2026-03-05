@@ -26,9 +26,9 @@ export function registerBankReconciliationHandlers(): void {
             account_number: data.account_number,
             bank_name: data.bank_name,
             opening_balance: data.opening_balance,
-            ...(data.branch !== undefined ? { branch: data.branch } : {}),
-            ...(data.swift_code !== undefined ? { swift_code: data.swift_code } : {}),
-            ...(data.currency !== undefined ? { currency: data.currency } : {})
+            ...(data.branch === undefined ? {} : { branch: data.branch }),
+            ...(data.swift_code === undefined ? {} : { swift_code: data.swift_code }),
+            ...(data.currency === undefined ? {} : { currency: data.currency })
         })
     })
 

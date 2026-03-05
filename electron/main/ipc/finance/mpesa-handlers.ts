@@ -4,8 +4,17 @@ import { ROLES } from '../ipc-result'
 import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
 export function setupMpesaHandlers(): void {
+    const MpesaImportRowSchema = z.object({
+        mpesa_receipt_number: z.string(),
+        transaction_date: z.string(),
+        phone_number: z.string(),
+        amount: z.number(),
+        account_reference: z.string().optional(),
+        payer_name: z.string().optional(),
+    })
+
     const importSchema = z.tuple([
-        z.array(z.any()), // MpesaImportRow roughly
+        z.array(MpesaImportRowSchema),
         z.enum(['CSV', 'API', 'MANUAL']),
         z.string().optional()
     ])
@@ -21,7 +30,7 @@ export function setupMpesaHandlers(): void {
     })
 
     // getUnmatched takes no args
-    validatedHandler('mpesa:getUnmatched', ROLES.FINANCE, z.any(), async () => {
+    validatedHandler('mpesa:getUnmatched', ROLES.FINANCE, z.void(), async () => {
         const service = new MpesaReconciliationService()
         return service.getUnmatchedTransactions()
     })
@@ -45,7 +54,7 @@ export function setupMpesaHandlers(): void {
     })
 
     // getSummary takes no args
-    validatedHandler('mpesa:getSummary', ROLES.FINANCE, z.any(), async () => {
+    validatedHandler('mpesa:getSummary', ROLES.FINANCE, z.void(), async () => {
         const service = new MpesaReconciliationService()
         return service.getReconciliationSummary()
     })

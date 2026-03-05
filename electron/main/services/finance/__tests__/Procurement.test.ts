@@ -285,4 +285,377 @@ describe('ProcurementService', () => {
     expect(rejectResult.success).toBe(true)
     expect(service.getRequisition(reqId)?.status).toBe('REJECTED')
   })
+
+  it('rejects requisition with empty items', () => {
+    const result = service.createRequisition({
+      department: 'Admin',
+      description: 'No items',
+      items: []
+    }, 1)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('At least one item')
+  })
+
+  it('returns undefined for non-existent requisition', () => {
+    expect(service.getRequisition(9999)).toBeUndefined()
+  })
+
+  it('getRequisitionsByStatus returns matching requisitions', () => {
+    service.createRequisition({
+      department: 'Admin', description: 'A',
+      items: [{ description: 'X', quantity: 1, estimated_unit_cost: 100 }]
+    }, 1)
+    service.createRequisition({
+      department: 'Admin', description: 'B',
+      items: [{ description: 'Y', quantity: 1, estimated_unit_cost: 200 }]
+    }, 1)
+    const drafts = service.getRequisitionsByStatus('DRAFT')
+    expect(drafts.length).toBe(2)
+  })
+
+  it('rejectRequisition fails for non-SUBMITTED requisition', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin', description: 'A',
+      items: [{ description: 'X', quantity: 1, estimated_unit_cost: 100 }]
+    }, 1) as { id: number }
+    const result = service.rejectRequisition(reqId, 'reason', 2)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('SUBMITTED')
+  })
+
+  it('rejectRequisition fails for non-existent requisition', () => {
+    const result = service.rejectRequisition(999, 'reason', 2)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('not found')
+  })
+
+  it('commitBudget fails for non-existent requisition', () => {
+    const result = service.commitBudget(999, 1)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('not found')
+  })
+
+  it('commitBudget fails for non-APPROVED requisition', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin', description: 'A',
+      items: [{ description: 'X', quantity: 1, estimated_unit_cost: 100 }]
+    }, 1) as { id: number }
+    const result = service.commitBudget(reqId, 1)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('APPROVED')
+  })
+
+  it('commitBudget fails if already committed', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin', description: 'A',
+      items: [{ description: 'X', quantity: 1, estimated_unit_cost: 100 }]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId, 1)
+    service.approveRequisition(reqId, 2)
+    service.commitBudget(reqId, 2)
+    const result = service.commitBudget(reqId, 2)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('APPROVED')
+  })
+
+  it('createPurchaseOrder fails for non-existent requisition', () => {
+    const result = service.createPurchaseOrder({ requisition_id: 9999, supplier_id: 1 }, 1)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('not found')
+  })
+
+  it('getPurchaseOrder returns undefined for non-existent PO', () => {
+    expect(service.getPurchaseOrder(9999)).toBeUndefined()
+  })
+
+  it('getPurchaseOrderByRequisition returns PO for valid requisition', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin', description: 'Office',
+      items: [{ description: 'Paper', quantity: 10, estimated_unit_cost: 500 }]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId, 1)
+    service.approveRequisition(reqId, 2)
+    service.commitBudget(reqId, 2)
+    const { id: poId } = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1) as { id: number }
+    const po = service.getPurchaseOrderByRequisition(reqId)
+    expect(po).toBeDefined()
+    expect(po!.id).toBe(poId)
+  })
+
+  it('getPoSummary returns PO with items and outstanding quantities', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin', description: 'Items',
+      items: [{ description: 'Pens', quantity: 50, estimated_unit_cost: 20 }]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId, 1)
+    service.approveRequisition(reqId, 2)
+    service.commitBudget(reqId, 2)
+    const { id: poId } = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1) as { id: number }
+    const summary = service.getPoSummary(poId)
+    expect(summary).toBeDefined()
+    expect(summary!.po.id).toBe(poId)
+    expect(summary!.items.length).toBe(1)
+    expect(summary!.items[0].outstanding).toBe(50)
+  })
+
+  it('getPoSummary returns undefined for non-existent PO', () => {
+    expect(service.getPoSummary(9999)).toBeUndefined()
+  })
+
+  it('createGrn rejects for cancelled PO', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin', description: 'C',
+      items: [{ description: 'X', quantity: 1, estimated_unit_cost: 100 }]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId, 1)
+    service.approveRequisition(reqId, 2)
+    service.commitBudget(reqId, 2)
+    const { id: poId } = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1) as { id: number }
+    db.prepare("UPDATE purchase_order SET status = 'CANCELLED' WHERE id = ?").run(poId)
+    const result = service.createGrn({ purchase_order_id: poId, received_date: '2026-03-01', items: [] }, 1)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('cancelled')
+  })
+
+  it('createGrn rejects for non-existent PO', () => {
+    const result = service.createGrn({ purchase_order_id: 9999, received_date: '2026-03-01', items: [] }, 1)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('not found')
+  })
+
+  it('createGrn rejects when accepted quantity exceeds received', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin', description: 'D',
+      items: [{ description: 'X', quantity: 10, estimated_unit_cost: 100 }]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId, 1)
+    service.approveRequisition(reqId, 2)
+    service.commitBudget(reqId, 2)
+    const { id: poId } = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1) as { id: number }
+    const poItems = db.prepare('SELECT id FROM purchase_order_item WHERE purchase_order_id = ?').all(poId) as Array<{ id: number }>
+    const result = service.createGrn({
+      purchase_order_id: poId, received_date: '2026-03-01',
+      items: [{ po_item_id: poItems[0]!.id, quantity_received: 3, quantity_accepted: 5 }]
+    }, 1)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('exceed')
+  })
+
+  it('createGrn with partially rejected items sets PARTIALLY_ACCEPTED status', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Store', description: 'Mixed',
+      items: [{ description: 'Bulbs', quantity: 20, estimated_unit_cost: 150 }]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId, 1)
+    service.approveRequisition(reqId, 2)
+    service.commitBudget(reqId, 2)
+    const { id: poId } = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1) as { id: number }
+    const poItems = db.prepare('SELECT id FROM purchase_order_item WHERE purchase_order_id = ?').all(poId) as Array<{ id: number }>
+    const grnResult = service.createGrn({
+      purchase_order_id: poId, received_date: '2026-03-01',
+      items: [{ po_item_id: poItems[0]!.id, quantity_received: 20, quantity_accepted: 15, quantity_rejected: 5, rejection_reason: 'Broken' }]
+    }, 1)
+    expect(grnResult.success).toBe(true)
+    const grn = db.prepare('SELECT status FROM goods_received_note WHERE id = ?').get(grnResult.id!) as { status: string }
+    expect(grn.status).toBe('PARTIALLY_ACCEPTED')
+  })
+
+  it('createPaymentVoucher rejects zero/negative amount', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin', description: 'Zero',
+      items: [{ description: 'X', quantity: 1, estimated_unit_cost: 100 }]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId, 1)
+    service.approveRequisition(reqId, 2)
+    service.commitBudget(reqId, 2)
+    const { id: poId } = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1) as { id: number }
+    const result = service.createPaymentVoucher({
+      purchase_order_id: poId, supplier_id: 1, amount: 0
+    }, 1)
+    expect(result.success).toBe(false)
+    expect(result.error).toBeDefined()
+  })
+
+  it('createPaymentVoucher requires GRN', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin', description: 'V',
+      items: [{ description: 'X', quantity: 1, estimated_unit_cost: 100 }]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId, 1)
+    service.approveRequisition(reqId, 2)
+    service.commitBudget(reqId, 2)
+    const { id: poId } = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1) as { id: number }
+    const result = service.createPaymentVoucher({
+      purchase_order_id: poId, supplier_id: 1, amount: 100
+    }, 1)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('GRN is required')
+  })
+
+  it('createPaymentVoucher rejects GRN not belonging to PO', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin', description: 'V',
+      items: [{ description: 'X', quantity: 10, estimated_unit_cost: 100 }]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId, 1)
+    service.approveRequisition(reqId, 2)
+    service.commitBudget(reqId, 2)
+    const { id: poId } = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1) as { id: number }
+    const poItems = db.prepare('SELECT id FROM purchase_order_item WHERE purchase_order_id = ?').all(poId) as Array<{ id: number }>
+    const grn = service.createGrn({
+      purchase_order_id: poId, received_date: '2026-03-01',
+      items: [{ po_item_id: poItems[0]!.id, quantity_received: 10, quantity_accepted: 10 }]
+    }, 1)
+    // Create a second PO to test cross-PO validation
+    const { id: reqId2 } = service.createRequisition({
+      department: 'Admin', description: 'V2',
+      items: [{ description: 'Y', quantity: 5, estimated_unit_cost: 200 }]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId2, 1)
+    service.approveRequisition(reqId2, 2)
+    service.commitBudget(reqId2, 2)
+    const { id: poId2 } = service.createPurchaseOrder({ requisition_id: reqId2, supplier_id: 1 }, 1) as { id: number }
+    const result = service.createPaymentVoucher({
+      purchase_order_id: poId2, supplier_id: 1, amount: 100, grn_id: grn.id as number
+    }, 1)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('does not belong')
+  })
+
+  it('approvePaymentVoucher rejects non-existent voucher', () => {
+    const result = service.approvePaymentVoucher(9999, 2)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('not found')
+  })
+
+  it('approvePaymentVoucher rejects already approved voucher', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin', description: 'AV',
+      items: [{ description: 'Pens', quantity: 10, estimated_unit_cost: 20 }]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId, 1)
+    service.approveRequisition(reqId, 2)
+    service.commitBudget(reqId, 2)
+    const { id: poId } = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1) as { id: number }
+    const poItems = db.prepare('SELECT id FROM purchase_order_item WHERE purchase_order_id = ?').all(poId) as Array<{ id: number }>
+    const grn = service.createGrn({
+      purchase_order_id: poId, received_date: '2026-03-01',
+      items: [{ po_item_id: poItems[0]!.id, quantity_received: 10, quantity_accepted: 10 }]
+    }, 1)
+    const v = service.createPaymentVoucher({
+      purchase_order_id: poId, supplier_id: 1, amount: 200, grn_id: grn.id as number
+    }, 1)
+    service.approvePaymentVoucher(v.id as number, 2)
+    const result = service.approvePaymentVoucher(v.id as number, 2)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('DRAFT or SUBMITTED')
+  })
+
+  it('submitRequisition fails for non-DRAFT requisition', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin', description: 'S',
+      items: [{ description: 'X', quantity: 1, estimated_unit_cost: 100 }]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId, 1)
+    const result = service.submitRequisition(reqId, 1)
+    expect(result.success).toBe(false)
+  })
+
+  it('getCommitment returns undefined for non-committed requisition', () => {
+    expect(service.getCommitment(9999)).toBeUndefined()
+  })
+
+  // ─── Additional branch coverage ────────────────────────────────────
+
+  it('createGrn with partial receipt sets PARTIALLY_RECEIVED status', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'IT', description: 'Computers',
+      items: [
+        { description: 'Laptop', quantity: 10, estimated_unit_cost: 50000 },
+        { description: 'Mouse', quantity: 20, estimated_unit_cost: 500 }
+      ]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId, 1)
+    service.approveRequisition(reqId, 2)
+    service.commitBudget(reqId, 2)
+    const { id: poId } = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1) as { id: number }
+    const poItems = db.prepare('SELECT id, quantity FROM purchase_order_item WHERE purchase_order_id = ? ORDER BY id').all(poId) as Array<{ id: number; quantity: number }>
+    // Only receive partial qty of first item
+    const grnResult = service.createGrn({
+      purchase_order_id: poId, received_date: '2026-04-01',
+      items: [{ po_item_id: poItems[0].id, quantity_received: 5, quantity_accepted: 5 }]
+    }, 1)
+    expect(grnResult.success).toBe(true)
+    expect(service.getPurchaseOrder(poId)?.status).toBe('PARTIALLY_RECEIVED')
+  })
+
+  it('createGrn with rejection_reason populates grn_item', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Store', description: 'Supplies',
+      items: [{ description: 'Pens', quantity: 100, estimated_unit_cost: 20 }]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId, 1)
+    service.approveRequisition(reqId, 2)
+    service.commitBudget(reqId, 2)
+    const { id: poId } = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1) as { id: number }
+    const poItems = db.prepare('SELECT id FROM purchase_order_item WHERE purchase_order_id = ?').all(poId) as Array<{ id: number }>
+    const grnResult = service.createGrn({
+      purchase_order_id: poId, received_date: '2026-04-01',
+      items: [{
+        po_item_id: poItems[0].id, quantity_received: 100, quantity_accepted: 80,
+        quantity_rejected: 20, rejection_reason: 'Damaged'
+      }]
+    }, 1)
+    expect(grnResult.success).toBe(true)
+    const grnItems = db.prepare('SELECT * FROM grn_item WHERE grn_id = ?').all(grnResult.id) as any[]
+    expect(grnItems[0].rejection_reason).toBe('Damaged')
+    expect(grnItems[0].quantity_rejected).toBe(20)
+  })
+
+  it('createPaymentVoucher rejects zero or negative amount', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin', description: 'Misc',
+      items: [{ description: 'Item', quantity: 1, estimated_unit_cost: 100 }]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId, 1)
+    service.approveRequisition(reqId, 2)
+    service.commitBudget(reqId, 2)
+    const { id: poId } = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1) as { id: number }
+    const poItems = db.prepare('SELECT id FROM purchase_order_item WHERE purchase_order_id = ?').all(poId) as Array<{ id: number }>
+    const grn = service.createGrn({
+      purchase_order_id: poId, received_date: '2026-04-01',
+      items: [{ po_item_id: poItems[0].id, quantity_received: 1, quantity_accepted: 1 }]
+    }, 1)
+    const result = service.createPaymentVoucher({
+      purchase_order_id: poId, supplier_id: 1, amount: 0, grn_id: grn.id as number
+    }, 1)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('positive')
+  })
+
+  it('createPaymentVoucher rejects without grn_id', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin', description: 'No GRN',
+      items: [{ description: 'Item', quantity: 1, estimated_unit_cost: 100 }]
+    }, 1) as { id: number }
+    service.submitRequisition(reqId, 1)
+    service.approveRequisition(reqId, 2)
+    service.commitBudget(reqId, 2)
+    const { id: poId } = service.createPurchaseOrder({ requisition_id: reqId, supplier_id: 1 }, 1) as { id: number }
+    const result = service.createPaymentVoucher({
+      purchase_order_id: poId, supplier_id: 1, amount: 100, grn_id: 0
+    }, 1)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('GRN')
+  })
+
+  it('rejectRequisition fails for non-SUBMITTED requisition', () => {
+    const { id: reqId } = service.createRequisition({
+      department: 'Admin', description: 'Reject test',
+      items: [{ description: 'Item', quantity: 1, estimated_unit_cost: 100 }]
+    }, 1) as { id: number }
+    // Still in DRAFT, cannot reject
+    const result = service.rejectRequisition(reqId, 2, 'Not needed')
+    expect(result.success).toBe(false)
+  })
 })

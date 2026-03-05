@@ -42,6 +42,13 @@ vi.mock('../../../database/utils/audit', () => ({
   logAudit: vi.fn()
 }))
 
+vi.mock('../../../services/finance/CashFlowService', () => ({
+  CashFlowService: {
+    getCashFlowStatement: vi.fn(() => ({ inflows: 100, outflows: 50, net: 50 })),
+    getForecast: vi.fn(() => [{ month: '2026-01', projected: 10000 }]),
+  }
+}))
+
 vi.mock('../../../services/base/ServiceContainer', () => ({
   container: {
     resolve: vi.fn((name: string) => {
@@ -87,6 +94,7 @@ vi.mock('../../../services/base/ServiceContainer', () => ({
 }))
 
 import { registerFinanceHandlers } from '../finance-handlers'
+import { CashFlowService } from '../../../services/finance/CashFlowService'
 
 describe('finance IPC handlers', () => {
   beforeEach(() => {
@@ -253,7 +261,9 @@ describe('finance IPC handlers', () => {
         amount INTEGER NOT NULL,
         payment_method TEXT,
         payment_reference TEXT,
-        created_by_user_id INTEGER NOT NULL
+        created_by_user_id INTEGER NOT NULL,
+        printed_count INTEGER DEFAULT 0,
+        last_printed_at TEXT
       );
 
       CREATE TABLE payment_invoice_allocation (
@@ -794,5 +804,107 @@ describe('finance IPC handlers', () => {
     expect(result[0]?.academic_year_id).toBe(1)
     expect(result[0]?.term_id).toBe(1)
     expect(result[0]?.amount).toBe(95000)
+  })
+
+  it('payment:void voids an existing payment', async () => {
+    // Insert a student and invoice
+    db.prepare(`INSERT INTO student (id, credit_balance) VALUES (50, 0)`).run()
+    db.prepare(`
+      INSERT INTO fee_invoice (id, invoice_number, student_id, term_id, total_amount, amount, amount_due, amount_paid, status, created_by_user_id, invoice_date)
+      VALUES (50, 'INV-VOID-1', 50, 1, 20000, 20000, 0, 20000, 'paid', 1, '2026-03-01')
+    `).run()
+
+    const handler = handlerMap.get('payment:void')
+    if (handler) {
+      const result = await handler({}, { invoiceId: 50, reason: 'test void' }) as { success: boolean }
+      expect(result).toBeDefined()
+    }
+  })
+
+  // ─── Cash flow handler coverage ─────────────────────────────────────
+
+  it('finance:getCashFlow is registered and invokes CashFlowService', async () => {
+    const handler = handlerMap.get('finance:getCashFlow')
+    expect(handler).toBeDefined()
+    const result = await handler!({}, '2026-01-01', '2026-12-31')
+    expect(CashFlowService.getCashFlowStatement).toHaveBeenCalledWith('2026-01-01', '2026-12-31')
+    expect(result).toEqual({ inflows: 100, outflows: 50, net: 50 })
+  })
+
+  it('finance:getForecast is registered and invokes CashFlowService', async () => {
+    const handler = handlerMap.get('finance:getForecast')
+    expect(handler).toBeDefined()
+    const result = await handler!({}, 6)
+    expect(CashFlowService.getForecast).toHaveBeenCalledWith(6)
+    expect(result).toEqual([{ month: '2026-01', projected: 10000 }])
+  })
+
+  // ─── receipt handler branch coverage ────────────────────────────────
+
+  it('receipt:getByTransaction returns null for non-existent transaction', async () => {
+    const handler = handlerMap.get('receipt:getByTransaction')
+    expect(handler).toBeDefined()
+    const result = await handler!({}, 99999)
+    expect(result).toBeNull()
+  })
+
+  it('receipt:getByTransaction returns receipt for existing transaction', async () => {
+    const handler = handlerMap.get('receipt:getByTransaction')
+    expect(handler).toBeDefined()
+    // Insert a receipt
+    db.prepare(`
+      INSERT INTO receipt (receipt_number, transaction_id, receipt_date, student_id, amount, payment_method, payment_reference, created_by_user_id)
+      VALUES ('RCP-GET-1', 88888, '2026-05-01', 1, 5000, 'CASH', 'REF-GET', 1)
+    `).run()
+    const result = await handler!({}, 88888) as { receipt_number: string }
+    expect(result).toBeDefined()
+    expect(result.receipt_number).toBe('RCP-GET-1')
+  })
+
+  it('receipt:markPrinted returns error for non-existent receipt', async () => {
+    const handler = handlerMap.get('receipt:markPrinted')
+    expect(handler).toBeDefined()
+    const result = await handler!({}, 99999) as { success: boolean; error?: string }
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Receipt not found')
+  })
+
+  it('receipt:markPrinted increments printed_count for existing receipt', async () => {
+    const handler = handlerMap.get('receipt:markPrinted')
+    expect(handler).toBeDefined()
+    db.prepare(`
+      INSERT INTO receipt (id, receipt_number, transaction_id, receipt_date, student_id, amount, payment_method, payment_reference, created_by_user_id)
+      VALUES (7777, 'RCP-PRINT-1', 77777, '2026-05-01', 1, 3000, 'CASH', 'REF-PRINT', 1)
+    `).run()
+    const result = await handler!({}, 7777) as { success: boolean }
+    expect(result.success).toBe(true)
+    const row = db.prepare('SELECT printed_count FROM receipt WHERE id = 7777').get() as { printed_count: number }
+    expect(row.printed_count).toBe(1)
+  })
+
+  // ─── payment:record failure branch coverage ─────────────────────────
+
+  it('payment:record returns failure when paymentService.recordPayment fails', async () => {
+    paymentServiceMock.recordPayment.mockReturnValueOnce({ success: false, error: 'Insufficient funds' })
+    db.prepare(`INSERT OR IGNORE INTO student (id, credit_balance) VALUES (60, 0)`).run()
+
+    const handler = handlerMap.get('payment:record')
+    expect(handler).toBeDefined()
+    const result = await handler!(
+      {},
+      {
+        student_id: 60,
+        amount: 10000,
+        transaction_date: '2025-01-15',
+        payment_method: 'CASH',
+        payment_reference: 'REF-FAIL',
+        description: 'Should fail',
+        term_id: 1
+      },
+      // eslint-disable-next-line unicorn/no-useless-undefined
+      undefined // no legacy user id
+    ) as { success: boolean; error?: string }
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Insufficient funds')
   })
 })

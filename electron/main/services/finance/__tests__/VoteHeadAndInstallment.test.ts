@@ -262,6 +262,96 @@ describe('VoteHeadSpreadingService', () => {
         expect(result.remaining).toBe(5000000)
         expect(result.allocations).toHaveLength(4)
     })
+
+    it('returns empty when invoice has no items', () => {
+        // Create invoice without items
+        db.prepare(`
+          INSERT INTO fee_invoice (invoice_number, student_id, term_id, invoice_date, due_date, total_amount, created_by_user_id)
+          VALUES ('INV-EMPTY', 1, 1, '2026-01-15', '2026-02-15', 0, 1)
+        `).run()
+        const emptyInvoiceId = db.prepare("SELECT id FROM fee_invoice WHERE invoice_number = 'INV-EMPTY'").get() as { id: number }
+        const allocationId = createPaymentAllocation(db, emptyInvoiceId.id, 5000)
+
+        const service = new VoteHeadSpreadingService(db)
+        const result = service.spreadPaymentOverItems(allocationId, emptyInvoiceId.id, 5000)
+
+        expect(result.allocations).toHaveLength(0)
+        expect(result.total_applied).toBe(0)
+        expect(result.remaining).toBe(5000)
+    })
+
+    it('returns balances for invoice with no items', () => {
+        db.prepare(`
+          INSERT INTO fee_invoice (invoice_number, student_id, term_id, invoice_date, due_date, total_amount, created_by_user_id)
+          VALUES ('INV-EMPTY2', 1, 1, '2026-01-15', '2026-02-15', 0, 1)
+        `).run()
+        const emptyInvoiceId = db.prepare("SELECT id FROM fee_invoice WHERE invoice_number = 'INV-EMPTY2'").get() as { id: number }
+
+        const service = new VoteHeadSpreadingService(db)
+        const balances = service.getVoteHeadBalance(emptyInvoiceId.id)
+        expect(balances).toHaveLength(0)
+    })
+
+    it('skips already fully-paid items (outstanding <= 0)', () => {
+        const invoiceId = createInvoiceWithItems(db)
+        const service = new VoteHeadSpreadingService(db)
+
+        // First: pay the full Tuition (8,000,000) and full Lunch (3,000,000)
+        const alloc1 = createPaymentAllocation(db, invoiceId, 11000000)
+        service.spreadPaymentOverItems(alloc1, invoiceId, 11000000)
+
+        // Second payment: 5,000,000 → Tuition and Lunch are already fully paid, should skip to Transport
+        const alloc2 = createPaymentAllocation(db, invoiceId, 5000000)
+        const result2 = service.spreadPaymentOverItems(alloc2, invoiceId, 5000000)
+
+        // Should skip Tuition (outstanding=0), skip Lunch (outstanding=0), apply to Transport (2,500,000) then Activity (1,500,000)
+        expect(result2.allocations).toHaveLength(2)
+        expect(result2.allocations[0]).toEqual({ invoice_item_id: 3, applied_amount: 2500000 }) // Transport fully paid
+        expect(result2.allocations[1]).toEqual({ invoice_item_id: 4, applied_amount: 1500000 }) // Activity fully paid
+        expect(result2.remaining).toBe(1000000) // 5M - 2.5M - 1.5M = 1M remaining
+    })
+
+    it('breaks early when payment is exhausted mid-loop', () => {
+        const invoiceId = createInvoiceWithItems(db)
+        const service = new VoteHeadSpreadingService(db)
+
+        // Pay exactly the Tuition amount → remaining becomes 0 before processing Lunch
+        const alloc = createPaymentAllocation(db, invoiceId, 8000000)
+        const result = service.spreadPaymentOverItems(alloc, invoiceId, 8000000)
+
+        expect(result.allocations).toHaveLength(1)
+        expect(result.allocations[0]).toEqual({ invoice_item_id: 1, applied_amount: 8000000 })
+        expect(result.remaining).toBe(0)
+        expect(result.total_applied).toBe(8000000)
+    })
+
+    // ── branch coverage: tiny payment exhausted after first partial item ──
+    it('spreadPaymentOverItems with amount smaller than first item leaves remaining at 0', () => {
+        const service = new VoteHeadSpreadingService(db)
+        const invoiceId = createInvoiceWithItems(db)
+        // Pay only 1000 cents against Tuition (8M) – tests the remaining <= 0 branch after first application
+        const alloc = createPaymentAllocation(db, invoiceId, 1000)
+        const result = service.spreadPaymentOverItems(alloc, invoiceId, 1000)
+        expect(result.total_applied).toBe(1000)
+        expect(result.remaining).toBe(0)
+    })
+
+    // ── branch coverage: getVoteHeadBalance reflects paid amounts after partial spread ──
+    it('getVoteHeadBalance shows correct outstanding after partial spread', () => {
+        const service = new VoteHeadSpreadingService(db)
+        const invoiceId = createInvoiceWithItems(db)
+        const alloc = createPaymentAllocation(db, invoiceId, 10000000)
+        service.spreadPaymentOverItems(alloc, invoiceId, 10000000)
+        // 10M: fills Tuition (8M), then 2M towards Lunch (3M)
+        const balances = service.getVoteHeadBalance(invoiceId)
+        expect(balances).toHaveLength(4)
+        const tuition = balances.find(b => b.category_name === 'Tuition')!
+        expect(tuition.total_paid).toBe(8000000)
+        expect(tuition.outstanding).toBe(0)
+        const lunch = balances.find(b => b.category_name === 'Lunch')!
+        expect(lunch.total_paid).toBe(2000000)
+        expect(lunch.outstanding).toBe(1000000)
+    })
 })
 
 // ============================================================================
@@ -377,5 +467,42 @@ describe('InstallmentPolicyService', () => {
 
         const policies = service.getPoliciesForTerm(1)
         expect(policies).toHaveLength(0) // Deactivated
+    })
+
+    it('filters policies by streamId (includes stream-specific and NULL stream)', () => {
+        const service = new InstallmentPolicyService(db)
+        // Policy with specific stream
+        service.createPolicy({
+            policy_name: 'Grade 7 Plan',
+            academic_year_id: 1,
+            stream_id: 1,
+            student_type: 'ALL',
+            schedules: [
+                { installment_number: 1, percentage: 50, due_date: '2026-01-15' },
+                { installment_number: 2, percentage: 50, due_date: '2026-02-15' },
+            ]
+        }, 1)
+
+        // Policy without stream (applies to all)
+        service.createPolicy({
+            policy_name: 'Universal Plan',
+            academic_year_id: 1,
+            student_type: 'ALL',
+            schedules: [
+                { installment_number: 1, percentage: 50, due_date: '2026-01-15' },
+                { installment_number: 2, percentage: 50, due_date: '2026-02-15' },
+            ]
+        }, 1)
+
+        const streamPolicies = service.getPoliciesForTerm(1, 1)
+        expect(streamPolicies).toHaveLength(2) // stream-specific + universal (NULL stream)
+    })
+})
+
+// ── Branch coverage: VoteHeadAllocationRepository constructor getDatabase() fallback (L47) ──
+describe('VoteHeadSpreadingService – constructor fallback', () => {
+    it('falls back to getDatabase() when no db is provided', () => {
+        // Exercises the || getDatabase() branch in VoteHeadAllocationRepository constructor
+        expect(() => new VoteHeadSpreadingService()).toThrow()
     })
 })

@@ -13,6 +13,10 @@ const journalServiceMock = {
   createJournalEntrySync: vi.fn((): { success: boolean; error?: string } => ({ success: true })),
 }
 
+const budgetServiceMock = {
+  validateTransaction: vi.fn((): { is_allowed: boolean; message?: string } => ({ is_allowed: true })),
+}
+
 // Mock keytar to provide a valid ADMIN session so safeHandleRawWithRole passes
 vi.mock('keytar', () => ({
   default: {
@@ -54,6 +58,9 @@ vi.mock('../../../services/base/ServiceContainer', () => ({
       if (name === 'DoubleEntryJournalService') {
         return journalServiceMock
       }
+      if (name === 'BudgetEnforcementService') {
+        return budgetServiceMock
+      }
       return {}
     })
   }
@@ -66,6 +73,8 @@ describe('transactions IPC handlers', () => {
     handlerMap.clear()
     journalServiceMock.createJournalEntrySync.mockReset()
     journalServiceMock.createJournalEntrySync.mockReturnValue({ success: true })
+    budgetServiceMock.validateTransaction.mockReset()
+    budgetServiceMock.validateTransaction.mockReturnValue({ is_allowed: true })
 
     db = new Database(':memory:')
     db.exec(`
@@ -175,6 +184,20 @@ describe('transactions IPC handlers', () => {
       INSERT INTO transaction_category (id, category_name, category_type, gl_account_code, is_active)
       VALUES (1, 'General Income', 'INCOME', '4300', 1)
     `).run()
+    db.prepare(`
+      INSERT INTO transaction_category (id, category_name, category_type, gl_account_code, is_active)
+      VALUES (2, 'Office Supplies', 'EXPENSE', '5100', 1)
+    `).run()
+
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS user (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'TEACHER',
+        full_name TEXT
+      );
+      INSERT INTO user (id, username, role, full_name) VALUES (1, 'admin', 'ADMIN', 'Admin User');
+    `)
 
     registerTransactionsHandlers()
   })
@@ -227,7 +250,8 @@ describe('transactions IPC handlers', () => {
   })
 
   it('transaction:create rejects future transaction date', async () => {
-    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const d = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)
+    const tomorrow = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     const handler = handlerMap.get('transaction:create')!
     const event = {};
     attachActor(event);
@@ -305,5 +329,324 @@ describe('transactions IPC handlers', () => {
     expect(row.payment_method).toBe('BANK')
     expect(row.amount).toBe(2500)
     expect(row.transaction_type).toBe('INCOME')
+  })
+
+  // ── transaction:getCategories ─────────────────────────────────
+  it('transaction:getCategories returns active categories', async () => {
+    const handler = handlerMap.get('transaction:getCategories')!
+    const event = {};
+    attachActor(event);
+    const result = await handler(event) as Array<{ id: number; category_name: string }>
+    expect(result).toHaveLength(2)
+    expect(result[0].category_name).toBe('General Income')
+    expect(result[1].category_name).toBe('Office Supplies')
+  })
+
+  // ── transaction:createCategory ────────────────────────────────
+  it('transaction:createCategory creates a new category', async () => {
+    const handler = handlerMap.get('transaction:createCategory')!
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, 'Transport', 'EXPENSE') as { success: boolean; id: number | bigint }
+    expect(result.success).toBe(true)
+    expect(result.id).toBeGreaterThan(0)
+
+    const cat = db.prepare('SELECT category_name, category_type FROM transaction_category WHERE id = ?').get(result.id) as { category_name: string; category_type: string }
+    expect(cat.category_name).toBe('Transport')
+    expect(cat.category_type).toBe('EXPENSE')
+  })
+
+  // ── transaction:getAll ────────────────────────────────────────
+  it('transaction:getAll returns paginated transactions without filters', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    db.prepare(`INSERT INTO ledger_transaction (transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit, payment_method, recorded_by_user_id, is_voided) VALUES ('TXN-1', ?, 'INCOME', 1, 5000, 'CREDIT', 'CASH', 1, 0)`).run(today)
+
+    const handler = handlerMap.get('transaction:getAll')!
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, {}) as { rows: unknown[]; totalCount: number; page: number; pageSize: number }
+    expect(result.totalCount).toBe(1)
+    expect(result.rows).toHaveLength(1)
+    expect(result.page).toBe(1)
+  })
+
+  it('transaction:getAll applies date and type filters', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    db.prepare(`INSERT INTO ledger_transaction (transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit, payment_method, recorded_by_user_id, is_voided) VALUES ('TXN-A', ?, 'INCOME', 1, 1000, 'CREDIT', 'CASH', 1, 0)`).run(today)
+    db.prepare(`INSERT INTO ledger_transaction (transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit, payment_method, recorded_by_user_id, is_voided) VALUES ('TXN-B', ?, 'EXPENSE', 2, 2000, 'DEBIT', 'BANK', 1, 0)`).run(today)
+
+    const handler = handlerMap.get('transaction:getAll')!
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, { startDate: today, endDate: today, type: 'EXPENSE' }) as { rows: unknown[]; totalCount: number }
+    expect(result.totalCount).toBe(1)
+    expect(result.rows).toHaveLength(1)
+  })
+
+  it('transaction:getAll filters by categoryId', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    db.prepare(`INSERT INTO ledger_transaction (transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit, payment_method, recorded_by_user_id, is_voided) VALUES ('TXN-X', ?, 'INCOME', 1, 1000, 'CREDIT', 'CASH', 1, 0)`).run(today)
+    db.prepare(`INSERT INTO ledger_transaction (transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit, payment_method, recorded_by_user_id, is_voided) VALUES ('TXN-Y', ?, 'EXPENSE', 2, 2000, 'DEBIT', 'BANK', 1, 0)`).run(today)
+
+    const handler = handlerMap.get('transaction:getAll')!
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, { categoryId: 2 }) as { rows: unknown[]; totalCount: number }
+    expect(result.totalCount).toBe(1)
+  })
+
+  // ── transaction:getSummary ────────────────────────────────────
+  it('transaction:getSummary returns income/expense totals', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    db.prepare(`INSERT INTO ledger_transaction (transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit, payment_method, recorded_by_user_id, is_voided) VALUES ('TXN-I1', ?, 'INCOME', 1, 3000, 'CREDIT', 'CASH', 1, 0)`).run(today)
+    db.prepare(`INSERT INTO ledger_transaction (transaction_ref, transaction_date, transaction_type, category_id, amount, debit_credit, payment_method, recorded_by_user_id, is_voided) VALUES ('TXN-E1', ?, 'EXPENSE', 2, 1000, 'DEBIT', 'BANK', 1, 0)`).run(today)
+
+    const handler = handlerMap.get('transaction:getSummary')!
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, today, today) as { totalIncome: number; totalExpense: number; netBalance: number }
+    expect(result.totalIncome).toBe(3000)
+    expect(result.totalExpense).toBe(1000)
+    expect(result.netBalance).toBe(2000)
+  })
+
+  // ── transaction:create edge cases ─────────────────────────────
+  it('transaction:create rejects non-existent category', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    const handler = handlerMap.get('transaction:create')!
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, {
+      transaction_date: today,
+      transaction_type: 'INCOME',
+      category_id: 999,
+      amount: 500,
+      payment_method: 'CASH',
+    }) as { success: boolean; error?: string }
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('does not exist')
+  })
+
+  it('transaction:create EXPENSE with budget NOT allowed returns error', async () => {
+    budgetServiceMock.validateTransaction.mockReturnValue({ is_allowed: false, message: 'Budget exceeded for GL 5100' })
+    const today = new Date().toISOString().slice(0, 10)
+    const handler = handlerMap.get('transaction:create')!
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, {
+      transaction_date: today,
+      transaction_type: 'EXPENSE',
+      category_id: 2,
+      amount: 50000,
+      payment_method: 'BANK',
+    }) as { success: boolean; error?: string }
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('Budget exceeded')
+  })
+
+  it('transaction:create EXPENSE budget override by ADMIN with reason succeeds', async () => {
+    budgetServiceMock.validateTransaction.mockReturnValue({ is_allowed: false, message: 'Over budget' })
+    const today = new Date().toISOString().slice(0, 10)
+    const handler = handlerMap.get('transaction:create')!
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, {
+      transaction_date: today,
+      transaction_type: 'EXPENSE',
+      category_id: 2,
+      amount: 50000,
+      payment_method: 'BANK',
+      force_budget_override: true,
+      budget_override_reason: 'Emergency repair',
+    }) as { success: boolean; id?: number | bigint }
+    expect(result.success).toBe(true)
+    expect(result.id).toBeDefined()
+  })
+
+  it('transaction:create EXPENSE creates correct journal entry codes', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    const handler = handlerMap.get('transaction:create')!
+    const event = {};
+    attachActor(event);
+    await handler(event, {
+      transaction_date: today,
+      transaction_type: 'EXPENSE',
+      category_id: 2,
+      amount: 1500,
+      payment_method: 'CASH',
+      description: 'Test expense',
+    })
+    expect(journalServiceMock.createJournalEntrySync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entry_type: 'EXPENSE',
+        lines: expect.arrayContaining([
+          expect.objectContaining({ gl_account_code: '5100', debit_amount: 1500 }),
+          expect.objectContaining({ gl_account_code: '1010', credit_amount: 1500 }),
+        ]),
+      })
+    )
+  })
+
+  it('transaction:create INCOME with CASH uses cash account code 1010', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    const handler = handlerMap.get('transaction:create')!
+    const event = {};
+    attachActor(event);
+    await handler(event, {
+      transaction_date: today,
+      transaction_type: 'INCOME',
+      category_id: 1,
+      amount: 3000,
+      payment_method: 'CASH',
+      description: 'Cash income',
+    })
+    expect(journalServiceMock.createJournalEntrySync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entry_type: 'INCOME',
+        lines: expect.arrayContaining([
+          expect.objectContaining({ gl_account_code: '1010', debit_amount: 3000 }),
+          expect.objectContaining({ gl_account_code: '4300', credit_amount: 3000 }),
+        ]),
+      })
+    )
+  })
+
+  /* ================================================================
+   *  Branch coverage: NULL gl_account_code fallback paths
+   * ================================================================ */
+  it('transaction:create INCOME with NULL gl_account_code falls back to 4300', async () => {
+    db.prepare(`INSERT INTO transaction_category (id, category_name, category_type, gl_account_code, is_active) VALUES (10, 'NoGL Income', 'INCOME', NULL, 1)`).run()
+    const today = new Date().toISOString().slice(0, 10)
+    const handler = handlerMap.get('transaction:create')!
+    const event = {};
+    attachActor(event);
+    await handler(event, {
+      transaction_date: today,
+      transaction_type: 'INCOME',
+      category_id: 10,
+      amount: 1000,
+      payment_method: 'BANK',
+    })
+    expect(journalServiceMock.createJournalEntrySync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lines: expect.arrayContaining([
+          expect.objectContaining({ gl_account_code: '4300', credit_amount: 1000 }),
+        ]),
+      })
+    )
+  })
+
+  it('transaction:create EXPENSE with NULL gl_account_code falls back to 5900 and skips budget check', async () => {
+    db.prepare(`INSERT INTO transaction_category (id, category_name, category_type, gl_account_code, is_active) VALUES (11, 'NoGL Expense', 'EXPENSE', NULL, 1)`).run()
+    const today = new Date().toISOString().slice(0, 10)
+    const handler = handlerMap.get('transaction:create')!
+    const event = {};
+    attachActor(event);
+    await handler(event, {
+      transaction_date: today,
+      transaction_type: 'EXPENSE',
+      category_id: 11,
+      amount: 500,
+      payment_method: 'CASH',
+    })
+    expect(budgetServiceMock.validateTransaction).not.toHaveBeenCalled()
+    expect(journalServiceMock.createJournalEntrySync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lines: expect.arrayContaining([
+          expect.objectContaining({ gl_account_code: '5900', debit_amount: 500 }),
+        ]),
+      })
+    )
+  })
+
+  it('transaction:create uses fallback description when description is omitted', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    const handler = handlerMap.get('transaction:create')!
+    const event = {};
+    attachActor(event);
+    await handler(event, {
+      transaction_date: today,
+      transaction_type: 'INCOME',
+      category_id: 1,
+      amount: 2000,
+      payment_method: 'BANK',
+    })
+    expect(journalServiceMock.createJournalEntrySync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: expect.stringContaining('INCOME'),
+      })
+    )
+  })
+
+  it('transaction:getSummary returns zeros when no matching transactions exist', async () => {
+    const handler = handlerMap.get('transaction:getSummary')!
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, '2020-01-01', '2020-12-31') as any
+    expect(result.totalIncome).toBe(0)
+    expect(result.totalExpense).toBe(0)
+    expect(result.netBalance).toBe(0)
+  })
+
+  it('transaction:getAll uses default pageSize when not provided', async () => {
+    const handler = handlerMap.get('transaction:getAll')!
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, { page: 1 }) as any
+    expect(result.pageSize).toBe(50)
+  })
+
+  it('transaction:create EXPENSE budget not allowed without user table still returns error', async () => {
+    // Drop user table to test hasUserTable = false path
+    db.exec('DROP TABLE IF EXISTS user')
+    budgetServiceMock.validateTransaction.mockReturnValue({ is_allowed: false, message: 'Over budget' })
+    const today = new Date().toISOString().slice(0, 10)
+    const handler = handlerMap.get('transaction:create')!
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, {
+      transaction_date: today,
+      transaction_type: 'EXPENSE',
+      category_id: 2,
+      amount: 50000,
+      payment_method: 'BANK',
+    }) as { success: boolean; error?: string }
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('Over budget')
+  })
+
+  it('transaction:create EXPENSE budget override without reason fails', async () => {
+    budgetServiceMock.validateTransaction.mockReturnValue({ is_allowed: false, message: 'Budget exceeded' })
+    const today = new Date().toISOString().slice(0, 10)
+    const handler = handlerMap.get('transaction:create')!
+    const event = {};
+    attachActor(event);
+    const result = await handler(event, {
+      transaction_date: today,
+      transaction_type: 'EXPENSE',
+      category_id: 2,
+      amount: 50000,
+      payment_method: 'BANK',
+      force_budget_override: true,
+      // No budget_override_reason
+    }) as { success: boolean; error?: string }
+    expect(result.success).toBe(false)
+  })
+
+  it('transaction:getAll with only type filter and no dates', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    const handler = handlerMap.get('transaction:create')!
+    const event = {};
+    attachActor(event);
+    await handler(event, {
+      transaction_date: today,
+      transaction_type: 'INCOME',
+      category_id: 1,
+      amount: 1000,
+      payment_method: 'CASH',
+    })
+    const getAllHandler = handlerMap.get('transaction:getAll')!
+    const result = await getAllHandler(event, { type: 'INCOME' }) as any
+    expect(result.rows.length).toBeGreaterThan(0)
   })
 })

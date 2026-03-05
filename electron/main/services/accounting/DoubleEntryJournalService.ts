@@ -181,11 +181,14 @@ export class DoubleEntryJournalService {
     return { valid: true };
   }
 
+  /** Half-cent epsilon – tolerates IEEE-754 floating-point rounding */
+  private static readonly BALANCE_EPSILON = 0.005;
+
   private validateBalancing(lines: JournalEntryLineData[]): { message?: string; totalCredits: number; totalDebits: number; valid: boolean } {
     const totalDebits = lines.reduce((sum, line) => sum + line.debit_amount, 0);
     const totalCredits = lines.reduce((sum, line) => sum + line.credit_amount, 0);
 
-    if (totalDebits !== totalCredits) {
+    if (Math.abs(totalDebits - totalCredits) > DoubleEntryJournalService.BALANCE_EPSILON) {
       return {
         valid: false,
         totalDebits,
@@ -264,7 +267,7 @@ export class DoubleEntryJournalService {
         requiresApproval ? 'PENDING' : 'APPROVED',
         data.created_by_user_id
       ];
-      const placeholders = Array(columns.length).fill('?');
+      const placeholders = new Array(columns.length).fill('?');
 
       if (supportsSupplier) {
         columns.push('supplier_id');
@@ -380,9 +383,9 @@ export class DoubleEntryJournalService {
     paymentReference: string,
     paymentDate: string,
     userId: number,
-    sourceLedgerTxnId?: number,
-    debitAccountOverride?: string
+    options?: { sourceLedgerTxnId?: number; debitAccountOverride?: string }
   ): JournalWriteResult {
+    const { sourceLedgerTxnId, debitAccountOverride } = options ?? {};
     // Determine debit account (Asset/Liability to reduce)
     let debitAccountCode: string;
     if (debitAccountOverride) {
@@ -401,7 +404,7 @@ export class DoubleEntryJournalService {
       description: `Fee payment received - ${paymentMethod} - Ref: ${paymentReference}`,
       student_id: studentId,
       created_by_user_id: userId,
-      ...(sourceLedgerTxnId !== undefined ? { source_ledger_txn_id: sourceLedgerTxnId } : {}),
+      ...(sourceLedgerTxnId == null ? {} : { source_ledger_txn_id: sourceLedgerTxnId }),
       lines: [
         {
           gl_account_code: debitAccountCode,
@@ -428,10 +431,9 @@ export class DoubleEntryJournalService {
     paymentReference: string,
     paymentDate: string,
     userId: number,
-    sourceLedgerTxnId?: number,
-    debitAccountOverride?: string
+    options?: { sourceLedgerTxnId?: number; debitAccountOverride?: string }
   ): Promise<JournalWriteResult> {
-    return this.recordPaymentSync(studentId, amount, paymentMethod, paymentReference, paymentDate, userId, sourceLedgerTxnId, debitAccountOverride);
+    return this.recordPaymentSync(studentId, amount, paymentMethod, paymentReference, paymentDate, userId, options);
   }
 
   /**
@@ -490,16 +492,12 @@ export class DoubleEntryJournalService {
   /**
    * Voids a journal entry (creates reversing entry)
    */
-  /**
-   * Voids a journal entry (creates reversing entry)
-   */
   voidJournalEntrySync(
     entryId: number,
     voidReason: string,
     userId: number
   ): { success: boolean; message: string; requires_approval?: boolean } {
     try {
-      // Get original entry
       const originalEntry = this.db.prepare(`
         SELECT je.*, jel.gl_account_id, jel.debit_amount, jel.credit_amount, jel.description as line_desc, ga.account_code
         FROM journal_entry je
@@ -517,142 +515,135 @@ export class DoubleEntryJournalService {
       }>;
 
       if (originalEntry.length === 0) {
-        return {
-          success: false,
-          message: 'Journal entry not found or already voided'
-        };
+        return { success: false, message: 'Journal entry not found or already voided' };
       }
 
-      // Check if approval required for void
-      const firstEntry = originalEntry[0]
-      const daysOld = firstEntry ? Math.floor(
-        (Date.now() - new Date(firstEntry.entry_date).getTime()) / (1000 * 60 * 60 * 24)
-      ) : 0;
-
-      // Calculate total amount from line items
-      const totalAmount = originalEntry.reduce((sum, line) => sum + (line.debit_amount || 0), 0);
-
-      const needsApproval = this.db.prepare(`
-        SELECT id, rule_name FROM approval_rule
-        WHERE transaction_type = 'VOID'
-          AND is_active = 1
-          AND (
-            (min_amount IS NOT NULL AND ? >= min_amount)
-            OR (days_since_transaction IS NOT NULL AND ? >= days_since_transaction)
-          )
-      `).get(totalAmount, daysOld) as { id: number; rule_name: string } | undefined;
-
-      if (needsApproval) {
-        // Canonical approval path: approval_request table.
-        if (this.tableExists('approval_request')) {
-          const workflowId = this.getOrCreateWorkflowId('JOURNAL_ENTRY', 'Journal Entry Approvals');
-          if (!workflowId) {
-            throw new Error('Approval workflow unavailable for journal approvals');
-          }
-
-          const supportsRuleColumn = this.tableHasColumn('approval_request', 'approval_rule_id');
-          const requestResult = supportsRuleColumn ? this.db.prepare(`
-            INSERT INTO approval_request (
-              workflow_id, entity_type, entity_id,
-              status, requested_by_user_id, approval_rule_id
-            ) VALUES (?, 'JOURNAL_ENTRY', ?, 'PENDING', ?, ?)
-          `).run(workflowId, entryId, userId, needsApproval.id) : this.db.prepare(`
-            INSERT INTO approval_request (
-              workflow_id, entity_type, entity_id,
-              status, requested_by_user_id
-            ) VALUES (?, 'JOURNAL_ENTRY', ?, 'PENDING', ?)
-          `).run(workflowId, entryId, userId);
-
-          if (this.tableExists('approval_history')) {
-            this.db.prepare(`
-              INSERT INTO approval_history (
-                approval_request_id, action, action_by, previous_status, new_status, notes
-              ) VALUES (?, 'REQUESTED', ?, NULL, 'PENDING', ?)
-            `).run(
-              requestResult.lastInsertRowid as number,
-              userId,
-              `Void requires approval: ${needsApproval.rule_name}`
-            );
-          }
-
-          return {
-            success: true,
-            message: 'Void request submitted for approval',
-            requires_approval: true
-          };
-        }
-
-        // Legacy fallback for environments that have not yet migrated.
-        if (this.tableExists('transaction_approval')) {
-          this.db.prepare(`
-            INSERT INTO transaction_approval (
-              journal_entry_id, approval_rule_id,
-              requested_by_user_id, status
-            ) VALUES (?, ?, ?, 'PENDING')
-          `).run(entryId, needsApproval.id, userId);
-
-          return {
-            success: true,
-            message: 'Void request submitted for approval',
-            requires_approval: true
-          };
-        }
-
-        return {
-          success: false,
-          message: 'Approval subsystem is not available'
-        };
+      const approvalResult = this.submitVoidApprovalIfNeeded(entryId, userId, originalEntry);
+      if (approvalResult) {
+        return approvalResult;
       }
 
-      // Prepare Reversal Lines (Swap Debit/Credit)
-      const reversalLines: JournalEntryLineData[] = originalEntry.map((line) => ({
-        gl_account_code: line.account_code,
-        debit_amount: line.credit_amount, // Swap
-        credit_amount: line.debit_amount, // Swap
-        description: `Reversal: ${line.line_desc || ''}`
-      }));
-
-      const reversalData: JournalEntryData = {
-        entry_date: new Date().toISOString().slice(0, 10), // Today
-        entry_type: 'VOID_REVERSAL',
-        description: `Void Reversal for Ref: ${originalEntry[0]?.entry_ref ?? 'N/A'}. Reason: ${voidReason}`,
-        created_by_user_id: userId,
-        lines: reversalLines,
-        requires_approval: false // Reversals usually don't need double approval if void itself was approved/checked
-      };
-
-      // Transaction: Mark Original Void + Create Reversal
-      const executeVoid = this.db.transaction(() => {
-        // 1. Mark original as voided (for UI/Audit trail)
-        this.db.prepare(`
-          UPDATE journal_entry
-          SET is_voided = 1, voided_reason = ?, voided_by_user_id = ?, voided_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `).run(voidReason, userId, entryId);
-
-        // 2. Create Reversal Entry
-        const reversalResult = this.createJournalEntrySync(reversalData);
-        if (!reversalResult.success) {
-          throw new Error(`Failed to create reversal entry: ${reversalResult.error}`);
-        }
-
-        // 3. Audit log
-        logAudit(userId, 'VOID', 'journal_entry', entryId, null, { void_reason: voidReason, type: 'REVERSAL_CREATED' });
-      });
-
-      executeVoid();
-
-      return {
-        success: true,
-        message: 'Journal entry voided and reversal entry created successfully',
-        requires_approval: false
-      };
+      return this.executeVoidReversal(entryId, voidReason, userId, originalEntry);
     } catch (error) {
-      return {
-        success: false,
-        message: `Failed to void journal entry: ${(error as Error).message}`
-      };
+      return { success: false, message: `Failed to void journal entry: ${(error as Error).message}` };
     }
+  }
+
+  /**
+   * Check whether the void requires approval and, if so, persist the request.
+   * Returns a result object when approval is required (or the subsystem is unavailable),
+   * or `null` when the void can proceed immediately.
+   */
+  private submitVoidApprovalIfNeeded(
+    entryId: number,
+    userId: number,
+    originalEntry: Array<{ entry_date: string; debit_amount: number }>
+  ): { success: boolean; message: string; requires_approval?: boolean } | null {
+    const firstEntry = originalEntry[0];
+    const daysOld = firstEntry
+      ? Math.floor((Date.now() - new Date(firstEntry.entry_date).getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+    const totalAmount = originalEntry.reduce((sum, line) => sum + (line.debit_amount || 0), 0);
+
+    const needsApproval = this.db.prepare(`
+      SELECT id, rule_name FROM approval_rule
+      WHERE transaction_type = 'VOID'
+        AND is_active = 1
+        AND (
+          (min_amount IS NOT NULL AND ? >= min_amount)
+          OR (days_since_transaction IS NOT NULL AND ? >= days_since_transaction)
+        )
+    `).get(totalAmount, daysOld) as { id: number; rule_name: string } | undefined;
+
+    if (!needsApproval) {
+      return null; // no approval needed — caller proceeds with void
+    }
+
+    if (this.tableExists('approval_request')) {
+      return this.submitCanonicalApproval(entryId, userId, needsApproval);
+    }
+
+    if (this.tableExists('transaction_approval')) {
+      this.db.prepare(`
+        INSERT INTO transaction_approval (
+          journal_entry_id, approval_rule_id, requested_by_user_id, status
+        ) VALUES (?, ?, ?, 'PENDING')
+      `).run(entryId, needsApproval.id, userId);
+      return { success: true, message: 'Void request submitted for approval', requires_approval: true };
+    }
+
+    return { success: false, message: 'Approval subsystem is not available' };
+  }
+
+  private submitCanonicalApproval(
+    entryId: number,
+    userId: number,
+    rule: { id: number; rule_name: string }
+  ): { success: boolean; message: string; requires_approval: boolean } {
+    const workflowId = this.getOrCreateWorkflowId('JOURNAL_ENTRY', 'Journal Entry Approvals');
+    if (!workflowId) {
+      throw new Error('Approval workflow unavailable for journal approvals');
+    }
+
+    const supportsRuleColumn = this.tableHasColumn('approval_request', 'approval_rule_id');
+    const requestResult = supportsRuleColumn
+      ? this.db.prepare(`
+          INSERT INTO approval_request (workflow_id, entity_type, entity_id, status, requested_by_user_id, approval_rule_id)
+          VALUES (?, 'JOURNAL_ENTRY', ?, 'PENDING', ?, ?)
+        `).run(workflowId, entryId, userId, rule.id)
+      : this.db.prepare(`
+          INSERT INTO approval_request (workflow_id, entity_type, entity_id, status, requested_by_user_id)
+          VALUES (?, 'JOURNAL_ENTRY', ?, 'PENDING', ?)
+        `).run(workflowId, entryId, userId);
+
+    if (this.tableExists('approval_history')) {
+      this.db.prepare(`
+        INSERT INTO approval_history (approval_request_id, action, action_by, previous_status, new_status, notes)
+        VALUES (?, 'REQUESTED', ?, NULL, 'PENDING', ?)
+      `).run(requestResult.lastInsertRowid as number, userId, `Void requires approval: ${rule.rule_name}`);
+    }
+
+    return { success: true, message: 'Void request submitted for approval', requires_approval: true };
+  }
+
+  private executeVoidReversal(
+    entryId: number,
+    voidReason: string,
+    userId: number,
+    originalEntry: Array<{ entry_ref: string; credit_amount: number; debit_amount: number; account_code: string; line_desc: string }>
+  ): { success: boolean; message: string; requires_approval: boolean } {
+    const reversalLines: JournalEntryLineData[] = originalEntry.map((line) => ({
+      gl_account_code: line.account_code,
+      debit_amount: line.credit_amount,
+      credit_amount: line.debit_amount,
+      description: `Reversal: ${line.line_desc || ''}`
+    }));
+
+    const reversalData: JournalEntryData = {
+      entry_date: new Date().toISOString().slice(0, 10),
+      entry_type: 'VOID_REVERSAL',
+      description: `Void Reversal for Ref: ${originalEntry[0]?.entry_ref ?? 'N/A'}. Reason: ${voidReason}`,
+      created_by_user_id: userId,
+      lines: reversalLines,
+      requires_approval: false
+    };
+
+    this.db.transaction(() => {
+      this.db.prepare(`
+        UPDATE journal_entry
+        SET is_voided = 1, voided_reason = ?, voided_by_user_id = ?, voided_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(voidReason, userId, entryId);
+
+      const reversalResult = this.createJournalEntrySync(reversalData);
+      if (!reversalResult.success) {
+        throw new Error(`Failed to create reversal entry: ${reversalResult.error}`);
+      }
+
+      logAudit(userId, 'VOID', 'journal_entry', entryId, null, { void_reason: voidReason, type: 'REVERSAL_CREATED' });
+    })();
+
+    return { success: true, message: 'Journal entry voided and reversal entry created successfully', requires_approval: false };
   }
 
   async voidJournalEntry(
@@ -825,7 +816,7 @@ export class DoubleEntryJournalService {
   private generateEntryRef(entryType: string): string {
     const prefix = entryType.substring(0, 3).toUpperCase();
     const timestamp = Date.now();
-    const nonce = randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
+    const nonce = randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase();
     return `${prefix}-${timestamp}-${nonce}`;
   }
 

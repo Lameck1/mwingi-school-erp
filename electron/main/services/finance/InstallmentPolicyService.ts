@@ -58,7 +58,7 @@ class InstallmentPolicyService {
      */
     createPolicy(data: InstallmentPolicyData, userId: number): { success: boolean; id?: number; error?: string } {
         const totalPercentage = data.schedules.reduce((sum, s) => sum + s.percentage, 0)
-        if (totalPercentage !== 100) {
+        if (Math.abs(totalPercentage - 100) > 0.01) {
             return { success: false, error: `Schedule percentages must sum to 100, got ${totalPercentage}` }
         }
 

@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 
-import { InvoiceValidator } from './InvoiceValidator'
 import { PaymentTransactionRepository, VoidAuditRepository } from './PaymentRepositories'
 import { getDatabase } from '../../database'
 import { logAudit } from '../../database/utils/audit'
@@ -24,10 +23,10 @@ import type {
   VoidedTransaction
 } from './PaymentService.types'
 import type Database from 'better-sqlite3'
+import { normalizeInvoiceStatus } from '../../utils/invoiceStatus'
 
-export { InvoiceValidator, PaymentTransactionRepository, VoidAuditRepository }
-
-const normalizeInvoiceStatus = (status: string | null | undefined): string => (status ?? 'PENDING').toUpperCase()
+export { InvoiceValidator } from './InvoiceValidator'
+export { PaymentTransactionRepository, VoidAuditRepository } from './PaymentRepositories'
 
 
 
@@ -101,8 +100,8 @@ export class PaymentProcessor {
   }
 
   private createTransactionRefs(): { transactionRef: string; receiptNumber: string } {
-    const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-    const nonce = randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()
+    const timestamp = new Date().toISOString().slice(0, 10).replaceAll('-', '')
+    const nonce = randomUUID().replaceAll('-', '').slice(0, 8).toUpperCase()
     const uniqueSegment = String(Date.now())
     return {
       transactionRef: `TXN-${timestamp}-${uniqueSegment}-${nonce}`,
@@ -212,9 +211,7 @@ export class PaymentProcessor {
     if (!this.paymentItemAllocationAvailable) {
       return
     }
-    if (!this.voteHeadService) {
-      this.voteHeadService = new VoteHeadSpreadingService(this.db)
-    }
+    this.voteHeadService ??= new VoteHeadSpreadingService(this.db)
     this.voteHeadService.spreadPaymentOverItems(paymentAllocationId, invoiceId, appliedAmount)
   }
 
@@ -302,7 +299,7 @@ export class PaymentProcessor {
   }
 
   private applyInvoiceAndCreditUpdates(data: PaymentData, transactionId: number): void {
-    let remainingAmount = data.amount
+    let remainingAmount: number
 
     if (data.invoice_id) {
       remainingAmount = this.applyPaymentToSpecificInvoice(transactionId, data.invoice_id, data.amount)
@@ -413,7 +410,7 @@ export class PaymentProcessor {
       data.payment_reference,
       data.transaction_date,
       data.recorded_by_user_id,
-      transactionId
+      { sourceLedgerTxnId: transactionId }
     )
     if (!journalResult.success) {
       throw new Error(journalResult.error || 'Failed to create journal entry for payment')
@@ -473,7 +470,14 @@ export class VoidProcessor implements IPaymentVoidProcessor {
     }
 
     const newPaid = Math.max(0, (invoice.amount_paid || 0) - appliedAmount)
-    const status = newPaid <= 0 ? 'PENDING' : (newPaid >= invoice.invoice_amount ? 'PAID' : 'PARTIAL')
+    let status: 'PENDING' | 'PAID' | 'PARTIAL'
+    if (newPaid <= 0) {
+      status = 'PENDING'
+    } else if (newPaid >= invoice.invoice_amount) {
+      status = 'PAID'
+    } else {
+      status = 'PARTIAL'
+    }
 
     this.db.prepare(`
       UPDATE fee_invoice
@@ -529,51 +533,55 @@ export class VoidProcessor implements IPaymentVoidProcessor {
     }
 
     if (shortfall > 0) {
-      // Trace and reverse invoice allocations originally funded by the spent credit
-      const recentCreditTxns = this.db.prepare(`
-        SELECT lt.id, lt.amount 
-        FROM ledger_transaction lt
-        WHERE lt.student_id = ? 
-          AND lt.is_voided = 0
-          AND (lt.payment_method = 'CREDIT_BALANCE' OR lt.payment_reference = 'CREDIT_BALANCE')
-        ORDER BY lt.id DESC
-      `).all(studentId) as Array<{ id: number; amount: number }>
+      this.reverseCreditShortfall(studentId, shortfall, transactionId)
+    }
+  }
 
-      let remainingShortfall = shortfall
+  private reverseCreditShortfall(studentId: number, shortfall: number, transactionId: number): void {
+    // Trace and reverse invoice allocations originally funded by the spent credit
+    const recentCreditTxns = this.db.prepare(`
+      SELECT lt.id, lt.amount 
+      FROM ledger_transaction lt
+      WHERE lt.student_id = ? 
+        AND lt.is_voided = 0
+        AND (lt.payment_method = 'CREDIT_BALANCE' OR lt.payment_reference = 'CREDIT_BALANCE')
+      ORDER BY lt.id DESC
+    `).all(studentId) as Array<{ id: number; amount: number }>
 
-      for (const txn of recentCreditTxns) {
+    let remainingShortfall = shortfall
+
+    for (const txn of recentCreditTxns) {
+      if (remainingShortfall <= 0) { break }
+
+      const allocations = this.getPaymentAllocations(txn.id)
+      for (const alloc of allocations) {
         if (remainingShortfall <= 0) { break }
 
-        const allocations = this.getPaymentAllocations(txn.id)
-        for (const alloc of allocations) {
-          if (remainingShortfall <= 0) { break }
-
-          const reverseAmount = Math.min(alloc.applied_amount, remainingShortfall)
-          this.reverseInvoiceAllocation(alloc.invoice_id, reverseAmount)
-
-          this.db.prepare(`
-            UPDATE payment_invoice_allocation 
-            SET applied_amount = applied_amount - ? 
-            WHERE invoice_id = ? AND transaction_id = ?
-          `).run(reverseAmount, alloc.invoice_id, txn.id)
-
-          remainingShortfall -= reverseAmount
-        }
-      }
-
-      // If there is still a shortfall (e.g. credit was consumed in a way we couldn't trace), force the credit balance negative.
-      if (remainingShortfall > 0) {
-        this.db.prepare(`UPDATE student SET credit_balance = credit_balance - ? WHERE id = ?`).run(remainingShortfall, studentId)
+        const reverseAmount = Math.min(alloc.applied_amount, remainingShortfall)
+        this.reverseInvoiceAllocation(alloc.invoice_id, reverseAmount)
 
         this.db.prepare(`
-          INSERT INTO credit_transaction (student_id, amount, transaction_type, notes, created_at)
-          VALUES (?, ?, 'CREDIT_REFUNDED', ?, CURRENT_TIMESTAMP)
-        `).run(
-          studentId,
-          remainingShortfall,
-          `Forced negative balance from void reversal shortfall of transaction #${transactionId}`
-        )
+          UPDATE payment_invoice_allocation 
+          SET applied_amount = applied_amount - ? 
+          WHERE invoice_id = ? AND transaction_id = ?
+        `).run(reverseAmount, alloc.invoice_id, txn.id)
+
+        remainingShortfall -= reverseAmount
       }
+    }
+
+    // If there is still a shortfall (e.g. credit was consumed in a way we couldn't trace), force the credit balance negative.
+    if (remainingShortfall > 0) {
+      this.db.prepare(`UPDATE student SET credit_balance = credit_balance - ? WHERE id = ?`).run(remainingShortfall, studentId)
+
+      this.db.prepare(`
+        INSERT INTO credit_transaction (student_id, amount, transaction_type, notes, created_at)
+        VALUES (?, ?, 'CREDIT_REFUNDED', ?, CURRENT_TIMESTAMP)
+      `).run(
+        studentId,
+        remainingShortfall,
+        `Forced negative balance from void reversal shortfall of transaction #${transactionId}`
+      )
     }
   }
 
@@ -646,7 +654,7 @@ export class VoidProcessor implements IPaymentVoidProcessor {
   }
 
   private createReversalTransaction(transaction: PaymentTransaction, data: VoidPaymentData, categoryId: number): number {
-    const reversalRef = `VOID-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${randomUUID().slice(0, 8)}`
+    const reversalRef = `VOID-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${randomUUID().slice(0, 8)}`
 
     // Phase 3: Dynamic Payment Method for Refunds
     const paymentMethod = transaction.payment_method || 'CASH'

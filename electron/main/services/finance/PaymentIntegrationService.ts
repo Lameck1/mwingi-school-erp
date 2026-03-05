@@ -108,7 +108,7 @@ interface JournalEntryContext {
   legacyTransactionId: number;
 }
 
-const normalizeInvoiceStatus = (status: string | null | undefined): string => (status ?? 'PENDING').toUpperCase();
+import { normalizeInvoiceStatus } from '../../utils/invoiceStatus'
 
 export class PaymentIntegrationService {
   private readonly db: Database.Database;
@@ -215,8 +215,8 @@ export class PaymentIntegrationService {
         description,
         reference: paymentRef,
         recorded_by: userId,
-        ...(data.term_id !== undefined ? { term_id: data.term_id } : {}),
-        ...(data.invoice_id !== undefined ? { invoice_id: data.invoice_id } : {})
+        ...(data.term_id === undefined ? {} : { term_id: data.term_id }),
+        ...(data.invoice_id === undefined ? {} : { invoice_id: data.invoice_id })
       })
 
       if (!(paymentResult.success && paymentResult.journal_entry_id)) {
@@ -379,7 +379,7 @@ export class PaymentIntegrationService {
         message: 'Payment recorded successfully',
         transactionRef,
         receiptNumber,
-        ...(journalEntryId !== undefined ? { journalEntryId } : {}),
+        ...(journalEntryId === undefined ? {} : { journalEntryId }),
         legacyTransactionId
       }
     } catch (error) {
@@ -423,7 +423,7 @@ export class PaymentIntegrationService {
         description: data.description || `Fee payment from ${student.full_name} via ${data.payment_method} - Ref: ${data.reference}`,
         student_id: data.student_id,
         created_by_user_id: data.recorded_by,
-        ...(data.term_id !== undefined ? { term_id: data.term_id } : {}),
+        ...(data.term_id === undefined ? {} : { term_id: data.term_id }),
         lines: [
           {
             gl_account_code: cashAccountCode,
@@ -511,7 +511,7 @@ export class PaymentIntegrationService {
         return {
             success: false,
             message: voidResult.message,
-            ...(voidResult.requires_approval !== undefined ? { requires_approval: voidResult.requires_approval } : {})
+            ...(voidResult.requires_approval === undefined ? {} : { requires_approval: voidResult.requires_approval })
         };
       }
 

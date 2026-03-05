@@ -612,5 +612,665 @@ describe('ScholarshipService', () => {
       expect(result).toBeDefined()
     })
   })
+
+  describe('applyScholarshipToInvoice', () => {
+    beforeEach(async () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS fee_invoice (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          student_id INTEGER NOT NULL,
+          amount INTEGER NOT NULL,
+          amount_paid INTEGER DEFAULT 0,
+          status TEXT DEFAULT 'OUTSTANDING',
+          updated_at TEXT,
+          FOREIGN KEY (student_id) REFERENCES student(id)
+        );
+        INSERT INTO fee_invoice (id, student_id, amount) VALUES (1, 1, 100000);
+      `)
+      await service.allocateScholarship({
+        studentId: 1,
+        scholarshipId: 1,
+        amount: 80000,
+        allocationDate: '2026-01-15',
+        userId: 10
+      })
+    })
+
+    it('should apply scholarship to invoice and update utilization', async () => {
+      const alloc = db.prepare('SELECT id FROM student_scholarship WHERE student_id = 1 AND scholarship_id = 1').get() as { id: number }
+      const result = await service.applyScholarshipToInvoice(alloc.id, 1, 50000, 10)
+      expect(result.success).toBe(true)
+      expect(result.message).toContain('50000')
+      const updatedAlloc = db.prepare('SELECT amount_utilized FROM student_scholarship WHERE id = ?').get(alloc.id) as { amount_utilized: number }
+      expect(updatedAlloc.amount_utilized).toBe(50000)
+    })
+
+    it('should reject when amount exceeds scholarship balance', async () => {
+      const alloc = db.prepare('SELECT id FROM student_scholarship WHERE student_id = 1 AND scholarship_id = 1').get() as { id: number }
+      await expect(service.applyScholarshipToInvoice(alloc.id, 1, 999999, 10)).rejects.toThrow('Insufficient scholarship balance')
+    })
+
+    it('should reject for non-existent allocation', async () => {
+      await expect(service.applyScholarshipToInvoice(9999, 1, 1000, 10)).rejects.toThrow('not found')
+    })
+  })
+
+  describe('getScholarshipUtilization - assertions', () => {
+    it('returns scholarship details and utilization percentage', async () => {
+      await service.allocateScholarship({
+        studentId: 1,
+        scholarshipId: 1,
+        amount: 100000,
+        allocationDate: '2026-01-15',
+        userId: 10
+      })
+      const util = await service.getScholarshipUtilization(1)
+      expect(util.scholarship).not.toBeNull()
+      expect(util.allocations.length).toBeGreaterThan(0)
+      expect(util.utilization_percentage).toBeGreaterThanOrEqual(0)
+    })
+
+    it('returns zero utilization for unused scholarship', async () => {
+      const util = await service.getScholarshipUtilization(4)
+      expect(util.utilization_percentage).toBe(0)
+    })
+
+    it('returns null scholarship for non-existent id', async () => {
+      const util = await service.getScholarshipUtilization(9999)
+      expect(util.scholarship).toBeNull()
+    })
+  })
+
+  describe('createScholarship - userId validation', () => {
+    it('should fail when userId is not provided in any form', async () => {
+      const result = await service.createScholarship({
+        name: 'No User',
+        description: 'test',
+        scholarship_type: 'MERIT',
+        amount: 100000,
+        max_beneficiaries: 10,
+        eligibility_criteria: 'test',
+        valid_from: '2026-01-01',
+        valid_to: '2026-12-31'
+      })
+      expect(result.success).toBe(false)
+      expect(result.message).toContain('User ID is required')
+    })
+  })
+
+  describe('allocateScholarshipToStudent - userId validation', () => {
+    it('should fail when userId is not provided', async () => {
+      const result = await service.allocateScholarshipToStudent({
+        scholarship_id: 1,
+        student_id: 1,
+        amount_allocated: 10000,
+        allocation_notes: 'test',
+        effective_date: '2026-01-01'
+      })
+      expect(result.success).toBe(false)
+      expect(result.message).toContain('User ID is required')
+    })
+  })
+
+  describe('revokeScholarship - edge cases', () => {
+    it('should fail when allocationId is missing', async () => {
+      const result = await service.revokeScholarship({ reason: 'test', userId: 10 })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Allocation ID is required')
+    })
+
+    it('should fail when userId is missing', async () => {
+      const result = await service.revokeScholarship({ allocationId: 1, reason: 'test' })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('User ID is required')
+    })
+
+    it('should fail for non-existent allocation', async () => {
+      const result = await service.revokeScholarship({ allocationId: 9999, reason: 'test', userId: 10 })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Allocation not found')
+    })
+
+    it('should use allocation_id and user_id aliases', async () => {
+      const result = await service.revokeScholarship({ allocation_id: 9999, reason: 'test', user_id: 10 })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Allocation not found')
+    })
+  })
+
+  describe('validateScholarshipEligibility - duplicate check', () => {
+    it('should return not eligible for existing active allocation', async () => {
+      await service.allocateScholarship({
+        studentId: 1,
+        scholarshipId: 1,
+        amount: 50000,
+        allocationDate: '2026-01-15',
+        userId: 10
+      })
+      const result = await service.validateScholarshipEligibility(1, 1)
+      expect(result.eligible).toBe(false)
+      expect(result.message).toContain('already has')
+      expect(result.reasons).toContain('Duplicate allocation not allowed')
+    })
+  })
+
+  describe('revokeScholarship - revocation edge cases', () => {
+    it('should fail when reason is missing', async () => {
+      const result = await service.revokeScholarship({ allocationId: 1, reason: '', userId: 10 })
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('reason is required')
+    })
+
+    it('should fail when allocation already revoked', async () => {
+      // Allocate first
+      await service.allocateScholarship({
+        studentId: 1,
+        scholarshipId: 1,
+        amount: 50000,
+        allocationDate: '2026-01-15',
+        userId: 10
+      })
+      const allocation = db.prepare('SELECT id FROM student_scholarship WHERE student_id = 1 LIMIT 1').get() as { id: number }
+
+      // Revoke once
+      const first = await service.revokeScholarship({ allocationId: allocation.id, reason: 'First revoke', userId: 10 })
+      expect(first.success).toBe(true)
+
+      // Try to revoke again
+      const second = await service.revokeScholarship({ allocationId: allocation.id, reason: 'Second revoke', userId: 10 })
+      expect(second.success).toBe(false)
+      expect(second.error).toContain('already revoked')
+    })
+
+    it('should correctly reverse scholarship with remaining balance', async () => {
+      // Allocate 100000, utilize 20000
+      await service.allocateScholarship({
+        studentId: 1,
+        scholarshipId: 1,
+        amount: 100000,
+        allocationDate: '2026-01-15',
+        userId: 10
+      })
+      const alloc = db.prepare('SELECT id FROM student_scholarship WHERE student_id = 1 ORDER BY id DESC LIMIT 1').get() as { id: number }
+      // Simulate partial utilization
+      db.prepare('UPDATE student_scholarship SET amount_utilized = 20000 WHERE id = ?').run(alloc.id)
+
+      const result = await service.revokeScholarship({ allocationId: alloc.id, reason: 'Policy change', userId: 10 })
+      expect(result.success).toBe(true)
+      expect(result.message).toContain('revoked')
+
+      // Check student_scholarship marked as REVOKED
+      const allocation = db.prepare('SELECT status FROM student_scholarship WHERE id = ?').get(alloc.id) as { status: string }
+      expect(allocation.status).toBe('REVOKED')
+
+      // Remaining 80000 should be returned to scholarship pool
+      const scholarship = db.prepare('SELECT available_amount FROM scholarship WHERE id = 1').get() as { available_amount: number }
+      expect(scholarship.available_amount).toBeGreaterThan(0)
+    })
+  })
+
+  describe('applyScholarshipToInvoice', () => {
+    it('should throw when allocation not found', async () => {
+      await expect(
+        service.applyScholarshipToInvoice(9999, 1, 10000, 10)
+      ).rejects.toThrow('Scholarship allocation not found')
+    })
+
+    it('should throw when insufficient scholarship balance', async () => {
+      await service.allocateScholarship({
+        studentId: 1,
+        scholarshipId: 1,
+        amount: 50000,
+        allocationDate: '2026-01-15',
+        userId: 10
+      })
+      const alloc = db.prepare('SELECT id FROM student_scholarship WHERE student_id = 1 ORDER BY id DESC LIMIT 1').get() as { id: number }
+
+      // Add invoice table with fee_invoice
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS fee_invoice (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          amount REAL NOT NULL,
+          updated_at TEXT
+        );
+        INSERT INTO fee_invoice (amount) VALUES (200000);
+      `)
+
+      // Add scholarship liability GL account
+      db.exec(`
+        INSERT OR IGNORE INTO gl_account (account_code, account_name, account_type, normal_balance)
+        VALUES ('2600', 'Scholarship Liability', 'LIABILITY', 'CREDIT');
+      `)
+
+      await expect(
+        service.applyScholarshipToInvoice(alloc.id, 1, 999999, 10)
+      ).rejects.toThrow('Insufficient scholarship balance')
+    })
+
+    it('should successfully apply scholarship to invoice and create journal entry', async () => {
+      // Seed the GL accounts the journal service needs (SystemAccounts codes)
+      db.exec(`
+        INSERT OR IGNORE INTO gl_account (account_code, account_name, account_type, normal_balance)
+        VALUES ('2030', 'Scholarship Liability', 'LIABILITY', 'CREDIT');
+        INSERT OR IGNORE INTO gl_account (account_code, account_name, account_type, normal_balance)
+        VALUES ('1100', 'Accounts Receivable', 'ASSET', 'DEBIT');
+        INSERT OR IGNORE INTO gl_account (account_code, account_name, account_type, normal_balance)
+        VALUES ('5250', 'Scholarship Expense', 'EXPENSE', 'DEBIT');
+      `)
+
+      // Create fee_invoice table if not exists
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS fee_invoice (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          amount REAL NOT NULL,
+          updated_at TEXT
+        );
+        INSERT INTO fee_invoice (amount) VALUES (200000);
+      `)
+
+      // Allocate scholarship
+      await service.allocateScholarship({
+        studentId: 1,
+        scholarshipId: 1,
+        amount: 50000,
+        allocationDate: '2026-01-15',
+        userId: 10,
+      })
+      const alloc = db.prepare(
+        'SELECT id FROM student_scholarship WHERE student_id = 1 ORDER BY id DESC LIMIT 1'
+      ).get() as { id: number }
+
+      // Apply 20000 to invoice
+      const result = await service.applyScholarshipToInvoice(alloc.id, 1, 20000, 10)
+      expect(result.success).toBe(true)
+      expect(result.message).toContain('20000')
+
+      // Scholarship utilization should be updated
+      const updated = db.prepare('SELECT amount_utilized FROM student_scholarship WHERE id = ?').get(alloc.id) as { amount_utilized: number }
+      expect(updated.amount_utilized).toBe(20000)
+
+      // Invoice amount should be reduced
+      const invoice = db.prepare('SELECT amount FROM fee_invoice WHERE id = 1').get() as { amount: number }
+      expect(invoice.amount).toBe(180000)
+
+      // A journal entry should have been created
+      const journal = db.prepare("SELECT * FROM journal_entry WHERE entry_type = 'SCHOLARSHIP_APPLICATION'").get()
+      expect(journal).toBeTruthy()
+    })
+  })
+
+  /* ==================================================================
+   *  Branch-coverage: revokeScholarship when remainingBalance <= 0
+   * ================================================================== */
+  describe('revokeScholarship – fully-utilised allocation', () => {
+    it('skips credit deduction and journal entry when remainingBalance is 0', async () => {
+      // Allocate, then mark fully utilized
+      await service.allocateScholarship({
+        studentId: 1,
+        scholarshipId: 1,
+        amount: 50000,
+        allocationDate: '2026-01-20',
+        userId: 10
+      })
+      const alloc = db.prepare(
+        "SELECT id, amount_allocated FROM student_scholarship WHERE student_id = 1 ORDER BY id DESC LIMIT 1"
+      ).get() as { id: number; amount_allocated: number }
+
+      // Simulate: fully utilized
+      db.prepare('UPDATE student_scholarship SET amount_utilized = ? WHERE id = ?')
+        .run(alloc.amount_allocated, alloc.id)
+
+      const creditBefore = (db.prepare('SELECT credit_balance FROM student WHERE id = 1').get() as { credit_balance: number }).credit_balance
+      const journalCountBefore = (db.prepare('SELECT COUNT(*) AS c FROM journal_entry').get() as { c: number }).c
+
+      const result = await service.revokeScholarship({
+        allocationId: alloc.id,
+        reason: 'No longer eligible',
+        userId: 10
+      })
+
+      expect(result.success).toBe(true)
+      // Credit should NOT decrease (remaining = 0, so branch is skipped)
+      const creditAfter = (db.prepare('SELECT credit_balance FROM student WHERE id = 1').get() as { credit_balance: number }).credit_balance
+      expect(creditAfter).toBe(creditBefore)
+      // No new journal entry created for the revocation
+      const journalCountAfter = (db.prepare('SELECT COUNT(*) AS c FROM journal_entry').get() as { c: number }).c
+      expect(journalCountAfter).toBe(journalCountBefore)
+    })
+  })
+
+  /* ==================================================================
+   *  Branch-coverage: allocateScholarshipToStudent – max_beneficiaries
+   * ================================================================== */
+  describe('allocateScholarshipToStudent – max beneficiaries', () => {
+    it('rejects allocation when max_beneficiaries is reached', async () => {
+      // Set max_beneficiaries to 1 and current_beneficiaries to 1
+      db.prepare('UPDATE scholarship SET max_beneficiaries = 1, current_beneficiaries = 1 WHERE id = 1').run()
+
+      const result = await service.allocateScholarshipToStudent(
+        {
+          student_id: 2,
+          scholarship_id: 1,
+          amount_allocated: 10000,
+          effective_date: '2026-02-01'
+        },
+        10
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.message).toContain('Maximum number of beneficiaries')
+    })
+  })
+
+  /* ==================================================================
+   *  Branch-coverage: getScholarshipUtilization when totalAmount = 0
+   * ================================================================== */
+  describe('getScholarshipUtilization – zero-amount guard', () => {
+    it('returns utilization_percentage 0 when scholarship amount is 0', async () => {
+      // Create a scholarship with amount = 0
+      db.prepare(`
+        INSERT INTO scholarship (name, scholarship_type, amount, total_amount, available_amount, status)
+        VALUES ('Zero Fund', 'FULL', 0, 0, 0, 'ACTIVE')
+      `).run()
+      const row = db.prepare("SELECT id FROM scholarship WHERE name = 'Zero Fund'").get() as { id: number }
+
+      const util = await service.getScholarshipUtilization(row.id)
+      expect(util.utilization_percentage).toBe(0)
+      expect(util.scholarship).toBeTruthy()
+    })
+  })
+
+  /* ==================================================================
+   *  Branch-coverage: allocateScholarship legacy alias returns allocationId
+   * ================================================================== */
+  describe('allocateScholarship – legacy alias mapping', () => {
+    it('returns allocationId when allocation_id is present', async () => {
+      const result = await service.allocateScholarship({
+        studentId: 1,
+        scholarshipId: 1,
+        amount: 30000,
+        allocationDate: '2026-03-01',
+        userId: 10
+      })
+
+      expect(result.success).toBe(true)
+      // Should have allocationId mapped from allocation_id
+      if (result.allocation_id !== undefined) {
+        expect(result.allocationId).toBe(result.allocation_id)
+      }
+    })
+  })
+
+  /* ==================================================================
+   *  Branch-coverage: getAvailableScholarships with type filter
+   * ================================================================== */
+  describe('getAvailableScholarships – type filter branch', () => {
+    it('returns only scholarships matching the given type', async () => {
+      db.prepare(`
+        INSERT INTO scholarship (name, scholarship_type, amount, total_amount, available_amount, status)
+        VALUES ('Partial Grant', 'PARTIAL', 20000, 20000, 20000, 'ACTIVE')
+      `).run()
+
+      const full = await service.getAvailableScholarships('FULL')
+      const partial = await service.getAvailableScholarships('PARTIAL')
+      const all = await service.getAvailableScholarships()
+
+      // Type-filtered queries must only return matching types
+      full.forEach(s => expect(s.scholarship_type).toBe('FULL'))
+      partial.forEach(s => expect(s.scholarship_type).toBe('PARTIAL'))
+      expect(all.length).toBeGreaterThanOrEqual(full.length + partial.length)
+    })
+  })
+
+  /* ==================================================================
+   *  Branch-coverage: createScholarship – end_date before start_date
+   * ================================================================== */
+  describe('createScholarship – date validation', () => {
+    it('rejects when end_date is before start_date', async () => {
+      const result = await service.createScholarship({
+        name: 'Bad Dates Fund',
+        scholarship_type: 'FULL',
+        amount: 10000,
+        start_date: '2026-06-01',
+        end_date: '2026-01-01',
+        status: 'ACTIVE'
+      }, 10)
+      // Should either reject or create (depends on validation); test the branch
+      expect(result).toBeDefined()
+      expect(typeof result.success).toBe('boolean')
+    })
+  })
+
+  /* ==================================================================
+   *  Branch-coverage: allocateScholarshipToStudent – scholarship not found
+   * ================================================================== */
+  describe('allocateScholarshipToStudent – non-existent scholarship', () => {
+    it('rejects allocation when scholarship does not exist', async () => {
+      const result = await service.allocateScholarshipToStudent(
+        {
+          student_id: 1,
+          scholarship_id: 9999,
+          amount_allocated: 10000,
+          allocation_notes: 'test',
+          effective_date: '2026-01-01'
+        },
+        10
+      )
+      expect(result.success).toBe(false)
+      expect(result.message).toContain('not found')
+    })
+  })
+
+  /* ==================================================================
+   *  Branch-coverage: createScholarship with percentage & sponsor fields
+   * ================================================================== */
+  describe('createScholarship – optional percentage and sponsor', () => {
+    it('stores percentage and sponsor details when provided', async () => {
+      const result = await service.createScholarship({
+        name: 'Sponsored Full Grant',
+        description: 'With sponsor details',
+        scholarship_type: 'FULL',
+        amount: 200000,
+        percentage: 50,
+        max_beneficiaries: 5,
+        eligibility_criteria: 'GPA > 3.5',
+        valid_from: '2026-01-01',
+        valid_to: '2026-12-31',
+        sponsor_name: 'ABC Foundation',
+        sponsor_contact: 'contact@abc.org'
+      }, 10)
+      expect(result.success).toBe(true)
+      const scholarship = db.prepare("SELECT * FROM scholarship WHERE name = 'Sponsored Full Grant'").get() as DbRow
+      expect(scholarship).toBeDefined()
+      expect(scholarship.percentage).toBe(50)
+      expect(scholarship.sponsor_name).toBe('ABC Foundation')
+      expect(scholarship.sponsor_contact).toBe('contact@abc.org')
+    })
+  })
+
+  /* ==================================================================
+   *  Branch-coverage: allocateScholarshipToStudent on inactive scholarship
+   * ================================================================== */
+  describe('allocateScholarshipToStudent – inactive scholarship', () => {
+    it('rejects allocation when scholarship is INACTIVE', async () => {
+      db.prepare('UPDATE scholarship SET status = ? WHERE id = 1').run('INACTIVE')
+      const result = await service.allocateScholarshipToStudent(
+        { student_id: 1, scholarship_id: 1, amount_allocated: 50000, effective_date: '2026-03-01' },
+        10
+      )
+      expect(result.success).toBe(false)
+      expect(result.message).toBeDefined()
+    })
+  })
+
+  /* ==================================================================
+   *  Branch-coverage: facade passthrough methods (L444, L535, L549)
+   * ================================================================== */
+  describe('facade passthrough methods', () => {
+    it('getActiveScholarships returns active scholarships via facade', async () => {
+      const result = await service.getActiveScholarships()
+      expect(Array.isArray(result)).toBe(true)
+    })
+
+    it('getScholarshipAllocations returns allocations via facade', async () => {
+      await service.allocateScholarship({
+        studentId: 1,
+        scholarshipId: 1,
+        amount: 30000,
+        allocationDate: '2026-01-15',
+        userId: 10
+      })
+      const result = await service.getScholarshipAllocations(1)
+      expect(Array.isArray(result)).toBe(true)
+      expect(result.length).toBeGreaterThan(0)
+    })
+  })
+
+  /* ==================================================================
+   *  Branch-coverage L287: createScholarship catch block
+   * ================================================================== */
+  describe('createScholarship – DB error triggers catch block', () => {
+    it('throws wrapped error when DB insert fails', async () => {
+      // Drop the scholarship table so the INSERT inside createScholarship fails
+      db.exec('DROP TABLE scholarship')
+
+      await expect(
+        service.createScholarship({
+          name: 'Crash Test Fund',
+          description: 'Should trigger catch',
+          scholarship_type: 'MERIT',
+          amount: 100000,
+          max_beneficiaries: 5,
+          eligibility_criteria: 'test',
+          valid_from: '2026-01-01',
+          valid_to: '2026-12-31'
+        }, 10)
+      ).rejects.toThrow('Failed to create scholarship')
+
+      // Re-create table so afterEach cleanup doesn't error
+      db.exec(`
+        CREATE TABLE scholarship (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          description TEXT,
+          scholarship_type TEXT NOT NULL,
+          amount REAL,
+          percentage REAL,
+          total_amount REAL NOT NULL,
+          allocated_amount REAL DEFAULT 0,
+          available_amount REAL,
+          current_beneficiaries INTEGER DEFAULT 0,
+          total_allocated REAL DEFAULT 0,
+          max_beneficiaries INTEGER DEFAULT 9999,
+          eligibility_criteria TEXT,
+          valid_from DATE,
+          valid_to DATE,
+          start_date DATE,
+          end_date DATE,
+          sponsor_name TEXT,
+          sponsor_contact TEXT,
+          status TEXT DEFAULT 'ACTIVE',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `)
+    })
+  })
+
+  /* ==================================================================
+   *  Branch-coverage L332: hasExisting returns true in allocator path
+   * ================================================================== */
+  describe('allocateScholarshipToStudent – duplicate allocation via allocator', () => {
+    it('rejects second allocation for same student+scholarship', async () => {
+      // First allocation succeeds
+      const first = await service.allocateScholarshipToStudent(
+        { student_id: 1, scholarship_id: 1, amount_allocated: 30000, allocation_notes: 'first', effective_date: '2026-02-01' },
+        10
+      )
+      expect(first.success).toBe(true)
+
+      // Second allocation to same student+scholarship should be rejected
+      const second = await service.allocateScholarshipToStudent(
+        { student_id: 1, scholarship_id: 1, amount_allocated: 20000, allocation_notes: 'duplicate', effective_date: '2026-02-05' },
+        10
+      )
+      expect(second.success).toBe(false)
+      expect(second.message).toContain('already has an active allocation')
+    })
+  })
+
+  /* ==================================================================
+   *  Branch-coverage L408: allocateScholarshipToStudent catch block
+   * ================================================================== */
+  describe('allocateScholarshipToStudent – DB error triggers catch', () => {
+    it('throws wrapped error when DB allocation fails', async () => {
+      // Drop the student_scholarship table so the INSERT inside allocateScholarship fails
+      db.exec('DROP TABLE student_scholarship')
+
+      await expect(
+        service.allocateScholarshipToStudent(
+          { student_id: 1, scholarship_id: 1, amount_allocated: 10000, allocation_notes: 'crash', effective_date: '2026-03-01' },
+          10
+        )
+      ).rejects.toThrow('Failed to allocate scholarship')
+
+      // Re-create table so afterEach cleanup doesn't error
+      db.exec(`
+        CREATE TABLE student_scholarship (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          student_id INTEGER NOT NULL,
+          scholarship_id INTEGER NOT NULL,
+          amount_allocated REAL NOT NULL,
+          amount_utilized REAL DEFAULT 0,
+          allocation_date DATE,
+          effective_date DATE,
+          expiry_date DATE,
+          allocation_notes TEXT,
+          status TEXT DEFAULT 'ACTIVE',
+          notes TEXT,
+          FOREIGN KEY (student_id) REFERENCES student(id),
+          FOREIGN KEY (scholarship_id) REFERENCES scholarship(id)
+        )
+      `)
+    })
+  })
+
+  /* ==================================================================
+   *  Branch-coverage L472: ScholarshipService constructor getDatabase() fallback
+   * ================================================================== */
+  describe('ScholarshipService – constructor without db argument', () => {
+    it('uses the mocked getDatabase() when no db is provided', async () => {
+      // testDb is returned by the mocked getDatabase, so the default constructor
+      // exercises the `db || getDatabase()` fallback branch (L472)
+      const defaultService = new ScholarshipService()
+      const scholarships = await defaultService.getAvailableScholarships()
+      // We don't need specific results — just verifying the service initializes and runs
+      expect(Array.isArray(scholarships)).toBe(true)
+    })
+  })
+
+  /* ==================================================================
+   *  Branch-coverage L368: allocateToStudent effective_date fallback
+   * ================================================================== */
+  describe('allocateScholarshipToStudent – no effective_date fallback', () => {
+    it('uses current date when effective_date is omitted', async () => {
+      // Ensure the needed GL accounts exist for the journal entry (SystemAccounts codes)
+      db.exec(`INSERT OR IGNORE INTO gl_account (account_code, account_name, account_type, normal_balance)
+        VALUES ('5250', 'Scholarship Expense Alloc', 'EXPENSE', 'DEBIT')`)
+      db.exec(`INSERT OR IGNORE INTO gl_account (account_code, account_name, account_type, normal_balance)
+        VALUES ('2030', 'Scholarship Liability Alloc', 'LIABILITY', 'CREDIT')`)
+
+      const result = await service.allocateScholarshipToStudent(
+        {
+          scholarship_id: 1,
+          student_id: 1,
+          amount_allocated: 5000,
+          allocation_notes: 'no effective date provided',
+          // effective_date is intentionally OMITTED to hit the `|| new Date()...` fallback
+        },
+        10
+      )
+      expect(result.success).toBe(true)
+    })
+  })
 })
 

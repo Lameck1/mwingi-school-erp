@@ -2,7 +2,7 @@ import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../database', () => ({
-    getDatabase: () => { throw new Error('Must inject db') }
+    getDatabase: vi.fn(() => { throw new Error('Must inject db') })
 }))
 
 vi.mock('../../../database/utils/audit', () => ({
@@ -10,6 +10,7 @@ vi.mock('../../../database/utils/audit', () => ({
 }))
 
 import { VirementPreventionService } from '../VirementPreventionService'
+import { getDatabase } from '../../../database'
 
 function createTestDb(): Database.Database {
     const db = new Database(':memory:')
@@ -55,6 +56,20 @@ function createTestDb(): Database.Database {
       user_id INTEGER, action_type TEXT, table_name TEXT,
       record_id INTEGER, old_values TEXT, new_values TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE invoice_item (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      invoice_id INTEGER NOT NULL,
+      fee_category_id INTEGER NOT NULL,
+      description TEXT,
+      amount INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE payment_item_allocation (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      invoice_item_id INTEGER NOT NULL,
+      applied_amount INTEGER NOT NULL DEFAULT 0
     );
   `)
 
@@ -152,5 +167,42 @@ describe('VirementPreventionService', () => {
         const result = service.reviewVirement(pending[0]!.id, 'APPROVED', 'Changed mind', 2)
         expect(result.success).toBe(false)
         expect(result.error).toContain('already rejected')
+    })
+
+    it('rejects virement request with amount <= 0', () => {
+        const result = service.requestVirement('TUITION', 'OPERATIONS', 0, 'Zero amount', 1)
+        expect(result.success).toBe(false)
+    })
+
+    it('rejects virement request with negative amount', () => {
+        const result = service.requestVirement('TUITION', 'OPERATIONS', -1000, 'Negative', 1)
+        expect(result.success).toBe(false)
+    })
+
+    it('returns error when reviewing non-existent virement request', () => {
+        const result = service.reviewVirement(99999, 'APPROVED', 'No such request', 2)
+        expect(result.success).toBe(false)
+    })
+
+    it('returns account summaries grouped by JSS account type', () => {
+        const summaries = service.getAccountSummaries()
+        expect(Array.isArray(summaries)).toBe(true)
+        // Should have TUITION, OPERATIONS, INFRASTRUCTURE
+        const types = summaries.map((s: { account_type: string }) => s.account_type)
+        expect(types).toContain('TUITION')
+        expect(types).toContain('OPERATIONS')
+        expect(types).toContain('INFRASTRUCTURE')
+    })
+
+    it('validates expenditure with non-existent category (fail-open)', () => {
+        const result = service.validateExpenditure('OPERATIONS', 99999)
+        expect(result.allowed).toBe(true)
+    })
+
+    it('uses getDatabase() fallback when no db argument is passed', () => {
+        vi.mocked(getDatabase).mockReturnValueOnce(db as ReturnType<typeof getDatabase>)
+        const svc = new VirementPreventionService()
+        const result = svc.validateExpenditure('TUITION', 1)
+        expect(result.allowed).toBe(true)
     })
 })

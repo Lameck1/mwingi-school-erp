@@ -22,8 +22,7 @@ import type {
   VoidedTransaction
 } from './PaymentService.types'
 import type Database from 'better-sqlite3'
-
-const normalizeInvoiceStatus = (status: string | null | undefined): string => (status ?? 'PENDING').toUpperCase()
+import { normalizeInvoiceStatus } from '../../utils/invoiceStatus'
 
 export type {
   ApprovalQueueItem,
@@ -55,6 +54,28 @@ export class PaymentService implements IPaymentRecorder, IPaymentVoidProcessor, 
     this.queryService = new PaymentQueryService(this.db)
   }
 
+  private validateInvoiceForPayment(data: PaymentData): string | null {
+    if (!data.invoice_id) {return null}
+
+    const invoice = this.db.prepare(`
+      SELECT
+        id,
+        student_id,
+        COALESCE(status, 'PENDING') as status,
+        term_id
+      FROM fee_invoice
+      WHERE id = ?
+    `).get(data.invoice_id) as { id: number; student_id: number; status: string; term_id: number } | undefined
+    if (!invoice) {return 'Invoice not found.'}
+    if (invoice.student_id !== data.student_id) {return 'Invoice does not belong to the selected student.'}
+    if (invoice.term_id !== data.term_id) {return 'Payment term must match the invoice term.'}
+    if (!OUTSTANDING_INVOICE_STATUSES.includes(
+      normalizeInvoiceStatus(invoice.status) as (typeof OUTSTANDING_INVOICE_STATUSES)[number]
+    )) {return `Invoice cannot accept payment while in ${invoice.status} status.`}
+
+    return null
+  }
+
   private recordPaymentSync(data: PaymentData): PaymentResult {
     if (!data.student_id || data.student_id <= 0) {
       return { success: false, error: 'Invalid student ID.' }
@@ -82,30 +103,9 @@ export class PaymentService implements IPaymentRecorder, IPaymentVoidProcessor, 
       return { success: false, error: 'Invalid user session. Please sign in again.' }
     }
 
-    if (data.invoice_id) {
-      const invoice = this.db.prepare(`
-        SELECT
-          id,
-          student_id,
-          COALESCE(status, 'PENDING') as status,
-          term_id
-        FROM fee_invoice
-        WHERE id = ?
-      `).get(data.invoice_id) as { id: number; student_id: number; status: string; term_id: number } | undefined
-      if (!invoice) {
-        return { success: false, error: 'Invoice not found.' }
-      }
-      if (invoice.student_id !== data.student_id) {
-        return { success: false, error: 'Invoice does not belong to the selected student.' }
-      }
-      if (invoice.term_id !== data.term_id) {
-        return { success: false, error: 'Payment term must match the invoice term.' }
-      }
-      if (!OUTSTANDING_INVOICE_STATUSES.includes(
-        normalizeInvoiceStatus(invoice.status) as (typeof OUTSTANDING_INVOICE_STATUSES)[number]
-      )) {
-        return { success: false, error: `Invoice cannot accept payment while in ${invoice.status} status.` }
-      }
+    const invoiceError = this.validateInvoiceForPayment(data)
+    if (invoiceError) {
+      return { success: false, error: invoiceError }
     }
 
     const validation = this.validator.validatePaymentAgainstInvoices(data.student_id, data.amount)

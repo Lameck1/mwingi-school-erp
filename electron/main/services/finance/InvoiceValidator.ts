@@ -23,6 +23,14 @@ export class InvoiceValidator implements IPaymentValidator {
     }
 
     validatePaymentAgainstInvoices(studentId: number, amount: number): ValidationResult {
+        if (!Number.isFinite(amount) || amount <= 0) {
+            return {
+                valid: false,
+                message: 'Payment amount must be a positive number',
+                invoices: []
+            }
+        }
+
         const db = this.db
 
         try {

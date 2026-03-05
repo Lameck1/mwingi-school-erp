@@ -242,9 +242,9 @@ export class ExemptionService {
         let query = `
             SELECT 
                 COUNT(*) as totalExemptions,
-                SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END) as activeExemptions,
-                SUM(CASE WHEN exemption_type = 'FULL' AND status = 'ACTIVE' THEN 1 ELSE 0 END) as fullExemptions,
-                SUM(CASE WHEN exemption_type = 'PARTIAL' AND status = 'ACTIVE' THEN 1 ELSE 0 END) as partialExemptions
+                COALESCE(SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END), 0) as activeExemptions,
+                COALESCE(SUM(CASE WHEN exemption_type = 'FULL' AND status = 'ACTIVE' THEN 1 ELSE 0 END), 0) as fullExemptions,
+                COALESCE(SUM(CASE WHEN exemption_type = 'PARTIAL' AND status = 'ACTIVE' THEN 1 ELSE 0 END), 0) as partialExemptions
             FROM fee_exemption
         `
         const params: unknown[] = []

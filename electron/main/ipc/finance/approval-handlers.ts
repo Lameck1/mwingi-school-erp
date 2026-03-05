@@ -60,13 +60,16 @@ function registerApprovalQueueHandler(db: ReturnType<typeof getDatabase>): void 
           ORDER BY ah.action_at DESC, ah.id DESC
           LIMIT 1
         )` : ''
-      const ruleExpr = hasRuleColumn && hasRuleTable
-        ? hasWorkflowTable
+      let ruleExpr: string
+      if (hasRuleColumn && hasRuleTable) {
+        ruleExpr = hasWorkflowTable
           ? "COALESCE(apr.rule_name, aw.workflow_name, 'Workflow approval')"
           : "COALESCE(apr.rule_name, 'Workflow approval')"
-        : hasWorkflowTable
+      } else {
+        ruleExpr = hasWorkflowTable
           ? "COALESCE(aw.workflow_name, 'Workflow approval')"
           : "'Workflow approval'"
+      }
       const reviewNotesExpr = hasHistoryTable ? 'latest.notes' : 'NULL'
 
       const approvals = db.prepare(`

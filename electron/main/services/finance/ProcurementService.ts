@@ -393,30 +393,7 @@ class ProcurementService {
             this.db.prepare('UPDATE purchase_order SET status = ? WHERE id = ?').run(poStatus, data.purchase_order_id)
 
             // Auto-provision Fixed Assets for accepted capital items
-            for (const item of data.items) {
-                if (item.quantity_accepted > 0) {
-                    const reqItem = this.db.prepare(`
-                        SELECT ri.* 
-                        FROM requisition_item ri
-                        JOIN purchase_order_item poi ON poi.requisition_item_id = ri.id
-                        WHERE poi.id = ?
-                    `).get(item.po_item_id) as { id: number; description: string; estimated_unit_cost: number; is_capital_asset: number; asset_category_id: number | null } | undefined
-
-                    if (reqItem && reqItem.is_capital_asset && reqItem.asset_category_id) {
-                        for (let i = 0; i < item.quantity_accepted; i++) {
-                            const assetName = `${reqItem.description} (Auto-provisioned via GRN ${grnNumber})`
-                            void this.fixedAssetService.create({
-                                asset_name: assetName,
-                                category_id: reqItem.asset_category_id,
-                                acquisition_date: data.received_date,
-                                acquisition_cost: reqItem.estimated_unit_cost,
-                                description: `Received via PO ${po.po_number}, GRN ${grnNumber}`,
-                                supplier_id: po.supplier_id
-                            }, userId)
-                        }
-                    }
-                }
-            }
+            this.provisionCapitalAssets(data.items, grnNumber, data.received_date, po, userId)
 
             logAudit(userId, 'CREATE', 'goods_received_note', grnId, null, {
                 po_id: data.purchase_order_id, status: grnStatus
@@ -427,6 +404,52 @@ class ProcurementService {
     }
 
     // ── PAYMENT VOUCHER ────────────────────────────────────────────────
+
+    /**
+     * Provision fixed assets for accepted capital items in a GRN.
+     * Extracted to keep createGrn within max-depth limits.
+     */
+    private provisionCapitalAssets(
+        items: GrnData['items'],
+        grnNumber: string,
+        receivedDate: string,
+        po: { po_number: string; supplier_id: number },
+        userId: number,
+    ): void {
+        for (const item of items) {
+            if (item.quantity_accepted <= 0) { continue }
+
+            const reqItem = this.db.prepare(`
+                SELECT ri.*
+                FROM requisition_item ri
+                JOIN purchase_order_item poi ON poi.requisition_item_id = ri.id
+                WHERE poi.id = ?
+            `).get(item.po_item_id) as {
+                id: number; description: string; estimated_unit_cost: number;
+                is_capital_asset: number; asset_category_id: number | null
+            } | undefined
+
+            if (!reqItem?.is_capital_asset || !reqItem.asset_category_id) { continue }
+
+            for (let i = 0; i < item.quantity_accepted; i++) {
+                const assetName = `${reqItem.description} (Auto-provisioned via GRN ${grnNumber})`
+                const assetResult = this.fixedAssetService.createSync({
+                    asset_name: assetName,
+                    category_id: reqItem.asset_category_id,
+                    acquisition_date: receivedDate,
+                    acquisition_cost: reqItem.estimated_unit_cost,
+                    description: `Received via PO ${po.po_number}, GRN ${grnNumber}`,
+                    supplier_id: po.supplier_id,
+                }, userId)
+
+                if (!assetResult.success) {
+                    throw new Error(
+                        `Fixed asset provisioning failed for "${reqItem.description}": ${assetResult.errors?.join(', ') ?? 'Unknown error'}`
+                    )
+                }
+            }
+        }
+    }
 
     createPaymentVoucher(data: VoucherData, userId: number): ServiceResult {
         const po = this.getPurchaseOrder(data.purchase_order_id)
@@ -469,7 +492,7 @@ class ProcurementService {
                 WHERE pr.id = ?
             `).get(po.requisition_id) as { budget_line_id: number | null } | undefined
 
-            if (req && req.budget_line_id) {
+            if (req?.budget_line_id) {
                 const utilizeResult = this.budgetService.utilizeFunds(req.budget_line_id, data.amount)
                 if (!utilizeResult.success) {
                     throw new Error(utilizeResult.error || 'Failed to utilize budget funds')

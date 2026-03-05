@@ -88,9 +88,9 @@ const registerPaymentRecordHandler = (context: FinanceContext): void => {
                     description: sanitizeString(data.description) || 'Tuition Fee Payment',
                     recorded_by_user_id: actorId,
                     term_id: data.term_id || 0,
-                    ...(idempotencyKey !== undefined ? { idempotency_key: idempotencyKey } : {}),
-                    ...(data.invoice_id !== undefined ? { invoice_id: data.invoice_id } : {}),
-                    ...(data.amount_in_words !== undefined ? { amount_in_words: data.amount_in_words } : {})
+                    ...(idempotencyKey == null ? {} : { idempotency_key: idempotencyKey }),
+                    ...(data.invoice_id == null ? {} : { invoice_id: data.invoice_id }),
+                    ...(data.amount_in_words == null ? {} : { amount_in_words: data.amount_in_words })
                 })
 
                 if (paymentResult?.success) {
@@ -196,7 +196,7 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
                 return { success: false, error: 'Invoice does not belong to selected student' }
             }
             const invoiceStatus = invoice.status.toUpperCase()
-            const canAcceptPayments = OUTSTANDING_INVOICE_STATUSES.some((status) => status === invoiceStatus)
+            const canAcceptPayments = (OUTSTANDING_INVOICE_STATUSES as readonly string[]).includes(invoiceStatus)
             if (!canAcceptPayments) {
                 return { success: false, error: `Invoice cannot accept payments in ${invoice.status} state` }
             }
@@ -317,7 +317,7 @@ const registerPayWithCreditHandler = (context: FinanceContext): void => {
                 'CREDIT_BALANCE',
                 transactionDate,
                 actorId,
-                transactionId
+                { sourceLedgerTxnId: transactionId }
             )
             if (!journalResult.success) {
                 throw new Error(journalResult.error || 'Failed to create journal entry for credit payment')
@@ -348,7 +348,7 @@ const registerPaymentVoidHandler = (context: FinanceContext): void => {
                 transaction_id: transactionId,
                 void_reason: voidReason.trim(),
                 voided_by: actorId,
-                ...(recoveryMethod !== undefined ? { recovery_method: recoveryMethod } : {})
+                ...(recoveryMethod == null ? {} : { recovery_method: recoveryMethod })
             })
         } catch (error) {
             console.error('Payment void error:', error)

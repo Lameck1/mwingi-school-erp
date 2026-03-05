@@ -132,7 +132,7 @@ export function buildFeeInvoiceStatusSql(
   alias: string = 'fi',
   fallbackStatus: string = 'PENDING'
 ): string {
-  const escapedFallback = fallbackStatus.replace(/'/g, "''")
+  const escapedFallback = fallbackStatus.replaceAll("'", "''")
   if (!columnExists(db, 'fee_invoice', 'status')) {
     return `'${escapedFallback}'`
   }

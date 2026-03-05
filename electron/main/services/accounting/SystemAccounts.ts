@@ -26,7 +26,7 @@ export const SystemAccounts = {
     TUITION_REVENUE: '4010',
     DONATIONS_REVENUE: '4200',
     HIRE_REVENUE: '4300',
-    OTHER_REVENUE: '4300',
+    OTHER_REVENUE: '4900',
 
     // Expenses
     SALARY_EXPENSE_ACADEMIC: '5010',

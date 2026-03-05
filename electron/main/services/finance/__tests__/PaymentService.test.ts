@@ -31,6 +31,7 @@ describe('PaymentService', () => {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             first_name TEXT NOT NULL,
                         last_name TEXT NOT NULL,
+                        admission_number TEXT,
                         credit_balance INTEGER DEFAULT 0
           );
 
@@ -290,7 +291,8 @@ describe('PaymentService', () => {
         })
 
         it('should reject future transaction date', async () => {
-            const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+            const d = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)
+            const tomorrow = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
             const result = service.recordPayment({
                 student_id: 1,
                 amount: 1000,
@@ -485,6 +487,363 @@ describe('PaymentService', () => {
             `).get(voidResult.transaction_id) as { transaction_type: string }
 
             expect(reversal.transaction_type).toBe('REFUND')
+        })
+    })
+
+    // ---- additional coverage tests ----
+
+    describe('recordPayment validation branches', () => {
+        it('rejects negative student ID', () => {
+            const result = service.recordPayment({
+                student_id: -1,
+                amount: 1000,
+                transaction_date: '2024-01-15',
+                payment_method: 'CASH',
+                payment_reference: 'NEG-ID',
+                recorded_by_user_id: 1,
+                term_id: 1
+            })
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('Invalid student ID')
+        })
+
+        it('rejects negative amount', () => {
+            const result = service.recordPayment({
+                student_id: 1,
+                amount: -500,
+                transaction_date: '2024-01-15',
+                payment_method: 'CASH',
+                payment_reference: 'NEG-AMT',
+                recorded_by_user_id: 1,
+                term_id: 1
+            })
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('greater than zero')
+        })
+
+        it('rejects NaN amount', () => {
+            const result = service.recordPayment({
+                student_id: 1,
+                amount: Number.NaN,
+                transaction_date: '2024-01-15',
+                payment_method: 'CASH',
+                payment_reference: 'NAN-AMT',
+                recorded_by_user_id: 1,
+                term_id: 1
+            })
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('greater than zero')
+        })
+
+        it('rejects missing transaction_date', () => {
+            const result = service.recordPayment({
+                student_id: 1,
+                amount: 1000,
+                transaction_date: '',
+                payment_method: 'CASH',
+                payment_reference: 'MISSING-DATE',
+                recorded_by_user_id: 1,
+                term_id: 1
+            })
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('Missing required')
+        })
+
+        it('rejects missing payment_method', () => {
+            const result = service.recordPayment({
+                student_id: 1,
+                amount: 1000,
+                transaction_date: '2024-01-15',
+                payment_method: '',
+                payment_reference: 'MISSING-METHOD',
+                recorded_by_user_id: 1,
+                term_id: 1
+            })
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('Missing required')
+        })
+
+        it('rejects invalid user session', () => {
+            const result = service.recordPayment({
+                student_id: 1,
+                amount: 1000,
+                transaction_date: '2024-01-15',
+                payment_method: 'CASH',
+                payment_reference: 'BAD-USER',
+                recorded_by_user_id: 999,
+                term_id: 1
+            })
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('Invalid user session')
+        })
+
+        it('rejects invoice not found', () => {
+            const result = service.recordPayment({
+                student_id: 1,
+                amount: 1000,
+                transaction_date: '2024-01-15',
+                payment_method: 'CASH',
+                payment_reference: 'BAD-INV',
+                recorded_by_user_id: 1,
+                term_id: 1,
+                invoice_id: 9999
+            })
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('Invoice not found')
+        })
+
+        it('rejects invoice belonging to different student', () => {
+            db.prepare(`INSERT INTO student (first_name, last_name) VALUES ('Jane', 'Other')`).run()
+            const result = service.recordPayment({
+                student_id: 2,
+                amount: 1000,
+                transaction_date: '2024-01-15',
+                payment_method: 'CASH',
+                payment_reference: 'WRONG-STUDENT',
+                recorded_by_user_id: 1,
+                term_id: 1,
+                invoice_id: 1
+            })
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('does not belong')
+        })
+
+        it('rejects invoice with mismatched term', () => {
+            const result = service.recordPayment({
+                student_id: 1,
+                amount: 1000,
+                transaction_date: '2024-01-15',
+                payment_method: 'CASH',
+                payment_reference: 'WRONG-TERM',
+                recorded_by_user_id: 1,
+                term_id: 99,
+                invoice_id: 1
+            })
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('term must match')
+        })
+
+        it('rejects payment against cancelled invoice', () => {
+            db.prepare(`UPDATE fee_invoice SET status = 'CANCELLED' WHERE id = 1`).run()
+            const result = service.recordPayment({
+                student_id: 1,
+                amount: 1000,
+                transaction_date: '2024-01-15',
+                payment_method: 'CASH',
+                payment_reference: 'CANCELLED-INV',
+                recorded_by_user_id: 1,
+                term_id: 1,
+                invoice_id: 1
+            })
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('cannot accept payment')
+        })
+    })
+
+    describe('query methods', () => {
+        it('getStudentPaymentHistory returns transactions', async () => {
+            service.recordPayment({
+                student_id: 1,
+                amount: 5000,
+                transaction_date: '2024-01-15',
+                payment_method: 'CASH',
+                payment_reference: 'HIST-1',
+                recorded_by_user_id: 1,
+                term_id: 1
+            })
+            const history = await service.getStudentPaymentHistory(1)
+            expect(history.length).toBeGreaterThanOrEqual(1)
+        })
+
+        it('getStudentPaymentHistory respects limit', async () => {
+            service.recordPayment({
+                student_id: 1,
+                amount: 5000,
+                transaction_date: '2024-01-15',
+                payment_method: 'CASH',
+                payment_reference: 'LIM-1',
+                recorded_by_user_id: 1,
+                term_id: 1
+            })
+            service.recordPayment({
+                student_id: 1,
+                amount: 3000,
+                transaction_date: '2024-01-16',
+                payment_method: 'CASH',
+                payment_reference: 'LIM-2',
+                recorded_by_user_id: 1,
+                term_id: 1
+            })
+            const history = await service.getStudentPaymentHistory(1, 1)
+            expect(history).toHaveLength(1)
+        })
+
+        it('getVoidedTransactionsReport returns voided transactions', async () => {
+            // Add first_name and last_name columns to user table for void report query
+            db.exec(`ALTER TABLE user ADD COLUMN first_name TEXT DEFAULT ''`)
+            db.exec(`ALTER TABLE user ADD COLUMN last_name TEXT DEFAULT ''`)
+            db.prepare(`UPDATE user SET first_name = 'Test', last_name = 'User' WHERE id = 1`).run()
+
+            // Directly insert a void_audit record (voidPayment requires many dependent tables)
+            const now = new Date().toISOString()
+            db.prepare(`
+                INSERT INTO void_audit (transaction_id, transaction_type, original_amount, student_id,
+                  description, void_reason, voided_by, voided_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(1, 'PAYMENT', 5000, 1, 'Test payment', 'For report test', 1, now)
+
+            const voided = await service.getVoidedTransactionsReport('2024-01-01', '2026-12-31')
+            expect(voided.length).toBeGreaterThanOrEqual(1)
+            expect(voided[0].void_reason).toBe('For report test')
+        })
+
+        it('getPaymentApprovalQueue returns queue items', async () => {
+            db.exec(`
+              CREATE TABLE IF NOT EXISTS approval_request (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                entity_id INTEGER NOT NULL,
+                entity_type TEXT NOT NULL,
+                status TEXT DEFAULT 'PENDING',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+              )
+            `)
+            const queue = await service.getPaymentApprovalQueue('admin')
+            expect(Array.isArray(queue)).toBe(true)
+        })
+
+        it('validatePaymentAgainstInvoices returns validation result', () => {
+            const result = service.validatePaymentAgainstInvoices(1, 50000)
+            expect(result).toHaveProperty('valid')
+        })
+
+        it('voidPayment delegates to void processor', async () => {
+            // Record a payment first
+            service.recordPayment({
+                student_id: 1,
+                amount: 5000,
+                transaction_date: '2024-01-15',
+                payment_method: 'CASH',
+                payment_reference: 'VOID-TEST',
+                recorded_by_user_id: 1,
+                term_id: 1
+            })
+            const txn = db.prepare(`SELECT id FROM ledger_transaction ORDER BY id DESC LIMIT 1`).get() as { id: number }
+            const result = await service.voidPayment({
+                transaction_id: txn.id,
+                void_reason: 'Testing void delegation',
+                voided_by: 1
+            })
+            // Result comes from VoidProcessor
+            expect(result).toHaveProperty('success')
+        })
+    })
+
+    describe('recordPayment – date validation', () => {
+        it('rejects future transaction date', () => {
+            const futureDate = new Date()
+            futureDate.setFullYear(futureDate.getFullYear() + 1)
+            const futureDateStr = futureDate.toISOString().split('T')[0]
+            const result = service.recordPayment({
+                student_id: 1,
+                amount: 1000,
+                transaction_date: futureDateStr,
+                payment_method: 'CASH',
+                payment_reference: 'FUTURE',
+                recorded_by_user_id: 1,
+                term_id: 1
+            })
+            expect(result.success).toBe(false)
+        })
+
+        it('rejects missing payment method', () => {
+            const result = service.recordPayment({
+                student_id: 1,
+                amount: 1000,
+                transaction_date: '2024-01-15',
+                payment_method: '',
+                payment_reference: 'NO-METHOD',
+                recorded_by_user_id: 1,
+                term_id: 1
+            })
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('Missing required')
+        })
+
+        it('rejects NaN amount', () => {
+            const result = service.recordPayment({
+                student_id: 1,
+                amount: Number.NaN,
+                transaction_date: '2024-01-15',
+                payment_method: 'CASH',
+                payment_reference: 'NAN-AMT',
+                recorded_by_user_id: 1,
+                term_id: 1
+            })
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('greater than zero')
+        })
+    })
+
+    // ── branch coverage: recordPayment with invoice in non-outstanding status ──
+    describe('recordPayment – VOIDED invoice', () => {
+        it('rejects payment against voided invoice', () => {
+            db.prepare(`UPDATE fee_invoice SET status = 'VOIDED' WHERE id = 1`).run()
+            const result = service.recordPayment({
+                student_id: 1,
+                amount: 1000,
+                transaction_date: '2024-01-15',
+                payment_method: 'CASH',
+                payment_reference: 'VOIDED-INV',
+                recorded_by_user_id: 1,
+                term_id: 1,
+                invoice_id: 1
+            })
+            expect(result.success).toBe(false)
+            expect(result.error).toContain('cannot accept payment')
+        })
+    })
+
+    // ── branch coverage: recordPayment with completely invalid date ──
+    describe('recordPayment – invalid date format', () => {
+        it('rejects malformed date string', () => {
+            const result = service.recordPayment({
+                student_id: 1,
+                amount: 1000,
+                transaction_date: 'not-a-date',
+                payment_method: 'CASH',
+                payment_reference: 'BAD-DATE',
+                recorded_by_user_id: 1,
+                term_id: 1
+            })
+            expect(result.success).toBe(false)
+        })
+    })
+
+    // ── branch coverage: validator rejects the payment (line 112) ──
+    describe('recordPayment – validator invalid branch', () => {
+        it('returns failure when invoice validator rejects the payment', () => {
+            const validatorSpy = vi.spyOn(
+                (service as unknown as { validator: { validatePaymentAgainstInvoices: (...args: unknown[]) => unknown } }).validator,
+                'validatePaymentAgainstInvoices'
+            ).mockReturnValueOnce({
+                valid: false,
+                message: 'Outstanding balance exceeded',
+                invoices: []
+            })
+
+            const result = service.recordPayment({
+                student_id: 1,
+                amount: 1000,
+                transaction_date: '2024-01-15',
+                payment_method: 'CASH',
+                payment_reference: 'VAL-REJECT',
+                recorded_by_user_id: 1,
+                term_id: 1
+            })
+
+            expect(result.success).toBe(false)
+            expect(result.message).toContain('Outstanding balance exceeded')
+            validatorSpy.mockRestore()
         })
     })
 })

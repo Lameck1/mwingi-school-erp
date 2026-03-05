@@ -16,8 +16,8 @@ interface MpesaImportRow {
     readonly transaction_date: string
     readonly phone_number: string
     readonly amount: number
-    readonly account_reference?: string
-    readonly payer_name?: string
+    readonly account_reference?: string | undefined
+    readonly payer_name?: string | undefined
 }
 
 interface MpesaTransaction {
@@ -276,7 +276,7 @@ class MpesaReconciliationService {
         REPLACE(guardian_phone, ' ', '') = ?
       )
       LIMIT 1
-    `).get(normalizedPhone, phone, normalizedPhone, normalizedPhone.replace(/\s/g, '')) as {
+    `).get(normalizedPhone, phone, normalizedPhone, normalizedPhone.replaceAll(/\s/g, '')) as {
             id: number; student_name: string; admission_number: string
         } | undefined
 
