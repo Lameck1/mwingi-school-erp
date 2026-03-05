@@ -124,6 +124,13 @@ class CashFlowRepository {
     this.db = db || getDatabase()
   }
 
+  private tableExists(tableName: string): boolean {
+    const result = this.db.prepare(
+      "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name=?"
+    ).get(tableName) as { cnt: number }
+    return result.cnt > 0
+  }
+
   async getTransactionsByType(startDate: string, endDate: string, transactionTypes: string[]): Promise<LedgerTransactionResult[]> {
     const db = this.db
     const placeholders = transactionTypes.map(() => '?').join(',')
@@ -146,6 +153,7 @@ class CashFlowRepository {
   }
 
   async getExpensesByType(startDate: string, endDate: string, expenseTypes: string[]): Promise<number> {
+    if (!this.tableExists('expense_transaction')) {return 0}
     const db = this.db
     const placeholders = expenseTypes.map(() => '?').join(',')
     const result = db.prepare(`
@@ -158,6 +166,7 @@ class CashFlowRepository {
   }
 
   async getPayrollExpenses(startDate: string, endDate: string): Promise<number> {
+    if (!this.tableExists('payroll_transaction')) {return 0}
     const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM payroll_transaction
@@ -167,6 +176,7 @@ class CashFlowRepository {
   }
 
   async getAssetTransactions(startDate: string, endDate: string): Promise<AssetTransactionResult[]> {
+    if (!this.tableExists('asset_transaction')) {return []}
     const db = this.db
     return db.prepare(`
       SELECT * FROM asset_transaction
@@ -176,6 +186,7 @@ class CashFlowRepository {
   }
 
   async getLoanTransactions(startDate: string, endDate: string): Promise<LoanTransactionResult[]> {
+    if (!this.tableExists('loan_transaction')) {return []}
     const db = this.db
     return db.prepare(`
       SELECT * FROM loan_transaction
@@ -185,6 +196,7 @@ class CashFlowRepository {
   }
 
   async getAverageMonthlyExpenses(): Promise<number> {
+    if (!this.tableExists('expense_transaction')) {return 0}
     const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM expense_transaction

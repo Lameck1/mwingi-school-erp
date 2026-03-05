@@ -38,6 +38,16 @@ class ProfitabilityRepository {
   constructor(db?: Database.Database) {
     this.db = db || getDatabase()
   }
+  private tableExists(tableName: string): boolean {
+    const result = this.db.prepare(
+      "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name=?"
+    ).get(tableName) as { cnt: number }
+    return result.cnt > 0
+  }
+  private columnExists(tableName: string, columnName: string): boolean {
+    const cols = this.db.prepare(`PRAGMA table_info(${tableName})`).all() as { name: string }[]
+    return cols.some(c => c.name === columnName)
+  }
   async getTransportRevenue(): Promise<number> {
     const db = this.db
     const result = db.prepare(`
@@ -48,6 +58,7 @@ class ProfitabilityRepository {
     return result?.total || 0
   }
   async getTransportCosts(): Promise<number> {
+    if (!this.tableExists('expense_transaction')) {return 0}
     const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM expense_transaction
@@ -57,6 +68,7 @@ class ProfitabilityRepository {
   }
   async getBoardingRevenue(): Promise<number> {
     const db = this.db
+    if (!this.tableExists('fee_invoice') || !this.columnExists('fee_invoice', 'fee_type')) {return 0}
     const invoiceAmountSql = buildFeeInvoiceAmountSql(db, 'fi')
     const activeStatusPredicate = buildFeeInvoiceActiveStatusPredicate(db, 'fi')
     const result = db.prepare(`
@@ -67,6 +79,7 @@ class ProfitabilityRepository {
     return result?.total || 0
   }
   async getBoardingCosts(): Promise<number> {
+    if (!this.tableExists('expense_transaction')) {return 0}
     const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM expense_transaction
@@ -76,6 +89,7 @@ class ProfitabilityRepository {
   }
   async getActivityFeeRevenue(): Promise<number> {
     const db = this.db
+    if (!this.tableExists('fee_invoice') || !this.columnExists('fee_invoice', 'fee_type')) {return 0}
     const invoiceAmountSql = buildFeeInvoiceAmountSql(db, 'fi')
     const activeStatusPredicate = buildFeeInvoiceActiveStatusPredicate(db, 'fi')
     const result = db.prepare(`
@@ -86,6 +100,7 @@ class ProfitabilityRepository {
     return result?.total || 0
   }
   async getActivityFeeExpenses(): Promise<number> {
+    if (!this.tableExists('expense_transaction')) {return 0}
     const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM expense_transaction
@@ -104,6 +119,7 @@ class ProfitabilityRepository {
     return result?.total || 0
   }
   async getTotalExpenses(): Promise<number> {
+    if (!this.tableExists('expense_transaction')) {return 0}
     const db = this.db
     const result = db.prepare(`
       SELECT SUM(amount) as total FROM expense_transaction
@@ -112,7 +128,8 @@ class ProfitabilityRepository {
   }
   async getStudentOccupancyRate(): Promise<number> {
     const db = this.db
-    const currentStudents = db.prepare(`SELECT COUNT(*) as count FROM student WHERE status = 'ACTIVE'`).get() as CountResult | undefined
+    const currentStudents = db.prepare(`SELECT COUNT(*) as count FROM student WHERE is_active = 1`).get() as CountResult | undefined
+    if (!this.tableExists('dormitory')) {return 0}
     const totalCapacity = db.prepare(`SELECT SUM(capacity) as total FROM dormitory`).get() as TotalResult | undefined
     return totalCapacity?.total ? (currentStudents?.count || 0) / totalCapacity.total : 0
   }
@@ -473,7 +490,7 @@ export class SegmentProfitabilityService
       segments: sorted,
       comparison_summary: {
         highest_performing: sorted[0]?.segment_name || 'N/A',
-        lowest_performing: sorted[sorted.length - 1]?.segment_name || 'N/A',
+        lowest_performing: sorted.at(-1)?.segment_name || 'N/A',
         total_segments: sorted.length
       }
     }

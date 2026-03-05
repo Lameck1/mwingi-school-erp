@@ -169,12 +169,13 @@ describe('ApprovalWorkflowService', () => {
 
       CREATE TABLE audit_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
+        user_id INTEGER NOT NULL,
         action_type TEXT NOT NULL,
         table_name TEXT NOT NULL,
         record_id INTEGER,
+        old_values TEXT,
         new_values TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
 
       -- Insert test data

@@ -101,7 +101,7 @@ describe('SegmentProfitabilityService', () => {
         first_name TEXT NOT NULL,
         last_name TEXT NOT NULL,
         admission_number TEXT UNIQUE,
-        status TEXT DEFAULT 'ACTIVE'
+        is_active BOOLEAN DEFAULT 1
       );
 
       CREATE TABLE fee_invoice (
@@ -152,11 +152,11 @@ describe('SegmentProfitabilityService', () => {
       );
 
       -- Insert test students
-      INSERT INTO student (first_name, last_name, admission_number, status)
+      INSERT INTO student (first_name, last_name, admission_number, is_active)
       VALUES 
-        ('John', 'Doe', 'STU-001', 'ACTIVE'),
-        ('Jane', 'Smith', 'STU-002', 'ACTIVE'),
-        ('Bob', 'Johnson', 'STU-003', 'ACTIVE');
+        ('John', 'Doe', 'STU-001', 1),
+        ('Jane', 'Smith', 'STU-002', 1),
+        ('Bob', 'Johnson', 'STU-003', 1);
 
       -- Insert test invoices
       INSERT INTO fee_invoice (student_id, invoice_number, amount, total_amount, amount_due, amount_paid, fee_type, status)
@@ -214,10 +214,10 @@ describe('SegmentProfitabilityService', () => {
       expect(tables.length).toBeGreaterThan(0)
     })
 
-    it('should have student table with status column', () => {
+    it('should have student table with is_active column', () => {
       const student = db.prepare('SELECT * FROM student WHERE admission_number = ?').get('STU-001') as DbRow
       expect(student).toBeDefined()
-      expect(student.status).toBe('ACTIVE')
+      expect(student.is_active).toBe(1)
     })
   })
 
@@ -404,7 +404,7 @@ describe('SegmentProfitabilityService', () => {
     })
 
     it('should have all students with ACTIVE status', () => {
-      const activeStudents = db.prepare("SELECT COUNT(*) as count FROM student WHERE status = 'ACTIVE'").get() as DbRow
+      const activeStudents = db.prepare("SELECT COUNT(*) as count FROM student WHERE is_active = 1").get() as DbRow
       expect(activeStudents.count).toBe(3)
     })
   })
@@ -1096,7 +1096,7 @@ describe('SegmentProfitabilityService', () => {
     it('returns recommendations for low occupancy and unprofitable boarding', async () => {
       db.exec(`
         DELETE FROM fee_invoice; DELETE FROM expense_transaction; DELETE FROM student; DELETE FROM dormitory;
-        INSERT INTO student (first_name, last_name, admission_number, status) VALUES ('A', 'B', 'S-1', 'ACTIVE');
+        INSERT INTO student (first_name, last_name, admission_number, is_active) VALUES ('A', 'B', 'S-1', 1);
         INSERT INTO dormitory (name, capacity) VALUES ('D1', 100);
         INSERT INTO expense_transaction (expense_type, amount, transaction_date)
         VALUES ('FOOD', 50000, '2026-01-10'), ('BEDDING', 20000, '2026-01-10');
@@ -1307,7 +1307,7 @@ describe('SegmentProfitabilityService', () => {
     it('recommends increasing occupancy when below 70%', async () => {
       db.exec(`
         DELETE FROM fee_invoice; DELETE FROM expense_transaction; DELETE FROM student; DELETE FROM dormitory;
-        INSERT INTO student (first_name, last_name, admission_number, status) VALUES ('Only', 'One', 'STU-OCC', 'ACTIVE');
+        INSERT INTO student (first_name, last_name, admission_number, is_active) VALUES ('Only', 'One', 'STU-OCC', 1);
         INSERT INTO dormitory (name, capacity) VALUES ('Dorm A', 100);
         INSERT INTO fee_invoice (student_id, invoice_number, amount, total_amount, amount_due, amount_paid, fee_type, status)
         VALUES (1, 'INV-BRD', 50000, 50000, 50000, 50000, 'BOARDING', 'PAID');

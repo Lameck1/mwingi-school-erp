@@ -149,7 +149,6 @@ describe('StudentLedgerService', () => {
         voided_reason TEXT,
         voided_by_user_id INTEGER,
         voided_at DATETIME,
-        deleted_at DATETIME DEFAULT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (category_id) REFERENCES transaction_category(id),
         FOREIGN KEY (student_id) REFERENCES student(id),

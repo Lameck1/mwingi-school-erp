@@ -61,7 +61,7 @@ interface AuditEntryInput {
   actionType: string
   tableName: string
   recordId: number
-  timestamp: string
+  createdAt: string
   newValues?: Record<string, unknown>
 }
 
@@ -158,14 +158,14 @@ export class ApprovalWorkflowService {
   }
 
   private writeAuditEntry(args: AuditEntryInput): void {
-    const { userId, actionType, tableName, recordId, timestamp, newValues } = args
+    const { userId, actionType, tableName, recordId, createdAt, newValues } = args
 
     this.db
       .prepare(
-        `INSERT INTO audit_log (user_id, action_type, table_name, record_id, new_values, timestamp)
+        `INSERT INTO audit_log (user_id, action_type, table_name, record_id, new_values, created_at)
          VALUES (?, ?, ?, ?, ?, ?)`
       )
-      .run(userId, actionType, tableName, recordId, newValues ? JSON.stringify(newValues) : null, timestamp)
+      .run(userId, actionType, tableName, recordId, newValues ? JSON.stringify(newValues) : null, createdAt)
   }
 
   /**
@@ -225,7 +225,7 @@ export class ApprovalWorkflowService {
         actionType: 'CREATE_APPROVAL_REQUEST',
         tableName: 'approval_request',
         recordId: requestId,
-        timestamp: now,
+        createdAt: now,
         newValues: {
           request_type: requestType,
           amount,
@@ -356,7 +356,7 @@ export class ApprovalWorkflowService {
           actionType: `REJECT_LEVEL_${level}`,
           tableName: 'approval_request',
           recordId: requestId,
-          timestamp: now
+          createdAt: now
         })
 
         return {
@@ -378,7 +378,7 @@ export class ApprovalWorkflowService {
         actionType: `APPROVE_LEVEL_${level}`,
         tableName: 'approval_request',
         recordId: requestId,
-        timestamp: now
+        createdAt: now
       })
 
       return {
