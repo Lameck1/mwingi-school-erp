@@ -24,6 +24,11 @@ vi.mock('../../../stores', () => ({
     selector({ user: mockUser }),
 }))
 
+const mockShowToast = vi.fn()
+vi.mock('../../../contexts/ToastContext', () => ({
+  useToast: () => ({ showToast: mockShowToast }),
+}))
+
 vi.mock('../../../utils/ipc', () => ({
   isIPCFailure: (v: unknown) =>
     v && typeof v === 'object' && 'success' in (v as any) && !(v as any).success,
@@ -63,6 +68,7 @@ function buildElectronAPI() {
 beforeEach(() => {
   mockParams = {}
   mockNavigate.mockClear()
+  mockShowToast.mockClear()
   mockUser = { id: 1, username: 'admin' }
   mockApi = buildElectronAPI()
   ;(globalThis as any).electronAPI = mockApi
@@ -272,6 +278,7 @@ describe('useStudentForm', () => {
       })
 
       expect(mockApi.students.createStudent).toHaveBeenCalled()
+      expect(mockShowToast).toHaveBeenCalledWith('Student created successfully', 'success')
       expect(mockNavigate).toHaveBeenCalledWith('/students')
     })
 
@@ -333,6 +340,7 @@ describe('useStudentForm', () => {
       })
 
       expect(mockApi.students.updateStudent).toHaveBeenCalledWith(5, expect.any(Object))
+      expect(mockShowToast).toHaveBeenCalledWith('Student updated successfully', 'success')
       expect(mockNavigate).toHaveBeenCalledWith('/students')
     })
 

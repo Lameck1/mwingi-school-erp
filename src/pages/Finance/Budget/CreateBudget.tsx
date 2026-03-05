@@ -6,6 +6,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { PageHeader } from '../../../components/patterns/PageHeader'
+import { useToast } from '../../../contexts/ToastContext'
 import { useAppStore, useAuthStore } from '../../../stores'
 import { type CreateBudgetLineItemData } from '../../../types/electron-api'
 import { formatCurrency, shillingsToCents } from '../../../utils/format'
@@ -136,6 +137,7 @@ function BudgetLineItemsSection({ lineItems, categories, totalBudgeted, onAddLin
 
 export default function CreateBudget() {
     const navigate = useNavigate()
+    const { showToast } = useToast()
     const currentAcademicYear = useAppStore((s) => s.currentAcademicYear)
     const currentTerm = useAppStore((s) => s.currentTerm)
     const user = useAuthStore((s) => s.user)
@@ -230,6 +232,7 @@ export default function CreateBudget() {
             } as Parameters<typeof globalThis.electronAPI.finance.createBudget>[0], user.id)
 
             if (result.success) {
+                showToast('Budget created successfully', 'success')
                 navigate('/budget')
             } else {
                 setError(result.errors?.join(', ') || 'Failed to create budget')

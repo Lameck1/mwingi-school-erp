@@ -1,6 +1,7 @@
 import { type ChangeEvent, type SyntheticEvent, useEffect, useState, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
+import { useToast } from '../../contexts/ToastContext'
 import { useAuthStore } from '../../stores'
 import { type Stream } from '../../types/electron-api/AcademicAPI'
 import { getIPCFailureMessage, isIPCFailure, unwrapArrayResult } from '../../utils/ipc'
@@ -88,6 +89,7 @@ export function useStudentForm() {
     const navigate = useNavigate()
     const { id } = useParams()
     const isEdit = Boolean(id)
+    const { showToast } = useToast()
     const user = useAuthStore((s) => s.user)
 
     const [streams, setStreams] = useState<Stream[]>([])
@@ -263,6 +265,7 @@ export function useStudentForm() {
                 throw new Error(getResultMessage(mutationResult, 'Failed to save student record'))
             }
 
+            showToast(isEdit ? 'Student updated successfully' : 'Student created successfully', 'success')
             navigate('/students')
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Registry synchronization failed')
