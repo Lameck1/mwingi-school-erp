@@ -4,4 +4,4 @@
  * Runtime CI command uses `scripts/generate-ipc-manifest.cjs` to avoid requiring
  * a TypeScript execution runtime. Keep this file in sync with the CJS generator.
  */
-export {}
+// This file is intentionally empty — see generate-ipc-manifest.cjs

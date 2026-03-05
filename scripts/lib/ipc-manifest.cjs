@@ -47,7 +47,7 @@ const IPC_NAMESPACE_OWNERS = {
 }
 
 function normalize(value) {
-  return String(value).replace(/\\/g, '/')
+  return String(value).replaceAll('\\', '/')
 }
 
 function collectFiles(dirPath, extension = '.ts') {
@@ -84,7 +84,7 @@ function collectDeclaredChannels(filePaths) {
       continue
     }
     const content = fs.readFileSync(filePath, 'utf8')
-    const withoutBlockComments = content.replace(/\/\*[\s\S]*?\*\//g, '')
+    const withoutBlockComments = content.replaceAll(/\/\*[\s\S]*?\*\//g, '')
     const withoutComments = withoutBlockComments
       .split('\n')
       .map((line) => {

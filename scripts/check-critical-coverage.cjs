@@ -20,7 +20,7 @@ const CRITICAL_FLOORS = {
 }
 
 function normalizePath(value) {
-  return String(value).replace(/\\/g, '/')
+  return String(value).replaceAll('\\', '/')
 }
 
 const failures = []

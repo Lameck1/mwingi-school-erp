@@ -73,6 +73,9 @@ export default defineConfig({
             target: 'esnext',
         },
     },
+    esbuild: {
+        drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
+    },
     build: {
         target: 'esnext',
         rollupOptions: {
@@ -92,7 +95,7 @@ export default defineConfig({
                         [['zustand'], 'zustand'],
                         [['lucide-react'], 'icons'],
                         [['@tanstack'], 'table'],
-                        [['recharts'], 'recharts'],
+                        [['recharts', 'd3-'], 'recharts'],
                         [['jspdf', 'pdf-lib'], 'pdf'],
                     ]
                     

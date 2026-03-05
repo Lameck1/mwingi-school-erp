@@ -166,9 +166,9 @@ export default [
     files: ['src/pages/**/*.{ts,tsx}'],
     rules: {
       'max-lines': ['warn', { max: 600, skipBlankLines: true, skipComments: true }],
-      'max-lines-per-function': ['warn', { max: 200, skipBlankLines: true, skipComments: true }],
-      'max-statements': ['warn', 40],
-      'complexity': ['warn', 20],
+      'max-lines-per-function': ['warn', { max: 250, skipBlankLines: true, skipComments: true }],
+      'max-statements': ['warn', 50],
+      'complexity': ['warn', 25],
       'sonarjs/no-duplicate-string': 'off',
       '@typescript-eslint/no-unnecessary-condition': 'off',
       'unicorn/consistent-function-scoping': 'off',
@@ -186,13 +186,13 @@ export default [
           caughtErrorsIgnorePattern: '^_',
         },
       ],
-      'max-lines': ['warn', { max: 750, skipBlankLines: true, skipComments: true }],
+      'max-lines': ['warn', { max: 725, skipBlankLines: true, skipComments: true }],
       'max-lines-per-function': ['warn', { max: 250, skipBlankLines: true, skipComments: true }],
       'max-params': ['warn', 8],
       'max-statements': ['warn', 40],
       'complexity': ['warn', 30],
       'sonarjs/deprecation': 'off',
-      'sonarjs/todo-tag': 'off',
+      'sonarjs/todo-tag': 'warn',
       '@typescript-eslint/no-unnecessary-condition': 'off',
       'sonarjs/cognitive-complexity': 'off',
       'sonarjs/no-duplicate-string': 'off',
@@ -221,15 +221,7 @@ export default [
       'max-params': 'off',
     },
   },
-  {
-    files: ['src/pages/**/*.{ts,tsx}'],
-    rules: {
-      'max-lines-per-function': ['warn', { max: 800, skipBlankLines: true, skipComments: true }],
-      'max-lines': ['warn', { max: 800, skipBlankLines: true, skipComments: true }],
-      'max-statements': ['warn', 100],
-      'complexity': ['warn', 50],
-    },
-  },
+
   {
     files: ['src/utils/__tests__/**/*.{ts,tsx}', 'tests/**/*.{ts,tsx}'],
     rules: {

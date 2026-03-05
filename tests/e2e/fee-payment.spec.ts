@@ -55,7 +55,7 @@ async function seedDeterministicData(activePage: Page): Promise<void> {
     if (!userId) {
       return { success: false, error: 'Missing session user id' }
     }
-    return globalThis.electronAPI.resetAndSeedDatabase(userId)
+    return globalThis.electronAPI.settings.resetAndSeedDatabase(userId)
   })
 
   expect(seeded.success).toBe(true)
@@ -109,7 +109,7 @@ test.describe('Fee Payment Flow', () => {
     await page.click('button[type="submit"]:has-text("Finalize Payment")')
 
     await expect(page.locator('text=Recent Ledger Entries')).toBeVisible({ timeout: 15000 })
-    await expect(page.locator('text=/Ksh\\s*1,000\\.00/i')).toBeVisible({ timeout: 15000 })
+    await expect(page.locator(String.raw`text=/Ksh\s*1,000\.00/i`)).toBeVisible({ timeout: 15000 })
     await expect(page.locator('text=Ledger Posted')).toBeVisible({ timeout: 15000 })
   })
 })

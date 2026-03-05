@@ -55,7 +55,7 @@ async function seedDeterministicData(activePage: Page): Promise<void> {
     if (!userId) {
       return { success: false, error: 'Missing session user id' }
     }
-    return globalThis.electronAPI.resetAndSeedDatabase(userId)
+    return globalThis.electronAPI.settings.resetAndSeedDatabase(userId)
   })
 
   expect(seeded.success).toBe(true)
@@ -126,23 +126,23 @@ test.describe('Critical Path E2E', () => {
     const year = 2099
 
     const runResult = await page.evaluate(async ({ month, year, userId }) => {
-      return globalThis.electronAPI.runPayroll(month, year, userId)
+      return globalThis.electronAPI.staff.runPayroll(month, year, userId)
     }, { month, year, userId })
     expect(runResult.success).toBe(true)
     expect(runResult.periodId).toBeGreaterThan(0)
 
     const confirmResult = await page.evaluate(async ({ periodId, userId }) => {
-      return globalThis.electronAPI.confirmPayroll(periodId, userId)
+      return globalThis.electronAPI.staff.confirmPayroll(periodId, userId)
     }, { periodId: runResult.periodId, userId })
     expect(confirmResult.success).toBe(true)
 
     const paidResult = await page.evaluate(async ({ periodId, userId }) => {
-      return globalThis.electronAPI.markPayrollPaid(periodId, userId)
+      return globalThis.electronAPI.staff.markPayrollPaid(periodId, userId)
     }, { periodId: runResult.periodId, userId })
     expect(paidResult.success).toBe(true)
 
     const detailsResult = await page.evaluate(async (periodId) => {
-      return globalThis.electronAPI.getPayrollDetails(periodId)
+      return globalThis.electronAPI.staff.getPayrollDetails(periodId)
     }, runResult.periodId)
     expect(detailsResult.success).toBe(true)
   })
@@ -153,7 +153,7 @@ test.describe('Critical Path E2E', () => {
     }
 
     const mergeResult = await page.evaluate(async () => {
-      return globalThis.electronAPI.mergeReportCards({
+      return globalThis.electronAPI.academic.mergeReportCards({
         exam_id: 1,
         stream_id: 1,
         output_path: '../evil.pdf'
