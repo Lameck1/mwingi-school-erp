@@ -516,8 +516,8 @@ export class MeritListService {
       if (!student) { continue }
 
       const prev = students[i - 1]
-      if (i > 0 && prev && student.average_marks === prev.average_marks) {
-        const lastRanking = rankings[rankings.length - 1]
+      if (i > 0 && prev?.average_marks === student.average_marks) {
+        const lastRanking = rankings.at(-1)
         if (lastRanking) {
           lastRanking.tied_with.push(student.id)
         }

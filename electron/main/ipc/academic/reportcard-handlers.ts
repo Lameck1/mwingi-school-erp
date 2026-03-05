@@ -1,4 +1,5 @@
 import * as fs from 'node:fs'
+import * as fsp from 'node:fs/promises'
 import * as path from 'node:path'
 import nodemailer from 'nodemailer'
 import { PDFDocument } from 'pdf-lib'
@@ -118,10 +119,10 @@ function sanitizeReportCardFolder(folderName: string): string {
   return segments.join(path.sep)
 }
 
-function resolveSafeReportCardOutputPath(filename: string, folderName: string): string {
+async function resolveSafeReportCardOutputPath(filename: string, folderName: string): Promise<string> {
   const safeFolderName = sanitizeReportCardFolder(folderName)
   const safeFilename = sanitizeReportCardFilename(filename, 'report_cards')
-  const resolvedPath = path.resolve(resolveOutputPath(safeFilename, safeFolderName))
+  const resolvedPath = path.resolve(await resolveOutputPath(safeFilename, safeFolderName))
   const allowedRoot = resolveAllowedReportCardRoot()
   const relativePath = path.relative(allowedRoot, resolvedPath)
 
@@ -312,8 +313,8 @@ function registerCbcMergeHandlers(): void {
         data.output_path ?? `report_cards_${data.exam_id}_${data.stream_id}.pdf`,
         `report_cards_${data.exam_id}_${data.stream_id}`
       )
-      const filePath = resolveSafeReportCardOutputPath(outputFile, REPORT_CARDS_DIR)
-      fs.writeFileSync(filePath, mergedBytes)
+      const filePath = await resolveSafeReportCardOutputPath(outputFile, REPORT_CARDS_DIR)
+      await fsp.writeFile(filePath, mergedBytes)
 
       return { success: true, message: 'Merged', filePath, failed }
     } catch (error) {
@@ -345,11 +346,11 @@ function registerCbcDownloadHandlers(): void {
       }
 
       const mergedBytes = await merged.save()
-      const filePath = resolveSafeReportCardOutputPath(
+      const filePath = await resolveSafeReportCardOutputPath(
         `report_cards_${data.exam_id}_${data.stream_id}.pdf`,
         REPORT_CARDS_DIR
       )
-      fs.writeFileSync(filePath, mergedBytes)
+      await fsp.writeFile(filePath, mergedBytes)
       return { success: true, filePath, failed }
     } catch (error) {
       console.error('Download report cards failed:', error)
@@ -401,7 +402,7 @@ function registerLegacyReportCardHandlers(): void {
       })
 
       if (!result.canceled && result.filePath) {
-        writePdfBuffer(result.filePath, buffer)
+        await writePdfBuffer(result.filePath, buffer)
         return { filePath: result.filePath }
       }
       return { success: false, error: 'Save cancelled' }
@@ -428,8 +429,8 @@ async function generateReportCardPdfs(reportCards: StudentReportCard[], folderLa
       `${card.admission_number || card.student_id}_${Date.now()}.pdf`,
       `student_${card.student_id}_${Date.now()}`
     )
-    const filePath = resolveSafeReportCardOutputPath(filename, path.join(REPORT_CARDS_DIR, folderLabel))
-    writePdfBuffer(filePath, buffer)
+    const filePath = await resolveSafeReportCardOutputPath(filename, path.join(REPORT_CARDS_DIR, folderLabel))
+    await writePdfBuffer(filePath, buffer)
     results.push({ studentId: card.student_id, filePath })
   }
   return results

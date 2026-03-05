@@ -139,27 +139,12 @@ export class AttendanceService {
     `).all(streamId, date, academicYearId, termId) as AttendanceRecord[]
     }
 
-    /**
-     * Mark attendance for a class on a specific date
-     */
-    async markAttendance(
-        ...[entries, streamId, date, academicYearId, termId, userId]: MarkAttendanceArgs
-    ): Promise<{ success: boolean; marked: number; errors?: string[] }> {
-        if (!Number.isFinite(streamId) || streamId <= 0 || !Number.isFinite(academicYearId) || academicYearId <= 0 || !Number.isFinite(termId) || termId <= 0) {
-            return { success: false, marked: 0, errors: ['Invalid attendance context (stream/year/term)'] }
-        }
-        if (!Number.isFinite(userId) || userId <= 0) {
-            return { success: false, marked: 0, errors: ['Invalid user context for attendance marking'] }
-        }
-        if (!Array.isArray(entries) || entries.length === 0) {
-            return { success: false, marked: 0, errors: ['At least one attendance entry is required'] }
-        }
-
-        const datePolicyError = this.validateAttendanceDatePolicy(date, academicYearId, termId)
-        if (datePolicyError) {
-            return { success: false, marked: 0, errors: [datePolicyError] }
-        }
-
+    private validateAttendanceEntries(
+        entries: DailyAttendanceEntry[],
+        streamId: number,
+        academicYearId: number,
+        termId: number
+    ): string[] {
         const validationErrors: string[] = []
         const seenStudents = new Set<number>()
         const enrollmentCheckStmt = this.db.prepare(`
@@ -195,6 +180,31 @@ export class AttendanceService {
             }
         }
 
+        return validationErrors
+    }
+
+    /**
+     * Mark attendance for a class on a specific date
+     */
+    async markAttendance(
+        ...[entries, streamId, date, academicYearId, termId, userId]: MarkAttendanceArgs
+    ): Promise<{ success: boolean; marked: number; errors?: string[] }> {
+        if (!Number.isFinite(streamId) || streamId <= 0 || !Number.isFinite(academicYearId) || academicYearId <= 0 || !Number.isFinite(termId) || termId <= 0) {
+            return { success: false, marked: 0, errors: ['Invalid attendance context (stream/year/term)'] }
+        }
+        if (!Number.isFinite(userId) || userId <= 0) {
+            return { success: false, marked: 0, errors: ['Invalid user context for attendance marking'] }
+        }
+        if (!Array.isArray(entries) || entries.length === 0) {
+            return { success: false, marked: 0, errors: ['At least one attendance entry is required'] }
+        }
+
+        const datePolicyError = this.validateAttendanceDatePolicy(date, academicYearId, termId)
+        if (datePolicyError) {
+            return { success: false, marked: 0, errors: [datePolicyError] }
+        }
+
+        const validationErrors = this.validateAttendanceEntries(entries, streamId, academicYearId, termId)
         if (validationErrors.length > 0) {
             return { success: false, marked: 0, errors: Array.from(new Set(validationErrors)) }
         }

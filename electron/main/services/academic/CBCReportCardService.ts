@@ -522,10 +522,10 @@ export class CBCReportCardService {
 
   private getPoints(grade: string): number {
     const pointsMap: Record<string, number> = {
-      'EE1': 4.0, 'EE2': 4.0,
-      'ME1': 3.0, 'ME2': 3.0,
-      'AE1': 2.0, 'AE2': 2.0,
-      'BE1': 1.0, 'BE2': 1.0,
+      'EE1': 4, 'EE2': 4,
+      'ME1': 3, 'ME2': 3,
+      'AE1': 2, 'AE2': 2,
+      'BE1': 1, 'BE2': 1,
     }
     return pointsMap[grade] ?? 0
   }
@@ -610,10 +610,10 @@ export class CBCReportCardService {
     return subjects.map((subject) => ({
       subject_id: subject.subject_id,
       subject_name: subject.subject_name || 'Unknown',
-      ...(subject.cat1 !== undefined ? { cat1: subject.cat1 } : {}),
-      ...(subject.cat2 !== undefined ? { cat2: subject.cat2 } : {}),
-      ...(subject.mid !== undefined ? { mid: subject.mid } : {}),
-      ...(subject.final !== undefined ? { final: subject.final } : {}),
+      ...(subject.cat1 === undefined ? {} : { cat1: subject.cat1 }),
+      ...(subject.cat2 === undefined ? {} : { cat2: subject.cat2 }),
+      ...(subject.mid === undefined ? {} : { mid: subject.mid }),
+      ...(subject.final === undefined ? {} : { final: subject.final }),
       marks: subject.marks,
       grade: subject.grade,
       points: this.getPoints(subject.grade),
@@ -680,7 +680,7 @@ export class CBCReportCardService {
       fees_balance: feesBalance,
       qr_code_token: rc.qr_code_token || '',
       generated_at: rc.generated_at,
-      ...(rc.email_sent_at !== undefined ? { email_sent_at: rc.email_sent_at } : {})
+      ...(rc.email_sent_at === undefined ? {} : { email_sent_at: rc.email_sent_at })
     }
   }
 }

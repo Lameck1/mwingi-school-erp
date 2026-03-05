@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearSessionCache } from '../../../security/session'
 
 type IpcHandler = (event: unknown, ...args: unknown[]) => Promise<unknown>
 
@@ -56,6 +57,7 @@ import { registerPromotionHandlers } from '../promotion-handlers'
 
 describe('promotion IPC handlers', () => {
   beforeEach(() => {
+    clearSessionCache()
     handlerMap.clear()
     sessionUserId = 9
     sessionRole = 'PRINCIPAL'
@@ -109,5 +111,37 @@ describe('promotion IPC handlers', () => {
     expect(result.success).toBe(false)
     expect(result.error).toContain('Unauthorized')
     expect(promotionServiceMock.batchPromote).not.toHaveBeenCalled()
+  })
+
+  it('getStreams returns available streams', async () => {
+    const handler = handlerMap.get('promotion:getStreams')
+    expect(handler).toBeDefined()
+    const result = await handler!({})
+    expect(promotionServiceMock.getStreams).toHaveBeenCalled()
+    expect(Array.isArray(result)).toBe(true)
+  })
+
+  it('getStudentsForPromotion returns student list', async () => {
+    const handler = handlerMap.get('promotion:getStudentsForPromotion')
+    expect(handler).toBeDefined()
+    const result = await handler!({}, 1, 2025)
+    expect(promotionServiceMock.getStudentsForPromotion).toHaveBeenCalledWith(1, 2025)
+    expect(Array.isArray(result)).toBe(true)
+  })
+
+  it('getStudentHistory returns promotion history', async () => {
+    const handler = handlerMap.get('promotion:getStudentHistory')
+    expect(handler).toBeDefined()
+    const result = await handler!({}, 11)
+    expect(promotionServiceMock.getStudentPromotionHistory).toHaveBeenCalledWith(11)
+    expect(Array.isArray(result)).toBe(true)
+  })
+
+  it('getNextStream returns next stream suggestion', async () => {
+    const handler = handlerMap.get('promotion:getNextStream')
+    expect(handler).toBeDefined()
+    const result = await handler!({}, 1)
+    expect(promotionServiceMock.getNextStream).toHaveBeenCalledWith(1)
+    expect(result).toBeNull()
   })
 })

@@ -417,6 +417,37 @@ export class ReportCardService {
         }
     }
 
+    private computeStudentExamScores(
+        studentId: number,
+        academicYearId: number,
+        termId: number
+    ): { id: number; cat1Total: number; cat2Total: number; midTotal: number; finalTotal: number; avgTotal: number; subjectCount: number } | null {
+        const results = this.getAllExamResultsByType(studentId, academicYearId, termId)
+        if (results.length === 0) { return null }
+
+        let cat1T = 0, cat2T = 0, midT = 0, finalT = 0
+        const subjectScores: Map<number, number[]> = new Map()
+
+        for (const r of results) {
+            if (r.exam_type === 'CAT1') { cat1T += r.score }
+            else if (r.exam_type === 'CAT2') { cat2T += r.score }
+            else if (r.exam_type === 'MIDTERM') { midT += r.score }
+            else { finalT += r.score }
+
+            if (!subjectScores.has(r.subject_id)) { subjectScores.set(r.subject_id, []) }
+            subjectScores.get(r.subject_id)!.push(r.score)
+        }
+
+        let avgTotal = 0
+        let subjectCount = 0
+        for (const scores of subjectScores.values()) {
+            avgTotal += scores.reduce((a, b) => a + b, 0) / scores.length
+            subjectCount++
+        }
+
+        return { id: studentId, cat1Total: cat1T, cat2Total: cat2T, midTotal: midT, finalTotal: finalT, avgTotal, subjectCount }
+    }
+
     /**
      * Compute class rankings: overall and per exam type
      */
@@ -444,45 +475,9 @@ export class ReportCardService {
               AND e.status = 'ACTIVE' AND s.is_active = 1
         `).all(streamResult.stream_id, academicYearId, termId) as { student_id: number }[]
 
-        // For each classmate, compute totals per exam type and overall average
-        const studentScores: {
-            id: number
-            cat1Total: number; cat2Total: number; midTotal: number; finalTotal: number
-            avgTotal: number; subjectCount: number
-        }[] = []
-
-        for (const mate of classmates) {
-            const results = this.getAllExamResultsByType(mate.student_id, academicYearId, termId)
-            if (results.length === 0) {continue}
-
-            let cat1T = 0, cat2T = 0, midT = 0, finalT = 0
-            const subjectScores: Map<number, number[]> = new Map()
-
-            for (const r of results) {
-                if (r.exam_type === 'CAT1') {cat1T += r.score}
-                else if (r.exam_type === 'CAT2') {cat2T += r.score}
-                else if (r.exam_type === 'MIDTERM') {midT += r.score}
-                else {finalT += r.score}
-
-                if (!subjectScores.has(r.subject_id)) {subjectScores.set(r.subject_id, [])}
-                subjectScores.get(r.subject_id)!.push(r.score)
-            }
-
-            // Compute average per subject, then overall average
-            let avgTotal = 0
-            let subjectCount = 0
-            for (const scores of subjectScores.values()) {
-                const subjectAvg = scores.reduce((a, b) => a + b, 0) / scores.length
-                avgTotal += subjectAvg
-                subjectCount++
-            }
-
-            studentScores.push({
-                id: mate.student_id,
-                cat1Total: cat1T, cat2Total: cat2T, midTotal: midT, finalTotal: finalT,
-                avgTotal, subjectCount
-            })
-        }
+        const studentScores = classmates
+            .map(mate => this.computeStudentExamScores(mate.student_id, academicYearId, termId))
+            .filter((s): s is NonNullable<typeof s> => s !== null)
 
         // Rank helper: returns rank of studentId in sorted array (descending)
         const rankBy = (key: (s: typeof studentScores[0]) => number): number | null => {

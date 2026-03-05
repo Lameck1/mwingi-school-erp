@@ -217,8 +217,8 @@ export function registerAcademicHandlers() {
 
             const buffer = await renderHtmlToPdfBuffer(finalHtml)
             const resolvedFilename = sanitizeExportPdfFilename(filename)
-            const filePath = resolveOutputPath(resolvedFilename, 'pdf')
-            writePdfBuffer(filePath, buffer)
+            const filePath = await resolveOutputPath(resolvedFilename, 'pdf')
+            await writePdfBuffer(filePath, buffer)
             return { success: true, filePath }
 
         } catch (error) {
@@ -282,8 +282,8 @@ export function registerAcademicHandlers() {
         `
         const buffer = await renderHtmlToPdfBuffer(html)
         const filename = `exam_timetable_${data.examId || 'export'}.pdf`
-        const filePath = resolveOutputPath(filename, 'timetables')
-        writePdfBuffer(filePath, buffer)
+        const filePath = await resolveOutputPath(filename, 'timetables')
+        await writePdfBuffer(filePath, buffer)
         return { success: true, filePath }
     })
 
@@ -332,13 +332,35 @@ export function registerAcademicHandlers() {
         `
         const buffer = await renderHtmlToPdfBuffer(html)
         const filename = `exam_timetable_${data.examId || 'export'}.pdf`
-        const filePath = resolveOutputPath(filename, 'timetables')
-        writePdfBuffer(filePath, buffer)
+        const filePath = await resolveOutputPath(filename, 'timetables')
+        await writePdfBuffer(filePath, buffer)
         return { success: true, filePath }
     })
 }
 
 // Helper functions (kept as is)
+
+/** Count pairwise clashes for a single student's subject list. */
+function countPairwiseClashes(
+    subjectIds: number[],
+    slotMap: Map<number, string>,
+    clashCounts: Map<string, number>
+): void {
+    for (let index = 0; index < subjectIds.length; index += 1) {
+        for (let nextIndex = index + 1; nextIndex < subjectIds.length; nextIndex += 1) {
+            const firstSubjectId = subjectIds[index]
+            const secondSubjectId = subjectIds[nextIndex]
+            if (firstSubjectId === undefined || secondSubjectId === undefined) { continue }
+            const firstSlot = slotMap.get(firstSubjectId)
+            const secondSlot = slotMap.get(secondSubjectId)
+
+            if (firstSlot && secondSlot && firstSlot === secondSlot) {
+                const key = `${firstSubjectId}| ${secondSubjectId}| ${firstSlot} `
+                clashCounts.set(key, (clashCounts.get(key) || 0) + 1)
+            }
+        }
+    }
+}
 
 function detectClashes(
     db: ReturnType<typeof getDatabase>,
@@ -369,20 +391,7 @@ function detectClashes(
 
     const clashCounts = new Map<string, number>()
     for (const subjectIds of studentMap.values()) {
-        for (let index = 0; index < subjectIds.length; index += 1) {
-            for (let nextIndex = index + 1; nextIndex < subjectIds.length; nextIndex += 1) {
-                const firstSubjectId = subjectIds[index]
-                const secondSubjectId = subjectIds[nextIndex]
-                if (firstSubjectId === undefined || secondSubjectId === undefined) { continue }
-                const firstSlot = slotMap.get(firstSubjectId)
-                const secondSlot = slotMap.get(secondSubjectId)
-
-                if (firstSlot && secondSlot && firstSlot === secondSlot) {
-                    const key = `${firstSubjectId}| ${secondSubjectId}| ${firstSlot} `
-                    clashCounts.set(key, (clashCounts.get(key) || 0) + 1)
-                }
-            }
-        }
+        countPairwiseClashes(subjectIds, slotMap, clashCounts)
     }
 
     return Array.from(clashCounts.entries()).map(([key, count]) => {
