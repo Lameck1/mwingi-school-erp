@@ -36,6 +36,8 @@ import { up as mpesaReconciliationUp } from './incremental/1029_mpesa_reconcilia
 import { up as schoolTypeConfigUp } from './incremental/1030_school_type_config.js'
 import { up as procurementIntegrationUp } from './incremental/1031_procurement_integration.js'
 import { up as performanceIndexesUp } from './incremental/1032_performance_indexes.js'
+import { up as additionalPerformanceIndexesUp } from './incremental/1033_additional_performance_indexes.js'
+import { up as seedOtherRevenueAccountUp } from './incremental/1034_seed_other_revenue_account.js'
 
 import type * as Database from 'better-sqlite3'
 
@@ -100,6 +102,8 @@ const migrations: Migration[] = [
     { name: '1030_school_type_config', fn: schoolTypeConfigUp },
     { name: '1031_procurement_integration', fn: procurementIntegrationUp },
     { name: '1032_performance_indexes', fn: performanceIndexesUp },
+    { name: '1033_additional_performance_indexes', fn: additionalPerformanceIndexesUp },
+    { name: '1034_seed_other_revenue_account', fn: seedOtherRevenueAccountUp },
 ]
 
 export function getRegisteredMigrationNames(): string[] {

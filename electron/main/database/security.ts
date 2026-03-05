@@ -1,5 +1,5 @@
 import * as crypto from 'node:crypto'
-import * as fs from 'node:fs'
+import * as fsp from 'node:fs/promises'
 import * as path from 'node:path'
 
 import { safeStorage, app } from '../electron-env'
@@ -13,17 +13,22 @@ let cachedKey: string | null = null
  * If not, it generates a new one, encrypts it, saves it, and returns it.
  * The result is cached in memory after the first call.
  */
-export function getEncryptionKey(): string {
+export async function getEncryptionKey(): Promise<string> {
     if (cachedKey) { return cachedKey }
 
     const userDataPath = app.getPath('userData')
     const keyPath = path.join(userDataPath, KEY_FILE_NAME)
 
     try {
-        if (fs.existsSync(keyPath)) {
-            // Key exists, read and decrypt
-            const encryptedKey = fs.readFileSync(keyPath)
-            
+        let encryptedKey: Buffer | null = null
+        try {
+            encryptedKey = await fsp.readFile(keyPath)
+        } catch {
+            // File does not exist — will generate a new key below
+        }
+
+        if (encryptedKey) {
+            // Key exists, decrypt
             if (safeStorage.isEncryptionAvailable()) {
                 const decryptedKey = safeStorage.decryptString(encryptedKey)
                 cachedKey = decryptedKey
@@ -36,8 +41,8 @@ export function getEncryptionKey(): string {
             const newKey = generateRandomKey()
             
             if (safeStorage.isEncryptionAvailable()) {
-                const encryptedKey = safeStorage.encryptString(newKey)
-                fs.writeFileSync(keyPath, encryptedKey, { mode: 0o600 })
+                const encrypted = safeStorage.encryptString(newKey)
+                await fsp.writeFile(keyPath, encrypted, { mode: 0o600 })
                 cachedKey = newKey
                 return newKey
             } else {

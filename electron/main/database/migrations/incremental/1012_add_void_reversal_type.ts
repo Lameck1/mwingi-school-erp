@@ -51,13 +51,13 @@ export function up(db: Database.Database): void {
   `)
 
     // Copy data
-    const sourceColumns = (db.prepare('PRAGMA table_info(journal_entry)').all() as Array<{ name: string }>)
-        .map(col => col.name)
+    const sourceColumns = new Set((db.prepare('PRAGMA table_info(journal_entry)').all() as Array<{ name: string }>)
+        .map(col => col.name))
     const targetColumns = (db.prepare('PRAGMA table_info(journal_entry_new)').all() as Array<{ name: string }>)
         .map(col => col.name)
 
     // Intersect columns to blindly copy whatever exists
-    const columnsToCopy = targetColumns.filter(col => sourceColumns.includes(col))
+    const columnsToCopy = targetColumns.filter(col => sourceColumns.has(col))
 
     if (columnsToCopy.length > 0) {
         const columnList = columnsToCopy.join(', ')

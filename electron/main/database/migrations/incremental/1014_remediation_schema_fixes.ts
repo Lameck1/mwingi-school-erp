@@ -7,46 +7,43 @@ import type Database from 'better-sqlite3'
  * #74 (fee_structure FK), #87 (invoice index), #88 (opening_balance unique),
  * #89 (stock_movement quantity CHECK), #90 (grading_scale unique), #96 (student_route unique)
  */
-export function up(db: Database.Database): void {
-    const hasColumn = (table: string, column: string): boolean => {
-        const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
-        return cols.some(c => c.name === column)
-    }
 
-    const indexExists = (indexName: string): boolean => {
-        const row = db.prepare(`SELECT name FROM sqlite_master WHERE type='index' AND name=?`).get(indexName)
-        return Boolean(row)
-    }
+function hasColumn(db: Database.Database, table: string, column: string): boolean {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
+    return cols.some(c => c.name === column)
+}
 
-    // Bug #29: Attendance unique constraint
-    if (!indexExists('idx_attendance_student_date')) {
-        try {
-            db.exec(`CREATE UNIQUE INDEX idx_attendance_student_date ON attendance(student_id, attendance_date, stream_id)`)
-        } catch {
-            // May fail if duplicates exist; create non-unique index as fallback
+function indexExists(db: Database.Database, indexName: string): boolean {
+    const row = db.prepare(`SELECT name FROM sqlite_master WHERE type='index' AND name=?`).get(indexName)
+    return Boolean(row)
+}
+
+function tryCreateUniqueIndex(db: Database.Database, indexName: string, definition: string, fallbackName?: string): void {
+    if (indexExists(db, indexName)) { return }
+    try {
+        db.exec(`CREATE UNIQUE INDEX ${indexName} ON ${definition}`)
+    } catch {
+        if (fallbackName) {
             try {
-                db.exec(`CREATE INDEX IF NOT EXISTS idx_attendance_student_date_nonuniq ON attendance(student_id, attendance_date, stream_id)`)
+                db.exec(`CREATE INDEX IF NOT EXISTS ${fallbackName} ON ${definition}`)
             } catch { /* ignore */ }
         }
     }
+}
+
+export function up(db: Database.Database): void {
+    // Bug #29: Attendance unique constraint
+    tryCreateUniqueIndex(db, 'idx_attendance_student_date', 'attendance(student_id, attendance_date, stream_id)', 'idx_attendance_student_date_nonuniq')
 
     // Bug #87: Fee invoice performance index
-    if (!indexExists('idx_fee_invoice_student_status')) {
+    if (!indexExists(db, 'idx_fee_invoice_student_status')) {
         db.exec(`CREATE INDEX IF NOT EXISTS idx_fee_invoice_student_status ON fee_invoice(student_id, status)`)
     }
 
     // Bug #88: Opening balance unique constraint
-    if (!indexExists('idx_opening_balance_account_year')) {
-        try {
-            db.exec(`CREATE UNIQUE INDEX idx_opening_balance_account_year ON opening_balance(gl_account_id, academic_year_id)`)
-        } catch {
-            // Duplicates may exist
-            db.exec(`CREATE INDEX IF NOT EXISTS idx_opening_balance_acct_yr ON opening_balance(gl_account_id, academic_year_id)`)
-        }
-    }
+    tryCreateUniqueIndex(db, 'idx_opening_balance_account_year', 'opening_balance(gl_account_id, academic_year_id)', 'idx_opening_balance_acct_yr')
 
     // Bug #89: stock_movement quantity should be non-negative
-    // SQLite can't add CHECK to existing column, but we can add a trigger
     db.exec(`
         CREATE TRIGGER IF NOT EXISTS trg_stock_movement_qty_check
         BEFORE INSERT ON stock_movement
@@ -58,29 +55,15 @@ export function up(db: Database.Database): void {
     `)
 
     // Bug #90: Grading scale uniqueness
-    if (!indexExists('idx_grading_scale_curriculum_grade')) {
-        try {
-            db.exec(`CREATE UNIQUE INDEX idx_grading_scale_curriculum_grade ON grading_scale(curriculum, grade)`)
-        } catch {
-            // May have duplicates
-        }
-    }
+    tryCreateUniqueIndex(db, 'idx_grading_scale_curriculum_grade', 'grading_scale(curriculum, grade)')
 
     // Bug #96: Student route assignment uniqueness
-    if (hasColumn('student_route_assignment', 'student_id')) {
-        if (!indexExists('idx_student_route_unique')) {
-            try {
-                db.exec(`CREATE UNIQUE INDEX idx_student_route_unique ON student_route_assignment(student_id, route_id, academic_year, term)`)
-            } catch {
-                // May have duplicates or columns may not exist
-            }
-        }
+    if (hasColumn(db, 'student_route_assignment', 'student_id')) {
+        tryCreateUniqueIndex(db, 'idx_student_route_unique', 'student_route_assignment(student_id, route_id, academic_year, term)')
     }
 
-    // Bug #52: Ensure journal_entry entry_type supports all needed types
-    // We can't ALTER CHECK in SQLite, but 1005_journal_entry_type_expansion should have handled this.
-    // Just ensure is_voided column defaults
-    if (hasColumn('fee_invoice', 'id') && !hasColumn('fee_invoice', 'is_voided')) {
+    // Bug #52: Ensure is_voided column defaults
+    if (hasColumn(db, 'fee_invoice', 'id') && !hasColumn(db, 'fee_invoice', 'is_voided')) {
         db.exec(`ALTER TABLE fee_invoice ADD COLUMN is_voided INTEGER DEFAULT 0`)
     }
 

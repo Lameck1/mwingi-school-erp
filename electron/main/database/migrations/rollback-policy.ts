@@ -33,6 +33,7 @@ export const IRREVERSIBLE_INCREMENTAL_MIGRATIONS = new Set<string>([
   '1019_seed_fixed_asset_gl_accounts',
   '1020_add_supplier_id_to_journal',
   '1024_login_rate_limit',
+  '1034_seed_other_revenue_account',
 ])
 
 export function getRollbackStrategy(migrationName: string): RollbackStrategy {

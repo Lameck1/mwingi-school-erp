@@ -43,6 +43,7 @@ const STANDARD_ACCOUNTS: readonly StandardAccount[] = [
   { code: '4100', name: 'Government Grants - Capitation', type: 'REVENUE', balance: 'CREDIT', system: 1 },
   { code: '4200', name: 'Donations', type: 'REVENUE', balance: 'CREDIT', system: 1 },
   { code: '4300', name: 'Other Income', type: 'REVENUE', balance: 'CREDIT', system: 1 },
+  { code: '4900', name: 'Other Revenue', type: 'REVENUE', balance: 'CREDIT', system: 1 },
   { code: '5010', name: 'Salaries - Teaching Staff', type: 'EXPENSE', balance: 'DEBIT', system: 1 },
   { code: '5020', name: 'Salaries - Non-Teaching Staff', type: 'EXPENSE', balance: 'DEBIT', system: 1 },
   { code: '5030', name: 'Statutory Deductions - NSSF', type: 'EXPENSE', balance: 'DEBIT', system: 1 },

@@ -1,4 +1,5 @@
 import * as fs from 'node:fs'
+import * as fsp from 'node:fs/promises'
 import * as path from 'node:path'
 
 import { app } from '../electron-env'
@@ -156,7 +157,7 @@ export async function initializeDatabase(): Promise<void> {
     const dbPath = getDatabasePath()
     const DatabaseClass = await loadDatabaseClass()
     const { getEncryptionKey } = await import('./security')
-    const key = getEncryptionKey()
+    const key = await getEncryptionKey()
     db = await openOrRecoverDatabase(DatabaseClass, dbPath, key)
     db.pragma('foreign_keys = ON')
     db.pragma('journal_mode = WAL')
@@ -187,31 +188,23 @@ function checkpointWal(database: Database.Database): void {
     }
 }
 
-function copyDatabaseFiles(sourceDbPath: string, targetDbPath: string): void {
-    fs.copyFileSync(sourceDbPath, targetDbPath)
+async function copyDatabaseFiles(sourceDbPath: string, targetDbPath: string): Promise<void> {
+    await fsp.copyFile(sourceDbPath, targetDbPath)
 
     const sourceWalPath = `${sourceDbPath}-wal`
     const sourceShmPath = `${sourceDbPath}-shm`
     const targetWalPath = `${targetDbPath}-wal`
     const targetShmPath = `${targetDbPath}-shm`
 
-    if (fs.existsSync(sourceWalPath)) {
-        fs.copyFileSync(sourceWalPath, targetWalPath)
-    }
-    if (fs.existsSync(sourceShmPath)) {
-        fs.copyFileSync(sourceShmPath, targetShmPath)
-    }
+    try { await fsp.access(sourceWalPath); await fsp.copyFile(sourceWalPath, targetWalPath) } catch { /* no WAL file */ }
+    try { await fsp.access(sourceShmPath); await fsp.copyFile(sourceShmPath, targetShmPath) } catch { /* no SHM file */ }
 }
 
 export async function backupDatabase(backupPath: string): Promise<void> {
     if (!db) {throw new Error('Database not initialized')}
     const dir = path.dirname(backupPath)
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true })
-    }
-    if (fs.existsSync(backupPath)) {
-        fs.unlinkSync(backupPath)
-    }
+    await fsp.mkdir(dir, { recursive: true })
+    try { await fsp.access(backupPath); await fsp.unlink(backupPath) } catch { /* file doesn't exist */ }
     const dbPath = getDatabasePath()
     const encryptedConnection = isEncryptedConnection(db)
 
@@ -229,7 +222,7 @@ export async function backupDatabase(backupPath: string): Promise<void> {
 
     try {
         checkpointWal(db)
-        copyDatabaseFiles(dbPath, backupPath)
+        await copyDatabaseFiles(dbPath, backupPath)
     } catch (fallbackError) {
         log.error('Fallback backup failed:', fallbackError)
         throw fallbackError
