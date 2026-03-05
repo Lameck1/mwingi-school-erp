@@ -366,4 +366,409 @@ describe('DataImportService', () => {
     )
     expect(inventoryResult.success).toBe(true)
   })
+
+  it('imports with both errors and successes sets success true', async () => {
+    const service = new DataImportService()
+    const config: ImportConfig = {
+      entityType: 'STUDENT',
+      mappings: [
+        { sourceColumn: 'Admission Number', targetField: 'admission_number', required: true },
+        { sourceColumn: 'First Name', targetField: 'first_name', required: true },
+        { sourceColumn: 'Last Name', targetField: 'last_name', required: true },
+        { sourceColumn: 'Date of Birth', targetField: 'date_of_birth', required: true },
+        { sourceColumn: 'Guardian Name', targetField: 'guardian_name', required: true },
+        { sourceColumn: 'Guardian Phone', targetField: 'guardian_phone', required: true },
+      ],
+    }
+    // Row 1 is valid, Row 2 has missing required fields
+    const result = await service.importFromFile(
+      csvBuffer('Admission Number,First Name,Last Name,Date of Birth,Guardian Name,Guardian Phone\nADM-100,Grace,Mutua,2011-01-02,Jane,0712345678\n,,,,,\n'),
+      'students.csv',
+      config,
+      1,
+    )
+    // Has errors but also imported → success = true
+    expect(result.success).toBe(true)
+    expect(result.imported).toBe(1)
+    expect(result.skipped).toBe(1)
+  })
+
+  it('collectMappingErrors with non-required empty value returns no error', () => {
+    const service = new DataImportService()
+    const internal = service as unknown as DataImportServiceInternals
+    const errors = internal.collectMappingErrors(
+      { sourceColumn: 'Middle Name', targetField: 'middle_name', required: false },
+      ''
+    )
+    expect(errors).toEqual([])
+  })
+
+  it('collectMappingErrors with validation returning null produces no error', () => {
+    const service = new DataImportService()
+    const internal = service as unknown as DataImportServiceInternals
+    const errors = internal.collectMappingErrors(
+      { sourceColumn: 'Phone', targetField: 'phone', required: false, validation: () => null },
+      '0712345678'
+    )
+    expect(errors).toEqual([])
+  })
+
+  it('applyMappingTransform without transform returns value unchanged', () => {
+    const service = new DataImportService()
+    const internal = service as unknown as DataImportServiceInternals
+    const result = internal.applyMappingTransform(
+      { sourceColumn: 'A', targetField: 'a' },
+      'hello'
+    )
+    expect(result).toEqual({ value: 'hello' })
+  })
+
+  it('applyMappingTransform with undefined value skips transform', () => {
+    const service = new DataImportService()
+    const internal = service as unknown as DataImportServiceInternals
+    const result = internal.applyMappingTransform(
+      { sourceColumn: 'A', targetField: 'a', transform: () => 'transformed' },
+      // eslint-disable-next-line unicorn/no-useless-undefined
+      undefined
+    )
+    expect(result).toEqual({ value: undefined })
+  })
+
+  it('insertStudent defaults gender, student_type, admission_date', async () => {
+    const service = new DataImportService()
+    const config: ImportConfig = {
+      entityType: 'STUDENT',
+      mappings: [
+        { sourceColumn: 'Admission Number', targetField: 'admission_number', required: true },
+        { sourceColumn: 'First Name', targetField: 'first_name', required: true },
+        { sourceColumn: 'Last Name', targetField: 'last_name', required: true },
+        { sourceColumn: 'Date of Birth', targetField: 'date_of_birth', required: true },
+        { sourceColumn: 'Guardian Name', targetField: 'guardian_name', required: true },
+        { sourceColumn: 'Guardian Phone', targetField: 'guardian_phone', required: true },
+      ],
+    }
+    const result = await service.importFromFile(
+      csvBuffer('Admission Number,First Name,Last Name,Date of Birth,Guardian Name,Guardian Phone\nADM-DEFAULTS,Grace,Mutua,2011-01-02,Jane,0712345678\n'),
+      'students.csv',
+      config,
+      1
+    )
+    expect(result.success).toBe(true)
+    const row = db.prepare('SELECT gender, student_type, admission_date FROM student WHERE admission_number = ?').get('ADM-DEFAULTS') as any
+    expect(row.gender).toBe('MALE')
+    expect(row.student_type).toBe('DAY_SCHOLAR')
+    expect(row.admission_date).toBeTruthy()
+  })
+
+  it('checkDuplicate on INVENTORY maps to inventory_item table', () => {
+    db.prepare("INSERT INTO inventory_item (item_code, item_name, category_id) VALUES ('INV-DUP', 'Paper', 1)").run()
+    const service = new DataImportService()
+    const internal = service as unknown as DataImportServiceInternals
+    expect(internal.checkDuplicate('INVENTORY', 'item_code', 'INV-DUP')).toBe(true)
+    expect(internal.checkDuplicate('INVENTORY', 'item_code', 'NOPE')).toBe(false)
+  })
+
+  it('generates template file for STAFF entity', async () => {
+    const service = new DataImportService()
+    const templateBuffer = await service.generateTemplateFile('STAFF')
+    expect(templateBuffer.length).toBeGreaterThan(0)
+  })
+
+  it('preProcess hook transforms mapped row before validation', async () => {
+    const service = new DataImportService()
+    const config: ImportConfig = {
+      entityType: 'STUDENT',
+      mappings: [
+        { sourceColumn: 'Admission Number', targetField: 'admission_number', required: true },
+        { sourceColumn: 'First Name', targetField: 'first_name', required: true },
+        { sourceColumn: 'Last Name', targetField: 'last_name', required: true },
+        { sourceColumn: 'Date of Birth', targetField: 'date_of_birth', required: true },
+        { sourceColumn: 'Guardian Name', targetField: 'guardian_name', required: true },
+        { sourceColumn: 'Guardian Phone', targetField: 'guardian_phone', required: true },
+      ],
+      preProcess: (row) => ({ ...row, first_name: String(row['first_name']).toUpperCase() }),
+    }
+    const result = await service.importFromFile(
+      csvBuffer('Admission Number,First Name,Last Name,Date of Birth,Guardian Name,Guardian Phone\nADM-PRE,grace,Mutua,2011-01-02,Jane,0712345678\n'),
+      'students.csv',
+      config,
+      1,
+    )
+    expect(result.success).toBe(true)
+    const row = db.prepare('SELECT first_name FROM student WHERE admission_number = ?').get('ADM-PRE') as any
+    expect(row.first_name).toBe('GRACE')
+  })
+
+  /* ==================================================================
+   *  Branch coverage: unsupported file format
+   * ================================================================== */
+  it('returns error for unsupported file format (e.g., .txt)', async () => {
+    const service = new DataImportService()
+    const config: ImportConfig = {
+      entityType: 'STUDENT',
+      mappings: [{ sourceColumn: 'Name', targetField: 'first_name', required: true }]
+    }
+    const result = await service.importFromFile(Buffer.from('hello'), 'file.txt', config, 1)
+    expect(result.success).toBe(false)
+    expect(result.errors[0]!.message).toContain('Unsupported file format')
+  })
+
+  /* ==================================================================
+   *  Branch coverage: file parsing error → catch block
+   * ================================================================== */
+  it('returns parsing error when CSV is malformed', async () => {
+    const service = new DataImportService()
+    const config: ImportConfig = {
+      entityType: 'STUDENT',
+      mappings: [{ sourceColumn: 'Name', targetField: 'first_name', required: true }]
+    }
+    // Empty buffer may cause a parse error depending on csv-parse behavior
+    // Instead, use a filename that claims to be an xls but the content is garbage
+    const result = await service.importFromFile(Buffer.from('not-real-excel'), 'file.xlsx', config, 1)
+    // xlsx parsing should fail
+    expect(result.success).toBe(false)
+    expect(result.errors[0]!.message).toContain('File parsing error')
+  })
+
+  /* ==================================================================
+   *  Branch coverage: skipDuplicates with existing record
+   * ================================================================== */
+  it('skips duplicate records when skipDuplicates is true', async () => {
+    const service = new DataImportService()
+    // Insert a student first
+    db.prepare(`INSERT INTO student (admission_number, first_name, last_name, date_of_birth, guardian_name, guardian_phone)
+      VALUES ('ADM-DUP', 'Existing', 'Student', '2010-01-01', 'Guardian', '0700000000')`).run()
+
+    const config: ImportConfig = {
+      entityType: 'STUDENT',
+      mappings: [
+        { sourceColumn: 'Admission Number', targetField: 'admission_number', required: true },
+        { sourceColumn: 'First Name', targetField: 'first_name', required: true },
+        { sourceColumn: 'Last Name', targetField: 'last_name', required: true },
+        { sourceColumn: 'Date of Birth', targetField: 'date_of_birth', required: true },
+        { sourceColumn: 'Guardian Name', targetField: 'guardian_name', required: true },
+        { sourceColumn: 'Guardian Phone', targetField: 'guardian_phone', required: true },
+      ],
+      skipDuplicates: true,
+      duplicateKey: 'admission_number'
+    }
+    const result = await service.importFromFile(
+      csvBuffer('Admission Number,First Name,Last Name,Date of Birth,Guardian Name,Guardian Phone\nADM-DUP,New,Name,2010-05-15,G,0712345678\n'),
+      'students.csv', config, 1
+    )
+    expect(result.skipped).toBe(1)
+    // Original record unchanged
+    const row = db.prepare('SELECT first_name FROM student WHERE admission_number = ?').get('ADM-DUP') as any
+    expect(row.first_name).toBe('Existing')
+  })
+
+  /* ==================================================================
+   *  Branch coverage: unsupported entity type
+   * ================================================================== */
+  it('throws for unsupported entity type at insert time', async () => {
+    const service = new DataImportService()
+    const config: ImportConfig = {
+      entityType: 'UNKNOWN_ENTITY' as any,
+      mappings: [
+        { sourceColumn: 'Col', targetField: 'field', required: true },
+      ]
+    }
+    const result = await service.importFromFile(
+      csvBuffer('Col\nValue\n'), 'file.csv', config, 1
+    )
+    // The insertRecord method should throw for unsupported entity
+    expect(result.errors.length).toBeGreaterThan(0)
+  })
+
+  /* ==================================================================
+   *  Branch coverage: empty rows → "No data rows found"
+   * ================================================================== */
+  it('returns error when CSV has only headers', async () => {
+    const service = new DataImportService()
+    const config: ImportConfig = {
+      entityType: 'STUDENT',
+      mappings: [{ sourceColumn: 'Name', targetField: 'first_name', required: true }]
+    }
+    const result = await service.importFromFile(
+      csvBuffer('Name\n'), 'file.csv', config, 1
+    )
+    expect(result.success).toBe(false)
+    expect(result.errors[0]!.message).toContain('No data rows')
+  })
+
+  /* ==================================================================
+   *  Branch coverage: validation callback returning error
+   * ================================================================== */
+  it('captures validation errors from config.validate callback', async () => {
+    const service = new DataImportService()
+    const config: ImportConfig = {
+      entityType: 'STUDENT',
+      mappings: [
+        { sourceColumn: 'Admission Number', targetField: 'admission_number', required: true },
+        { sourceColumn: 'First Name', targetField: 'first_name', required: true },
+        { sourceColumn: 'Last Name', targetField: 'last_name', required: true },
+        { sourceColumn: 'Date of Birth', targetField: 'date_of_birth', required: true },
+        { sourceColumn: 'Guardian Name', targetField: 'guardian_name', required: true },
+        { sourceColumn: 'Guardian Phone', targetField: 'guardian_phone', required: true },
+      ],
+      validate: (row) => row['first_name'] === 'BAD' ? ['Name is not allowed'] : []
+    }
+    const result = await service.importFromFile(
+      csvBuffer('Admission Number,First Name,Last Name,Date of Birth,Guardian Name,Guardian Phone\nADM-VAL,BAD,Name,2010-01-01,G,0700000000\n'),
+      'file.csv', config, 1
+    )
+    expect(result.skipped).toBe(1)
+    expect(result.errors[0]!.message).toContain('Name is not allowed')
+  })
+
+  /* ==================================================================
+   *  Branch coverage: mapping with transform that throws
+   * ================================================================== */
+  it('captures transform errors for a mapping', async () => {
+    const service = new DataImportService()
+    const config: ImportConfig = {
+      entityType: 'STUDENT',
+      mappings: [
+        { sourceColumn: 'Admission Number', targetField: 'admission_number', required: true },
+        { sourceColumn: 'First Name', targetField: 'first_name', required: true, transform: () => { throw new Error('bad transform') } },
+        { sourceColumn: 'Last Name', targetField: 'last_name', required: true },
+        { sourceColumn: 'Date of Birth', targetField: 'date_of_birth', required: true },
+        { sourceColumn: 'Guardian Name', targetField: 'guardian_name', required: true },
+        { sourceColumn: 'Guardian Phone', targetField: 'guardian_phone', required: true },
+      ]
+    }
+    const result = await service.importFromFile(
+      csvBuffer('Admission Number,First Name,Last Name,Date of Birth,Guardian Name,Guardian Phone\nADM-TF,Grace,Mutua,2011-01-02,Jane,0712345678\n'),
+      'file.csv', config, 1
+    )
+    expect(result.skipped).toBe(1)
+    expect(result.errors[0]!.message).toContain('Transform failed')
+  })
+
+  /* ==================================================================
+   *  Branch coverage: getImportTemplate for INVENTORY entity type
+   * ================================================================== */
+  it('getImportTemplate returns columns for INVENTORY', () => {
+    const service = new DataImportService()
+    const template = service.getImportTemplate('INVENTORY')
+    expect(template.columns.length).toBeGreaterThan(0)
+    expect(template.columns[0]!.name).toBe('Item Code')
+  })
+
+  /* ==================================================================
+   *  Branch coverage: getImportTemplate for unknown entity → empty
+   * ================================================================== */
+  it('getImportTemplate returns empty for unknown entity', () => {
+    const service = new DataImportService()
+    const template = service.getImportTemplate('WIDGETS')
+    expect(template.columns).toHaveLength(0)
+    expect(template.sampleData).toHaveLength(0)
+  })
+
+  /* ==================================================================
+   *  Branch coverage: mapping with validation callback
+   * ================================================================== */
+  it('captures per-mapping validation errors', async () => {
+    const service = new DataImportService()
+    const config: ImportConfig = {
+      entityType: 'STUDENT',
+      mappings: [
+        { sourceColumn: 'Admission Number', targetField: 'admission_number', required: true },
+        { sourceColumn: 'First Name', targetField: 'first_name', required: true, validation: (v) => typeof v === 'string' && v.length < 2 ? 'Name too short' : null },
+        { sourceColumn: 'Last Name', targetField: 'last_name', required: true },
+        { sourceColumn: 'Date of Birth', targetField: 'date_of_birth', required: true },
+        { sourceColumn: 'Guardian Name', targetField: 'guardian_name', required: true },
+        { sourceColumn: 'Guardian Phone', targetField: 'guardian_phone', required: true },
+      ]
+    }
+    const result = await service.importFromFile(
+      csvBuffer('Admission Number,First Name,Last Name,Date of Birth,Guardian Name,Guardian Phone\nADM-MV,A,Mutua,2010-01-01,G,0700000000\n'),
+      'file.csv', config, 1
+    )
+    expect(result.skipped).toBe(1)
+    expect(result.errors[0]!.message).toContain('Name too short')
+  })
+
+  /* ==================================================================
+   *  Branch coverage: generateTemplateFile with known entity (L529-531)
+   * ================================================================== */
+  it('generateTemplateFile returns valid Excel buffer for STUDENT', async () => {
+    const service = new DataImportService()
+    const buf = await service.generateTemplateFile('STUDENT')
+    expect(buf).toBeInstanceOf(Buffer)
+    expect(buf.length).toBeGreaterThan(0)
+  })
+
+  it('generateTemplateFile returns valid Excel buffer for unknown entity (empty template)', async () => {
+    const service = new DataImportService()
+    const buf = await service.generateTemplateFile('WIDGETS')
+    expect(buf).toBeInstanceOf(Buffer)
+    expect(buf.length).toBeGreaterThan(0)
+  })
+
+  /* ==================================================================
+   *  Branch coverage: skipDuplicates with and without duplicateKey (L269)
+   * ================================================================== */
+  it('skips duplicates when skipDuplicates=true and duplicateKey is set', async () => {
+    const service = new DataImportService()
+    const config = studentImportConfig({ skipDuplicates: true, duplicateKey: 'admission_number' })
+    // Insert first
+    const csv = csvBuffer('Admission Number,First Name,Last Name,Date of Birth,Guardian Name,Guardian Phone\nADM-DUP1,Alice,Doe,2010-01-01,Jane,0712345678\n')
+    await service.importFromFile(csv, 'file.csv', config, 1)
+    // Insert again — should skip
+    const csv2 = csvBuffer('Admission Number,First Name,Last Name,Date of Birth,Guardian Name,Guardian Phone\nADM-DUP1,Alice,Doe,2010-01-01,Jane,0712345678\n')
+    const result2 = await service.importFromFile(csv2, 'file.csv', config, 1)
+    expect(result2.skipped).toBe(1)
+  })
+
+  it('does not skip duplicates when skipDuplicates=true but duplicateKey is empty', async () => {
+    const service = new DataImportService()
+    const config = studentImportConfig({ skipDuplicates: true, duplicateKey: '' })
+    const csv = csvBuffer('Admission Number,First Name,Last Name,Date of Birth,Guardian Name,Guardian Phone\nADM-NOKEY,Bob,Doe,2010-01-01,Jane,0712345678\n')
+    db.prepare(`INSERT INTO student (admission_number, first_name, last_name, date_of_birth, guardian_name, guardian_phone) VALUES ('ADM-NOKEY','Bob','Doe','2010-01-01','Jane','0712345678')`).run()
+    // Without duplicateKey, it should try to import (and may fail on UNIQUE constraint)
+    const result = await service.importFromFile(csv, 'file.csv', config, 1)
+    // Either imports or errors, but shouldn't be silently skipped as duplicate
+    expect(result.totalRows).toBe(1)
+  })
+
+  /* ==================================================================
+   *  Branch coverage: Excel import with empty worksheet (L103)
+   * ================================================================== */
+  it('parseExcel returns empty rows when workbook has no data sheet', async () => {
+    const service = new DataImportService()
+    const workbook = new ExcelJS.Workbook()
+    // Add worksheet with different name than expected index
+    const buf = Buffer.from(await workbook.xlsx.writeBuffer())
+    const result = await service.importFromFile(buf, 'file.xlsx', studentImportConfig(), 1)
+    expect(result.success).toBe(false)
+    expect(result.errors[0]!.message).toContain('No data rows')
+  })
+
+  /* ==================================================================
+   *  Branch coverage: Excel import with cell values including formula prefix (L120-122)
+   * ================================================================== */
+  it('strips formula prefixes from Excel cell values', async () => {
+    const service = new DataImportService()
+    const buf = await buildWorkbookBuffer([
+      { 'Admission Number': '=+ADM-FX', 'First Name': 'Grace', 'Last Name': 'Test', 'Date of Birth': '2011-01-02', 'Guardian Name': 'Jane', 'Guardian Phone': '0712345678' }
+    ])
+    const result = await service.importFromFile(buf, 'file.xlsx', studentImportConfig(), 1)
+    // The formula prefix '=+' should be stripped
+    if (result.imported > 0) {
+      const row = db.prepare('SELECT admission_number FROM student ORDER BY id DESC LIMIT 1').get() as any
+      expect(row.admission_number).not.toMatch(/^[=+]/)
+    }
+    expect(result.totalRows).toBe(1)
+  })
+
+  /* ==================================================================
+   *  Branch coverage: resolveSourceValue with missing column (L77)
+   * ================================================================== */
+  it('resolveSourceValue returns undefined for missing source column', () => {
+    const service = new DataImportService()
+    const internals = service as unknown as DataImportServiceInternals
+    const value = internals.resolveSourceValue({ 'A': 1, 'B': 2 }, 'NonExistent')
+    expect(value).toBeUndefined()
+  })
 })

@@ -49,6 +49,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     },
     logout: () => {
         set({ user: null, isAuthenticated: false, lastActivity: null, isSessionLoaded: true })
+        // Clear app state to prevent stale data from leaking across sessions
+        useAppStore.getState().resetAppState()
         globalThis.electronAPI.auth.clearSession().catch((error) => {
             console.error(SESSION_CLEAR_ERROR, error)
         })
@@ -141,6 +143,7 @@ interface AppState {
     setSchoolSettings(settings: SchoolSettings): void
     setDashboardCache(cache: Omit<DashboardCache, 'timestamp'>): void
     isDashboardCacheValid(): boolean
+    resetAppState(): void
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -156,4 +159,5 @@ export const useAppStore = create<AppState>((set, get) => ({
         const c = get().dashboardCache
         return c !== null && (Date.now() - c.timestamp) < DASHBOARD_CACHE_TTL_MS
     },
+    resetAppState: () => set({ currentAcademicYear: null, currentTerm: null, schoolSettings: null, dashboardCache: null }),
 }))

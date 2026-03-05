@@ -15,10 +15,10 @@ export function isIPCFailure(value: unknown): value is IPCFailure {
 }
 
 export function getIPCFailureMessage(value: IPCFailure, fallback = 'Operation failed'): string {
-  if (value.error && value.error.trim()) {
+  if (value.error?.trim()) {
     return value.error
   }
-  if (value.message && value.message.trim()) {
+  if (value.message?.trim()) {
     return value.message
   }
   if (Array.isArray(value.errors) && value.errors.length > 0) {
@@ -29,7 +29,7 @@ export function getIPCFailureMessage(value: IPCFailure, fallback = 'Operation fa
 
 export function unwrapIPCResult<T>(value: T | IPCFailure, fallback = 'Operation failed'): T {
   if (isIPCFailure(value)) {
-    throw new Error(getIPCFailureMessage(value, fallback))
+    throw new TypeError(getIPCFailureMessage(value, fallback))
   }
   return value
 }
@@ -37,7 +37,7 @@ export function unwrapIPCResult<T>(value: T | IPCFailure, fallback = 'Operation 
 export function unwrapArrayResult<T>(value: T[] | IPCFailure, fallback = 'Expected a list response'): T[] {
   const resolved = unwrapIPCResult(value, fallback)
   if (!Array.isArray(resolved)) {
-    throw new Error(fallback)
+    throw new TypeError(fallback)
   }
   return resolved
 }

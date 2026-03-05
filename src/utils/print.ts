@@ -75,7 +75,7 @@ function safeString(value: unknown): string {
   if (typeof value === 'string') { return value }
   if (value == null) { return '' }
   if (typeof value === 'object') { return JSON.stringify(value) }
-  return String(value)
+  return String(value as string | number | boolean)
 }
 
 function buildHtmlDocument(params: {
@@ -161,76 +161,22 @@ export function printDocument(options: PrintOptions): void {
 const safeStr = (v: unknown, fallback: string): string => (typeof v === 'string' && v) ? v : fallback
 const safeNum = (v: unknown, fallback: number): number => (typeof v === 'number') ? v : fallback
 
-function generatePrintHTML(
-  template: string,
-  data: Record<string, unknown>,
-  settings: Record<string, unknown> | undefined,
-  title: string,
-  orientation: 'portrait' | 'landscape'
-) {
-  interface LedgerRow {
-    debit_credit?: string
-    amount?: number
-    transaction_date?: string
-    date?: string
-    receipt_number?: string
-    invoice_number?: string
-    ref?: string
-    runningBalance?: number
-    running_balance?: number
-    description?: string
-  }
+interface LedgerRow {
+  debit_credit?: string
+  amount?: number
+  transaction_date?: string
+  date?: string
+  receipt_number?: string
+  invoice_number?: string
+  ref?: string
+  runningBalance?: number
+  running_balance?: number
+  description?: string
+}
 
-  const schoolName = safeStr(settings?.['schoolName'], 'Mwingi Adventist School')
-  const schoolAddress = safeStr(settings?.['address'], 'P.O Box 123, Mwingi')
-  const schoolPhone = safeStr(settings?.['phone'], '0700 000 000')
-  const schoolEmail = safeStr(settings?.['email'], 'info@mwingischool.ac.ke')
-
-  const css = `
-    html, body {
-      margin: 0;
-      padding: 0;
-      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      color: #1e293b;
-      line-height: 1.5;
-      font-size: 12px;
-      background: #ffffff;
-    }
-    .print-content {
-      padding: 20px;
-    }
-    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
-    .school-name { font-size: 24px; font-weight: bold; color: #0f172a; text-transform: uppercase; }
-    .school-info { font-size: 11px; color: #64748b; }
-    .doc-title { font-size: 18px; font-weight: bold; margin: 15px 0; text-align: center; text-transform: uppercase; }
-    table { border-collapse: collapse; margin-bottom: 20px; width: 100%; }
-    th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
-    th { background-color: #f8fafc; font-weight: 600; text-transform: uppercase; font-size: 10px; }
-    .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-    .meta-box { border: 1px solid #e2e8f0; padding: 10px; border-radius: 4px; }
-    .meta-label { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: bold; }
-    .meta-value { font-size: 12px; font-weight: 600; }
-    .footer { margin-top: 40px; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px; }
-    .signatures { display: flex; justify-content: space-between; margin-top: 50px; }
-    .sig-line { border-top: 1px solid #000; width: 200px; padding-top: 5px; text-align: center; font-size: 11px; }
-    .watermark {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) rotate(-45deg);
-      font-size: 100px;
-      opacity: 0.03;
-      font-weight: bold;
-      pointer-events: none;
-      z-index: -1;
-    }
-  `
-
-  let content = ''
-
-  if (template === 'statement') {
-    const ledger = (Array.isArray(data['ledger']) ? data['ledger'] : []) as LedgerRow[]
-    content = `
+function generateStatementContent(data: Record<string, unknown>): string {
+  const ledger = (Array.isArray(data['ledger']) ? data['ledger'] : []) as LedgerRow[]
+  return `
       <div class="meta-grid">
         <div class="meta-box">
           <div class="meta-label">Student Details</div>
@@ -290,8 +236,10 @@ function generatePrintHTML(
         <div class="sig-line">Parent/Guardian</div>
       </div>
     `
-  } else if (template === 'receipt') {
-    content = `
+}
+
+function generateReceiptContent(data: Record<string, unknown>): string {
+  return `
       <div class="meta-grid">
         <div class="meta-box">
           <div class="meta-label">Receipt For</div>
@@ -320,15 +268,18 @@ function generatePrintHTML(
         <div class="sig-line">Authorized Signatory</div>
       </div>
     `
-  } else if (template === 'invoice') {
-    interface InvoiceItem {
-      description?: string
-      amount?: number
-    }
-    const items = (Array.isArray(data['items']) ? data['items'] : []) as InvoiceItem[]
-    const totalAmount = safeNum(data['totalAmount'], items.reduce((sum, item) => sum + safeNum(item.amount, 0), 0))
+}
 
-    content = `
+function generateInvoiceContent(data: Record<string, unknown>): string {
+  interface InvoiceItem {
+    description?: string
+    amount?: number
+  }
+  const items = (Array.isArray(data['items']) ? data['items'] : []) as InvoiceItem[]
+  const totalAmount = safeNum(data['totalAmount'], items.reduce((sum, item) => sum + safeNum(item.amount, 0), 0))
+  const balanceColor = safeNum(data['balanceDue'], 0) > 0 ? '#f59e0b' : '#10b981'
+
+  return `
       <div class="meta-grid">
         <div class="meta-box">
           <div class="meta-label">Bill To</div>
@@ -365,18 +316,18 @@ function generatePrintHTML(
             <td style="font-weight: bold; text-align: right">Total</td>
             <td style="font-weight: bold; text-align: right">${formatCurrencyFromCents(totalAmount)}</td>
           </tr>
-          ${data['amountPaid'] != null ? `
+          ${data['amountPaid'] == null ? '' : `
           <tr>
             <td style="text-align: right">Amount Paid</td>
             <td style="text-align: right">${formatCurrencyFromCents(safeNum(data['amountPaid'], 0))}</td>
           </tr>
           <tr>
             <td style="font-weight: bold; text-align: right">Balance Due</td>
-            <td style="font-weight: bold; text-align: right; color: ${safeNum(data['balanceDue'], 0) > 0 ? '#f59e0b' : '#10b981'};">
+            <td style="font-weight: bold; text-align: right; color: ${balanceColor};">
               ${formatCurrencyFromCents(safeNum(data['balanceDue'], 0))}
             </td>
           </tr>
-          ` : ''}
+          `}
         </tfoot>
       </table>
 
@@ -385,15 +336,17 @@ function generatePrintHTML(
         <div class="sig-line">Parent/Guardian</div>
       </div>
     `
-  } else if (template === 'payslip') {
-    interface PayslipLine {
-      name?: string
-      amount?: number
-    }
-    const allowances = (Array.isArray(data['allowancesList']) ? data['allowancesList'] : []) as PayslipLine[]
-    const deductions = (Array.isArray(data['deductionsList']) ? data['deductionsList'] : []) as PayslipLine[]
+}
 
-    content = `
+function generatePayslipContent(data: Record<string, unknown>): string {
+  interface PayslipLine {
+    name?: string
+    amount?: number
+  }
+  const allowances = (Array.isArray(data['allowancesList']) ? data['allowancesList'] : []) as PayslipLine[]
+  const deductions = (Array.isArray(data['deductionsList']) ? data['deductionsList'] : []) as PayslipLine[]
+
+  return `
       <div class="meta-grid">
         <div class="meta-box">
           <div class="meta-label">Employee Details</div>
@@ -449,15 +402,17 @@ function generatePrintHTML(
         <div class="sig-line">Employee Signature</div>
       </div>
     `
-  } else if (template === 'report') {
-    interface ReportRow {
-      [key: string]: unknown
-    }
-    const columns = (Array.isArray(data['columns']) ? data['columns'] : []) as string[]
-    const rows = (Array.isArray(data['rows']) ? data['rows'] : []) as ReportRow[]
-    const summary = safeString(data['summary'])
+}
 
-    content = `
+function generateReportContent(data: Record<string, unknown>): string {
+  interface ReportRow {
+    [key: string]: unknown
+  }
+  const columns = (Array.isArray(data['columns']) ? data['columns'] : []) as string[]
+  const rows = (Array.isArray(data['rows']) ? data['rows'] : []) as ReportRow[]
+  const summary = safeString(data['summary'])
+
+  return `
       ${summary ? `<div style="margin-bottom: 15px; color: #64748b; font-size: 11px;">${escapeHtml(summary)}</div>` : ''}
 
       <table>
@@ -481,7 +436,70 @@ function generatePrintHTML(
         </div>
       ` : ''}
     `
-  }
+}
+
+const TEMPLATE_GENERATORS: Record<string, (data: Record<string, unknown>) => string> = {
+  statement: generateStatementContent,
+  receipt: generateReceiptContent,
+  invoice: generateInvoiceContent,
+  payslip: generatePayslipContent,
+  report: generateReportContent,
+}
+
+function generatePrintHTML(
+  template: string,
+  data: Record<string, unknown>,
+  settings: Record<string, unknown> | undefined,
+  title: string,
+  orientation: 'portrait' | 'landscape'
+) {
+  const schoolName = safeStr(settings?.['schoolName'], 'Mwingi Adventist School')
+  const schoolAddress = safeStr(settings?.['address'], 'P.O Box 123, Mwingi')
+  const schoolPhone = safeStr(settings?.['phone'], '0700 000 000')
+  const schoolEmail = safeStr(settings?.['email'], 'info@mwingischool.ac.ke')
+
+  const css = `
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: #1e293b;
+      line-height: 1.5;
+      font-size: 12px;
+      background: #ffffff;
+    }
+    .print-content {
+      padding: 20px;
+    }
+    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+    .school-name { font-size: 24px; font-weight: bold; color: #0f172a; text-transform: uppercase; }
+    .school-info { font-size: 11px; color: #64748b; }
+    .doc-title { font-size: 18px; font-weight: bold; margin: 15px 0; text-align: center; text-transform: uppercase; }
+    table { border-collapse: collapse; margin-bottom: 20px; width: 100%; }
+    th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+    th { background-color: #f8fafc; font-weight: 600; text-transform: uppercase; font-size: 10px; }
+    .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+    .meta-box { border: 1px solid #e2e8f0; padding: 10px; border-radius: 4px; }
+    .meta-label { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: bold; }
+    .meta-value { font-size: 12px; font-weight: 600; }
+    .footer { margin-top: 40px; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+    .signatures { display: flex; justify-content: space-between; margin-top: 50px; }
+    .sig-line { border-top: 1px solid #000; width: 200px; padding-top: 5px; text-align: center; font-size: 11px; }
+    .watermark {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-45deg);
+      font-size: 100px;
+      opacity: 0.03;
+      font-weight: bold;
+      pointer-events: none;
+      z-index: -1;
+    }
+  `
+
+  const generator = TEMPLATE_GENERATORS[template]
+  const content = generator ? generator(data) : ''
 
   return buildHtmlDocument({
     title,

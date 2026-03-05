@@ -11,7 +11,7 @@ export interface ValidationResult<T> {
 
 export const validateAmount = (amount?: unknown): ValidationResult<number> => {
     const num = Number(amount)
-    if (Number.isNaN(num) || num <= 0) {
+    if (Number.isNaN(num) || !Number.isFinite(num) || num <= 0) {
         return { success: false, error: 'Invalid amount. Must be a positive number.' }
     }
     // Amount is expected to be in cents already; normalize to an integer
@@ -24,14 +24,22 @@ export const formatFromCents = (cents: number): number => {
 
 export const validateId = (id?: unknown, label: string = 'ID'): ValidationResult<number> => {
     const num = Number(id)
-    if (Number.isNaN(num) || num <= 0) {
+    if (Number.isNaN(num) || num <= 0 || !Number.isInteger(num)) {
         return { success: false, error: `Invalid ${label}.` }
     }
     return { success: true, data: num }
 }
 
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/
+const DATE_TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
+const DATE_TIME_SEC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/
+
 export const validateDate = (date?: unknown): ValidationResult<string> => {
-    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(date)) {
+    if (typeof date !== 'string') {
+        return { success: false, error: 'Invalid date format. Expected YYYY-MM-DD.' }
+    }
+    const trimmed = date.trimEnd()
+    if (!DATE_ONLY_RE.test(trimmed) && !DATE_TIME_RE.test(trimmed) && !DATE_TIME_SEC_RE.test(trimmed)) {
         return { success: false, error: 'Invalid date format. Expected YYYY-MM-DD.' }
     }
     return { success: true, data: date }

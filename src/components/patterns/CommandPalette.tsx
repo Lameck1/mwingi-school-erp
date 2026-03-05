@@ -68,7 +68,7 @@ export function CommandPalette() {
     const [open, setOpen] = useState(false)
     const navigate = useNavigate()
     const { theme, toggleTheme } = useTheme()
-    const { logout } = useAuthStore()
+    const logout = useAuthStore((s) => s.logout)
 
     useEffect(() => {
         const down = (e: KeyboardEvent) => {

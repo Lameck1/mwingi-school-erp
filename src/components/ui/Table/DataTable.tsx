@@ -305,7 +305,7 @@ function DataTableToolbar<T extends { id: number | string }>({ controller, onExp
                     className="pl-10"
                 />
                 {controller.searchTerm && (
-                    <button onClick={() => controller.setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-secondary rounded">
+                    <button onClick={() => controller.setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-secondary rounded" aria-label="Clear search">
                         <X className="w-4 h-4" />
                     </button>
                 )}
@@ -383,7 +383,7 @@ function DataTableGrid<T extends { id: number | string }>({
                     <tr className="bg-secondary/40 backdrop-blur-sm border-b border-border/40">
                         {selectable && (
                             <th className={`${headerPadding} w-12`}>
-                                <input type="checkbox" checked={controller.allPageSelected} onChange={controller.handleSelectAll} className="rounded border-border/20" />
+                                <input type="checkbox" checked={controller.allPageSelected} onChange={controller.handleSelectAll} className="rounded border-border/20" aria-label="Select all rows" />
                             </th>
                         )}
                         {controller.visibleColumns.map((column) => {
@@ -413,7 +413,7 @@ function DataTableGrid<T extends { id: number | string }>({
                         >
                             {selectable && (
                                 <td className={cellPadding} onClick={(event) => event.stopPropagation()}>
-                                    <input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => controller.handleSelectRow(row.id)} className="rounded border-border/40" />
+                                    <input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => controller.handleSelectRow(row.id)} className="rounded border-border/40" aria-label="Select row" />
                                 </td>
                             )}
                             {controller.visibleColumns.map((column) => {
@@ -476,6 +476,7 @@ function DataTablePagination({
                     value={pageSize}
                     onChange={(event) => onPageSizeChange(Number(event.target.value))}
                     className="bg-transparent border border-border/40 rounded px-2 py-1 outline-none"
+                    aria-label="Rows per page"
                 >
                     {pageSizeOptions.map((option) => (
                         <option key={option} value={option} className="bg-secondary">{option} per page</option>
@@ -483,7 +484,7 @@ function DataTablePagination({
                 </select>
             </div>
             <div className="flex items-center gap-2">
-                <button onClick={() => onPageChange(page - 1)} disabled={page === 1} className="p-2 hover:bg-secondary disabled:opacity-30 rounded-lg border border-border/40">
+                <button onClick={() => onPageChange(page - 1)} disabled={page === 1} className="p-2 hover:bg-secondary disabled:opacity-30 rounded-lg border border-border/40" aria-label="Previous page">
                     <ChevronLeft className="w-4 h-4" />
                 </button>
                 <div className="flex items-center gap-1">
@@ -497,7 +498,7 @@ function DataTablePagination({
                         </button>
                     ))}
                 </div>
-                <button onClick={() => onPageChange(page + 1)} disabled={page === totalPages} className="p-2 hover:bg-secondary disabled:opacity-30 rounded-lg border border-border/40">
+                <button onClick={() => onPageChange(page + 1)} disabled={page === totalPages} className="p-2 hover:bg-secondary disabled:opacity-30 rounded-lg border border-border/40" aria-label="Next page">
                     <ChevronRight className="w-4 h-4" />
                 </button>
             </div>

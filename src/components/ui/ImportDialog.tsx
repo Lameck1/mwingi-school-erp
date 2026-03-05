@@ -278,7 +278,7 @@ function useImportDialogController(
     onClose: () => void,
     onSuccess: (result: unknown) => void
 ): ImportDialogController {
-    const { user } = useAuthStore()
+    const user = useAuthStore((s) => s.user)
     const { showToast } = useToast()
     const [step, setStep] = useState<ImportStep>('UPLOAD')
     const [selectedImportFile, setSelectedImportFile] = useState<{ token: string; fileName: string; fileSizeBytes: number } | null>(null)

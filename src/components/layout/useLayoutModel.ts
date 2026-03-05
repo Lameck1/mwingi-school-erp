@@ -16,7 +16,8 @@ export function useLayoutModel(): LayoutModel {
     const navigate = useNavigate()
     const location = useLocation()
     const isOnline = useNetworkStatus()
-    const { user, logout } = useAuthStore()
+    const user = useAuthStore((s) => s.user)
+    const logout = useAuthStore((s) => s.logout)
     const { theme, toggleTheme } = useTheme()
     const { showToast } = useToast()
     const [expandedMenus, setExpandedMenus] = useState<string[]>(() =>

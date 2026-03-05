@@ -1,4 +1,4 @@
-import * as fs from 'node:fs'
+import * as fsp from 'node:fs/promises'
 import * as path from 'node:path'
 
 import { BrowserWindow, app } from '../electron-env'
@@ -23,13 +23,13 @@ export async function renderHtmlToPdfBuffer(html: string): Promise<Buffer> {
   }
 }
 
-export function resolveOutputPath(filename: string, folderName: string = 'exports'): string {
+export async function resolveOutputPath(filename: string, folderName: string = 'exports'): Promise<string> {
   const documentsPath = app.getPath('documents')
   const folder = path.join(documentsPath, 'MwingiSchoolERP', folderName)
-  fs.mkdirSync(folder, { recursive: true })
+  await fsp.mkdir(folder, { recursive: true })
   return path.join(folder, filename)
 }
 
-export function writePdfBuffer(filePath: string, buffer: Buffer): void {
-  fs.writeFileSync(filePath, buffer)
+export async function writePdfBuffer(filePath: string, buffer: Buffer): Promise<void> {
+  await fsp.writeFile(filePath, buffer)
 }

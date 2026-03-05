@@ -17,7 +17,7 @@ interface ErrorBoundaryProps {
  */
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
     private retryCount = 0
-    private maxRetries = 3
+    private readonly maxRetries = 3
 
     constructor(props: ErrorBoundaryProps) {
         super(props)
@@ -35,7 +35,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         console.error('ErrorBoundary caught:', error, errorInfo)
 
         // Report to main process for logging
-        const api = window.electronAPI
+        const api = globalThis.electronAPI
 
         const logErrorFn = api.system.logError
         if (typeof logErrorFn === 'function') {
@@ -60,12 +60,12 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
             this.setState({ hasError: false, error: null, errorInfo: null })
         } else {
             // Max retries reached, offer full page reload
-            window.location.reload()
+            globalThis.location.reload()
         }
     }
 
     handleReload = (): void => {
-        window.location.reload()
+        globalThis.location.reload()
     }
 
     override render(): React.JSX.Element {

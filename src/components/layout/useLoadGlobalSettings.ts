@@ -6,7 +6,11 @@ import type { SchoolSettings } from '../../types/electron-api/SettingsAPI'
 import { unwrapIPCResult } from '../../utils/ipc'
 
 export function useLoadGlobalSettings(): { schoolName: string; currentAcademicYearName: string } {
-    const { schoolSettings, currentAcademicYear, setSchoolSettings, setCurrentAcademicYear, setCurrentTerm } = useAppStore()
+    const schoolSettings = useAppStore((s) => s.schoolSettings)
+    const currentAcademicYear = useAppStore((s) => s.currentAcademicYear)
+    const setSchoolSettings = useAppStore((s) => s.setSchoolSettings)
+    const setCurrentAcademicYear = useAppStore((s) => s.setCurrentAcademicYear)
+    const setCurrentTerm = useAppStore((s) => s.setCurrentTerm)
 
     useEffect(() => {
         void (async () => {

@@ -185,15 +185,15 @@ describe('Validation Utilities', () => {
 
     it('should reject decimal IDs', () => {
       const result = validateId(1.5)
-      // Number(1.5) = 1.5 which is > 0, so success is true
-      expect(result.success).toBe(true)
-      expect(result.data).toBe(1.5)
+      // Non-integer IDs are now rejected
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Invalid')
     })
 
     it('should handle float strings', () => {
       const result = validateId('123.5')
-      expect(result.success).toBe(true) // Will coerce to 123.5, then Number(123.5) > 0
-      expect(result.data).toBe(123.5)
+      expect(result.success).toBe(false) // Non-integer IDs rejected
+      expect(result.error).toContain('Invalid')
     })
   })
 
@@ -349,8 +349,8 @@ describe('Validation Utilities', () => {
 
     it('should handle Infinity values', () => {
       const result = validateAmount(Infinity)
-      // Infinity is not < 0, so success is true (edge case not handled)
-      expect(result.success).toBe(true)
+      // Infinity is now correctly rejected
+      expect(result.success).toBe(false)
     })
 
     it('should handle negative Infinity', () => {

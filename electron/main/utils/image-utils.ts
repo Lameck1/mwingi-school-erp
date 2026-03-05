@@ -1,4 +1,3 @@
-import * as fs from 'node:fs'
 import * as fsp from 'node:fs/promises'
 import * as path from 'node:path'
 
@@ -6,10 +5,15 @@ import { app } from '../electron-env'
 
 /**
  * Get the root images directory in userData.
+ * Caches already-created directories to avoid redundant mkdirSync calls.
  */
-function getImagesDir(subfolder: string): string {
+const createdDirs = new Set<string>()
+async function getImagesDir(subfolder: string): Promise<string> {
     const dir = path.join(app.getPath('userData'), 'images', subfolder)
-    fs.mkdirSync(dir, { recursive: true })
+    if (!createdDirs.has(dir)) {
+        await fsp.mkdir(dir, { recursive: true })
+        createdDirs.add(dir)
+    }
     return dir
 }
 
@@ -39,7 +43,7 @@ export async function saveImageFromDataUrl(dataUrl: string, subfolder: string, f
         throw new Error('Image file size exceeds 5MB limit')
     }
 
-    const dir = getImagesDir(subfolder)
+    const dir = await getImagesDir(subfolder)
     const finalFilename = `${filename}.${ext}`
     const filePath = path.join(dir, finalFilename)
 
@@ -54,19 +58,33 @@ export async function saveImageFromDataUrl(dataUrl: string, subfolder: string, f
 export async function getImageAsBase64DataUrl(imagePath: string): Promise<string | null> {
     if (!imagePath) { return null }
 
-    let finalPath = imagePath
-    try {
-        await fsp.access(finalPath)
-    } catch {
-        // Fallback: Check relative to userData/images
-        const fallbackPath = path.join(app.getPath('userData'), 'images', imagePath)
+    // Security: Resolve against the images root and verify containment to prevent path traversal
+    const imagesRoot = path.join(app.getPath('userData'), 'images')
+    const resolvedFromRoot = path.resolve(imagesRoot, imagePath)
+
+    // First try the path as provided (may be absolute from a previous save)
+    const resolvedAbsolute = path.resolve(imagePath)
+
+    // Ensure any absolute path is within the images directory
+    let finalPath: string
+    if (resolvedAbsolute.startsWith(imagesRoot + path.sep) || resolvedAbsolute === imagesRoot) {
         try {
-            await fsp.access(fallbackPath)
-            finalPath = fallbackPath
+            await fsp.access(resolvedAbsolute)
+            finalPath = resolvedAbsolute
         } catch {
-            // Second fallback: if it's just a filename in a subfolder
             return null
         }
+    } else if (resolvedFromRoot.startsWith(imagesRoot + path.sep)) {
+        // Relative path — resolve within images root
+        try {
+            await fsp.access(resolvedFromRoot)
+            finalPath = resolvedFromRoot
+        } catch {
+            return null
+        }
+    } else {
+        // Path traversal attempt or path outside images directory
+        return null
     }
 
     const ext = path.extname(finalPath).slice(1).toLowerCase()

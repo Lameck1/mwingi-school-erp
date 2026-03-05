@@ -1,4 +1,5 @@
-import { formatCurrency, formatCurrencyFromCents, formatDate, formatDateTime } from '../format'
+import { describe, expect, it } from 'vitest'
+import { formatCurrency, formatCurrencyFromCents, formatDate, formatDateTime, escapeCsvField, numberToWords, centsToShillings, shillingsToCents } from '../format'
 
 describe('Format Utilities', () => {
   describe('formatCurrency', () => {
@@ -14,7 +15,7 @@ describe('Format Utilities', () => {
     })
 
     it('should include decimal places', () => {
-      const result = formatCurrency(1500.50)
+      const result = formatCurrency(1500.5)
       expect(result).toContain('.50')
     })
 
@@ -33,7 +34,7 @@ describe('Format Utilities', () => {
     })
 
     it('should handle NaN values', () => {
-      expect(formatCurrency(NaN)).toBe('Ksh 0.00')
+      expect(formatCurrency(Number.NaN)).toBe('Ksh 0.00')
     })
 
     it('should format decimal amounts', () => {
@@ -234,6 +235,152 @@ describe('Format Utilities', () => {
     it('should handle fractional cents', () => {
       const result = formatCurrency(99.999)
       expect(result).toBeTruthy()
+    })
+  })
+
+  describe('escapeCsvField', () => {
+    it('returns plain string unchanged', () => {
+      expect(escapeCsvField('hello')).toBe('hello')
+    })
+
+    it('wraps string containing comma in quotes', () => {
+      expect(escapeCsvField('a,b')).toBe('"a,b"')
+    })
+
+    it('escapes double quotes by doubling them', () => {
+      expect(escapeCsvField('say "hi"')).toBe('"say ""hi"""')
+    })
+
+    it('wraps string containing newline in quotes', () => {
+      expect(escapeCsvField('line1\nline2')).toBe('"line1\nline2"')
+    })
+
+    it('handles number input by converting to string', () => {
+      expect(escapeCsvField(42)).toBe('42')
+    })
+
+    it('handles number with comma-worthy string representation', () => {
+      // A number won't naturally contain commas, but verifying String(v) path
+      expect(escapeCsvField(12345)).toBe('12345')
+    })
+
+    it('handles empty string', () => {
+      expect(escapeCsvField('')).toBe('')
+    })
+
+    it('handles string with both comma and quotes', () => {
+      expect(escapeCsvField('a,"b"')).toBe('"a,""b"""')
+    })
+  })
+
+  describe('numberToWords', () => {
+    it('returns Zero for 0', () => {
+      expect(numberToWords(0)).toBe('Zero')
+    })
+
+    it('returns correct word for 1-19', () => {
+      expect(numberToWords(1)).toBe('One')
+      expect(numberToWords(5)).toBe('Five')
+      expect(numberToWords(10)).toBe('Ten')
+      expect(numberToWords(13)).toBe('Thirteen')
+      expect(numberToWords(19)).toBe('Nineteen')
+    })
+
+    it('returns correct word for 20-99', () => {
+      expect(numberToWords(20)).toBe('Twenty')
+      expect(numberToWords(21)).toBe('Twenty One')
+      expect(numberToWords(45)).toBe('Forty Five')
+      expect(numberToWords(99)).toBe('Ninety Nine')
+    })
+
+    it('returns correct word for exact tens', () => {
+      expect(numberToWords(30)).toBe('Thirty')
+      expect(numberToWords(50)).toBe('Fifty')
+      expect(numberToWords(90)).toBe('Ninety')
+    })
+
+    it('returns correct word for 100-999', () => {
+      expect(numberToWords(100)).toBe('One Hundred')
+      expect(numberToWords(101)).toBe('One Hundred and One')
+      expect(numberToWords(250)).toBe('Two Hundred and Fifty')
+      expect(numberToWords(999)).toBe('Nine Hundred and Ninety Nine')
+    })
+
+    it('returns correct word for 1000-999999', () => {
+      expect(numberToWords(1000)).toBe('One Thousand')
+      expect(numberToWords(1001)).toBe('One Thousand One')
+      expect(numberToWords(1234)).toBe('One Thousand Two Hundred and Thirty Four')
+      expect(numberToWords(50000)).toBe('Fifty Thousand')
+      expect(numberToWords(999999)).toBe('Nine Hundred and Ninety Nine Thousand Nine Hundred and Ninety Nine')
+    })
+
+    it('returns correct word for millions', () => {
+      expect(numberToWords(1000000)).toBe('One Million')
+      expect(numberToWords(1000001)).toBe('One Million One')
+      expect(numberToWords(2500000)).toBe('Two Million Five Hundred Thousand')
+      expect(numberToWords(999999999)).toBe('Nine Hundred and Ninety Nine Million Nine Hundred and Ninety Nine Thousand Nine Hundred and Ninety Nine')
+    })
+
+    // Branch coverage: ones[num] ?? '' fallback when array index is out of range
+    it('returns empty string for negative numbers (ones array fallback)', () => {
+      expect(numberToWords(-1)).toBe('')
+    })
+
+    it('returns empty string for exact hundred with no remainder (hundred and branch)', () => {
+      expect(numberToWords(200)).toBe('Two Hundred')
+      expect(numberToWords(500)).toBe('Five Hundred')
+    })
+
+    it('returns correct word for exact thousands with no remainder', () => {
+      expect(numberToWords(5000)).toBe('Five Thousand')
+    })
+
+    it('returns correct word for exact million with no remainder', () => {
+      expect(numberToWords(3000000)).toBe('Three Million')
+    })
+  })
+
+  describe('centsToShillings', () => {
+    it('converts string input', () => {
+      expect(centsToShillings('5000')).toBe(50)
+      expect(centsToShillings('150')).toBe(1.5)
+    })
+
+    it('returns 0 for null', () => {
+      expect(centsToShillings(null)).toBe(0)
+    })
+
+    it('returns 0 for undefined', () => {
+      // eslint-disable-next-line unicorn/no-useless-undefined
+      expect(centsToShillings(undefined)).toBe(0)
+    })
+
+    it('converts number input', () => {
+      expect(centsToShillings(10000)).toBe(100)
+    })
+  })
+
+  describe('shillingsToCents', () => {
+    it('converts string input', () => {
+      expect(shillingsToCents('50')).toBe(5000)
+      expect(shillingsToCents('1.5')).toBe(150)
+    })
+
+    it('returns 0 for null', () => {
+      expect(shillingsToCents(null)).toBe(0)
+    })
+
+    it('returns 0 for undefined', () => {
+      // eslint-disable-next-line unicorn/no-useless-undefined
+      expect(shillingsToCents(undefined)).toBe(0)
+    })
+
+    it('converts number input', () => {
+      expect(shillingsToCents(100)).toBe(10000)
+    })
+
+    it('rounds to integer cents', () => {
+      expect(shillingsToCents(10.999)).toBe(1100)
     })
   })
 })

@@ -44,8 +44,7 @@ export function exportToCSV(options: ExcelExportOptions): string {
 
     // Add timestamp
     if (includeTimestamp) {
-        lines.push(`Generated: ${new Date().toLocaleString()}`)
-        lines.push('')
+        lines.push(`Generated: ${new Date().toLocaleString()}`, '')
     }
 
     // Add column headers
@@ -77,16 +76,17 @@ export function downloadCSV(options: ExcelExportOptions): void {
     link.style.display = 'none'
     document.body.appendChild(link)
     link.click()
-    document.body.removeChild(link)
+    link.remove()
     URL.revokeObjectURL(url)
 }
 
 function escapeCSV(value: unknown): string {
     if (value === null || value === undefined) {return ''}
-    const str = String(value)
+    if (typeof value === 'object') {return JSON.stringify(value)}
+    const str = String(value as string | number | boolean | bigint)
     // Escape quotes and wrap in quotes if contains comma, quote, or newline
     if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`
+        return `"${str.replaceAll('"', '""')}"`
     }
     return str
 }

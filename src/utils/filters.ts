@@ -17,7 +17,7 @@ export function normalizeFilters<T extends Record<string, unknown>>(filters: T):
         // Convert numeric-like IDs/Years to numbers
         if (typeof value === 'string' && (key.toLowerCase().endsWith('id') || key.toLowerCase().endsWith('year'))) {
             const num = Number(value)
-            if (!isNaN(num) && value.trim() !== '') {
+            if (!Number.isNaN(num) && value.trim() !== '') {
                 normalized[key] = num
                 return
             }

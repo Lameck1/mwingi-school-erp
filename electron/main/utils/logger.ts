@@ -25,6 +25,7 @@ electronLog.transports.console.level = process.env['NODE_ENV'] === 'production' 
 export function installConsoleOverrides(): void {
     const origError = console.error
     const origWarn  = console.warn
+    const origInfo  = console.info // eslint-disable-line no-console
 
     console.error = (...args: unknown[]) => {
         electronLog.error(...args)
@@ -34,6 +35,11 @@ export function installConsoleOverrides(): void {
     console.warn = (...args: unknown[]) => {
         electronLog.warn(...args)
         origWarn.apply(console, args)
+    }
+
+    console.info = (...args: unknown[]) => { // eslint-disable-line no-console
+        electronLog.info(...args)
+        origInfo.apply(console, args)
     }
 }
 
