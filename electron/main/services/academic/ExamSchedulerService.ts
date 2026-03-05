@@ -80,7 +80,7 @@ class ExamSchedulerService {
 
   private getSubjectName(subjectId: number): string {
     const db = getDatabase()
-    return (db.prepare('SELECT name FROM subjects WHERE id = ?').get(subjectId) as { name?: string } | undefined)?.name || 'Unknown'
+    return (db.prepare('SELECT name FROM subject WHERE id = ?').get(subjectId) as { name?: string } | undefined)?.name || 'Unknown'
   }
 
   private pickLeastLoadedStaff(staffLoads: Map<number, number>, fallbackStaffId: number): { staffId: number; load: number } {
@@ -200,9 +200,9 @@ class ExamSchedulerService {
           db
             .prepare(`
               SELECT COUNT(DISTINCT s.id) as count
-              FROM students s
-              LEFT JOIN enrollments e ON s.id = e.student_id
-              WHERE s.deleted_at IS NULL
+              FROM student s
+              LEFT JOIN enrollment e ON s.id = e.student_id
+              WHERE s.is_active = 1
             `)
             .get() as { count: number }
         ).count
@@ -280,10 +280,10 @@ class ExamSchedulerService {
             const clashingStudents = db
               .prepare(`
                 SELECT DISTINCT s.id, s.first_name || ' ' || s.last_name as name
-                FROM students s
-                LEFT JOIN marks m1 ON s.id = m1.student_id AND m1.subject_id = ?
-                LEFT JOIN marks m2 ON s.id = m2.student_id AND m2.subject_id = ?
-                WHERE s.deleted_at IS NULL
+                FROM student s
+                LEFT JOIN exam_result m1 ON s.id = m1.student_id AND m1.subject_id = ?
+                LEFT JOIN exam_result m2 ON s.id = m2.student_id AND m2.subject_id = ?
+                WHERE s.is_active = 1
                   AND m1.id IS NOT NULL
                   AND m2.id IS NOT NULL
               `)
@@ -321,8 +321,7 @@ class ExamSchedulerService {
         .prepare(`
           SELECT id, first_name || ' ' || last_name as name
           FROM staff
-          WHERE deleted_at IS NULL
-            AND is_active = 1
+          WHERE is_active = 1
           ORDER BY first_name
         `)
         .all() as Array<{ id: number; name: string }>
@@ -406,7 +405,7 @@ class ExamSchedulerService {
       ).count
 
       const studentCount = (
-        db.prepare('SELECT COUNT(DISTINCT id) as count FROM students WHERE deleted_at IS NULL').get() as { count: number }
+        db.prepare('SELECT COUNT(DISTINCT id) as count FROM student WHERE is_active = 1').get() as { count: number }
       ).count
 
       const totalCapacity = (
@@ -441,7 +440,7 @@ class ExamSchedulerService {
         .prepare(`
           SELECT et.*, s.name as subject_name
           FROM exam_timetable et
-          JOIN subjects s ON et.subject_id = s.id
+          JOIN subject s ON et.subject_id = s.id
           WHERE et.exam_id = ?
           ORDER BY et.start_time
         `)

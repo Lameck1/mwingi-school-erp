@@ -1,5 +1,6 @@
 import Database from 'better-sqlite3'
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { applySchema } from '../../__tests__/helpers/schema'
 
 let db: Database.Database
 
@@ -9,54 +10,37 @@ vi.mock('../../../database', () => ({
 
 import ExamSchedulerService from '../ExamSchedulerService'
 
-const SCHEMA = `
-  CREATE TABLE subjects (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
-  CREATE TABLE students (
-    id INTEGER PRIMARY KEY, first_name TEXT NOT NULL, last_name TEXT NOT NULL,
-    deleted_at TEXT
-  );
-  CREATE TABLE enrollments (id INTEGER PRIMARY KEY AUTOINCREMENT, student_id INTEGER NOT NULL);
-  CREATE TABLE marks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT, student_id INTEGER NOT NULL, subject_id INTEGER NOT NULL
-  );
-  CREATE TABLE staff (
-    id INTEGER PRIMARY KEY, first_name TEXT NOT NULL, last_name TEXT NOT NULL,
-    deleted_at TEXT, is_active INTEGER DEFAULT 1
-  );
-  CREATE TABLE exam_timetable (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    exam_id INTEGER NOT NULL,
-    subject_id INTEGER NOT NULL,
-    start_time TEXT NOT NULL,
-    end_time TEXT NOT NULL,
-    venue_id INTEGER,
-    max_capacity INTEGER DEFAULT 0
-  );
-  CREATE TABLE exam_invigilator (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    exam_id INTEGER NOT NULL,
-    slot_id INTEGER NOT NULL,
-    staff_id INTEGER NOT NULL
-  );
-`
+const TABLES = [
+  'subject', 'student', 'enrollment', 'exam', 'exam_result',
+  'staff', 'exam_timetable', 'exam_invigilator',
+] as const
 
 const SEED = `
-  INSERT INTO subjects VALUES (1, 'Mathematics'), (2, 'English'), (3, 'Science');
-  INSERT INTO students (id, first_name, last_name) VALUES
-    (1, 'Alice', 'Wanjiku'), (2, 'Bob', 'Odhiambo'), (3, 'Carol', 'Mwangi');
-  INSERT INTO enrollments (student_id) VALUES (1), (2), (3);
-  INSERT INTO marks (student_id, subject_id) VALUES
-    (1, 1), (1, 2), (1, 3),
-    (2, 1), (2, 2),
-    (3, 1), (3, 3);
-  INSERT INTO staff (id, first_name, last_name, is_active) VALUES
-    (1, 'Mr', 'Kamau', 1), (2, 'Mrs', 'Otieno', 1), (3, 'Dr', 'Mutiso', 1);
+  INSERT INTO academic_year (id, year_name, start_date, end_date, is_current) VALUES (1, '2026', '2026-01-01', '2026-12-31', 1);
+  INSERT INTO term (id, academic_year_id, term_number, term_name, start_date, end_date, is_current) VALUES (1, 1, 1, 'Term 1', '2026-01-01', '2026-04-30', 1);
+  INSERT INTO stream (id, stream_code, stream_name, level_order) VALUES (1, 'G8', 'Grade 8', 8);
+  INSERT INTO subject (id, code, name, curriculum) VALUES (1, 'MAT', 'Mathematics', 'CBC'), (2, 'ENG', 'English', 'CBC'), (3, 'SCI', 'Science', 'CBC');
+  INSERT INTO student (id, admission_number, first_name, last_name, student_type, admission_date) VALUES
+    (1, 'ADM001', 'Alice', 'Wanjiku', 'DAY_SCHOLAR', '2025-01-01'),
+    (2, 'ADM002', 'Bob', 'Odhiambo', 'DAY_SCHOLAR', '2025-01-01'),
+    (3, 'ADM003', 'Carol', 'Mwangi', 'DAY_SCHOLAR', '2025-01-01');
+  INSERT INTO enrollment (student_id, academic_year_id, term_id, stream_id, student_type, enrollment_date) VALUES
+    (1, 1, 1, 1, 'DAY_SCHOLAR', '2026-01-01'),
+    (2, 1, 1, 1, 'DAY_SCHOLAR', '2026-01-01'),
+    (3, 1, 1, 1, 'DAY_SCHOLAR', '2026-01-01');
+  INSERT INTO exam (id, exam_name, academic_year_id, term_id) VALUES (1, 'Mid Term', 1, 1);
+  INSERT INTO exam_result (exam_id, student_id, subject_id, score) VALUES
+    (1, 1, 1, 80), (1, 1, 2, 75), (1, 1, 3, 90),
+    (1, 2, 1, 70), (1, 2, 2, 65),
+    (1, 3, 1, 85), (1, 3, 3, 78);
+  INSERT INTO staff (id, staff_number, first_name, last_name, is_active) VALUES
+    (1, 'STF001', 'Mr', 'Kamau', 1), (2, 'STF002', 'Mrs', 'Otieno', 1), (3, 'STF003', 'Dr', 'Mutiso', 1);
 `
 
 describe('ExamSchedulerService', () => {
   beforeEach(() => {
     db = new Database(':memory:')
-    db.exec(SCHEMA)
+    applySchema(db, [...TABLES])
     db.exec(SEED)
   })
 
@@ -130,7 +114,7 @@ describe('ExamSchedulerService', () => {
           (1, 1, '08:00', '10:00'), (1, 2, '09:00', '11:00')
       `)
       const clashes = await ExamSchedulerService.detectClashes(1)
-      // Students 1 & 2 have marks in both subject 1 & 2 and times overlap
+      // Students 1 & 2 have exam_result in both subject 1 & 2 and times overlap
       expect(clashes.length).toBeGreaterThan(0)
       expect(clashes[0]!.clashing_subjects).toHaveLength(2)
     })
@@ -414,17 +398,7 @@ describe('ExamSchedulerService', () => {
         ])
       ).rejects.toThrow('Failed to generate timetable')
       // Recreate table for remaining tests
-      db.exec(`
-        CREATE TABLE exam_timetable (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          exam_id INTEGER NOT NULL,
-          subject_id INTEGER NOT NULL,
-          start_time TEXT NOT NULL,
-          end_time TEXT NOT NULL,
-          venue_id INTEGER,
-          max_capacity INTEGER DEFAULT 0
-        )
-      `)
+      applySchema(db, ['exam_timetable'])
     })
   })
 
@@ -451,17 +425,7 @@ describe('ExamSchedulerService', () => {
     it('throws when database is broken', async () => {
       db.exec('DROP TABLE exam_timetable')
       await expect(ExamSchedulerService.allocateVenues(1, new Map([[1, 100]]))).rejects.toThrow('Failed to allocate venues')
-      db.exec(`
-        CREATE TABLE exam_timetable (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          exam_id INTEGER NOT NULL,
-          subject_id INTEGER NOT NULL,
-          start_time TEXT NOT NULL,
-          end_time TEXT NOT NULL,
-          venue_id INTEGER,
-          max_capacity INTEGER DEFAULT 0
-        )
-      `)
+      applySchema(db, ['exam_timetable'])
     })
   })
 
@@ -491,17 +455,7 @@ describe('ExamSchedulerService', () => {
     it('throws on database error', async () => {
       db.exec('DROP TABLE exam_timetable')
       await expect(ExamSchedulerService.detectClashes(1)).rejects.toThrow('Failed to detect clashes')
-      db.exec(`
-        CREATE TABLE exam_timetable (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          exam_id INTEGER NOT NULL,
-          subject_id INTEGER NOT NULL,
-          start_time TEXT NOT NULL,
-          end_time TEXT NOT NULL,
-          venue_id INTEGER,
-          max_capacity INTEGER DEFAULT 0
-        )
-      `)
+      applySchema(db, ['exam_timetable'])
     })
   })
 
@@ -518,17 +472,7 @@ describe('ExamSchedulerService', () => {
     it('throws on bad database', async () => {
       db.exec('DROP TABLE exam_timetable')
       await expect(ExamSchedulerService.assignInvigilators(1, 2)).rejects.toThrow('Failed to assign invigilators')
-      db.exec(`
-        CREATE TABLE exam_timetable (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          exam_id INTEGER NOT NULL,
-          subject_id INTEGER NOT NULL,
-          start_time TEXT NOT NULL,
-          end_time TEXT NOT NULL,
-          venue_id INTEGER,
-          max_capacity INTEGER DEFAULT 0
-        )
-      `)
+      applySchema(db, ['exam_timetable'])
     })
   })
 
@@ -539,17 +483,7 @@ describe('ExamSchedulerService', () => {
     it('throws on broken table', async () => {
       db.exec('DROP TABLE exam_timetable')
       await expect(ExamSchedulerService.getTimetableStats(1)).rejects.toThrow('Failed to get timetable stats')
-      db.exec(`
-        CREATE TABLE exam_timetable (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          exam_id INTEGER NOT NULL,
-          subject_id INTEGER NOT NULL,
-          start_time TEXT NOT NULL,
-          end_time TEXT NOT NULL,
-          venue_id INTEGER,
-          max_capacity INTEGER DEFAULT 0
-        )
-      `)
+      applySchema(db, ['exam_timetable'])
     })
   })
 
@@ -568,17 +502,7 @@ describe('ExamSchedulerService', () => {
     it('throws on broken database', async () => {
       db.exec('DROP TABLE exam_timetable')
       await expect(ExamSchedulerService.exportToPDF(1)).rejects.toThrow('Failed to export to PDF')
-      db.exec(`
-        CREATE TABLE exam_timetable (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          exam_id INTEGER NOT NULL,
-          subject_id INTEGER NOT NULL,
-          start_time TEXT NOT NULL,
-          end_time TEXT NOT NULL,
-          venue_id INTEGER,
-          max_capacity INTEGER DEFAULT 0
-        )
-      `)
+      applySchema(db, ['exam_timetable'])
     })
   })
 
@@ -602,8 +526,14 @@ describe('ExamSchedulerService', () => {
   describe('error message fallback', () => {
     it('uses UNKNOWN_ERROR for non-Error throws', async () => {
       // Force a non-Error throw by dropping required tables
-      db.exec('DROP TABLE exam_timetable')
-      db.exec('DROP TABLE students')
+      // Disable FK checks to allow dropping tables with dependents
+      db.pragma('foreign_keys = OFF')
+      db.exec('DROP TABLE IF EXISTS exam_invigilator')
+      db.exec('DROP TABLE IF EXISTS exam_timetable')
+      db.exec('DROP TABLE IF EXISTS exam_result')
+      db.exec('DROP TABLE IF EXISTS enrollment')
+      db.exec('DROP TABLE IF EXISTS student')
+      db.pragma('foreign_keys = ON')
       try {
         await ExamSchedulerService.generateTimetable(1, '2026-03-01', '2026-03-05', [
           { exam_id: 1, subject_id: 1, start_time: '08:00', end_time: '10:00', venue_id: 1, invigilators: 1, max_capacity: 50 },
@@ -612,9 +542,8 @@ describe('ExamSchedulerService', () => {
         expect(e.message).toContain('Failed to generate timetable')
       }
       // Recreate
-      db.exec(`CREATE TABLE students (id INTEGER PRIMARY KEY, first_name TEXT NOT NULL, last_name TEXT NOT NULL, deleted_at TEXT)`)
-      db.exec(`CREATE TABLE exam_timetable (id INTEGER PRIMARY KEY AUTOINCREMENT, exam_id INTEGER NOT NULL, subject_id INTEGER NOT NULL, start_time TEXT NOT NULL, end_time TEXT NOT NULL, venue_id INTEGER, max_capacity INTEGER DEFAULT 0)`)
-      db.exec(SEED.split(';').filter(s => s.includes('students')).join(';'))
+      applySchema(db, ['student', 'enrollment', 'exam_result', 'exam_timetable', 'exam_invigilator'])
+      db.exec(SEED.split(';').filter(s => s.includes('student')).join(';'))
     })
   })
 

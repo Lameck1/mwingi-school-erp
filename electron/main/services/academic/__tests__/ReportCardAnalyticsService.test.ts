@@ -1,72 +1,49 @@
 /**
  * Tests for ReportCardAnalyticsService.
  *
- * Uses in-memory SQLite with minimal schemas for: students, enrollments,
- * report_card, report_card_subject, subjects, exams.
+ * Uses shared schema helper with real production DDL for: student, enrollment,
+ * report_card, report_card_subject, subject, exam.
  * Also tests the module-level pure function calculateMedian.
  */
 import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { applySchema } from '../../__tests__/helpers/schema'
 
 let testDb: Database.Database
 vi.mock('../../../database', () => ({ getDatabase: () => testDb }))
 
 import reportCardAnalyticsService from '../ReportCardAnalyticsService'
 
-/* ── Schema ───────────────────────────────────────────────────────── */
-const SCHEMA = `
-  CREATE TABLE IF NOT EXISTS students (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    first_name TEXT NOT NULL,
-    last_name TEXT NOT NULL,
-    admission_number TEXT NOT NULL UNIQUE,
-    deleted_at DATETIME DEFAULT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS enrollments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    student_id INTEGER NOT NULL,
-    stream_id INTEGER NOT NULL,
-    FOREIGN KEY (student_id) REFERENCES students(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS exams (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    academic_year_id INTEGER NOT NULL,
-    term_id INTEGER NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS report_card (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    student_id INTEGER NOT NULL,
-    exam_id INTEGER NOT NULL,
-    stream_id INTEGER NOT NULL,
-    FOREIGN KEY (student_id) REFERENCES students(id),
-    FOREIGN KEY (exam_id) REFERENCES exams(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS report_card_subject (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    report_card_id INTEGER NOT NULL,
-    student_id INTEGER NOT NULL,
-    exam_id INTEGER NOT NULL,
-    subject_id INTEGER NOT NULL,
-    marks REAL,
-    grade TEXT,
-    FOREIGN KEY (report_card_id) REFERENCES report_card(id),
-    FOREIGN KEY (student_id) REFERENCES students(id),
-    FOREIGN KEY (subject_id) REFERENCES subjects(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS subjects (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    deleted_at DATETIME DEFAULT NULL
-  );
-`
+const TABLES = [
+  'subject', 'student', 'enrollment', 'exam',
+  'report_card', 'report_card_subject',
+] as const
 
 /* ── Seed helpers ─────────────────────────────────────────────────── */
+function seedBaseRecords() {
+  testDb.prepare(
+    'INSERT OR IGNORE INTO academic_year (id, year_name, start_date, end_date, is_current) VALUES (1, ?, ?, ?, 1)'
+  ).run('2026', '2026-01-01', '2026-12-31')
+  testDb.prepare(
+    'INSERT OR IGNORE INTO academic_year (id, year_name, start_date, end_date, is_current) VALUES (2, ?, ?, ?, 0)'
+  ).run('2027', '2027-01-01', '2027-12-31')
+  testDb.prepare(
+    'INSERT OR IGNORE INTO term (id, academic_year_id, term_number, term_name, start_date, end_date) VALUES (1, 1, 1, ?, ?, ?)'
+  ).run('Term 1', '2026-01-01', '2026-04-30')
+  testDb.prepare(
+    'INSERT OR IGNORE INTO term (id, academic_year_id, term_number, term_name, start_date, end_date) VALUES (2, 1, 2, ?, ?, ?)'
+  ).run('Term 2', '2026-05-01', '2026-08-31')
+  testDb.prepare(
+    'INSERT OR IGNORE INTO term (id, academic_year_id, term_number, term_name, start_date, end_date) VALUES (3, 1, 3, ?, ?, ?)'
+  ).run('Term 3', '2026-09-01', '2026-12-31')
+  testDb.prepare(
+    'INSERT OR IGNORE INTO stream (id, stream_code, stream_name, level_order) VALUES (1, ?, ?, 8)'
+  ).run('G8', 'Grade 8')
+  testDb.prepare(
+    'INSERT OR IGNORE INTO user (id, username, password_hash, full_name, role) VALUES (1, ?, ?, ?, ?)'
+  ).run('test_user', 'hashed', 'Test User', 'ADMIN')
+}
+
 function seedStudentWithScores(
   studentId: number,
   firstName: string,
@@ -77,40 +54,41 @@ function seedStudentWithScores(
   scores: Array<{ subjectId: number; marks: number; grade?: string }>
 ) {
   testDb.prepare(
-    'INSERT OR IGNORE INTO students (id, first_name, last_name, admission_number) VALUES (?, ?, ?, ?)'
-  ).run(studentId, firstName, lastName, admNo)
+    'INSERT OR IGNORE INTO student (id, admission_number, first_name, last_name, student_type, admission_date) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(studentId, admNo, firstName, lastName, 'DAY_SCHOLAR', '2025-01-01')
 
   testDb.prepare(
-    'INSERT OR IGNORE INTO enrollments (student_id, stream_id) VALUES (?, ?)'
-  ).run(studentId, streamId)
+    'INSERT OR IGNORE INTO enrollment (student_id, academic_year_id, term_id, stream_id, student_type, enrollment_date) VALUES (?, 1, 1, ?, ?, ?)'
+  ).run(studentId, streamId, 'DAY_SCHOLAR', '2026-01-01')
 
   const rc = testDb.prepare(
-    'INSERT INTO report_card (student_id, exam_id, stream_id) VALUES (?, ?, ?)'
+    'INSERT INTO report_card (student_id, exam_id, stream_id, generated_by_user_id) VALUES (?, ?, ?, 1)'
   ).run(studentId, examId, streamId)
   const rcId = rc.lastInsertRowid
 
   for (const s of scores) {
     testDb.prepare(
-      'INSERT INTO report_card_subject (report_card_id, student_id, exam_id, subject_id, marks, grade) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(rcId, studentId, examId, s.subjectId, s.marks, s.grade ?? null)
+      'INSERT INTO report_card_subject (report_card_id, subject_id, marks, grade) VALUES (?, ?, ?, ?)'
+    ).run(rcId, s.subjectId, s.marks, s.grade ?? null)
   }
 }
 
 function seedSubjects(...names: string[]) {
   for (let i = 0; i < names.length; i++) {
-    testDb.prepare('INSERT OR IGNORE INTO subjects (id, name) VALUES (?, ?)').run(i + 1, names[i])
+    testDb.prepare('INSERT OR IGNORE INTO subject (id, code, name, curriculum) VALUES (?, ?, ?, ?)').run(i + 1, `SUB${i + 1}`, names[i], 'CBC')
   }
 }
 
 function seedExam(id: number, name: string, ayId: number, termId: number) {
-  testDb.prepare('INSERT OR IGNORE INTO exams (id, name, academic_year_id, term_id) VALUES (?, ?, ?, ?)').run(id, name, ayId, termId)
+  testDb.prepare('INSERT OR IGNORE INTO exam (id, exam_name, academic_year_id, term_id) VALUES (?, ?, ?, ?)').run(id, name, ayId, termId)
 }
 
 /* ── Setup / teardown ─────────────────────────────────────────────── */
 beforeEach(() => {
   testDb = new Database(':memory:')
   testDb.pragma('journal_mode = WAL')
-  testDb.exec(SCHEMA)
+  applySchema(testDb, [...TABLES])
+  seedBaseRecords()
 })
 
 afterEach(() => {
@@ -230,7 +208,7 @@ describe('getPerformanceSummary()', () => {
     seedSubjects('Math')
     seedStudentWithScores(1, 'Active', 'A', 'ADM001', 1, 1, [{ subjectId: 1, marks: 80 }])
     seedStudentWithScores(2, 'Deleted', 'D', 'ADM002', 1, 1, [{ subjectId: 1, marks: 20 }])
-    testDb.prepare("UPDATE students SET deleted_at = '2025-01-01' WHERE id = 2").run()
+    testDb.prepare('UPDATE student SET is_active = 0 WHERE id = 2').run()
 
     const summary = await reportCardAnalyticsService.getPerformanceSummary(1, 1)
     expect(summary.total_students).toBe(1)
@@ -297,12 +275,12 @@ describe('getGradeDistribution()', () => {
     ])
     // Add a null grade entry directly
     testDb.prepare(`
-      INSERT INTO report_card (student_id, exam_id, stream_id) VALUES (1, 1, 1)
+      INSERT INTO report_card (student_id, exam_id, stream_id, generated_by_user_id) VALUES (1, 1, 1, 1)
     `).run()
     const rcId = testDb.prepare('SELECT MAX(id) as id FROM report_card').get() as { id: number }
     testDb.prepare(`
-      INSERT INTO report_card_subject (report_card_id, student_id, exam_id, subject_id, marks, grade)
-      VALUES (?, 1, 1, 1, 50, NULL)
+      INSERT INTO report_card_subject (report_card_id, subject_id, marks, grade)
+      VALUES (?, 1, 50, NULL)
     `).run(rcId.id)
 
     const dist = await reportCardAnalyticsService.getGradeDistribution(1, 1)
@@ -372,7 +350,7 @@ describe('getSubjectPerformance()', () => {
   it('excludes soft-deleted subjects', async () => {
     seedExam(1, 'Exam 1', 1, 1)
     seedSubjects('Math', 'Deleted')
-    testDb.prepare("UPDATE subjects SET deleted_at = '2025-01-01' WHERE name = 'Deleted'").run()
+    testDb.prepare("UPDATE subject SET is_active = 0 WHERE name = 'Deleted'").run()
 
     seedStudentWithScores(1, 'A', 'A', 'ADM001', 1, 1, [
       { subjectId: 1, marks: 80 },

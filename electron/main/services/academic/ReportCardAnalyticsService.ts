@@ -76,11 +76,11 @@ class ReportCardAnalyticsService {
             s.id,
             s.first_name || ' ' || s.last_name as student_name,
             COALESCE(AVG(rcs.marks), 0) as average_score
-          FROM students s
-          LEFT JOIN enrollments e ON s.id = e.student_id AND e.stream_id = ?
-          LEFT JOIN report_card_subject rcs ON s.id = rcs.student_id 
-            AND rcs.exam_id = ?
-          WHERE s.deleted_at IS NULL 
+          FROM student s
+          LEFT JOIN enrollment e ON s.id = e.student_id AND e.stream_id = ?
+          LEFT JOIN report_card rc ON s.id = rc.student_id AND rc.exam_id = ?
+          LEFT JOIN report_card_subject rcs ON rc.id = rcs.report_card_id
+          WHERE s.is_active = 1 
             AND e.stream_id = ?
           GROUP BY s.id, s.first_name, s.last_name
           ORDER BY average_score DESC
@@ -194,8 +194,8 @@ class ReportCardAnalyticsService {
       const subjects = db
         .prepare(`
           SELECT DISTINCT sub.id, sub.name
-          FROM subjects sub
-          WHERE sub.deleted_at IS NULL
+          FROM subject sub
+          WHERE sub.is_active = 1
           ORDER BY sub.name
         `)
         .all() as Array<{ id: number; name: string }>
@@ -266,11 +266,11 @@ class ReportCardAnalyticsService {
             s.first_name || ' ' || s.last_name as student_name,
             s.admission_number,
             COALESCE(AVG(rcs.marks), 0) as average_score
-          FROM students s
-          LEFT JOIN enrollments e ON s.id = e.student_id AND e.stream_id = ?
-          LEFT JOIN report_card_subject rcs ON s.id = rcs.student_id 
-            AND rcs.exam_id = ?
-          WHERE s.deleted_at IS NULL 
+          FROM student s
+          LEFT JOIN enrollment e ON s.id = e.student_id AND e.stream_id = ?
+          LEFT JOIN report_card rc ON s.id = rc.student_id AND rc.exam_id = ?
+          LEFT JOIN report_card_subject rcs ON rc.id = rcs.report_card_id
+          WHERE s.is_active = 1 
             AND e.stream_id = ?
           GROUP BY s.id
           HAVING COALESCE(AVG(rcs.marks), 0) < ?
@@ -317,7 +317,7 @@ class ReportCardAnalyticsService {
 
       // Get current exam details
       const currentExam = db
-        .prepare('SELECT academic_year_id, term_id FROM exams WHERE id = ?')
+        .prepare('SELECT academic_year_id, term_id FROM exam WHERE id = ?')
         .get(examId) as { academic_year_id: number; term_id: number } | undefined
 
       if (!currentExam) {
@@ -327,8 +327,8 @@ class ReportCardAnalyticsService {
       // Get previous exams in same academic year and earlier
       const previousExams = db
         .prepare(`
-          SELECT id, name, term_id, academic_year_id
-          FROM exams
+          SELECT id, exam_name as name, term_id, academic_year_id
+          FROM exam
           WHERE (academic_year_id < ? OR 
                  (academic_year_id = ? AND term_id < ?))
           ORDER BY academic_year_id DESC, term_id DESC

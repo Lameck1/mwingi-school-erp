@@ -125,8 +125,7 @@ describe('JSSTransitionService', () => {
       stream_id INTEGER NOT NULL,
       student_type TEXT NOT NULL,
       enrollment_date TEXT,
-      status TEXT NOT NULL,
-      updated_at DATETIME
+      status TEXT NOT NULL
     );
 
     CREATE TABLE fee_invoice (

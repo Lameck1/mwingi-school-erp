@@ -168,7 +168,7 @@ export class JSSTransitionService {
 
       this.db.prepare(`
         UPDATE enrollment
-        SET stream_id = ?, updated_at = datetime('now')
+        SET stream_id = ?
         WHERE id = ?
       `).run(newStreamId, currentEnrollment.enrollment_id);
     }
