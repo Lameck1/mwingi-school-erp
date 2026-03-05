@@ -65,42 +65,14 @@ export * from './DataImportAPI'
 export * from './OperationsAPI'
 export * from './JSSAPI'
 
-// Flat API — all methods available directly on electronAPI.*
-// Also provides namespaced sub-objects for structured access
-export interface ElectronAPI extends
-  AuthAPI,
-  SettingsAPI,
-  AcademicAPI,
-  JSSAPI,
-  FinanceAPI,
-  BudgetAPI,
-  BankReconciliationAPI,
-  GLAccountAPI,
-  OpeningBalanceAPI,
-  FixedAssetAPI,
-  ExemptionAPI,
-  StudentAPI,
-  StaffAPI,
-  PayrollAPI,
-  OperationsAPI,
-  InventoryAPI,
-  HireAPI,
-  ReportsAPI,
-  AuditAPI,
-  MessagingAPI,
-  NotificationAPI,
-  BackupAPI,
-  UserAPI,
-  UpdateAPI,
-  ApprovalAPI,
-  DataImportAPI,
-  MenuEventAPI
-{
+// Namespaced-only API — all methods accessed through domain sub-objects
+// e.g. electronAPI.auth.login(), electronAPI.finance.getFeeCategories()
+export interface ElectronAPI {
   // Namespaced sub-objects
   auth: AuthAPI
   settings: SettingsAPI
   academic: AcademicAPI & JSSAPI & Pick<OperationsAPI, 'getCBCStrands' | 'getActiveCBCStrands' | 'getCBCProfitabilityReport' | 'linkFeeCategoryToStrand'>
-  finance: FinanceAPI & BudgetAPI & BankReconciliationAPI & GLAccountAPI & OpeningBalanceAPI & FixedAssetAPI & ExemptionAPI
+  finance: FinanceAPI & BudgetAPI & BankReconciliationAPI & GLAccountAPI & OpeningBalanceAPI & FixedAssetAPI & ExemptionAPI & HireAPI
   students: StudentAPI
   staff: StaffAPI & PayrollAPI
   operations: OperationsAPI & InventoryAPI & HireAPI

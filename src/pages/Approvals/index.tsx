@@ -66,8 +66,100 @@ function getApprovalActionErrorMessage(
     return fallback
 }
 
+interface ApprovalRequestListProps {
+    loading: boolean
+    requests: ApprovalRequest[]
+    processing: boolean
+    onApprove: (request: ApprovalRequest) => void
+    onOpenReject: (request: ApprovalRequest) => void
+}
+
+function ApprovalRequestList({ loading, requests, processing, onApprove, onOpenReject }: Readonly<ApprovalRequestListProps>) {
+    if (loading) {
+        return (
+            <>
+                {[1, 2, 3].map((value) => (
+                    <div key={value} className="h-24 bg-secondary/30 animate-pulse rounded-xl" />
+                ))}
+            </>
+        )
+    }
+
+    if (requests.length === 0) {
+        return (
+            <div className="text-center py-16 text-foreground/40">
+                No approval requests found
+            </div>
+        )
+    }
+
+    return (
+        <>
+            {requests.map(request => {
+                const config = statusConfig[request.status]
+                const Icon = config.icon
+
+                return (
+                    <div
+                        key={request.id}
+                        className="premium-card flex items-center justify-between"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-500/20 text-blue-400">
+                                <FileText className="w-5 h-5" />
+                            </div>
+
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <h3 className="font-bold text-foreground">{request.entity_description || `${request.entity_type} #${request.entity_id}`}</h3>
+                                    <Badge variant={config.variant} icon={Icon}>
+                                        {config.label}
+                                    </Badge>
+                                </div>
+                                <p className="text-sm text-foreground/50">
+                                    {request.workflow_name} • Requested by {request.requester_name} • {formatDate(request.created_at)}
+                                </p>
+                                {request.approver_name && (
+                                    <p className="text-xs text-foreground/40 mt-1">
+                                        {request.status === 'APPROVED' ? 'Approved' : 'Rejected'} by {request.approver_name}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+
+                        {request.status === 'PENDING' && (
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => onOpenReject(request)}
+                                    disabled={processing}
+                                    className="btn btn-secondary text-red-400 hover:bg-red-500/10 flex items-center gap-1"
+                                >
+                                    <XCircle className="w-4 h-4" />
+                                    Reject
+                                </button>
+                                <button
+                                    onClick={() => onApprove(request)}
+                                    disabled={processing}
+                                    className="btn btn-primary flex items-center gap-1"
+                                >
+                                    <CheckCircle className="w-4 h-4" />
+                                    Approve
+                                </button>
+                            </div>
+                        )}
+
+                        {request.status !== 'PENDING' && (
+                            <ChevronRight className="w-5 h-5 text-foreground/30" />
+                        )}
+                    </div>
+                )
+            })}
+        </>
+    )
+}
+
 export default function Approvals() {
-    const { user } = useAuthStore()
+    const user = useAuthStore((s) => s.user)
     const { showToast } = useToast()
     const [requests, setRequests] = useState<ApprovalRequest[]>([])
     const [counts, setCounts] = useState<ApprovalCounts>({ pending: 0, approved: 0, rejected: 0 })
@@ -84,9 +176,9 @@ export default function Approvals() {
         try {
             const [requestsData, countsData] = await Promise.all([
                 filter === 'pending'
-                    ? globalThis.electronAPI.getPendingApprovals()
-                    : globalThis.electronAPI.getAllApprovals(),
-                globalThis.electronAPI.getApprovalCounts()
+                    ? globalThis.electronAPI.system.getPendingApprovals()
+                    : globalThis.electronAPI.system.getAllApprovals(),
+                globalThis.electronAPI.system.getApprovalCounts()
             ])
 
             const safeRequests = unwrapArrayResult(requestsData, 'Invalid approval request payload')
@@ -118,7 +210,7 @@ export default function Approvals() {
         }
         setProcessing(true)
         try {
-            const result = await globalThis.electronAPI.approveRequest(request.id, user.id)
+            const result = await globalThis.electronAPI.system.approveRequest(request.id, user.id)
             if (result.success) {
                 showToast('Request approved', 'success')
                 await loadData()
@@ -146,7 +238,7 @@ export default function Approvals() {
 
         setProcessing(true)
         try {
-            const result = await globalThis.electronAPI.rejectRequest(selectedRequest.id, user.id, rejectReason)
+            const result = await globalThis.electronAPI.system.rejectRequest(selectedRequest.id, user.id, rejectReason)
             if (result.success) {
                 setShowRejectModal(false)
                 setRejectReason('')
@@ -169,90 +261,6 @@ export default function Approvals() {
         setSelectedRequest(request)
         setRejectReason('')
         setShowRejectModal(true)
-    }
-
-    const renderRequests = () => {
-        if (loading) {
-            return (
-                <>
-                    {[1, 2, 3].map((value) => (
-                        <div key={value} className="h-24 bg-secondary/30 animate-pulse rounded-xl" />
-                    ))}
-                </>
-            )
-        }
-
-        if (requests.length === 0) {
-            return (
-                <div className="text-center py-16 text-foreground/40">
-                    No approval requests found
-                </div>
-            )
-        }
-
-        return (
-            <>
-                {requests.map(request => {
-                    const config = statusConfig[request.status]
-                    const Icon = config.icon
-
-                    return (
-                        <div
-                            key={request.id}
-                            className="premium-card flex items-center justify-between"
-                        >
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-500/20 text-blue-400">
-                                    <FileText className="w-5 h-5" />
-                                </div>
-
-                                <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <h3 className="font-bold text-foreground">{request.entity_description || `${request.entity_type} #${request.entity_id}`}</h3>
-                                        <Badge variant={config.variant} icon={Icon}>
-                                            {config.label}
-                                        </Badge>
-                                    </div>
-                                    <p className="text-sm text-foreground/50">
-                                        {request.workflow_name} • Requested by {request.requester_name} • {formatDate(request.created_at)}
-                                    </p>
-                                    {request.approver_name && (
-                                        <p className="text-xs text-foreground/40 mt-1">
-                                            {request.status === 'APPROVED' ? 'Approved' : 'Rejected'} by {request.approver_name}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-
-                            {request.status === 'PENDING' && (
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => openRejectModal(request)}
-                                        disabled={processing}
-                                        className="btn btn-secondary text-red-400 hover:bg-red-500/10 flex items-center gap-1"
-                                    >
-                                        <XCircle className="w-4 h-4" />
-                                        Reject
-                                    </button>
-                                    <button
-                                        onClick={() => handleApprove(request)}
-                                        disabled={processing}
-                                        className="btn btn-primary flex items-center gap-1"
-                                    >
-                                        <CheckCircle className="w-4 h-4" />
-                                        Approve
-                                    </button>
-                                </div>
-                            )}
-
-                            {request.status !== 'PENDING' && (
-                                <ChevronRight className="w-5 h-5 text-foreground/30" />
-                            )}
-                        </div>
-                    )
-                })}
-            </>
-        )
     }
 
     return (
@@ -309,7 +317,13 @@ export default function Approvals() {
 
             {/* Requests List */}
             <div className="space-y-4">
-                {renderRequests()}
+                <ApprovalRequestList
+                    loading={loading}
+                    requests={requests}
+                    processing={processing}
+                    onApprove={handleApprove}
+                    onOpenReject={openRejectModal}
+                />
             </div>
 
             {/* Reject Modal */}

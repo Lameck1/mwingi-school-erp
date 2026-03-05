@@ -17,8 +17,9 @@ interface Exam {
 }
 
 export default function ExamManagement() {
-    const { currentAcademicYear, currentTerm } = useAppStore()
-    const { user } = useAuthStore()
+    const currentAcademicYear = useAppStore((s) => s.currentAcademicYear)
+    const currentTerm = useAppStore((s) => s.currentTerm)
+    const user = useAuthStore((s) => s.user)
     const { showToast } = useToast()
 
     const [exams, setExams] = useState<Exam[]>([])
@@ -33,7 +34,7 @@ export default function ExamManagement() {
         setLoading(true)
         try {
             const data = unwrapArrayResult(
-                await globalThis.electronAPI.getAcademicExams(currentAcademicYear.id, currentTerm.id),
+                await globalThis.electronAPI.academic.getAcademicExams(currentAcademicYear.id, currentTerm.id),
                 'Failed to load exams'
             )
             setExams(data)
@@ -71,7 +72,7 @@ export default function ExamManagement() {
         setSaving(true)
         try {
             unwrapIPCResult(
-                await globalThis.electronAPI.createAcademicExam({
+                await globalThis.electronAPI.academic.createAcademicExam({
                     academic_year_id: currentAcademicYear.id,
                     term_id: currentTerm.id,
                     name: newExamName.trim(),
@@ -100,7 +101,7 @@ export default function ExamManagement() {
 
         try {
             unwrapIPCResult(
-                await globalThis.electronAPI.deleteAcademicExam(id, user.id),
+                await globalThis.electronAPI.academic.deleteAcademicExam(id, user.id),
                 'Failed to delete exam'
             )
             await loadExams()

@@ -33,9 +33,143 @@ const getResultMessage = (value: unknown, fallback: string): string => {
   return fallback
 }
 
+type FeeStructureInfoProps = Readonly<{
+  feeStructure: JSSFeeStructure;
+}>;
+
+function FeeStructureInfoCard({ feeStructure }: FeeStructureInfoProps) {
+  return (
+    <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6">
+      <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400 mb-2">JSS Grade {feeStructure.grade} Fee Structure ({feeStructure.fiscal_year})</h3>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+        <div>
+          <span className="text-blue-600 dark:text-blue-400">Tuition:</span>
+          <div className="font-semibold text-blue-600 dark:text-blue-400">{formatCurrencyFromCents(feeStructure.tuition_fee_cents)}</div>
+        </div>
+        <div>
+          <span className="text-blue-600 dark:text-blue-400">Boarding:</span>
+          <div className="font-semibold text-blue-600 dark:text-blue-400">{formatCurrencyFromCents(feeStructure.boarding_fee_cents || 0)}</div>
+        </div>
+        <div>
+          <span className="text-blue-600 dark:text-blue-400">Activity:</span>
+          <div className="font-semibold text-blue-600 dark:text-blue-400">{formatCurrencyFromCents(feeStructure.activity_fee_cents || 0)}</div>
+        </div>
+        <div>
+          <span className="text-blue-600 dark:text-blue-400">Total:</span>
+          <div className="font-semibold text-blue-600 dark:text-blue-400">
+            {formatCurrencyFromCents(
+              feeStructure.tuition_fee_cents +
+              (feeStructure.boarding_fee_cents || 0) +
+              (feeStructure.activity_fee_cents || 0) +
+              (feeStructure.exam_fee_cents || 0) +
+              (feeStructure.library_fee_cents || 0) +
+              (feeStructure.lab_fee_cents || 0) +
+              (feeStructure.ict_fee_cents || 0)
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type EligibleStudentsTableProps = Readonly<{
+  eligibleStudents: EligibleStudent[];
+  selectedStudents: Set<number>;
+  processing: boolean;
+  onSelectAll: () => void;
+  onSelectStudent: (studentId: number) => void;
+  onBatchTransition: () => void;
+}>;
+
+function EligibleStudentsTable({
+  eligibleStudents,
+  selectedStudents,
+  processing,
+  onSelectAll,
+  onSelectStudent,
+  onBatchTransition,
+}: EligibleStudentsTableProps) {
+  return (
+    <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
+      <div className="px-6 py-4 bg-secondary border-b flex justify-between items-center">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Eligible Students ({eligibleStudents.length})</h2>
+          <p className="text-sm text-muted-foreground mt-1">{selectedStudents.size} selected</p>
+        </div>
+        <button
+          onClick={onBatchTransition}
+          disabled={selectedStudents.size === 0 || processing}
+          className={`px-6 py-2 rounded font-medium ${
+            selectedStudents.size > 0 && !processing
+              ? 'btn-primary'
+              : 'bg-gray-300 text-muted-foreground cursor-not-allowed'
+          }`}
+        >
+          {processing ? 'Processing...' : `Promote ${selectedStudents.size} Student(s)`}
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-secondary">
+            <tr>
+              <th className="px-6 py-3 text-left">
+                <input
+                  type="checkbox"
+                  title="Select all students"
+                  aria-label="Select all students"
+                  checked={selectedStudents.size === eligibleStudents.length}
+                  onChange={onSelectAll}
+                  className="rounded"
+                />
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase">Adm. No.</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase">Student Name</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase">Current Grade</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase">Boarding</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-foreground/70 uppercase">Outstanding Balance</th>
+            </tr>
+          </thead>
+          <tbody className="bg-card divide-y divide-border">
+            {eligibleStudents.map((student) => (
+              <tr key={student.student_id} className="hover:bg-secondary">
+                <td className="px-6 py-4">
+                  <input
+                    type="checkbox"
+                    title={`Select ${student.full_name}`}
+                    aria-label={`Select ${student.full_name}`}
+                    checked={selectedStudents.has(student.student_id)}
+                    onChange={() => onSelectStudent(student.student_id)}
+                    className="rounded"
+                  />
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">{student.admission_number}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">{student.full_name}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">Grade {student.current_grade}</td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                    student.boarding_status === 'BOARDER' ? 'bg-purple-100 text-purple-800' : 'bg-secondary text-foreground'
+                  }`}>
+                    {student.boarding_status === 'DAY_SCHOLAR' ? 'DAY SCHOLAR' : student.boarding_status}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right">
+                  <span className={student.outstanding_balance_cents > 0 ? 'text-red-600 font-semibold' : 'text-foreground'}>
+                    {formatCurrencyFromCents(student.outstanding_balance_cents)}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 
 const JSSTransition: React.FC = () => {
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const { showToast } = useToast()
   const [eligibleStudents, setEligibleStudents] = useState<EligibleStudent[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<Set<number>>(new Set());
@@ -239,114 +373,17 @@ const JSSTransition: React.FC = () => {
       </div>
 
       {/* Fee Structure Info */}
-      {feeStructure && (
-        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6">
-          <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400 mb-2">JSS Grade {feeStructure.grade} Fee Structure ({feeStructure.fiscal_year})</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-            <div>
-              <span className="text-blue-600 dark:text-blue-400">Tuition:</span>
-              <div className="font-semibold text-blue-600 dark:text-blue-400">{formatCurrencyFromCents(feeStructure.tuition_fee_cents)}</div>
-            </div>
-            <div>
-              <span className="text-blue-600 dark:text-blue-400">Boarding:</span>
-              <div className="font-semibold text-blue-600 dark:text-blue-400">{formatCurrencyFromCents(feeStructure.boarding_fee_cents || 0)}</div>
-            </div>
-            <div>
-              <span className="text-blue-600 dark:text-blue-400">Activity:</span>
-              <div className="font-semibold text-blue-600 dark:text-blue-400">{formatCurrencyFromCents(feeStructure.activity_fee_cents || 0)}</div>
-            </div>
-            <div>
-              <span className="text-blue-600 dark:text-blue-400">Total:</span>
-              <div className="font-semibold text-blue-600 dark:text-blue-400">
-                {formatCurrencyFromCents(
-                  feeStructure.tuition_fee_cents +
-                  (feeStructure.boarding_fee_cents || 0) +
-                  (feeStructure.activity_fee_cents || 0) +
-                  (feeStructure.exam_fee_cents || 0) +
-                  (feeStructure.library_fee_cents || 0) +
-                  (feeStructure.lab_fee_cents || 0) +
-                  (feeStructure.ict_fee_cents || 0)
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {feeStructure && <FeeStructureInfoCard feeStructure={feeStructure} />}
 
       {/* Students List */}
-      <div className="bg-card rounded-lg shadow overflow-hidden mb-6">
-        <div className="px-6 py-4 bg-secondary border-b flex justify-between items-center">
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">Eligible Students ({eligibleStudents.length})</h2>
-            <p className="text-sm text-muted-foreground mt-1">{selectedStudents.size} selected</p>
-          </div>
-          <button
-            onClick={handleBatchTransition}
-            disabled={selectedStudents.size === 0 || processing}
-            className={`px-6 py-2 rounded font-medium ${
-              selectedStudents.size > 0 && !processing
-                ? 'btn-primary'
-                : 'bg-gray-300 text-muted-foreground cursor-not-allowed'
-            }`}
-          >
-            {processing ? 'Processing...' : `Promote ${selectedStudents.size} Student(s)`}
-          </button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-secondary">
-              <tr>
-                <th className="px-6 py-3 text-left">
-                  <input
-                    type="checkbox"
-                    title="Select all students"
-                    aria-label="Select all students"
-                    checked={selectedStudents.size === eligibleStudents.length}
-                    onChange={handleSelectAll}
-                    className="rounded"
-                  />
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase">Adm. No.</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase">Student Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase">Current Grade</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-foreground/70 uppercase">Boarding</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-foreground/70 uppercase">Outstanding Balance</th>
-              </tr>
-            </thead>
-            <tbody className="bg-card divide-y divide-border">
-              {eligibleStudents.map((student) => (
-                <tr key={student.student_id} className="hover:bg-secondary">
-                  <td className="px-6 py-4">
-                    <input
-                      type="checkbox"
-                      title={`Select ${student.full_name}`}
-                      aria-label={`Select ${student.full_name}`}
-                      checked={selectedStudents.has(student.student_id)}
-                      onChange={() => handleSelectStudent(student.student_id)}
-                      className="rounded"
-                    />
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">{student.admission_number}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">{student.full_name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">Grade {student.current_grade}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                      student.boarding_status === 'BOARDER' ? 'bg-purple-100 text-purple-800' : 'bg-secondary text-foreground'
-                    }`}>
-                      {student.boarding_status === 'DAY_SCHOLAR' ? 'DAY SCHOLAR' : student.boarding_status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <span className={student.outstanding_balance_cents > 0 ? 'text-red-600 font-semibold' : 'text-foreground'}>
-                      {formatCurrencyFromCents(student.outstanding_balance_cents)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <EligibleStudentsTable
+        eligibleStudents={eligibleStudents}
+        selectedStudents={selectedStudents}
+        processing={processing}
+        onSelectAll={handleSelectAll}
+        onSelectStudent={handleSelectStudent}
+        onBatchTransition={handleBatchTransition}
+      />
 
       {/* Transition Result */}
       {transitionResult && (

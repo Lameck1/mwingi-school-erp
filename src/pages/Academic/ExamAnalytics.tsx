@@ -47,8 +47,101 @@ interface StrugglingStu {
   recommended_action: string
 }
 
+interface SubjectPerformanceSectionProps {
+  subjectPerformance: SubjectPerformance[]
+}
+
+function SubjectPerformanceSection({ subjectPerformance }: Readonly<SubjectPerformanceSectionProps>) {
+  if (subjectPerformance.length === 0) { return null }
+  return (
+    <div className="premium-card">
+      <h3 className="text-lg font-semibold mb-4">Subject Performance Analysis</h3>
+      <div className="h-[300px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={subjectPerformance}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+            <XAxis dataKey="subject_name" angle={-45} textAnchor="end" height={100} />
+            <YAxis />
+            <Tooltip
+              contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '8px' }}
+              formatter={(value: number) => value.toFixed(2)}
+            />
+            <Legend />
+            <Bar dataKey="mean_score" fill="#10b981" name="Mean Score" />
+            <Bar dataKey="pass_rate" fill="#3b82f6" name="Pass Rate %" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="mt-6 overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="pb-3 pt-2 font-bold text-foreground/60">Subject</th>
+              <th className="pb-3 pt-2 font-bold text-foreground/60">Mean Score</th>
+              <th className="pb-3 pt-2 font-bold text-foreground/60">Pass Rate</th>
+              <th className="pb-3 pt-2 font-bold text-foreground/60">Difficulty</th>
+              <th className="pb-3 pt-2 font-bold text-foreground/60">Discrimination</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {subjectPerformance.map((subject) => (
+              <tr key={subject.subject_name} className="hover:bg-secondary/30">
+                <td className="py-3 font-medium">{subject.subject_name}</td>
+                <td className="py-3">{subject.mean_score.toFixed(2)}</td>
+                <td className="py-3">{subject.pass_rate.toFixed(1)}%</td>
+                <td className="py-3">
+                  <span className={`text-xs font-semibold ${subject.difficulty_index > 50 ? 'text-red-400' : 'text-green-400'
+                    }`}>
+                    {subject.difficulty_index.toFixed(1)}
+                  </span>
+                </td>
+                <td className="py-3">{subject.discrimination_index.toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+interface StrugglingStudentsSectionProps {
+  strugglingStudents: StrugglingStu[]
+}
+
+function StrugglingStudentsSection({ strugglingStudents }: Readonly<StrugglingStudentsSectionProps>) {
+  if (strugglingStudents.length === 0) { return null }
+  return (
+    <div className="premium-card border-l-4 border-amber-500">
+      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+        <AlertTriangle size={20} className="text-amber-500" />
+        Students Needing Intervention ({strugglingStudents.length})
+      </h3>
+      <div className="space-y-3">
+        {strugglingStudents.map((student) => (
+          <div key={student.student_id} className="p-4 rounded-lg bg-secondary/50 border border-border">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="font-semibold">{student.student_name}</p>
+                <p className="text-xs text-foreground/60">Adm: {student.admission_number}</p>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-sm font-bold ${student.average_score >= 40 ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'
+                }`}>
+                {student.average_score.toFixed(1)}
+              </span>
+            </div>
+            <p className="text-sm text-foreground/70">{student.recommended_action}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 const ExamAnalytics = () => {
-  const { currentAcademicYear, currentTerm } = useAppStore()
+  const currentAcademicYear = useAppStore((s) => s.currentAcademicYear)
+  const currentTerm = useAppStore((s) => s.currentTerm)
   const { showToast } = useToast()
 
   const [exams, setExams] = useState<{ id: number; name: string }[]>([])
@@ -66,8 +159,8 @@ const ExamAnalytics = () => {
   const loadInitialData = React.useCallback(async () => {
     try {
       const [examsData, streamsData] = await Promise.all([
-        globalThis.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
-        globalThis.electronAPI.getStreams()
+        globalThis.electronAPI.academic.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
+        globalThis.electronAPI.academic.getStreams()
       ])
 
       setExams(unwrapArrayResult(examsData, 'Failed to load exams'))
@@ -91,19 +184,19 @@ const ExamAnalytics = () => {
     setLoading(true)
     try {
       const [summary, grades, subjects, struggling] = await Promise.all([
-        globalThis.electronAPI.getPerformanceSummary({
+        globalThis.electronAPI.academic.getPerformanceSummary({
           examId: selectedExam,
           streamId: selectedStream
         }),
-        globalThis.electronAPI.getGradeDistribution({
+        globalThis.electronAPI.academic.getGradeDistribution({
           examId: selectedExam,
           streamId: selectedStream
         }),
-        globalThis.electronAPI.getSubjectPerformance({
+        globalThis.electronAPI.academic.getSubjectPerformance({
           examId: selectedExam,
           streamId: selectedStream
         }),
-        globalThis.electronAPI.getStrugglingStudents({
+        globalThis.electronAPI.academic.getStrugglingStudents({
           examId: selectedExam,
           streamId: selectedStream,
           threshold: 40
@@ -277,85 +370,9 @@ const ExamAnalytics = () => {
             </div>
           )}
 
-          {/* Subject Performance */}
-          {subjectPerformance.length > 0 && (
-            <div className="premium-card">
-              <h3 className="text-lg font-semibold mb-4">Subject Performance Analysis</h3>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={subjectPerformance}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                    <XAxis dataKey="subject_name" angle={-45} textAnchor="end" height={100} />
-                    <YAxis />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '8px' }}
-                      formatter={(value: number) => value.toFixed(2)}
-                    />
-                    <Legend />
-                    <Bar dataKey="mean_score" fill="#10b981" name="Mean Score" />
-                    <Bar dataKey="pass_rate" fill="#3b82f6" name="Pass Rate %" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+          <SubjectPerformanceSection subjectPerformance={subjectPerformance} />
 
-              <div className="mt-6 overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="pb-3 pt-2 font-bold text-foreground/60">Subject</th>
-                      <th className="pb-3 pt-2 font-bold text-foreground/60">Mean Score</th>
-                      <th className="pb-3 pt-2 font-bold text-foreground/60">Pass Rate</th>
-                      <th className="pb-3 pt-2 font-bold text-foreground/60">Difficulty</th>
-                      <th className="pb-3 pt-2 font-bold text-foreground/60">Discrimination</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {subjectPerformance.map((subject) => (
-                      <tr key={subject.subject_name} className="hover:bg-secondary/30">
-                        <td className="py-3 font-medium">{subject.subject_name}</td>
-                        <td className="py-3">{subject.mean_score.toFixed(2)}</td>
-                        <td className="py-3">{subject.pass_rate.toFixed(1)}%</td>
-                        <td className="py-3">
-                          <span className={`text-xs font-semibold ${subject.difficulty_index > 50 ? 'text-red-400' : 'text-green-400'
-                            }`}>
-                            {subject.difficulty_index.toFixed(1)}
-                          </span>
-                        </td>
-                        <td className="py-3">{subject.discrimination_index.toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Struggling Students */}
-          {strugglingStudents.length > 0 && (
-            <div className="premium-card border-l-4 border-amber-500">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <AlertTriangle size={20} className="text-amber-500" />
-                Students Needing Intervention ({strugglingStudents.length})
-              </h3>
-              <div className="space-y-3">
-                {strugglingStudents.map((student) => (
-                  <div key={student.student_id} className="p-4 rounded-lg bg-secondary/50 border border-border">
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <p className="font-semibold">{student.student_name}</p>
-                        <p className="text-xs text-foreground/60">Adm: {student.admission_number}</p>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-sm font-bold ${student.average_score >= 40 ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'
-                        }`}>
-                        {student.average_score.toFixed(1)}
-                      </span>
-                    </div>
-                    <p className="text-sm text-foreground/70">{student.recommended_action}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <StrugglingStudentsSection strugglingStudents={strugglingStudents} />
         </>
       )}
 

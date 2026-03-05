@@ -3,153 +3,280 @@ import {
     LayoutGrid, List as ListIcon,
     Printer, Loader2, Wallet, Users, Upload
 } from 'lucide-react'
-import React, { useEffect, useState, useCallback, useRef } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import React from 'react'
+import { Link } from 'react-router-dom'
 
+import { useStudents } from './useStudents'
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { ImportDialog } from '../../components/ui/ImportDialog'
-import { useToast } from '../../contexts/ToastContext'
-import { useAppStore } from '../../stores'
 import { type Stream } from '../../types/electron-api/AcademicAPI'
 import { type Student } from '../../types/electron-api/StudentAPI'
-import { normalizeFilters } from '../../utils/filters'
 import { formatCurrencyFromCents } from '../../utils/format'
-import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
-import { printDocument } from '../../utils/print'
 
+// --- Sub-components ---
+
+type StudentListViewProps = Readonly<{
+    students: Student[]
+    printingId: number | null
+    navigate: (path: string) => void
+    onPrintStatement: (student: Student) => void
+}>
+
+function StudentListView({ students, printingId, navigate, onPrintStatement }: StudentListViewProps) {
+    return (
+        <div className="card animate-slide-up no-scrollbar">
+            <div className="overflow-x-auto -mx-2">
+                <table className="w-full text-left">
+                    <thead>
+                        <tr className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 border-b border-border/20">
+                            <th className="px-4 py-4">Student Identity</th>
+                            <th className="px-4 py-4">Academic Placement</th>
+                            <th className="px-4 py-4 text-right">Balance Due</th>
+                            <th className="px-4 py-4">Status</th>
+                            <th className="px-4 py-4 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/20">
+                        {students.map((student) => (
+                            <tr key={student.id} className="group hover:bg-accent/20 transition-colors">
+                                <td className="px-4 py-5">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shadow-inner group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
+                                            {student.first_name?.charAt(0)}
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-foreground group-hover:text-primary transition-colors">
+                                                {student.first_name} {student.last_name}
+                                            </p>
+                                            <p className="text-[10px] font-mono text-foreground/40 uppercase tracking-widest">
+                                                ADM: {student.admission_number}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td className="px-4 py-5">
+                                    <p className="font-bold text-foreground">{student.stream_name || 'Unassigned Stream'}</p>
+                                    <p className="text-[10px] text-foreground/40 font-mono uppercase tracking-wider">
+                                        {student.student_type?.replace('_', ' ') || 'N/A'}
+                                    </p>
+                                </td>
+                                <td className="px-4 py-5 text-right">
+                                    <p className={`text-xs font-bold ${(student.balance || 0) > 0 ? 'text-amber-600 dark:text-amber-500' : 'text-emerald-500'}`}>
+                                        {formatCurrencyFromCents(student.balance || 0)}
+                                    </p>
+                                </td>
+                                <td className="px-4 py-5">
+                                    <span className={`text-[9px] font-bold tracking-widest uppercase px-3 py-1 rounded-full border ${student.is_active
+                                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                        : 'bg-red-500/10 border-red-500/20 text-red-400'
+                                        }`}>
+                                        {student.is_active ? 'Active' : 'Disabled'}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-5">
+                                    <div className="flex items-center justify-end gap-2">
+                                        <button
+                                            onClick={() => navigate(`/fee-payment?student=${student.id}`)}
+                                            className="p-2 bg-secondary/50 hover:bg-primary/20 text-primary rounded-lg transition-all"
+                                            title="Collect Fees"
+                                            aria-label={`Collect fees for ${student.first_name} ${student.last_name}`}
+                                        >
+                                            <Wallet className="w-4 h-4" aria-hidden="true" />
+                                        </button>
+                                        <button
+                                            onClick={() => onPrintStatement(student)}
+                                            className="p-2 bg-secondary/50 hover:bg-accent/20 text-foreground/40 hover:text-foreground rounded-lg transition-all"
+                                            title="Print Statement"
+                                            disabled={printingId === student.id}
+                                            aria-label={`Print statement for ${student.first_name} ${student.last_name}`}
+                                        >
+                                            {printingId === student.id ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Printer className="w-4 h-4" aria-hidden="true" />}
+                                        </button>
+                                        <button
+                                            onClick={() => navigate(`/students/${student.id}`)}
+                                            className="p-2 bg-secondary/50 hover:bg-accent/20 text-foreground/40 hover:text-foreground rounded-lg transition-all"
+                                            title="Edit Profile"
+                                            aria-label={`Edit profile for ${student.first_name} ${student.last_name}`}
+                                        >
+                                            <Edit className="w-4 h-4" aria-hidden="true" />
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    )
+}
+
+type StudentCardGridProps = Readonly<{
+    students: Student[]
+    navigate: (path: string) => void
+}>
+
+function StudentCardGrid({ students, navigate }: StudentCardGridProps) {
+    return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {students.map((student) => (
+                <div key={student.id} className="card group hover:-translate-y-1 transition-all duration-300">
+                    <div className="flex items-start justify-between mb-4">
+                        <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center text-foreground font-bold text-lg shadow-inner group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
+                            {student.first_name[0]}{student.last_name[0]}
+                        </div>
+                        <span className={`text-[9px] font-bold tracking-widest uppercase px-2 py-1 rounded-md border ${student.student_type === 'BOARDER'
+                            ? 'bg-purple-500/10 border-purple-500/20 text-purple-400'
+                            : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                            }`}>
+                            {student.student_type}
+                        </span>
+                    </div>
+
+                    <h3 className="font-bold text-foreground mb-1 truncate group-hover:text-primary transition-colors">
+                        {student.first_name} {student.last_name}
+                    </h3>
+                    <p className="text-[10px] font-mono text-foreground/40 uppercase tracking-widest mb-4">ADM: {student.admission_number}</p>
+
+                    <div className="space-y-3 pt-4 border-t border-border/40">
+                        <div className="flex justify-between items-center text-[11px]">
+                            <span className="text-foreground/40 font-bold uppercase tracking-tighter">Placement</span>
+                            <span className="text-foreground font-bold">{student.stream_name || '-'}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[11px]">
+                            <span className="text-foreground/40 font-bold uppercase tracking-tighter">Outstanding</span>
+                            <span className={`font-bold ${(student.balance || 0) > 0 ? 'text-orange-400' : 'text-emerald-400'}`}>
+                                {formatCurrencyFromCents(student.balance || 0)}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-6">
+                        <button
+                            onClick={() => navigate(`/students/${student.id}`)}
+                            className="flex-1 py-2 bg-secondary/50 hover:bg-secondary/80 text-foreground text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all duration-300"
+                        >
+                            Profile
+                        </button>
+                        <button
+                            onClick={() => navigate(`/fee-payment?student=${student.id}`)}
+                            className="flex-1 py-2 bg-primary/10 hover:bg-primary text-primary hover:text-primary-foreground text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all duration-300"
+                        >
+                            Pay
+                        </button>
+                    </div>
+                </div>
+            ))}
+        </div>
+    )
+}
+
+type StudentPaginationProps = Readonly<{
+    totalPages: number
+    currentPage: number
+    totalCount: number
+    itemsPerPage: number
+    onPageChange: (page: number) => void
+}>
+
+function StudentPagination({ totalPages, currentPage, totalCount, itemsPerPage, onPageChange }: StudentPaginationProps) {
+    if (totalPages <= 1) { return null }
+    return (
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mt-8 pt-8 border-t border-border/20 px-2">
+            <p className="text-xs font-medium text-foreground/40">
+                Displaying records <span className="text-foreground">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-foreground">{Math.min(currentPage * itemsPerPage, totalCount)}</span> of <span className="text-foreground">{totalCount}</span>
+            </p>
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    title="Previous page"
+                    className="p-3 bg-secondary/50 hover:bg-secondary text-foreground rounded-xl disabled:opacity-20 transition-all border border-border/40"
+                >
+                    <ChevronLeft className="w-5 h-5" />
+                </button>
+                <div className="flex items-center gap-1 px-4">
+                    <span className="text-sm font-bold text-foreground">{currentPage}</span>
+                    <span className="text-sm font-bold text-foreground/20">/</span>
+                    <span className="text-sm font-bold text-foreground/40">{totalPages}</span>
+                </div>
+                <button
+                    onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    title="Next page"
+                    className="p-3 bg-secondary/50 hover:bg-secondary/80 text-foreground rounded-xl disabled:opacity-20 transition-all border border-border/40 duration-300"
+                >
+                    <ChevronRight className="w-5 h-5" />
+                </button>
+            </div>
+        </div>
+    )
+}
+
+type StudentSearchFiltersProps = Readonly<{
+    search: string
+    onSearchChange: (value: string) => void
+    onSearch: (e: React.SyntheticEvent) => void
+    filters: { streamId: string; isActive: boolean }
+    onFiltersChange: (filters: { streamId: string; isActive: boolean }) => void
+    streams: Stream[]
+}>
+
+function StudentSearchFilters({ search, onSearchChange, onSearch, filters, onFiltersChange, streams }: StudentSearchFiltersProps) {
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="lg:col-span-2 relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40" />
+                <form onSubmit={onSearch}>
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={(e) => onSearchChange(e.target.value)}
+                        placeholder="Quick search by name or admission number..."
+                        className="input pl-11 py-3.5 border-border/20 focus:border-primary/50 transition-all w-full"
+                    />
+                </form>
+            </div>
+            <div>
+                <select
+                    value={filters.streamId}
+                    onChange={(e) => onFiltersChange({ ...filters, streamId: e.target.value })}
+                    className="input py-3.5 border-border/20 focus:border-primary/50 transition-all font-medium"
+                    aria-label="Filter by Stream"
+                >
+                    <option value="" className="bg-background">All Learning Streams</option>
+                    {streams.map((s) => (
+                        <option key={s.id} value={s.id} className="bg-background">{s.stream_name}</option>
+                    ))}
+                </select>
+            </div>
+            <div>
+                <select
+                    value={filters.isActive ? 'active' : 'inactive'}
+                    onChange={(e) => onFiltersChange({ ...filters, isActive: e.target.value === 'active' })}
+                    className="input py-3.5 border-border/20 focus:border-primary/50 transition-all font-medium"
+                    aria-label="Filter by Status"
+                >
+                    <option value="active" className="bg-background">Active Enrollment</option>
+                    <option value="inactive" className="bg-background">Inactive / Alumni</option>
+                </select>
+            </div>
+        </div>
+    )
+}
 
 export default function Students() {
-    const navigate = useNavigate()
-    const location = useLocation()
-    const { showToast } = useToast()
-    const { schoolSettings } = useAppStore()
-    const [students, setStudents] = useState<Student[]>([])
-    const [totalCount, setTotalCount] = useState(0)
-    const [printingId, setPrintingId] = useState<number | null>(null)
-    const [streams, setStreams] = useState<Stream[]>([])
-    const [loading, setLoading] = useState(true)
-    const [search, setSearch] = useState('')
-    const [showImport, setShowImport] = useState(false)
-    const [filters, setFilters] = useState({ streamId: '', isActive: true })
-    const [currentPage, setCurrentPage] = useState(1)
-    const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
-    const itemsPerPage = 12
-    const searchRef = useRef(search)
-
-    useEffect(() => {
-        searchRef.current = search
-    }, [search])
-
-    const loadStudents = useCallback(async (page = currentPage) => {
-        setLoading(true)
-        try {
-            const result = unwrapIPCResult<{ rows: Student[]; totalCount: number; page: number; pageSize: number }>(
-                await globalThis.electronAPI.getStudents(normalizeFilters({
-                streamId: filters.streamId || undefined,
-                isActive: filters.isActive ?? undefined,
-                search: searchRef.current || undefined,
-                page,
-                pageSize: itemsPerPage,
-                }) as Parameters<typeof globalThis.electronAPI.getStudents>[0]),
-                'Failed to load students'
-            )
-            setStudents(result.rows)
-            setTotalCount(result.totalCount)
-        } catch (error) {
-            console.error('Failed to load students:', error)
-            setStudents([])
-            setTotalCount(0)
-            showToast(error instanceof Error ? error.message : 'Failed to load students', 'error')
-        } finally {
-            setLoading(false)
-        }
-    }, [filters, showToast, currentPage])
-
-    const loadData = useCallback(async () => {
-        try {
-            const streamsData = unwrapArrayResult(await globalThis.electronAPI.getStreams(), 'Failed to load streams')
-            setStreams(streamsData)
-            await loadStudents(1)
-        } catch (error) {
-            console.error('Failed to load data:', error)
-            setStreams([])
-            setStudents([])
-            setTotalCount(0)
-            setLoading(false)
-            showToast(error instanceof Error ? error.message : 'Failed to load data', 'error')
-        }
-    }, [loadStudents, showToast])
-
-    useEffect(() => {
-        loadData().catch((err: unknown) => console.error('Failed to load student data', err))
-    }, [loadData])
-
-    useEffect(() => {
-        const params = new URLSearchParams(location.search)
-        if (params.get('import') === '1') {
-            setShowImport(true)
-        }
-    }, [location.search])
-
-    useEffect(() => {
-        const unsubscribe = globalThis.electronAPI.onOpenImportDialog(() => {
-            setShowImport(true)
-        })
-        return () => unsubscribe()
-    }, [])
-
-    const handleSearch = (e: React.SyntheticEvent) => {
-        e.preventDefault()
-        loadStudents().catch((err: unknown) => console.error('Failed to search students', err))
-    }
-
-    useEffect(() => {
-        setCurrentPage(1)
-    }, [search, filters.streamId, filters.isActive])
-
-    useEffect(() => {
-        loadStudents(currentPage).catch((err: unknown) => console.error('Failed to load students page', err))
-    }, [currentPage, loadStudents])
+    const {
+        students, totalCount, streams,
+        loading, printingId, search, showImport, filters,
+        currentPage, viewMode, itemsPerPage, totalPages,
+        navigate,
+        setSearch, setFilters, setCurrentPage, setViewMode,
+        handleSearch, handlePrintStatement,
+        openImport, closeImport, onImportSuccess,
+    } = useStudents()
 
     const paginatedStudents = students
-    const totalPages = Math.ceil(totalCount / itemsPerPage)
-
-
-
-
-    const handlePrintStatement = async (student: Student) => {
-        setPrintingId(student.id)
-        try {
-            const result = unwrapIPCResult<{
-                student?: Record<string, unknown>
-                ledger: Record<string, unknown>[]
-                openingBalance: number
-                closingBalance: number
-                error?: string
-            }>(
-                await globalThis.electronAPI.getStudentLedgerReport(student.id),
-                'Failed to load ledger data'
-            )
-            printDocument({
-                title: `Statement - ${student.first_name} ${student.last_name}`,
-                template: 'statement',
-                data: {
-                    studentName: `${student.first_name} ${student.middle_name || ''} ${student.last_name}`,
-                    admissionNumber: student.admission_number,
-                    streamName: student.stream_name,
-                    openingBalance: result.openingBalance,
-                    ledger: result.ledger,
-                    closingBalance: result.closingBalance
-                },
-                schoolSettings: (schoolSettings ? { ...schoolSettings } : undefined) as Record<string, unknown>
-            })
-        } catch (error) {
-            console.error(error)
-            showToast(error instanceof Error ? error.message : 'Error generating statement', 'error')
-        } finally {
-            setPrintingId(null)
-        }
-    }
 
     return (
         <div className="space-y-8 pb-10">
@@ -188,7 +315,7 @@ export default function Students() {
 
             <div className="flex justify-end px-1">
                 <button
-                    onClick={() => setShowImport(true)}
+                    onClick={openImport}
                     className="flex items-center gap-2 text-sm font-medium text-primary hover:bg-primary/10 px-3 py-1.5 rounded-lg transition-all duration-300"
                 >
                     <Upload className="w-4 h-4" />
@@ -196,45 +323,14 @@ export default function Students() {
                 </button>
             </div>
 
-            {/* Global Search & Filters Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                <div className="lg:col-span-2 relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40" />
-                    <form onSubmit={handleSearch}>
-                        <input
-                            type="text"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Quick search by name or admission number..."
-                            className="input pl-11 py-3.5 border-border/20 focus:border-primary/50 transition-all w-full"
-                        />
-                    </form>
-                </div>
-                <div>
-                    <select
-                        value={filters.streamId}
-                        onChange={(e) => setFilters(prev => ({ ...prev, streamId: e.target.value }))}
-                        className="input py-3.5 border-border/20 focus:border-primary/50 transition-all font-medium"
-                        aria-label="Filter by Stream"
-                    >
-                        <option value="" className="bg-background">All Learning Streams</option>
-                        {streams.map((s) => (
-                            <option key={s.id} value={s.id} className="bg-background">{s.stream_name}</option>
-                        ))}
-                    </select>
-                </div>
-                <div>
-                    <select
-                        value={filters.isActive ? 'active' : 'inactive'}
-                        onChange={(e) => setFilters(prev => ({ ...prev, isActive: e.target.value === 'active' }))}
-                        className="input py-3.5 border-border/20 focus:border-primary/50 transition-all font-medium"
-                        aria-label="Filter by Status"
-                    >
-                        <option value="active" className="bg-background">Active Enrollment</option>
-                        <option value="inactive" className="bg-background">Inactive / Alumni</option>
-                    </select>
-                </div>
-            </div>
+            <StudentSearchFilters
+                search={search}
+                onSearchChange={setSearch}
+                onSearch={handleSearch}
+                filters={filters}
+                onFiltersChange={setFilters}
+                streams={streams}
+            />
 
             {/* Main Data View */}
             {(() => {
@@ -259,187 +355,35 @@ export default function Students() {
 
                 if (viewMode === 'list') {
                     return (
-                        <div className="card animate-slide-up no-scrollbar">
-                            <div className="overflow-x-auto -mx-2">
-                                <table className="w-full text-left">
-                                    <thead>
-                                        <tr className="text-[11px] font-bold uppercase tracking-wider text-foreground/40 border-b border-border/20">
-                                            <th className="px-4 py-4">Student Identity</th>
-                                            <th className="px-4 py-4">Academic Placement</th>
-                                            <th className="px-4 py-4 text-right">Balance Due</th>
-                                            <th className="px-4 py-4">Status</th>
-                                            <th className="px-4 py-4 text-right">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-border/20">
-                                        {paginatedStudents.map((student) => (
-                                            <tr key={student.id} className="group hover:bg-accent/20 transition-colors">
-                                                <td className="px-4 py-5">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shadow-inner group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
-                                                            {student.first_name?.charAt(0)}
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-bold text-foreground group-hover:text-primary transition-colors">
-                                                                {student.first_name} {student.last_name}
-                                                            </p>
-                                                            <p className="text-[10px] font-mono text-foreground/40 uppercase tracking-widest">
-                                                                ADM: {student.admission_number}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-5">
-                                                    <p className="font-bold text-foreground">{student.stream_name || 'Unassigned Stream'}</p>
-                                                    <p className="text-[10px] text-foreground/40 font-mono uppercase tracking-wider">
-                                                        {student.student_type?.replace('_', ' ') || 'N/A'}
-                                                    </p>
-                                                </td>
-                                                <td className="px-4 py-5 text-right">
-                                                    <p className={`text-xs font-bold ${(student.balance || 0) > 0 ? 'text-amber-600 dark:text-amber-500' : 'text-emerald-500'}`}>
-                                                        {formatCurrencyFromCents(student.balance || 0)}
-                                                    </p>
-                                                </td>
-                                                <td className="px-4 py-5">
-                                                    <span className={`text-[9px] font-bold tracking-widest uppercase px-3 py-1 rounded-full border ${student.is_active
-                                                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                                        : 'bg-red-500/10 border-red-500/20 text-red-400'
-                                                        }`}>
-                                                        {student.is_active ? 'Active' : 'Disabled'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-5">
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        <button
-                                                            onClick={() => navigate(`/fee-payment?student=${student.id}`)}
-                                                            className="p-2 bg-secondary/50 hover:bg-primary/20 text-primary rounded-lg transition-all"
-                                                            title="Collect Fees"
-                                                            aria-label={`Collect fees for ${student.first_name} ${student.last_name}`}
-                                                        >
-                                                            <Wallet className="w-4 h-4" aria-hidden="true" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handlePrintStatement(student)}
-                                                            className="p-2 bg-secondary/50 hover:bg-accent/20 text-foreground/40 hover:text-foreground rounded-lg transition-all"
-                                                            title="Print Statement"
-                                                            disabled={printingId === student.id}
-                                                            aria-label={`Print statement for ${student.first_name} ${student.last_name}`}
-                                                        >
-                                                            {printingId === student.id ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Printer className="w-4 h-4" aria-hidden="true" />}
-                                                        </button>
-                                                        <button
-                                                            onClick={() => navigate(`/students/${student.id}`)}
-                                                            className="p-2 bg-secondary/50 hover:bg-accent/20 text-foreground/40 hover:text-foreground rounded-lg transition-all"
-                                                            title="Edit Profile"
-                                                            aria-label={`Edit profile for ${student.first_name} ${student.last_name}`}
-                                                        >
-                                                            <Edit className="w-4 h-4" aria-hidden="true" />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                        <StudentListView
+                            students={paginatedStudents}
+                            printingId={printingId}
+                            navigate={navigate}
+                            onPrintStatement={handlePrintStatement}
+                        />
                     )
                 }
 
                 return (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {paginatedStudents.map((student) => (
-                            <div key={student.id} className="card group hover:-translate-y-1 transition-all duration-300">
-                                <div className="flex items-start justify-between mb-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center text-foreground font-bold text-lg shadow-inner group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300">
-                                        {student.first_name[0]}{student.last_name[0]}
-                                    </div>
-                                    <span className={`text-[9px] font-bold tracking-widest uppercase px-2 py-1 rounded-md border ${student.student_type === 'BOARDER'
-                                        ? 'bg-purple-500/10 border-purple-500/20 text-purple-400'
-                                        : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-                                        }`}>
-                                        {student.student_type}
-                                    </span>
-                                </div>
-
-                                <h3 className="font-bold text-foreground mb-1 truncate group-hover:text-primary transition-colors">
-                                    {student.first_name} {student.last_name}
-                                </h3>
-                                <p className="text-[10px] font-mono text-foreground/40 uppercase tracking-widest mb-4">ADM: {student.admission_number}</p>
-
-                                <div className="space-y-3 pt-4 border-t border-border/40">
-                                    <div className="flex justify-between items-center text-[11px]">
-                                        <span className="text-foreground/40 font-bold uppercase tracking-tighter">Placement</span>
-                                        <span className="text-foreground font-bold">{student.stream_name || '-'}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-[11px]">
-                                        <span className="text-foreground/40 font-bold uppercase tracking-tighter">Outstanding</span>
-                                        <span className={`font-bold ${(student.balance || 0) > 0 ? 'text-orange-400' : 'text-emerald-400'}`}>
-                                            {formatCurrencyFromCents(student.balance || 0)}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-2 mt-6">
-                                    <button
-                                        onClick={() => navigate(`/students/${student.id}`)}
-                                        className="flex-1 py-2 bg-secondary/50 hover:bg-secondary/80 text-foreground text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all duration-300"
-                                    >
-                                        Profile
-                                    </button>
-                                    <button
-                                        onClick={() => navigate(`/fee-payment?student=${student.id}`)}
-                                        className="flex-1 py-2 bg-primary/10 hover:bg-primary text-primary hover:text-primary-foreground text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all duration-300"
-                                    >
-                                        Pay
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                    <StudentCardGrid
+                        students={paginatedStudents}
+                        navigate={navigate}
+                    />
                 )
             })()}
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mt-8 pt-8 border-t border-border/20 px-2">
-                    <p className="text-xs font-medium text-foreground/40">
-                        Displaying records <span className="text-foreground">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-foreground">{Math.min(currentPage * itemsPerPage, totalCount)}</span> of <span className="text-foreground">{totalCount}</span>
-                    </p>
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            disabled={currentPage === 1}
-                            title="Previous page"
-                            className="p-3 bg-secondary/50 hover:bg-secondary text-foreground rounded-xl disabled:opacity-20 transition-all border border-border/40"
-                        >
-                            <ChevronLeft className="w-5 h-5" />
-                        </button>
-                        <div className="flex items-center gap-1 px-4">
-                            <span className="text-sm font-bold text-foreground">{currentPage}</span>
-                            <span className="text-sm font-bold text-foreground/20">/</span>
-                            <span className="text-sm font-bold text-foreground/40">{totalPages}</span>
-                        </div>
-                        <button
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                            disabled={currentPage === totalPages}
-                            title="Next page"
-                            className="p-3 bg-secondary/50 hover:bg-secondary/80 text-foreground rounded-xl disabled:opacity-20 transition-all border border-border/40 duration-300"
-                        >
-                            <ChevronRight className="w-5 h-5" />
-                        </button>
-                    </div>
-                </div>
-            )}
+            <StudentPagination
+                totalPages={totalPages}
+                currentPage={currentPage}
+                totalCount={totalCount}
+                itemsPerPage={itemsPerPage}
+                onPageChange={setCurrentPage}
+            />
 
             <ImportDialog
                 isOpen={showImport}
-                onClose={() => setShowImport(false)}
-                onSuccess={() => {
-                    setShowImport(false)
-                    showToast('Students imported successfully', 'success')
-                    loadStudents().catch((err: unknown) => console.error('Failed to reload students after import', err))
-                }}
+                onClose={closeImport}
+                onSuccess={onImportSuccess}
                 entityType="STUDENT"
                 title="Import Students"
             />

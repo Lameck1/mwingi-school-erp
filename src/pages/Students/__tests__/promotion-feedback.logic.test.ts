@@ -96,4 +96,15 @@ describe('promotion feedback logic', () => {
         expect(result.errors).toEqual(['Promotion failed for one or more students'])
         expect(result.failureDetails).toEqual([])
     })
+
+    it('returns empty errors for fully successful promotion', () => {
+        const result = buildPromotionRunFeedback(
+            { success: true, promoted: 2, failed: 0 },
+            [10, 11],
+            students
+        )
+        expect(result.errors).toEqual([])
+        expect(result.promoted).toBe(2)
+        expect(result.failed).toBe(0)
+    })
 })

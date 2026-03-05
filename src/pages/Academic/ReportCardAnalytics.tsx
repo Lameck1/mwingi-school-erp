@@ -45,8 +45,93 @@ interface TermComparison {
   improvement?: number
 }
 
+interface PerformanceSummaryCardsProps {
+  summary: PerformanceSummary
+}
+
+function PerformanceSummaryCards({ summary }: Readonly<PerformanceSummaryCardsProps>) {
+  return (
+    <div className="premium-card">
+      <h3 className="text-lg font-semibold mb-6">Performance Summary</h3>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="p-4 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/30">
+          <p className="text-xs text-foreground/60">Mean Score</p>
+          <p className="text-2xl font-bold text-blue-400">{summary.mean_score.toFixed(2)}</p>
+        </div>
+        <div className="p-4 rounded-lg bg-gradient-to-br from-green-500/20 to-green-600/20 border border-green-500/30">
+          <p className="text-xs text-foreground/60">Pass Rate</p>
+          <p className="text-2xl font-bold text-green-400">{summary.pass_rate.toFixed(1)}%</p>
+        </div>
+        <div className="p-4 rounded-lg bg-gradient-to-br from-amber-500/20 to-amber-600/20 border border-amber-500/30">
+          <p className="text-xs text-foreground/60">Total Students</p>
+          <p className="text-2xl font-bold text-amber-400">{summary.total_students}</p>
+        </div>
+        <div className="p-4 rounded-lg bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/30">
+          <p className="text-xs text-foreground/60">Top Performer</p>
+          <p className="text-sm font-bold text-purple-400">{(summary.top_performer ?? 'N/A').split(' ')[0]}</p>
+          <p className="text-xs text-foreground/60">{summary.top_performer_score?.toFixed(1) ?? 'N/A'}</p>
+        </div>
+        <div className="p-4 rounded-lg bg-gradient-to-br from-red-500/20 to-red-600/20 border border-red-500/30">
+          <p className="text-xs text-foreground/60">Pass/Fail</p>
+          <p className="text-lg font-bold"><span className="text-green-400">{summary.pass_count}</span>/<span className="text-red-400">{summary.fail_count}</span></p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface SubjectAnalysisTableProps {
+  subjectPerformance: SubjectPerformance[]
+}
+
+function SubjectAnalysisTable({ subjectPerformance }: Readonly<SubjectAnalysisTableProps>) {
+  if (subjectPerformance.length === 0) {
+    return null
+  }
+
+  return (
+    <div className="premium-card">
+      <h3 className="text-lg font-semibold mb-4">Detailed Subject Analysis</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="pb-3 pt-2 font-bold text-foreground/60">Subject</th>
+              <th className="pb-3 pt-2 font-bold text-foreground/60 text-right">Mean</th>
+              <th className="pb-3 pt-2 font-bold text-foreground/60 text-right">Pass %</th>
+              <th className="pb-3 pt-2 font-bold text-foreground/60 text-right">Difficulty</th>
+              <th className="pb-3 pt-2 font-bold text-foreground/60 text-right">Discrimination</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {subjectPerformance.map((subject) => (
+              <tr key={subject.subject_name} className="hover:bg-secondary/30">
+                <td className="py-3 font-medium">{subject.subject_name}</td>
+                <td className="py-3 text-right font-bold">{subject.mean_score.toFixed(1)}</td>
+                <td className="py-3 text-right">
+                  <span className={`${subject.pass_rate >= 70 ? 'text-green-400' : 'text-red-400'}`}>
+                    {subject.pass_rate.toFixed(1)}%
+                  </span>
+                </td>
+                <td className="py-3 text-right">
+                  <span className={`text-xs font-semibold px-2 py-1 rounded ${subject.difficulty_index > 50 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'
+                    }`}>
+                    {subject.difficulty_index.toFixed(1)}
+                  </span>
+                </td>
+                <td className="py-3 text-right">{subject.discrimination_index.toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 const ReportCardAnalytics = () => {
-  const { currentAcademicYear, currentTerm } = useAppStore()
+  const currentAcademicYear = useAppStore((s) => s.currentAcademicYear)
+  const currentTerm = useAppStore((s) => s.currentTerm)
   const { showToast } = useToast()
 
   const [exams, setExams] = useState<{ id: number; name: string }[]>([])
@@ -64,8 +149,8 @@ const ReportCardAnalytics = () => {
   const loadInitialData = useCallback(async () => {
     try {
       const [examsData, streamsData] = await Promise.all([
-        globalThis.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
-        globalThis.electronAPI.getStreams()
+        globalThis.electronAPI.academic.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
+        globalThis.electronAPI.academic.getStreams()
       ])
 
       setExams(unwrapArrayResult(examsData, 'Failed to load exams'))
@@ -89,19 +174,19 @@ const ReportCardAnalytics = () => {
     setLoading(true)
     try {
       const [summary, grades, subjects, comparison] = await Promise.all([
-        globalThis.electronAPI.getPerformanceSummary({
+        globalThis.electronAPI.academic.getPerformanceSummary({
           examId: selectedExam,
           streamId: selectedStream
         }),
-        globalThis.electronAPI.getGradeDistribution({
+        globalThis.electronAPI.academic.getGradeDistribution({
           examId: selectedExam,
           streamId: selectedStream
         }),
-        globalThis.electronAPI.getSubjectPerformance({
+        globalThis.electronAPI.academic.getSubjectPerformance({
           examId: selectedExam,
           streamId: selectedStream
         }),
-        globalThis.electronAPI.getTermComparison({
+        globalThis.electronAPI.academic.getTermComparison({
           examId: selectedExam,
           streamId: selectedStream
         })
@@ -210,33 +295,7 @@ const ReportCardAnalytics = () => {
 
       {performanceSummary && (
         <>
-          {/* Summary Cards */}
-          <div className="premium-card">
-            <h3 className="text-lg font-semibold mb-6">Performance Summary</h3>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div className="p-4 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/30">
-                <p className="text-xs text-foreground/60">Mean Score</p>
-                <p className="text-2xl font-bold text-blue-400">{performanceSummary.mean_score.toFixed(2)}</p>
-              </div>
-              <div className="p-4 rounded-lg bg-gradient-to-br from-green-500/20 to-green-600/20 border border-green-500/30">
-                <p className="text-xs text-foreground/60">Pass Rate</p>
-                <p className="text-2xl font-bold text-green-400">{performanceSummary.pass_rate.toFixed(1)}%</p>
-              </div>
-              <div className="p-4 rounded-lg bg-gradient-to-br from-amber-500/20 to-amber-600/20 border border-amber-500/30">
-                <p className="text-xs text-foreground/60">Total Students</p>
-                <p className="text-2xl font-bold text-amber-400">{performanceSummary.total_students}</p>
-              </div>
-              <div className="p-4 rounded-lg bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/30">
-                <p className="text-xs text-foreground/60">Top Performer</p>
-                <p className="text-sm font-bold text-purple-400">{(performanceSummary.top_performer ?? 'N/A').split(' ')[0]}</p>
-                <p className="text-xs text-foreground/60">{performanceSummary.top_performer_score?.toFixed(1) ?? 'N/A'}</p>
-              </div>
-              <div className="p-4 rounded-lg bg-gradient-to-br from-red-500/20 to-red-600/20 border border-red-500/30">
-                <p className="text-xs text-foreground/60">Pass/Fail</p>
-                <p className="text-lg font-bold"><span className="text-green-400">{performanceSummary.pass_count}</span>/<span className="text-red-400">{performanceSummary.fail_count}</span></p>
-              </div>
-            </div>
-          </div>
+          <PerformanceSummaryCards summary={performanceSummary} />
 
           {/* Grade Distribution & Subject Performance */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -275,45 +334,7 @@ const ReportCardAnalytics = () => {
             )}
           </div>
 
-          {/* Subject Analysis Details */}
-          {subjectPerformance.length > 0 && (
-            <div className="premium-card">
-              <h3 className="text-lg font-semibold mb-4">Detailed Subject Analysis</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="pb-3 pt-2 font-bold text-foreground/60">Subject</th>
-                      <th className="pb-3 pt-2 font-bold text-foreground/60 text-right">Mean</th>
-                      <th className="pb-3 pt-2 font-bold text-foreground/60 text-right">Pass %</th>
-                      <th className="pb-3 pt-2 font-bold text-foreground/60 text-right">Difficulty</th>
-                      <th className="pb-3 pt-2 font-bold text-foreground/60 text-right">Discrimination</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {subjectPerformance.map((subject) => (
-                      <tr key={subject.subject_name} className="hover:bg-secondary/30">
-                        <td className="py-3 font-medium">{subject.subject_name}</td>
-                        <td className="py-3 text-right font-bold">{subject.mean_score.toFixed(1)}</td>
-                        <td className="py-3 text-right">
-                          <span className={`${subject.pass_rate >= 70 ? 'text-green-400' : 'text-red-400'}`}>
-                            {subject.pass_rate.toFixed(1)}%
-                          </span>
-                        </td>
-                        <td className="py-3 text-right">
-                          <span className={`text-xs font-semibold px-2 py-1 rounded ${subject.difficulty_index > 50 ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'
-                            }`}>
-                            {subject.difficulty_index.toFixed(1)}
-                          </span>
-                        </td>
-                        <td className="py-3 text-right">{subject.discrimination_index.toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+          <SubjectAnalysisTable subjectPerformance={subjectPerformance} />
 
           {/* Term Comparison */}
           {termComparison.length > 1 && (

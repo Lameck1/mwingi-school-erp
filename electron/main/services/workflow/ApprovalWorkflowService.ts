@@ -111,10 +111,10 @@ export class ApprovalWorkflowService {
     return {
       amount: params.amount,
       description: params.description,
-      ...(requestType !== undefined ? { requestType } : {}),
-      ...(entityType !== undefined ? { entityType } : {}),
-      ...(entityId !== undefined ? { entityId } : {}),
-      ...(requestedBy !== undefined ? { requestedBy } : {})
+      ...(requestType === undefined ? {} : { requestType }),
+      ...(entityType === undefined ? {} : { entityType }),
+      ...(entityId === undefined ? {} : { entityId }),
+      ...(requestedBy === undefined ? {} : { requestedBy })
     }
   }
 
@@ -207,7 +207,7 @@ export class ApprovalWorkflowService {
         }
       }
 
-      const maxLevel = matchingConfigs[matchingConfigs.length - 1]?.required_level ?? 1
+      const maxLevel = matchingConfigs.at(-1)?.required_level ?? 1
       const now = new Date().toISOString()
       const requestId = this.createApprovalRequestRecord({
         requestType,
@@ -346,7 +346,7 @@ export class ApprovalWorkflowService {
         level,
         approverId,
         now,
-        ...(comments !== undefined ? { comments } : {})
+        ...(comments === undefined ? {} : { comments })
       })
 
       if (decision === 'REJECTED') {

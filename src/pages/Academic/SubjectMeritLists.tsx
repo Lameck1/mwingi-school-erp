@@ -42,7 +42,8 @@ const getMarksBadgeClass = (marks: number): string => {
 
 
 const SubjectMeritLists = () => {
-  const { currentAcademicYear, currentTerm } = useAppStore()
+  const currentAcademicYear = useAppStore((s) => s.currentAcademicYear)
+  const currentTerm = useAppStore((s) => s.currentTerm)
   const { showToast } = useToast()
 
   const [exams, setExams] = useState<{ id: number; name: string }[]>([])
@@ -60,9 +61,9 @@ const SubjectMeritLists = () => {
   const loadInitialData = useCallback(async () => {
     try {
       const [examsData, streamsData, subjectsData] = await Promise.all([
-        globalThis.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
-        globalThis.electronAPI.getStreams(),
-        globalThis.electronAPI.getAcademicSubjects()
+        globalThis.electronAPI.academic.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
+        globalThis.electronAPI.academic.getStreams(),
+        globalThis.electronAPI.academic.getAcademicSubjects()
       ])
 
       setExams(unwrapArrayResult(examsData, 'Failed to load exams'))
@@ -87,12 +88,12 @@ const SubjectMeritLists = () => {
     setLoading(true)
     try {
       const [rankings_, difficulty_] = await Promise.all([
-        globalThis.electronAPI.getSubjectMeritList({
+        globalThis.electronAPI.academic.getSubjectMeritList({
           examId: selectedExam,
           subjectId: selectedSubject,
           streamId: selectedStream
         }),
-        globalThis.electronAPI.getSubjectDifficulty({
+        globalThis.electronAPI.academic.getSubjectDifficulty({
           examId: selectedExam,
           subjectId: selectedSubject,
           streamId: selectedStream

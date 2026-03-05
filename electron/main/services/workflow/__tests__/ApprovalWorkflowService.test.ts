@@ -802,4 +802,411 @@ describe('ApprovalWorkflowService', () => {
       expect(history.request.request_type).toBe('PAYMENT')
     })
   })
+
+  /* ============================================================== */
+  /*  snake_case parameter normalization                            */
+  /* ============================================================== */
+  describe('normalizeCreateParams – snake_case params', () => {
+    it('accepts snake_case parameter names', async () => {
+      const result = await service.createApprovalRequest({
+        request_type: 'PAYMENT',
+        entity_type: 'fee_invoice',
+        entity_id: 1,
+        amount: 25000,
+        description: 'Snake case test',
+        requested_by: 1
+      })
+      expect(result.success).toBe(true)
+      expect(result.requestId).toBeGreaterThan(0)
+    })
+  })
+
+  /* ============================================================== */
+  /*  missing required fields                                       */
+  /* ============================================================== */
+  describe('createApprovalRequest – validation', () => {
+    it('returns error when missing required fields', async () => {
+      const result = await service.createApprovalRequest({
+        amount: 25000,
+        description: 'Missing fields'
+      } as any)
+      expect(result.success).toBe(false)
+      expect(result.message).toContain('Missing required')
+    })
+
+    it('returns error when no matching approval config', async () => {
+      // REFUND type has no config
+      const inner = new ApprovalWorkflowService(db as any)
+      const result = inner.createApprovalRequest({
+        requestType: 'REFUND',
+        entityType: 'payment',
+        entityId: 1,
+        amount: 1000,
+        description: 'No config',
+        requestedBy: 1
+      })
+      expect(result.success).toBe(false)
+      expect(result.message).toContain('No approval configuration')
+    })
+  })
+
+  /* ============================================================== */
+  /*  multi-level approval (advance to next level)                  */
+  /* ============================================================== */
+  describe('processApproval – multi-level', () => {
+    it('advances to next level on approve when not final', async () => {
+      // Large amount requires level 2
+      const req = await service.createApprovalRequest({
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 2,
+        amount: 100000,
+        description: 'Multi-level test',
+        requestedBy: 1
+      })
+
+      // Approve level 1
+      const l1Result = await service.processApproval({
+        requestId: req.requestId!,
+        level: 1,
+        decision: 'APPROVED',
+        approverId: 1,
+        comments: 'Level 1 OK'
+      })
+      expect(l1Result.success).toBe(true)
+      expect(l1Result.message).toContain('advanced to Level 2')
+
+      // Approve level 2 (final)
+      const l2Result = await service.processApproval({
+        requestId: req.requestId!,
+        level: 2,
+        decision: 'APPROVED',
+        approverId: 2,
+        comments: 'Level 2 OK'
+      })
+      expect(l2Result.success).toBe(true)
+      expect(l2Result.message).toContain('fully approved')
+    })
+
+    it('rejection at level 2 finalizes as REJECTED', async () => {
+      const req = await service.createApprovalRequest({
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 2,
+        amount: 100000,
+        description: 'Reject at level 2',
+        requestedBy: 1
+      })
+
+      await service.processApproval({
+        requestId: req.requestId!,
+        level: 1,
+        decision: 'APPROVED',
+        approverId: 1,
+        comments: 'OK'
+      })
+
+      const l2Result = await service.processApproval({
+        requestId: req.requestId!,
+        level: 2,
+        decision: 'REJECTED',
+        approverId: 2,
+        comments: 'Budget exceeded'
+      })
+      expect(l2Result.success).toBe(true)
+      expect(l2Result.message).toContain('rejected')
+    })
+  })
+
+  /* ============================================================== */
+  /*  getApprovalContext edge cases                                  */
+  /* ============================================================== */
+  describe('processApproval – context errors', () => {
+    it('returns error when approval level not found', async () => {
+      const req = await service.createApprovalRequest({
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
+        amount: 30000,
+        description: 'Test',
+        requestedBy: 1
+      })
+
+      const result = await service.processApproval({
+        requestId: req.requestId!,
+        level: 5,  // Level 5 doesn't exist
+        decision: 'APPROVED',
+        approverId: 1,
+        comments: 'Nope'
+      })
+      expect(result.success).toBe(false)
+      expect(result.message).toContain('not found')
+    })
+
+    it('returns error when wrong level attempted', async () => {
+      // Create a multi-level request
+      const req = await service.createApprovalRequest({
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 2,
+        amount: 100000,
+        description: 'Test',
+        requestedBy: 1
+      })
+
+      // Try to approve level 2 before level 1
+      const result = await service.processApproval({
+        requestId: req.requestId!,
+        level: 2,
+        decision: 'APPROVED',
+        approverId: 2,
+        comments: 'Skip'
+      })
+      expect(result.success).toBe(false)
+      expect(result.message).toContain('not at the current approval level')
+    })
+  })
+
+  /* ============================================================== */
+  /*  getApprovalQueue – with filter                                */
+  /* ============================================================== */
+  describe('getApprovalQueue – requestType filter', () => {
+    it('filters by request type', async () => {
+      await service.createApprovalRequest({
+        requestType: 'PAYMENT', entityType: 'fee_invoice',
+        entityId: 1, amount: 25000, description: 'Payment', requestedBy: 1
+      })
+      await service.createApprovalRequest({
+        requestType: 'EXPENSE', entityType: 'supplies',
+        entityId: 1, amount: 15000, description: 'Expense', requestedBy: 1
+      })
+
+      const payments = await service.getApprovalQueue(1, 'PAYMENT')
+      expect(payments.length).toBe(1)
+      expect(payments[0].request_type).toBe('PAYMENT')
+    })
+  })
+
+  /* ============================================================== */
+  /*  Backward-compatible wrappers                                  */
+  /* ============================================================== */
+  describe('backward-compatible wrappers', () => {
+    let innerService: ApprovalWorkflowService
+
+    beforeEach(() => {
+      innerService = new ApprovalWorkflowService(db as any)
+    })
+
+    it('approveRequest delegates to processApproval', () => {
+      const req = innerService.createApprovalRequest({
+        requestType: 'PAYMENT', entityType: 'fee_invoice',
+        entityId: 1, amount: 25000, description: 'Test', requestedBy: 1
+      })
+      const result = innerService.approveRequest(req.requestId!, 1, 'OK', 1)
+      expect(result.success).toBe(true)
+    })
+
+    it('rejectRequest delegates to processApproval', () => {
+      const req = innerService.createApprovalRequest({
+        requestType: 'PAYMENT', entityType: 'fee_invoice',
+        entityId: 1, amount: 25000, description: 'Test', requestedBy: 1
+      })
+      const result = innerService.rejectRequest(req.requestId!, 1, 'No', 1)
+      expect(result.success).toBe(true)
+      expect(result.message).toContain('rejected')
+    })
+
+    it('getRequestHistory returns approval history', () => {
+      const req = innerService.createApprovalRequest({
+        requestType: 'PAYMENT', entityType: 'fee_invoice',
+        entityId: 1, amount: 25000, description: 'Test', requestedBy: 1
+      })
+      const history = innerService.getRequestHistory(req.requestId!)
+      expect(history.request).toBeDefined()
+      expect(history.levels).toBeDefined()
+    })
+
+    it('getPendingRequests returns pending queue', () => {
+      innerService.createApprovalRequest({
+        requestType: 'PAYMENT', entityType: 'fee_invoice',
+        entityId: 1, amount: 25000, description: 'Test', requestedBy: 1
+      })
+      const pending = innerService.getPendingRequests()
+      expect(Array.isArray(pending)).toBe(true)
+      expect(pending.length).toBeGreaterThanOrEqual(1)
+    })
+
+    it('getPendingRequests with requestType filter', () => {
+      innerService.createApprovalRequest({
+        requestType: 'EXPENSE', entityType: 'supplies',
+        entityId: 1, amount: 15000, description: 'Test', requestedBy: 1
+      })
+      const pending = innerService.getPendingRequests(1, 'EXPENSE')
+      expect(pending.every(r => r.request_type === 'EXPENSE')).toBe(true)
+    })
+  })
+
+  /* ============================================================== */
+  /*  processApproval – error handling & edge cases                 */
+  /* ============================================================== */
+  describe('processApproval – error handling', () => {
+    it('returns error when request not found', async () => {
+      const result = await service.processApproval({
+        requestId: 9999,
+        level: 1,
+        decision: 'APPROVED',
+        approverId: 1
+      })
+      expect(result.success).toBe(false)
+      expect(result.message).toContain('not found')
+    })
+
+    it('returns error when approval level not found for request', async () => {
+      const req = await service.createApprovalRequest({
+        requestType: 'PAYMENT', entityType: 'fee_invoice',
+        entityId: 1, amount: 25000, description: 'Test', requestedBy: 1
+      })
+      const result = await service.processApproval({
+        requestId: req.requestId!,
+        level: 99,
+        decision: 'APPROVED',
+        approverId: 1
+      })
+      expect(result.success).toBe(false)
+      expect(result.message).toContain('level 99 not found')
+    })
+
+    it('getApprovalHistory returns undefined request for non-existent id', async () => {
+      const history = await service.getApprovalHistory(9999)
+      expect(history.request).toBeUndefined()
+      expect(history.levels).toHaveLength(0)
+    })
+  })
+
+  // ── branch coverage: processApproval succeeds without comments ──
+  describe('processApproval – no comments branch', () => {
+    it('approves request without comments field', async () => {
+      const req = await service.createApprovalRequest({
+        requestType: 'PAYMENT', entityType: 'fee_invoice',
+        entityId: 99, amount: 25000, description: 'No comments test', requestedBy: 1
+      })
+      const result = await service.processApproval({
+        requestId: req.requestId!,
+        level: 1,
+        decision: 'APPROVED',
+        approverId: 1
+      })
+      expect(result.success).toBe(true)
+    })
+  })
+
+  // ── branch coverage: processApproval catch block ──
+  describe('processApproval – database error', () => {
+    it('returns error when database operation fails', async () => {
+      const req = await service.createApprovalRequest({
+        requestType: 'PAYMENT', entityType: 'fee_invoice',
+        entityId: 100, amount: 25000, description: 'DB error test', requestedBy: 1
+      })
+      // Drop table to force SQL error during updateApprovalLevel
+      ;(db as any).exec('DROP TABLE approval_level')
+      const result = await service.processApproval({
+        requestId: req.requestId!,
+        level: 1,
+        decision: 'APPROVED',
+        approverId: 1
+      })
+      expect(result.success).toBe(false)
+      expect(result.message).toContain('Failed to process approval')
+    })
+  })
+
+  // ── branch coverage: createApprovalRequest catch with non-Error throw (L243) ──
+  describe('createApprovalRequest – non-Error exception', () => {
+    it('returns error message via String(error) for non-Error throw', () => {
+      const innerService = new ApprovalWorkflowService(db as any)
+      const origPrepare = db.prepare.bind(db)
+      vi.spyOn(db, 'prepare').mockImplementation((sql: string) => {
+        if (sql.includes('INSERT INTO approval_request')) { throw 'string error in create' } // NOSONAR
+        return origPrepare(sql)
+      })
+      const result = innerService.createApprovalRequest({
+        requestType: 'PAYMENT', entityType: 'fee_invoice',
+        entityId: 1, amount: 25000, description: 'Test', requestedBy: 1
+      })
+      expect(result.success).toBe(false)
+      expect(result.message).toContain('string error in create')
+      vi.restoreAllMocks()
+    })
+  })
+
+  // ── branch coverage: getApprovalQueue error path (L418-419) ──
+  describe('getApprovalQueue – error handling', () => {
+    it('returns empty array when database query fails', () => {
+      const innerService = new ApprovalWorkflowService(db as any)
+      const origPrepare = db.prepare.bind(db)
+      vi.spyOn(db, 'prepare').mockImplementation((sql: string) => {
+        if (sql.includes('SELECT DISTINCT ar.*')) { throw new Error('DB error') }
+        return origPrepare(sql)
+      })
+      const result = innerService.getApprovalQueue(1)
+      expect(result).toEqual([])
+      vi.restoreAllMocks()
+    })
+  })
+
+  // ── branch coverage: getApprovalHistory non-Error catch (L441) ──
+  describe('getApprovalHistory – non-Error exception', () => {
+    it('throws with String(error) for non-Error exception', () => {
+      const innerService = new ApprovalWorkflowService(db as any)
+      const origPrepare = db.prepare.bind(db)
+      vi.spyOn(db, 'prepare').mockImplementation((sql: string) => {
+        if (sql.includes('SELECT * FROM approval_request WHERE id')) { throw 42 } // NOSONAR
+        return origPrepare(sql)
+      })
+      expect(() => innerService.getApprovalHistory(1)).toThrow('Failed to get approval history: 42')
+      vi.restoreAllMocks()
+    })
+  })
+
+  // ── branch coverage: processApproval catch with non-Error throw (String(error) path) ──
+  describe('processApproval – non-Error exception in catch', () => {
+    it('returns error message via String(error) for non-Error throw', () => {
+      const innerService = new ApprovalWorkflowService(db as any)
+      const req = innerService.createApprovalRequest({
+        requestType: 'PAYMENT', entityType: 'fee_invoice',
+        entityId: 1, amount: 25000, description: 'Non-Error process test', requestedBy: 1
+      })
+      const origPrepare = db.prepare.bind(db)
+      vi.spyOn(db, 'prepare').mockImplementation((sql: string) => {
+        if (sql.includes('UPDATE approval_level')) { throw 'string error in process' } // NOSONAR
+        return origPrepare(sql)
+      })
+      const result = innerService.processApproval({
+        requestId: req.requestId!,
+        level: 1,
+        decision: 'APPROVED',
+        approverId: 1
+      })
+      expect(result.success).toBe(false)
+      expect(result.message).toContain('string error in process')
+      vi.restoreAllMocks()
+    })
+  })
+
+  // ── branch coverage: getMatchingConfigs sort comparator with multiple matching configs ──
+  describe('createApprovalRequest – boundary amount matches multiple configs', () => {
+    it('assigns correct max level when amount sits on boundary of two configs', async () => {
+      // amount 50000 matches both PAYMENT configs: (0-50000, level 1) and (50000-null, level 2)
+      const result = await service.createApprovalRequest({
+        requestType: 'PAYMENT',
+        entityType: 'fee_invoice',
+        entityId: 1,
+        amount: 50000,
+        description: 'Boundary amount test',
+        requestedBy: 1
+      })
+      expect(result.success).toBe(true)
+      expect(result.requiredLevel).toBe(2)
+    })
+  })
 })

@@ -12,6 +12,15 @@ import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 import type { AcademicResult } from '../../types/electron-api/AcademicAPI'
 
+interface MarksResultsContentProps {
+    selectedExam: number
+    selectedAllocation: number
+    loading: boolean
+    results: StudentResult[]
+    isCBC: boolean
+    onScoreChange: (studentId: number, field: keyof StudentResult, value: unknown) => void
+}
+
 interface Exam {
     id: number
     name: string
@@ -36,9 +45,103 @@ interface StudentResult {
     [key: string]: unknown
 }
 
+function MarksResultsContent({
+    selectedExam, selectedAllocation, loading, results, isCBC, onScoreChange
+}: Readonly<MarksResultsContentProps>) {
+    if (!selectedExam || !selectedAllocation) {
+        return (
+            <div className="flex flex-col items-center justify-center h-64 text-foreground/40 space-y-3">
+                <Search className="w-12 h-12 opacity-20" />
+                <p>Select an exam and your allocated subject to begin</p>
+            </div>
+        )
+    }
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-64 text-foreground/40">
+                <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+        )
+    }
+
+    if (results.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center h-64 text-foreground/40 space-y-3 font-semibold">
+                <AlertCircle className="w-12 h-12 text-amber-500 opacity-50" />
+                <p>No students found for the selected class.</p>
+            </div>
+        )
+    }
+
+    return (
+        <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+                <thead>
+                    <tr className="border-b border-border">
+                        <th className="pb-4 pt-2 font-bold text-foreground/60 w-1/4">Student</th>
+                        <th className="pb-4 pt-2 font-bold text-foreground/60 w-1/4">
+                            {isCBC ? 'Competency Level' : 'Score (0-100)'}
+                        </th>
+                        <th className="pb-4 pt-2 font-bold text-foreground/60">Teacher Remarks</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                    {results.map((row: StudentResult) => (
+                        <tr key={row.student_id} className="group hover:bg-secondary/30 transition-colors">
+                            <td className="py-4 pr-4">
+                                <p className="font-bold text-foreground">{row.student_name}</p>
+                                <p className="text-xs text-foreground/40 font-mono tracking-tighter uppercase">{row.admission_number}</p>
+                            </td>
+                            <td className="py-4 pr-4">
+                                {isCBC ? (
+                                    <Select aria-label="Selection"
+                                        value={row.competency_level || 0}
+                                        onChange={(val) => onScoreChange(row.student_id, 'competency_level', Number(val))}
+                                        options={[
+                                            { value: 0, label: 'Select Level...' },
+                                            { value: 4, label: '4 - Exceeding Expectations' },
+                                            { value: 3, label: '3 - Meeting Expectations' },
+                                            { value: 2, label: '2 - Approaching Expectations' },
+                                            { value: 1, label: '1 - Below Expectations' }
+                                        ]}
+                                        className="w-full"
+                                    />
+                                ) : (
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            value={row.score ?? ''}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => onScoreChange(row.student_id, 'score', e.target.value === '' ? null : Number(e.target.value))}
+                                            className="w-full bg-sidebar border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50 text-sm text-center"
+                                            placeholder="0-100"
+                                        />
+                                    </div>
+                                )}
+                            </td>
+                            <td className="py-4">
+                                <input
+                                    type="text"
+                                    value={row.teacher_remarks || ''}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => onScoreChange(row.student_id, 'teacher_remarks', e.target.value)}
+                                    className="w-full bg-sidebar border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50 text-sm"
+                                    placeholder="e.g. Excellent work, keep it up"
+                                />
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    )
+}
+
 export default function MarksEntry() {
-    const { currentAcademicYear, currentTerm } = useAppStore()
-    const { user } = useAuthStore()
+    const currentAcademicYear = useAppStore((s) => s.currentAcademicYear)
+    const currentTerm = useAppStore((s) => s.currentTerm)
+    const user = useAuthStore((s) => s.user)
     const { showToast } = useToast()
 
     const [exams, setExams] = useState<Exam[]>([])
@@ -61,8 +164,8 @@ export default function MarksEntry() {
         }
         try {
             const [examsData, allocationsData] = await Promise.all([
-                globalThis.electronAPI.getAcademicExams(currentAcademicYear.id, currentTerm.id),
-                globalThis.electronAPI.getTeacherAllocations(currentAcademicYear.id, currentTerm.id)
+                globalThis.electronAPI.academic.getAcademicExams(currentAcademicYear.id, currentTerm.id),
+                globalThis.electronAPI.academic.getTeacherAllocations(currentAcademicYear.id, currentTerm.id)
             ])
 
             setExams(unwrapArrayResult(examsData, 'Failed to load exams'))
@@ -90,7 +193,7 @@ export default function MarksEntry() {
         setLoading(true)
         try {
             const data = unwrapArrayResult(
-                await globalThis.electronAPI.getAcademicResults(
+                await globalThis.electronAPI.academic.getAcademicResults(
                     selectedExam, alloc.subject_id, alloc.stream_id, user.id
                 ),
                 'Failed to load student results'
@@ -123,11 +226,11 @@ export default function MarksEntry() {
         }
     }, [selectedExam, selectedAllocation, loadResults])
 
-    const handleScoreChange = (studentId: number, field: keyof StudentResult, value: unknown) => {
+    const handleScoreChange = useCallback((studentId: number, field: keyof StudentResult, value: unknown) => {
         setResults(prev => prev.map(r =>
             r.student_id === studentId ? { ...r, [field]: value } : r
         ))
-    }
+    }, [])
 
     const handleSave = async () => {
         if (!selectedExam) {
@@ -142,7 +245,7 @@ export default function MarksEntry() {
         setSaving(true)
         try {
             unwrapIPCResult(
-                await globalThis.electronAPI.saveAcademicResults(selectedExam, results, user.id),
+                await globalThis.electronAPI.academic.saveAcademicResults(selectedExam, results, user.id),
                 'Failed to save results'
             )
             showToast('Results saved successfully!', 'success')
@@ -167,7 +270,7 @@ export default function MarksEntry() {
         setProcessing(true)
         try {
             unwrapIPCResult(
-                await globalThis.electronAPI.processAcademicResults(selectedExam, user.id),
+                await globalThis.electronAPI.academic.processAcademicResults(selectedExam, user.id),
                 'Failed to process results'
             )
             showToast('Results processed successfully! Ranks have been updated.', 'success')
@@ -181,97 +284,6 @@ export default function MarksEntry() {
 
     const selectedAlloc = allocations.find((a: Allocation) => a.id === selectedAllocation)
     const isCBC = selectedAlloc?.curriculum === 'CBC' || selectedAlloc?.curriculum === 'ECDE'
-
-    const renderResultsContent = () => {
-        if (!selectedExam || !selectedAllocation) {
-            return (
-                <div className="flex flex-col items-center justify-center h-64 text-foreground/40 space-y-3">
-                    <Search className="w-12 h-12 opacity-20" />
-                    <p>Select an exam and your allocated subject to begin</p>
-                </div>
-            )
-        }
-
-        if (loading) {
-            return (
-                <div className="flex items-center justify-center h-64 text-foreground/40">
-                    <Loader2 className="w-8 h-8 animate-spin" />
-                </div>
-            )
-        }
-
-        if (results.length === 0) {
-            return (
-                <div className="flex flex-col items-center justify-center h-64 text-foreground/40 space-y-3 font-semibold">
-                    <AlertCircle className="w-12 h-12 text-amber-500 opacity-50" />
-                    <p>No students found for the selected class.</p>
-                </div>
-            )
-        }
-
-        return (
-            <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="border-b border-border">
-                            <th className="pb-4 pt-2 font-bold text-foreground/60 w-1/4">Student</th>
-                            <th className="pb-4 pt-2 font-bold text-foreground/60 w-1/4">
-                                {isCBC ? 'Competency Level' : 'Score (0-100)'}
-                            </th>
-                            <th className="pb-4 pt-2 font-bold text-foreground/60">Teacher Remarks</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                        {results.map((row: StudentResult) => (
-                            <tr key={row.student_id} className="group hover:bg-secondary/30 transition-colors">
-                                <td className="py-4 pr-4">
-                                    <p className="font-bold text-foreground">{row.student_name}</p>
-                                    <p className="text-xs text-foreground/40 font-mono tracking-tighter uppercase">{row.admission_number}</p>
-                                </td>
-                                <td className="py-4 pr-4">
-                                    {isCBC ? (
-                                        <Select aria-label="Selection"
-                                            value={row.competency_level || 0}
-                                            onChange={(val) => handleScoreChange(row.student_id, 'competency_level', Number(val))}
-                                            options={[
-                                                { value: 0, label: 'Select Level...' },
-                                                { value: 4, label: '4 - Exceeding Expectations' },
-                                                { value: 3, label: '3 - Meeting Expectations' },
-                                                { value: 2, label: '2 - Approaching Expectations' },
-                                                { value: 1, label: '1 - Below Expectations' }
-                                            ]}
-                                            className="w-full"
-                                        />
-                                    ) : (
-                                        <div className="relative">
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                max="100"
-                                                value={row.score ?? ''}
-                                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleScoreChange(row.student_id, 'score', e.target.value === '' ? null : Number(e.target.value))}
-                                                className="w-full bg-sidebar border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50 text-sm text-center"
-                                                placeholder="0-100"
-                                            />
-                                        </div>
-                                    )}
-                                </td>
-                                <td className="py-4">
-                                    <input
-                                        type="text"
-                                        value={row.teacher_remarks || ''}
-                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleScoreChange(row.student_id, 'teacher_remarks', e.target.value)}
-                                        className="w-full bg-sidebar border border-border rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50 text-sm"
-                                        placeholder="e.g. Excellent work, keep it up"
-                                    />
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        )
-    }
 
     return (
         <div className="space-y-8 pb-10">
@@ -334,7 +346,14 @@ export default function MarksEntry() {
 
             {/* Results Grid */}
             <div className="premium-card min-h-[400px]">
-                {renderResultsContent()}
+                <MarksResultsContent
+                    selectedExam={selectedExam}
+                    selectedAllocation={selectedAllocation}
+                    loading={loading}
+                    results={results}
+                    isCBC={isCBC}
+                    onScoreChange={handleScoreChange}
+                />
             </div>
         </div>
     )

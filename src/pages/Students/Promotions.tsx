@@ -1,450 +1,306 @@
 import {
     ArrowUpRight, Users, CheckCircle, AlertCircle, Loader2
 } from 'lucide-react'
-import { useState, useEffect, useCallback } from 'react'
 
-import { buildPromotionRunFeedback, type PromotionRunFeedback } from './promotion-feedback.logic'
+import type { PromotionRunFeedback } from './promotion-feedback.logic'
+import { usePromotions } from './usePromotions'
 import { PageHeader } from '../../components/patterns/PageHeader'
 import { StatCard } from '../../components/patterns/StatCard'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Select } from '../../components/ui/Select'
-import { useToast } from '../../contexts/ToastContext'
-import { useAppStore, useAuthStore } from '../../stores'
 import { type Stream, type AcademicYear, type Term, type PromotionStudent } from '../../types/electron-api/AcademicAPI'
-import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
-import { reportRuntimeError } from '../../utils/runtimeError'
 
-export default function Promotions() {
-    const { currentAcademicYear } = useAppStore()
-    const { user } = useAuthStore()
-    const { showToast } = useToast()
+// --- Sub-components ---
 
-    const [streams, setStreams] = useState<Stream[]>([])
-    const [students, setStudents] = useState<PromotionStudent[]>([])
-    const [selectedStudents, setSelectedStudents] = useState<number[]>([])
-    const [loading, setLoading] = useState(false)
-    const [promoting, setPromoting] = useState(false)
+type PromotionFeedbackPanelProps = Readonly<{
+    feedback: PromotionRunFeedback | null
+}>
 
-    const [fromStream, setFromStream] = useState<number>(0)
-    const [toStream, setToStream] = useState<number>(0)
-    const [academicYears, setAcademicYears] = useState<AcademicYear[]>([])
-    const [toAcademicYear, setToAcademicYear] = useState<number>(0)
-    const [toTerm, setToTerm] = useState<number>(0)
-    const [terms, setTerms] = useState<Term[]>([])
-    const [lastPromotionFeedback, setLastPromotionFeedback] = useState<PromotionRunFeedback | null>(null)
-    const [confirmingPromotion, setConfirmingPromotion] = useState(false)
+function PromotionFeedbackPanel({ feedback }: PromotionFeedbackPanelProps) {
+    if (!feedback) { return null }
 
-    const loadStreams = useCallback(async () => {
-        try {
-            const data = unwrapArrayResult(await globalThis.electronAPI.getPromotionStreams(), 'Failed to load streams')
-            setStreams(data)
-        } catch (error) {
-            reportRuntimeError(error, { area: 'Students.Promotions', action: 'loadStreams' }, 'Failed to load streams')
-            setStreams([])
-            setFromStream(0)
-            setToStream(0)
-            setStudents([])
-            setSelectedStudents([])
-            showToast(error instanceof Error ? error.message : 'Failed to load streams', 'error')
-        }
-    }, [showToast])
+    const hasFailures = feedback.failed > 0
+    const borderTone = hasFailures ? 'border-amber-500/30' : 'border-emerald-500/30'
+    const badgeTone = hasFailures
+        ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+        : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
 
-    const loadAcademicYears = useCallback(async () => {
-        try {
-            const data = unwrapArrayResult(await globalThis.electronAPI.getAcademicYears(), 'Failed to load academic years')
-            setAcademicYears(data)
-            // Prefer a non-current year as promotion destination.
-            const targetYear = data.find((year) => !year.is_current) || data[0] || null
-            if (targetYear) {
-                setToAcademicYear(targetYear.id)
-            }
-        } catch (error) {
-            reportRuntimeError(error, { area: 'Students.Promotions', action: 'loadAcademicYears' }, 'Failed to load academic years')
-            setAcademicYears([])
-            setToAcademicYear(0)
-            setTerms([])
-            setToTerm(0)
-            showToast(error instanceof Error ? error.message : 'Failed to load academic years', 'error')
-        }
-    }, [showToast])
-
-    const loadTerms = useCallback(async () => {
-        if (!toAcademicYear) {
-            setTerms([])
-            setToTerm(0)
-            return
-        }
-        try {
-            const data = unwrapArrayResult(await globalThis.electronAPI.getTermsByYear(toAcademicYear), 'Failed to load terms')
-            setTerms(data)
-            if (data.length > 0 && data[0]) {
-                setToTerm(data[0].id)
-            }
-        } catch (error) {
-            reportRuntimeError(error, { area: 'Students.Promotions', action: 'loadTerms' }, 'Failed to load terms')
-            setTerms([])
-            setToTerm(0)
-            showToast(error instanceof Error ? error.message : 'Failed to load terms', 'error')
-        }
-    }, [showToast, toAcademicYear])
-
-    useEffect(() => {
-        loadStreams().catch((err: unknown) => console.error('Failed to load streams', err))
-        loadAcademicYears().catch((err: unknown) => console.error('Failed to load academic years', err))
-    }, [loadStreams, loadAcademicYears])
-
-    useEffect(() => {
-        if (toAcademicYear) {
-            loadTerms().catch((err: unknown) => console.error('Failed to load terms', err))
-        }
-    }, [toAcademicYear, loadTerms])
-
-    const loadStudents = useCallback(async () => {
-        if (!currentAcademicYear) {
-            setStudents([])
-            setSelectedStudents([])
-            return
-        }
-        setLoading(true)
-        try {
-            const data = unwrapArrayResult(
-                await globalThis.electronAPI.getStudentsForPromotion(fromStream, currentAcademicYear.id),
-                'Failed to load students for promotion'
-            )
-            setStudents(data)
-            setSelectedStudents([])
-        } catch (error) {
-            reportRuntimeError(error, { area: 'Students.Promotions', action: 'loadStudents' }, 'Failed to load students')
-            setStudents([])
-            setSelectedStudents([])
-            showToast(error instanceof Error ? error.message : 'Failed to load students for promotion', 'error')
-        } finally {
-            setLoading(false)
-        }
-    }, [fromStream, currentAcademicYear, showToast])
-
-    const suggestNextStream = useCallback(async () => {
-        try {
-            const next = unwrapIPCResult<Stream | null>(
-                await globalThis.electronAPI.getNextStream(fromStream),
-                'Failed to get next stream'
-            )
-            if (next) {
-                setToStream(next.id)
-            }
-        } catch (error) {
-            reportRuntimeError(error, { area: 'Students.Promotions', action: 'suggestNextStream' }, 'Failed to get next stream')
-            showToast(error instanceof Error ? error.message : 'Failed to get next stream', 'error')
-        }
-    }, [fromStream, showToast])
-
-    useEffect(() => {
-        if (fromStream && currentAcademicYear) {
-            loadStudents().catch((err: unknown) => {
-                reportRuntimeError(err, { area: 'Students.Promotions', action: 'loadStudentsEffect' }, 'Failed to load students for promotion')
-            })
-            suggestNextStream().catch((err: unknown) => {
-                reportRuntimeError(err, { area: 'Students.Promotions', action: 'suggestNextStreamEffect' }, 'Failed to suggest next stream')
-            })
-            return
-        }
-        setStudents([])
-        setSelectedStudents([])
-    }, [fromStream, currentAcademicYear, loadStudents, suggestNextStream])
-
-    const toggleStudent = (studentId: number) => {
-        setSelectedStudents(prev =>
-            prev.includes(studentId)
-                ? prev.filter(id => id !== studentId)
-                : [...prev, studentId]
-        )
-    }
-
-    const selectAll = () => {
-        if (selectedStudents.length === students.length) {
-            setSelectedStudents([])
-        } else {
-            setSelectedStudents(students.map(s => s.student_id))
-        }
-    }
-
-    const handlePromote = () => {
-        if (!currentAcademicYear) {
-            showToast('No active academic year selected', 'error')
-            return
-        }
-        if (!user?.id) {
-            showToast('You must be signed in to promote students', 'error')
-            return
-        }
-        if (selectedStudents.length === 0) {
-            showToast('Please select students to promote', 'warning')
-            return
-        }
-        if (!toStream || !toAcademicYear || !toTerm) {
-            showToast('Please select destination stream, academic year, and term', 'warning')
-            return
-        }
-
-        setConfirmingPromotion(true)
-    }
-
-    const executePromotion = async () => {
-        if (!currentAcademicYear) {
-            showToast('No active academic year selected', 'error')
-            return
-        }
-        if (!user?.id) {
-            showToast('You must be signed in to promote students', 'error')
-            return
-        }
-
-        setConfirmingPromotion(false)
-        setLastPromotionFeedback(null)
-        setPromoting(true)
-        try {
-            const result = await globalThis.electronAPI.batchPromoteStudents(
-                selectedStudents,
-                fromStream,
-                toStream,
-                currentAcademicYear.id,
-                toAcademicYear,
-                toTerm,
-                user.id
-            )
-
-            setLastPromotionFeedback(buildPromotionRunFeedback(result, selectedStudents, students))
-
-            if (result.success) {
-                showToast(`Successfully promoted ${result.promoted} students`, 'success')
-                await loadStudents()
-            } else {
-                showToast(`Promotion completed with ${result.failed} failure(s)`, 'warning')
-                if (result.promoted > 0) {
-                    await loadStudents()
-                }
-            }
-        } catch (error) {
-            const errorMessage = reportRuntimeError(error, { area: 'Students.Promotions', action: 'executePromotion' }, 'Failed to promote students')
-            setLastPromotionFeedback({
-                attempted: selectedStudents.length,
-                promoted: 0,
-                failed: selectedStudents.length,
-                errors: [errorMessage],
-                failureDetails: []
-            })
-            showToast(errorMessage, 'error')
-        } finally {
-            setPromoting(false)
-        }
-    }
-
-    const renderPromotionFeedback = () => {
-        if (!lastPromotionFeedback) { return null }
-
-        const hasFailures = lastPromotionFeedback.failed > 0
-        const borderTone = hasFailures ? 'border-amber-500/30' : 'border-emerald-500/30'
-        const badgeTone = hasFailures
-            ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-            : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-
-        return (
-            <div className={`premium-card border ${borderTone}`}>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h3 className="text-lg font-bold text-foreground">Last Promotion Run</h3>
-                    <span className={`text-xs px-3 py-1 rounded-full border ${badgeTone}`}>
-                        Promoted {lastPromotionFeedback.promoted} / Failed {lastPromotionFeedback.failed}
-                    </span>
-                </div>
-
-                <p className="text-sm text-foreground/70 mt-2">
-                    Attempted {lastPromotionFeedback.attempted} student{lastPromotionFeedback.attempted === 1 ? '' : 's'}.
-                </p>
-
-                {lastPromotionFeedback.errors.length > 0 && (
-                    <div className="mt-4 space-y-2">
-                        {lastPromotionFeedback.errors.map(error => (
-                            <p key={error} className="text-sm text-amber-200">
-                                {error}
-                            </p>
-                        ))}
-                    </div>
-                )}
-
-                {lastPromotionFeedback.failureDetails.length > 0 && (
-                    <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3">
-                        {lastPromotionFeedback.failureDetails.map(detail => (
-                            <div key={`${detail.student_id}-${detail.reason}`} className="rounded-xl border border-border/40 bg-secondary/20 p-3">
-                                <p className="text-sm font-semibold text-foreground">{detail.student_name}</p>
-                                <p className="text-xs text-foreground/50 font-mono">{detail.admission_number}</p>
-                                <p className="text-sm text-foreground/70 mt-2">{detail.reason}</p>
-                            </div>
-                        ))}
-                    </div>
-                )}
+    return (
+        <div className={`premium-card border ${borderTone}`}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-lg font-bold text-foreground">Last Promotion Run</h3>
+                <span className={`text-xs px-3 py-1 rounded-full border ${badgeTone}`}>
+                    Promoted {feedback.promoted} / Failed {feedback.failed}
+                </span>
             </div>
-        )
-    }
 
-    const renderStudents = () => {
-        if (loading) {
-            return <div className="text-center py-16 text-foreground/40">Loading students...</div>
-        }
+            <p className="text-sm text-foreground/70 mt-2">
+                Attempted {feedback.attempted} student{feedback.attempted === 1 ? '' : 's'}.
+            </p>
 
-        if (students.length === 0) {
-            return (
-                <div className="text-center py-16 text-foreground/40">
-                    {fromStream ? 'No students found in this class' : 'Select a class to view students'}
+            {feedback.errors.length > 0 && (
+                <div className="mt-4 space-y-2">
+                    {feedback.errors.map(error => (
+                        <p key={error} className="text-sm text-amber-200">
+                            {error}
+                        </p>
+                    ))}
                 </div>
-            )
-        }
+            )}
 
-        return (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {students.map(student => (
-                    <button
-                        key={student.student_id}
-                        type="button"
-                        onClick={() => toggleStudent(student.student_id)}
-                        aria-label={`Toggle student ${student.student_name}`}
-                        className={`w-full text-left p-4 rounded-xl border cursor-pointer transition-all duration-300 ${selectedStudents.includes(student.student_id)
-                            ? 'bg-primary/10 border-primary/40'
-                            : 'bg-secondary/30 border-border/20 hover:border-primary/30 hover:bg-secondary/50'
-                            }`}
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors duration-300 ${selectedStudents.includes(student.student_id)
-                                ? 'bg-primary border-primary'
-                                : 'border-border/60 bg-background'
-                                }`}>
-                                {selectedStudents.includes(student.student_id) && (
-                                    <CheckCircle className="w-3 h-3 text-primary-foreground" />
-                                )}
-                            </div>
-                            <div>
-                                <p className="font-bold text-foreground">{student.student_name}</p>
-                                <p className="text-xs text-foreground/40 font-mono">{student.admission_number}</p>
-                            </div>
+            {feedback.failureDetails.length > 0 && (
+                <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    {feedback.failureDetails.map(detail => (
+                        <div key={`${detail.student_id}-${detail.reason}`} className="rounded-xl border border-border/40 bg-secondary/20 p-3">
+                            <p className="text-sm font-semibold text-foreground">{detail.student_name}</p>
+                            <p className="text-xs text-foreground/50 font-mono">{detail.admission_number}</p>
+                            <p className="text-sm text-foreground/70 mt-2">{detail.reason}</p>
                         </div>
-                    </button>
-                ))}
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
+
+type PromotionSettingsPanelProps = Readonly<{
+    streams: Stream[]
+    academicYears: AcademicYear[]
+    terms: Term[]
+    fromStream: number
+    toStream: number
+    toAcademicYear: number
+    toTerm: number
+    onFromStreamChange: (val: number) => void
+    onToStreamChange: (val: number) => void
+    onToAcademicYearChange: (val: number) => void
+    onToTermChange: (val: number) => void
+}>
+
+function PromotionSettingsPanel({
+    streams, academicYears, terms, fromStream, toStream, toAcademicYear, toTerm,
+    onFromStreamChange, onToStreamChange, onToAcademicYearChange, onToTermChange
+}: PromotionSettingsPanelProps) {
+    return (
+        <div className="premium-card">
+            <h3 className="text-lg font-bold text-foreground mb-4">Promotion Settings</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Select
+                    label="From Class"
+                    value={fromStream}
+                    onChange={(val) => onFromStreamChange(Number(val))}
+                    options={[
+                        { value: 0, label: 'Select class...' },
+                        ...streams.map(s => ({ value: s.id, label: s.stream_name }))
+                    ]}
+                />
+                <Select
+                    label="To Class"
+                    value={toStream}
+                    onChange={(val) => onToStreamChange(Number(val))}
+                    options={[
+                        { value: 0, label: 'Select class...' },
+                        ...streams.map(s => ({ value: s.id, label: s.stream_name }))
+                    ]}
+                />
+                <Select
+                    label="To Academic Year"
+                    value={toAcademicYear}
+                    onChange={(val) => onToAcademicYearChange(Number(val))}
+                    options={[
+                        { value: 0, label: 'Select year...' },
+                        ...academicYears.map(y => ({ value: y.id, label: y.year_name }))
+                    ]}
+                />
+                <Select
+                    label="To Term"
+                    value={toTerm}
+                    onChange={(val) => onToTermChange(Number(val))}
+                    options={[
+                        { value: 0, label: 'Select term...' },
+                        ...terms.map(t => ({ value: t.id, label: t.term_name }))
+                    ]}
+                />
+            </div>
+        </div>
+    )
+}
+
+type StudentListSectionProps = Readonly<{
+    loading: boolean
+    students: PromotionStudent[]
+    selectedStudents: number[]
+    fromStream: number
+    promoting: boolean
+    onToggleStudent: (studentId: number) => void
+    onSelectAll: () => void
+    onPromote: () => void
+}>
+
+function StudentListSection({
+    loading, students, selectedStudents, fromStream, promoting,
+    onToggleStudent, onSelectAll, onPromote
+}: StudentListSectionProps) {
+    if (loading) {
+        return (
+            <div className="premium-card">
+                <div className="text-center py-16 text-foreground/40">Loading students...</div>
             </div>
         )
     }
 
     return (
-        <div className="space-y-8 pb-10">
+        <div className="premium-card">
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-foreground">Students</h3>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={onSelectAll}
+                        className="btn btn-secondary text-sm"
+                    >
+                        {selectedStudents.length === students.length ? 'Deselect All' : 'Select All'}
+                    </button>
+                    <button
+                        onClick={onPromote}
+                        disabled={promoting || selectedStudents.length === 0}
+                        className="btn btn-primary flex items-center gap-2"
+                    >
+                        {promoting ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <ArrowUpRight className="w-4 h-4" />
+                        )}
+                        Promote Selected ({selectedStudents.length})
+                    </button>
+                </div>
+            </div>
+
+            {students.length === 0 ? (
+                <div className="text-center py-16 text-foreground/40">
+                    {fromStream ? 'No students found in this class' : 'Select a class to view students'}
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {students.map(student => (
+                        <button
+                            key={student.student_id}
+                            type="button"
+                            onClick={() => onToggleStudent(student.student_id)}
+                            aria-label={`Toggle student ${student.student_name}`}
+                            className={`w-full text-left p-4 rounded-xl border cursor-pointer transition-all duration-300 ${selectedStudents.includes(student.student_id)
+                                ? 'bg-primary/10 border-primary/40'
+                                : 'bg-secondary/30 border-border/20 hover:border-primary/30 hover:bg-secondary/50'
+                                }`}
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors duration-300 ${selectedStudents.includes(student.student_id)
+                                    ? 'bg-primary border-primary'
+                                    : 'border-border/60 bg-background'
+                                    }`}>
+                                    {selectedStudents.includes(student.student_id) && (
+                                        <CheckCircle className="w-3 h-3 text-primary-foreground" />
+                                    )}
+                                </div>
+                                <div>
+                                    <p className="font-bold text-foreground">{student.student_name}</p>
+                                    <p className="text-xs text-foreground/40 font-mono">{student.admission_number}</p>
+                                </div>
+                            </div>
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
+
+type PromotionHeaderSectionProps = Readonly<{
+    studentCount: number
+    selectedCount: number
+}>
+
+function PromotionHeaderSection({ studentCount, selectedCount }: PromotionHeaderSectionProps) {
+    return (
+        <>
             <PageHeader
                 title="Student Promotions"
                 subtitle="Promote students to the next class"
                 breadcrumbs={[{ label: 'Students', href: '/students' }, { label: 'Promotions' }]}
             />
 
-            {/* Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <StatCard
                     label="Students in Class"
-                    value={students.length.toString()}
+                    value={studentCount.toString()}
                     icon={Users}
                     color="from-blue-500/20 to-indigo-500/20 text-blue-500"
                 />
                 <StatCard
                     label="Selected"
-                    value={selectedStudents.length.toString()}
+                    value={selectedCount.toString()}
                     icon={CheckCircle}
                     color="from-emerald-500/20 to-teal-500/20 text-emerald-500"
                 />
                 <StatCard
                     label="Pending"
-                    value={(students.length - selectedStudents.length).toString()}
+                    value={(studentCount - selectedCount).toString()}
                     icon={AlertCircle}
                     color="from-amber-500/20 to-orange-500/20 text-amber-500"
                 />
             </div>
+        </>
+    )
+}
 
-            {/* Filters */}
-            <div className="premium-card">
-                <h3 className="text-lg font-bold text-foreground mb-4">Promotion Settings</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <Select
-                        label="From Class"
-                        value={fromStream}
-                        onChange={(val) => setFromStream(Number(val))}
-                        options={[
-                            { value: 0, label: 'Select class...' },
-                            ...streams.map(s => ({ value: s.id, label: s.stream_name }))
-                        ]}
-                    />
+export default function Promotions() {
+    const {
+        streams, students, selectedStudents, academicYears, terms,
+        lastPromotionFeedback, loading, promoting,
+        fromStream, toStream, toAcademicYear, toTerm, confirmingPromotion,
+        setFromStream, setToStream, setToAcademicYear, setToTerm,
+        toggleStudent, selectAll, handlePromote, executePromotion, cancelPromotion,
+    } = usePromotions()
 
-                    <Select
-                        label="To Class"
-                        value={toStream}
-                        onChange={(val) => setToStream(Number(val))}
-                        options={[
-                            { value: 0, label: 'Select class...' },
-                            ...streams.map(s => ({ value: s.id, label: s.stream_name }))
-                        ]}
-                    />
+    return (
+        <div className="space-y-8 pb-10">
+            <PromotionHeaderSection
+                studentCount={students.length}
+                selectedCount={selectedStudents.length}
+            />
 
-                    <Select
-                        label="To Academic Year"
-                        value={toAcademicYear}
-                        onChange={(val) => setToAcademicYear(Number(val))}
-                        options={[
-                            { value: 0, label: 'Select year...' },
-                            ...academicYears.map(y => ({ value: y.id, label: y.year_name }))
-                        ]}
-                    />
+            <PromotionSettingsPanel
+                streams={streams}
+                academicYears={academicYears}
+                terms={terms}
+                fromStream={fromStream}
+                toStream={toStream}
+                toAcademicYear={toAcademicYear}
+                toTerm={toTerm}
+                onFromStreamChange={setFromStream}
+                onToStreamChange={setToStream}
+                onToAcademicYearChange={setToAcademicYear}
+                onToTermChange={setToTerm}
+            />
 
-                    <Select
-                        label="To Term"
-                        value={toTerm}
-                        onChange={(val) => setToTerm(Number(val))}
-                        options={[
-                            { value: 0, label: 'Select term...' },
-                            ...terms.map(t => ({ value: t.id, label: t.term_name }))
-                        ]}
-                    />
-                </div>
-            </div>
+            <PromotionFeedbackPanel feedback={lastPromotionFeedback} />
 
-            {renderPromotionFeedback()}
-
-            {/* Students List */}
-            <div className="premium-card">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-bold text-foreground">Students</h3>
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={selectAll}
-                            className="btn btn-secondary text-sm"
-                        >
-                            {selectedStudents.length === students.length ? 'Deselect All' : 'Select All'}
-                        </button>
-                        <button
-                            onClick={handlePromote}
-                            disabled={promoting || selectedStudents.length === 0}
-                            className="btn btn-primary flex items-center gap-2"
-                        >
-                            {promoting ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                                <ArrowUpRight className="w-4 h-4" />
-                            )}
-                            Promote Selected ({selectedStudents.length})
-                        </button>
-                    </div>
-                </div>
-
-                {renderStudents()}
-            </div>
+            <StudentListSection
+                loading={loading}
+                students={students}
+                selectedStudents={selectedStudents}
+                fromStream={fromStream}
+                promoting={promoting}
+                onToggleStudent={toggleStudent}
+                onSelectAll={selectAll}
+                onPromote={handlePromote}
+            />
 
             <ConfirmDialog
                 isOpen={confirmingPromotion}
                 title="Confirm Promotion"
                 message={`Promote ${selectedStudents.length} selected student${selectedStudents.length === 1 ? '' : 's'} to the selected class and academic term?`}
                 confirmLabel="Promote Students"
-                onCancel={() => setConfirmingPromotion(false)}
+                onCancel={cancelPromotion}
                 onConfirm={() => { void executePromotion() }}
                 isProcessing={promoting}
             />

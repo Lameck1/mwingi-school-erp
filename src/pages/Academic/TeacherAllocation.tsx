@@ -37,8 +37,9 @@ interface Allocation {
 }
 
 export default function TeacherAllocation() {
-    const { currentAcademicYear, currentTerm } = useAppStore()
-    const { user } = useAuthStore()
+    const currentAcademicYear = useAppStore((s) => s.currentAcademicYear)
+    const currentTerm = useAppStore((s) => s.currentTerm)
+    const user = useAuthStore((s) => s.user)
     const { showToast } = useToast()
 
     const [streams, setStreams] = useState<Stream[]>([])
@@ -58,13 +59,13 @@ export default function TeacherAllocation() {
             if (currentAcademicYear && currentTerm) {
                 setLoading(true)
                 const [allocationsData, streamsData, subjectsData] = await Promise.all([
-                    globalThis.electronAPI.getTeacherAllocations(
+                    globalThis.electronAPI.academic.getTeacherAllocations(
                         currentAcademicYear.id,
                         currentTerm.id,
                         selectedStream || undefined
                     ),
-                    globalThis.electronAPI.getStreams(),
-                    globalThis.electronAPI.getAcademicSubjects()
+                    globalThis.electronAPI.academic.getStreams(),
+                    globalThis.electronAPI.academic.getAcademicSubjects()
                 ])
 
                 setAllocations(unwrapArrayResult(allocationsData, 'Failed to load allocations'))
@@ -84,7 +85,7 @@ export default function TeacherAllocation() {
 
     const loadInitialData = useCallback(async () => {
         try {
-            const staffData = await globalThis.electronAPI.getStaff()
+            const staffData = await globalThis.electronAPI.staff.getStaff()
             setStaff(unwrapArrayResult(staffData, 'Failed to load staff list'))
         } catch (error) {
             console.error('Failed to load initial data:', error)
@@ -110,7 +111,7 @@ export default function TeacherAllocation() {
         setSaving(true)
         try {
             unwrapIPCResult(
-                await globalThis.electronAPI.allocateTeacher({
+                await globalThis.electronAPI.academic.allocateTeacher({
                     academic_year_id: currentAcademicYear.id,
                     term_id: currentTerm.id,
                     stream_id: selectedStream,
@@ -142,7 +143,7 @@ export default function TeacherAllocation() {
         }
         try {
             unwrapIPCResult(
-                await globalThis.electronAPI.deleteTeacherAllocation(allocationId, user.id),
+                await globalThis.electronAPI.academic.deleteTeacherAllocation(allocationId, user.id),
                 'Failed to remove teacher allocation'
             )
             await loadAllocations()

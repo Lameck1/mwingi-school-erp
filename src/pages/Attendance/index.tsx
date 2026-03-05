@@ -75,8 +75,9 @@ function StudentAttendanceRow({ student, statusButtons, onStatusChange }: Studen
 }
 
 export default function Attendance() {
-    const { currentAcademicYear, currentTerm } = useAppStore()
-    const { user } = useAuthStore()
+    const currentAcademicYear = useAppStore((s) => s.currentAcademicYear)
+    const currentTerm = useAppStore((s) => s.currentTerm)
+    const user = useAuthStore((s) => s.user)
     const { showToast } = useToast()
 
     const [streams, setStreams] = useState<Stream[]>([])
@@ -100,7 +101,7 @@ export default function Attendance() {
     const loadStreams = useCallback(async () => {
         try {
             const data = unwrapArrayResult(
-                await globalThis.electronAPI.getStreams(),
+                await globalThis.electronAPI.academic.getStreams(),
                 'Failed to load streams'
             )
             setStreams(data)
@@ -121,7 +122,7 @@ export default function Attendance() {
         try {
             // Get enrolled students
             const enrolled = unwrapArrayResult(
-                await globalThis.electronAPI.getStudentsForAttendance(
+                await globalThis.electronAPI.academic.getStudentsForAttendance(
                     selectedStream, currentAcademicYear.id, currentTerm.id
                 ),
                 'Failed to load enrolled students'
@@ -129,7 +130,7 @@ export default function Attendance() {
 
             // Get existing attendance for this date
             const existing = unwrapArrayResult(
-                await globalThis.electronAPI.getAttendanceByDate(
+                await globalThis.electronAPI.academic.getAttendanceByDate(
                     Number(selectedStream),
                     selectedDate,
                     currentAcademicYear.id,
@@ -217,8 +218,8 @@ export default function Attendance() {
                 notes: s.notes || undefined
             }))
 
-            const result = await globalThis.electronAPI.markAttendance(
-                entries as Parameters<typeof globalThis.electronAPI.markAttendance>[0], selectedStream, selectedDate, currentAcademicYear.id, currentTerm.id, user.id
+            const result = await globalThis.electronAPI.academic.markAttendance(
+                entries as Parameters<typeof globalThis.electronAPI.academic.markAttendance>[0], selectedStream, selectedDate, currentAcademicYear.id, currentTerm.id, user.id
             )
 
             if (result.success) {

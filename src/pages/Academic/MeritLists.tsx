@@ -35,8 +35,59 @@ const getGradeBadgeClass = (grade: string): string => {
   return 'bg-gray-500';
 };
 
+interface MeritTableProps {
+  streamName: string;
+  academicYearName: string;
+  termName: string;
+  meritList: MeritListItem[];
+}
+
+function MeritTable({ streamName, academicYearName, termName, meritList }: Readonly<MeritTableProps>) {
+  return (
+    <div>
+      <div className="mb-4 print:text-black">
+        <h2 className="text-xl font-bold mb-2">Merit List - {streamName}</h2>
+        <p className="text-sm text-foreground/60">
+          Academic Year: {academicYearName} | Term: {termName}
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse print:text-black">
+          <thead>
+            <tr className="border-b border-border print:border-black">
+              <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Position</th>
+              <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Adm No.</th>
+              <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Name</th>
+              <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Total Marks</th>
+              <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Average</th>
+              <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Grade</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border print:divide-black">
+            {meritList.map((row) => (
+              <tr key={row.admission_number} className="group hover:bg-secondary/30 transition-colors print:hover:bg-card">
+                <td className="py-4 pr-4 print:text-black">{row.position}</td>
+                <td className="py-4 pr-4 print:text-black">{row.admission_number}</td>
+                <td className="py-4 pr-4 print:text-black">{row.student_name}</td>
+                <td className="py-4 pr-4 print:text-black">{row.total_marks}</td>
+                <td className="py-4 pr-4 print:text-black">{row.average_marks.toFixed(2)}</td>
+                <td className="py-4 pr-4 print:text-black">
+                  <span className={`px-2 py-1 rounded text-sm font-semibold text-white ${getGradeBadgeClass(row.grade)}`}>
+                    {row.grade}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 const MeritLists = () => {
-  const { currentAcademicYear, currentTerm } = useAppStore();
+  const currentAcademicYear = useAppStore((s) => s.currentAcademicYear);
+  const currentTerm = useAppStore((s) => s.currentTerm);
   const { showToast } = useToast();
 
   const [streams, setStreams] = useState<{ id: number; stream_name: string }[]>([]);
@@ -48,7 +99,7 @@ const MeritLists = () => {
 
   const loadInitialData = useCallback(async () => {
     try {
-      const streamsData = unwrapArrayResult(await globalThis.electronAPI.getStreams(), 'Failed to load streams');
+      const streamsData = unwrapArrayResult(await globalThis.electronAPI.academic.getStreams(), 'Failed to load streams');
       setStreams(streamsData);
     } catch (error) {
       console.error('Failed to load initial data:', error);
@@ -69,7 +120,7 @@ const MeritLists = () => {
     setLoading(true);
     try {
       const list = unwrapArrayResult(
-        await globalThis.electronAPI.generateMeritList({
+        await globalThis.electronAPI.academic.generateMeritList({
           academicYearId: currentAcademicYear.id,
           termId: currentTerm.id,
           streamId: selectedStream,
@@ -195,44 +246,12 @@ const MeritLists = () => {
     }
 
     return (
-      <div>
-        <div className="mb-4 print:text-black">
-          <h2 className="text-xl font-bold mb-2">Merit List - {getStreamName()}</h2>
-          <p className="text-sm text-foreground/60">
-            Academic Year: {currentAcademicYear?.year_name} | Term: {currentTerm?.term_name}
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse print:text-black">
-            <thead>
-              <tr className="border-b border-border print:border-black">
-                <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Position</th>
-                <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Adm No.</th>
-                <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Name</th>
-                <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Total Marks</th>
-                <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Average</th>
-                <th className="pb-4 pt-2 font-bold text-foreground/60 print:text-black">Grade</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border print:divide-black">
-              {meritList.map((row) => (
-                <tr key={row.admission_number} className="group hover:bg-secondary/30 transition-colors print:hover:bg-card">
-                  <td className="py-4 pr-4 print:text-black">{row.position}</td>
-                  <td className="py-4 pr-4 print:text-black">{row.admission_number}</td>
-                  <td className="py-4 pr-4 print:text-black">{row.student_name}</td>
-                  <td className="py-4 pr-4 print:text-black">{row.total_marks}</td>
-                  <td className="py-4 pr-4 print:text-black">{row.average_marks.toFixed(2)}</td>
-                  <td className="py-4 pr-4 print:text-black">
-                    <span className={`px-2 py-1 rounded text-sm font-semibold text-white ${getGradeBadgeClass(row.grade)}`}>
-                      {row.grade}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <MeritTable
+        streamName={getStreamName()}
+        academicYearName={currentAcademicYear?.year_name || ''}
+        termName={currentTerm?.term_name || ''}
+        meritList={meritList}
+      />
     );
   };
 

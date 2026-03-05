@@ -29,8 +29,116 @@ function toBoolean(value: boolean | number | null | undefined): boolean {
   return value === true || value === 1
 }
 
+interface SubjectsContentProps {
+  loading: boolean
+  subjects: AcademicSubject[]
+  saving: boolean
+  onOpenCreate: () => void
+  onOpenEdit: (subject: AcademicSubject) => void
+  onToggleActive: (subject: AcademicSubject, desired: boolean) => void
+}
+
+function SubjectsContent({
+  loading, subjects, saving, onOpenCreate, onOpenEdit, onToggleActive
+}: Readonly<SubjectsContentProps>) {
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+        <p className="text-xs font-bold uppercase tracking-widest text-foreground/40">Loading Subjects...</p>
+      </div>
+    )
+  }
+
+  if (subjects.length === 0) {
+    return (
+      <div className="text-center py-24 bg-secondary/5 rounded-3xl border border-dashed border-border/40 m-4">
+        <BookOpen className="w-16 h-16 text-foreground/10 mx-auto mb-4" />
+        <h3 className="text-xl font-bold text-foreground/80 font-heading">No Subjects Found</h3>
+        <p className="text-foreground/40 font-medium italic mb-6">Add subjects to enable allocations and exam workflows</p>
+        <button onClick={onOpenCreate} className="btn btn-secondary border-2 border-dashed px-8">Add First Subject</button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="data-table">
+        <thead>
+          <tr className="border-b border-border/40">
+            <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Code</th>
+            <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Name</th>
+            <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Curriculum</th>
+            <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Compulsory</th>
+            <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Status</th>
+            <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40 text-right px-6">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border/10">
+          {subjects.map((subject) => {
+            const active = toBoolean(subject.is_active)
+            return (
+              <tr key={subject.id} className="group hover:bg-secondary/20 transition-colors">
+                <td className="py-4">
+                  <span className="font-mono text-xs font-bold text-primary/60">{subject.code}</span>
+                </td>
+                <td className="py-4">
+                  <span className="font-bold text-foreground">{subject.name}</span>
+                </td>
+                <td className="py-4">
+                  <span className="text-xs font-bold text-foreground/60 uppercase tracking-wide">{subject.curriculum}</span>
+                </td>
+                <td className="py-4">
+                  <span className="text-xs font-semibold text-foreground/60">{toBoolean(subject.is_compulsory) ? 'Yes' : 'No'}</span>
+                </td>
+                <td className="py-4">
+                  <span className={`px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-widest flex items-center gap-2 w-fit border ${active ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-sm shadow-emerald-500/10' : 'bg-destructive/10 text-destructive border-destructive/20'
+                    }`}>
+                    <div className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-emerald-500 animate-pulse' : 'bg-destructive'}`} />
+                    {active ? 'ACTIVE' : 'INACTIVE'}
+                  </span>
+                </td>
+                <td className="py-4 px-6 text-right">
+                  <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => onOpenEdit(subject)}
+                      className="p-2.5 bg-background border border-border/40 hover:border-blue-500/50 hover:text-blue-500 rounded-xl transition-all shadow-sm"
+                      aria-label="Edit subject"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    {active ? (
+                      <button
+                        onClick={() => onToggleActive(subject, false)}
+                        className="p-2.5 bg-background border border-border/40 hover:border-destructive/50 hover:text-destructive rounded-xl transition-all shadow-sm"
+                        disabled={saving}
+                        aria-label="Deactivate subject"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => onToggleActive(subject, true)}
+                        className="p-2.5 bg-background border border-border/40 hover:border-emerald-500/50 hover:text-emerald-500 rounded-xl transition-all shadow-sm"
+                        disabled={saving}
+                        aria-label="Activate subject"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export default function SubjectManagement() {
-  const { user } = useAuthStore()
+  const user = useAuthStore((s) => s.user)
   const { showToast } = useToast()
   const [subjects, setSubjects] = useState<AcademicSubject[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,7 +156,7 @@ export default function SubjectManagement() {
   const loadSubjects = useCallback(async () => {
     setLoading(true)
     try {
-      const data = unwrapArrayResult(await globalThis.electronAPI.getAcademicSubjectsAdmin(), 'Failed to load subjects')
+      const data = unwrapArrayResult(await globalThis.electronAPI.academic.getAcademicSubjectsAdmin(), 'Failed to load subjects')
       setSubjects(data)
     } catch (error) {
       console.error('Failed to load subjects:', error)
@@ -95,7 +203,7 @@ export default function SubjectManagement() {
     try {
       if (editing) {
         unwrapIPCResult(
-          await globalThis.electronAPI.updateAcademicSubject(editing.id, {
+          await globalThis.electronAPI.academic.updateAcademicSubject(editing.id, {
             code: form.code.trim().toUpperCase(),
             name: form.name.trim(),
             curriculum: form.curriculum,
@@ -107,7 +215,7 @@ export default function SubjectManagement() {
         showToast('Subject updated', 'success')
       } else {
         unwrapIPCResult(
-          await globalThis.electronAPI.createAcademicSubject({
+          await globalThis.electronAPI.academic.createAcademicSubject({
             code: form.code.trim().toUpperCase(),
             name: form.name.trim(),
             curriculum: form.curriculum,
@@ -136,7 +244,7 @@ export default function SubjectManagement() {
     setSaving(true)
     try {
       unwrapIPCResult(
-        await globalThis.electronAPI.setAcademicSubjectActive(subject.id, desired, user.id),
+        await globalThis.electronAPI.academic.setAcademicSubjectActive(subject.id, desired, user.id),
         `Failed to ${desired ? 'activate' : 'deactivate'} subject`
       )
       await loadSubjects()
@@ -146,103 +254,6 @@ export default function SubjectManagement() {
     } finally {
       setSaving(false)
     }
-  }
-
-  const renderSubjectsContent = () => {
-    if (loading) {
-      return (
-        <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-          <p className="text-xs font-bold uppercase tracking-widest text-foreground/40">Loading Subjects...</p>
-        </div>
-      )
-    }
-
-    if (subjects.length === 0) {
-      return (
-        <div className="text-center py-24 bg-secondary/5 rounded-3xl border border-dashed border-border/40 m-4">
-          <BookOpen className="w-16 h-16 text-foreground/10 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-foreground/80 font-heading">No Subjects Found</h3>
-          <p className="text-foreground/40 font-medium italic mb-6">Add subjects to enable allocations and exam workflows</p>
-          <button onClick={openCreate} className="btn btn-secondary border-2 border-dashed px-8">Add First Subject</button>
-        </div>
-      )
-    }
-
-    return (
-      <div className="overflow-x-auto">
-        <table className="data-table">
-          <thead>
-            <tr className="border-b border-border/40">
-              <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Code</th>
-              <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Name</th>
-              <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Curriculum</th>
-              <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Compulsory</th>
-              <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40">Status</th>
-              <th className="py-5 font-bold uppercase tracking-widest text-[10px] text-foreground/40 text-right px-6">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/10">
-            {subjects.map((subject) => {
-              const active = toBoolean(subject.is_active)
-              return (
-                <tr key={subject.id} className="group hover:bg-secondary/20 transition-colors">
-                  <td className="py-4">
-                    <span className="font-mono text-xs font-bold text-primary/60">{subject.code}</span>
-                  </td>
-                  <td className="py-4">
-                    <span className="font-bold text-foreground">{subject.name}</span>
-                  </td>
-                  <td className="py-4">
-                    <span className="text-xs font-bold text-foreground/60 uppercase tracking-wide">{subject.curriculum}</span>
-                  </td>
-                  <td className="py-4">
-                    <span className="text-xs font-semibold text-foreground/60">{toBoolean(subject.is_compulsory) ? 'Yes' : 'No'}</span>
-                  </td>
-                  <td className="py-4">
-                    <span className={`px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-widest flex items-center gap-2 w-fit border ${active ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 shadow-sm shadow-emerald-500/10' : 'bg-destructive/10 text-destructive border-destructive/20'
-                      }`}>
-                      <div className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-emerald-500 animate-pulse' : 'bg-destructive'}`} />
-                      {active ? 'ACTIVE' : 'INACTIVE'}
-                    </span>
-                  </td>
-                  <td className="py-4 px-6 text-right">
-                    <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => openEdit(subject)}
-                        className="p-2.5 bg-background border border-border/40 hover:border-blue-500/50 hover:text-blue-500 rounded-xl transition-all shadow-sm"
-                        aria-label="Edit subject"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      {active ? (
-                        <button
-                          onClick={() => handleToggleActive(subject, false)}
-                          className="p-2.5 bg-background border border-border/40 hover:border-destructive/50 hover:text-destructive rounded-xl transition-all shadow-sm"
-                          disabled={saving}
-                          aria-label="Deactivate subject"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleToggleActive(subject, true)}
-                          className="p-2.5 bg-background border border-border/40 hover:border-emerald-500/50 hover:text-emerald-500 rounded-xl transition-all shadow-sm"
-                          disabled={saving}
-                          aria-label="Activate subject"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-    )
   }
 
   return (
@@ -267,7 +278,14 @@ export default function SubjectManagement() {
       </div>
 
       <div className="card overflow-hidden transition-all duration-300">
-        {renderSubjectsContent()}
+        <SubjectsContent
+          loading={loading}
+          subjects={subjects}
+          saving={saving}
+          onOpenCreate={openCreate}
+          onOpenEdit={openEdit}
+          onToggleActive={handleToggleActive}
+        />
       </div>
 
       <Modal

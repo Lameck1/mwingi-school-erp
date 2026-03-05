@@ -1,3 +1,5 @@
+import type { AttendanceStudent, AttendanceRecord, AttendanceEntry } from './StudentAPI'
+import type { ReportCardStudentEntry, ReportCardData } from './ReportsAPI'
 
 // Merit List Types
 export interface StudentRanking {
@@ -235,6 +237,15 @@ export interface AcademicAPI {
   getMostImprovedStudents: (filters: { academicYearId: number; currentTermId: number; comparisonTermId: number; streamId?: number; minimumImprovement: number }) => Promise<IPCResult<ImprovedStudent[]>>
   generateCertificate: (data: { studentId: number; studentName: string; awardCategory: string; academicYearId: number; improvementPercentage: number }) => Promise<IPCResult<{ success: boolean; message?: string; filePath?: string }>>
   emailParents: (data: { students: ImprovedStudent[]; awardCategory: string; templateType: string }, userId: number) => Promise<IPCResult<{ success: boolean; message?: string; sent?: number; failed?: number; errors?: string[] }>>
+
+  // Attendance
+  getStudentsForAttendance: (streamId: number, academicYearId: number, termId: number) => Promise<IPCResult<AttendanceStudent[]>>
+  getAttendanceByDate: (streamId: number, date: string, academicYearId: number, termId: number) => Promise<IPCResult<AttendanceRecord[]>>
+  markAttendance: (entries: AttendanceEntry[], streamId: number, date: string, academicYearId: number, termId: number, userId: number) => Promise<{ success: boolean; marked: number; errors?: string[] }>
+
+  // Report Cards (individual)
+  getStudentsForReportCards: (streamId: number, academicYearId: number, termId: number) => Promise<IPCResult<ReportCardStudentEntry[]>>
+  generateReportCard: (studentId: number, academicYearId: number, termId: number) => Promise<IPCResult<ReportCardData | null>>
 
   // Report Cards (Refactored)
   generateBatchReportCards: (data: { exam_id: number; stream_id: number }) => Promise<{ success: boolean; generated: number; failed: number; total?: number; failures?: Array<{ student_id: number; error: string }> }>;

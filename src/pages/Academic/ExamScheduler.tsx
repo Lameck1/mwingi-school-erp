@@ -44,8 +44,52 @@ interface TimetableResult {
   stats: TimetableStats
 }
 
+interface ExamTimetableTableProps {
+  slots: ExamSlot[]
+}
+
+function ExamTimetableTable({ slots }: Readonly<ExamTimetableTableProps>) {
+  return (
+    <div className="premium-card">
+      <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+        <CheckCircle size={20} className="text-green-500" />
+        Generated Timetable
+      </h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="pb-4 pt-2 font-bold text-foreground/60">Subject</th>
+              <th className="pb-4 pt-2 font-bold text-foreground/60">Date</th>
+              <th className="pb-4 pt-2 font-bold text-foreground/60">Time</th>
+              <th className="pb-4 pt-2 font-bold text-foreground/60">Venue</th>
+              <th className="pb-4 pt-2 font-bold text-foreground/60">Capacity</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {slots.map((slot) => (
+              <tr key={slot.id} className="hover:bg-secondary/30">
+                <td className="py-4 pr-4 font-medium">{slot.subject_name}</td>
+                <td className="py-4 pr-4">{new Date(slot.start_date).toLocaleDateString()}</td>
+                <td className="py-4 pr-4">{slot.start_time} - {slot.end_time}</td>
+                <td className="py-4 pr-4">{slot.venue_name}</td>
+                <td className="py-4 pr-4">
+                  <span className="px-2 py-1 rounded text-sm bg-secondary">
+                    {slot.enrolled_students}/{slot.max_capacity}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 const ExamScheduler = () => {
-  const { currentAcademicYear, currentTerm } = useAppStore()
+  const currentAcademicYear = useAppStore((s) => s.currentAcademicYear)
+  const currentTerm = useAppStore((s) => s.currentTerm)
   const { showToast } = useToast()
 
   const [exams, setExams] = useState<{ id: number; name: string }[]>([])
@@ -62,7 +106,7 @@ const ExamScheduler = () => {
   const loadInitialData = useCallback(async () => {
     try {
       const examsData = unwrapArrayResult(
-        await globalThis.electronAPI.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
+        await globalThis.electronAPI.academic.getExams({ academicYearId: currentAcademicYear?.id, termId: currentTerm?.id }),
         'Failed to load exams'
       )
       setExams(examsData)
@@ -89,7 +133,7 @@ const ExamScheduler = () => {
     setLoading(true)
     try {
       const result = unwrapIPCResult<TimetableResult>(
-        await globalThis.electronAPI.generateExamTimetable({
+        await globalThis.electronAPI.academic.generateExamTimetable({
           examId: selectedExam,
           startDate,
           endDate,
@@ -122,7 +166,7 @@ const ExamScheduler = () => {
     setLoading(true)
     try {
       const clashData = unwrapArrayResult<ClashReport>(
-        await globalThis.electronAPI.detectExamClashes({ examId: selectedExam }),
+        await globalThis.electronAPI.academic.detectExamClashes({ examId: selectedExam }),
         'Failed to detect clashes'
       )
       setClashes(clashData)
@@ -150,7 +194,7 @@ const ExamScheduler = () => {
 
     try {
       unwrapIPCResult(
-        await globalThis.electronAPI.exportExamTimetableToPDF({
+        await globalThis.electronAPI.academic.exportExamTimetableToPDF({
           examId: selectedExam,
           slots
         }),
@@ -285,42 +329,7 @@ const ExamScheduler = () => {
       )}
 
       {/* Timetable */}
-      {slots.length > 0 && (
-        <div className="premium-card">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <CheckCircle size={20} className="text-green-500" />
-            Generated Timetable
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="pb-4 pt-2 font-bold text-foreground/60">Subject</th>
-                  <th className="pb-4 pt-2 font-bold text-foreground/60">Date</th>
-                  <th className="pb-4 pt-2 font-bold text-foreground/60">Time</th>
-                  <th className="pb-4 pt-2 font-bold text-foreground/60">Venue</th>
-                  <th className="pb-4 pt-2 font-bold text-foreground/60">Capacity</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {slots.map((slot) => (
-                  <tr key={slot.id} className="hover:bg-secondary/30">
-                    <td className="py-4 pr-4 font-medium">{slot.subject_name}</td>
-                    <td className="py-4 pr-4">{new Date(slot.start_date).toLocaleDateString()}</td>
-                    <td className="py-4 pr-4">{slot.start_time} - {slot.end_time}</td>
-                    <td className="py-4 pr-4">{slot.venue_name}</td>
-                    <td className="py-4 pr-4">
-                      <span className="px-2 py-1 rounded text-sm bg-secondary">
-                        {slot.enrolled_students}/{slot.max_capacity}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {slots.length > 0 && <ExamTimetableTable slots={slots} />}
     </div>
   )
 }
