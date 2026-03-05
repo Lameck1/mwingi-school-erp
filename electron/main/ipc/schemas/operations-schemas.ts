@@ -48,7 +48,7 @@ export const TransportRouteSchema = z.union([
         distance_km: 0,
         estimated_students: 0,
         budget_per_term_cents: Math.round(params.cost_per_term),
-        ...(params.description !== undefined ? { vehicle_registration: params.description } : {})
+        ...(params.description === undefined ? {} : { vehicle_registration: params.description })
     }
 })
 

@@ -34,7 +34,7 @@ export function validatedHandler<TSchema extends ZodType>(
         event: IpcMainInvokeEvent,
         data: TSchema['_output'],
         actor: IpcActor,
-    ) => unknown | Promise<unknown>,
+    ) => unknown,
 ): void {
     ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
         try {
@@ -95,7 +95,7 @@ export function validatedHandlerMulti<TSchema extends ZodType>(
         event: IpcMainInvokeEvent,
         data: TSchema['_output'],
         actor: IpcActor,
-    ) => unknown | Promise<unknown>,
+    ) => unknown,
 ): void {
     ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
         try {

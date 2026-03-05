@@ -5,7 +5,7 @@ const SettingsUpdateFieldsSchema = z.object({
     school_motto: z.string().optional(),
     address: z.string().optional(),
     phone: z.string().optional(),
-    email: z.string().email().optional(),
+    email: z.email().optional(),
     logo_path: z.string().optional(),
     mpesa_paybill: z.string().optional(),
     sms_api_key: z.string().optional(),

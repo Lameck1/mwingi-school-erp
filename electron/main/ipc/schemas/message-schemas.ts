@@ -19,7 +19,7 @@ export const MessageSendSmsSchema = z.object({
 })
 
 export const MessageSendEmailSchema = z.object({
-    to: z.string().email('Invalid email address'),
+    to: z.email({ message: 'Invalid email address' }),
     subject: z.string().min(1, 'Subject is required'),
     body: z.string().min(1, 'Email body is required'),
     recipientId: z.number().optional(),

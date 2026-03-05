@@ -31,7 +31,7 @@ export const ImportConfigSchema = z.object({
     duplicateKey: z.string().optional()
 })
 
-const ImportTokenSchema = z.string().uuid('Import token must be a UUID')
+const ImportTokenSchema = z.uuid({ message: 'Import token must be a UUID' })
 
 export const ImportPickFileSchema = z.void()
 

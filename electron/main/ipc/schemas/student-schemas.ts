@@ -19,7 +19,7 @@ export const StudentCreateSchema = z.object({
     admission_date: z.string(),
     guardian_name: z.string(),
     guardian_phone: z.string(),
-    guardian_email: z.string().email().optional().or(z.literal('')),
+    guardian_email: z.email().optional().or(z.literal('')),
     guardian_relationship: z.string(),
     address: z.string(),
     notes: z.string().optional(),

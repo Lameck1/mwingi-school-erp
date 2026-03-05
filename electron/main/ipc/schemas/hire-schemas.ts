@@ -12,7 +12,7 @@ export const ClientFilterSchema = z.object({
 export const HireClientSchema = z.object({
     client_name: z.string().min(1).optional(),
     contact_phone: z.string().optional(),
-    contact_email: z.string().email().optional().or(z.literal('')),
+    contact_email: z.email().optional().or(z.literal('')),
     is_active: ActiveFlagSchema
 })
 // For create/update, partial is used in handler. 
@@ -24,7 +24,7 @@ export const HireClientSchema = z.object({
 export const HireClientUpdateSchema = z.object({
     client_name: z.string().min(1).optional(),
     contact_phone: z.string().optional(),
-    contact_email: z.string().email().optional().or(z.literal('')),
+    contact_email: z.email().optional().or(z.literal('')),
     is_active: ActiveFlagSchema
 })
 

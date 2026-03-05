@@ -78,7 +78,7 @@ export function resolveActorId(
 
 export function safeHandle<T, TArgs extends unknown[]>(
     channel: string,
-    handler: (event: IpcMainInvokeEvent, ...args: TArgs) => unknown | Promise<unknown>,
+    handler: (event: IpcMainInvokeEvent, ...args: TArgs) => unknown,
 ): void {
     ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]): Promise<IPCResult<T>> => {
         try {
@@ -97,7 +97,7 @@ export function safeHandle<T, TArgs extends unknown[]>(
  */
 export function safeHandleRaw<TArgs extends unknown[]>(
     channel: string,
-    handler: (event: IpcMainInvokeEvent, ...args: TArgs) => unknown | Promise<unknown>,
+    handler: (event: IpcMainInvokeEvent, ...args: TArgs) => unknown,
 ): void {
     ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
         try {
@@ -116,7 +116,7 @@ export function safeHandleRaw<TArgs extends unknown[]>(
 export function safeHandleRawWithRole<TArgs extends unknown[]>(
     channel: string,
     allowedRoles: readonly string[],
-    handler: (event: IpcMainInvokeEvent, ...args: TArgs) => unknown | Promise<unknown>,
+    handler: (event: IpcMainInvokeEvent, ...args: TArgs) => unknown,
 ): void {
     ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
         try {
@@ -142,7 +142,7 @@ export function safeHandleRawWithRole<TArgs extends unknown[]>(
 export function safeHandleWithRole<T, TArgs extends unknown[]>(
     channel: string,
     allowedRoles: readonly string[],
-    handler: (event: IpcMainInvokeEvent, ...args: TArgs) => unknown | Promise<unknown>,
+    handler: (event: IpcMainInvokeEvent, ...args: TArgs) => unknown,
 ): void {
     ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]): Promise<IPCResult<T>> => {
         try {
