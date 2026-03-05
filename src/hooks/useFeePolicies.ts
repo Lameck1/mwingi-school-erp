@@ -55,19 +55,19 @@ export function useFeePolicies() {
         stream_id?: number
         student_type: 'DAY_SCHOLAR' | 'BOARDER' | 'ALL'
         schedules: InstallmentSchedule[]
-    }): Promise<number | null> => executeCall(() => window.electronAPI.createInstallmentPolicy(data)), [])
+    }): Promise<number | null> => executeCall(() => globalThis.electronAPI.finance.createInstallmentPolicy(data)), [])
 
     const getPoliciesForTerm = useCallback(async (academicYearId: number, streamId?: number, studentType?: string): Promise<InstallmentPolicy[] | null> =>
-        executeCall(() => window.electronAPI.getPoliciesForTerm(academicYearId, streamId, studentType)), [])
+        executeCall(() => globalThis.electronAPI.finance.getPoliciesForTerm(academicYearId, streamId, studentType)), [])
 
     const getInstallmentSchedule = useCallback(async (policyId: number): Promise<InstallmentSchedule[] | null> =>
-        executeCall(() => window.electronAPI.getInstallmentSchedule(policyId)), [])
+        executeCall(() => globalThis.electronAPI.finance.getInstallmentSchedule(policyId)), [])
 
     const deactivatePolicy = useCallback(async (policyId: number): Promise<boolean | null> =>
-        executeCall(() => window.electronAPI.deactivatePolicy(policyId)), [])
+        executeCall(() => globalThis.electronAPI.finance.deactivatePolicy(policyId)), [])
 
     const getVoteHeadBalances = useCallback(async (invoiceId: number): Promise<VoteHeadBalance[] | null> =>
-        executeCall(() => window.electronAPI.getVoteHeadBalances(invoiceId)), [])
+        executeCall(() => globalThis.electronAPI.finance.getVoteHeadBalances(invoiceId)), [])
 
     return {
         isLoading,

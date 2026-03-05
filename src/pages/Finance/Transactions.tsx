@@ -1,5 +1,5 @@
 import { ClipboardList, Filter, Download, Calendar, Tag, ChevronLeft, ChevronRight } from 'lucide-react'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 
 import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
 import { useToast } from '../../contexts/ToastContext'
@@ -28,7 +28,7 @@ export default function Transactions() {
 
     const loadCategories = useCallback(async () => {
         try {
-            const allCats = await globalThis.electronAPI.getTransactionCategories()
+            const allCats = await globalThis.electronAPI.finance.getTransactionCategories()
             setCategories(unwrapArrayResult(allCats, 'Failed to load transaction categories'))
         } catch (error) {
             console.error('Failed to load categories:', error)
@@ -45,7 +45,7 @@ export default function Transactions() {
             if (appliedFilter.endDate) { filters['endDate'] = appliedFilter.endDate }
             if (appliedFilter.category_id) { filters['categoryId'] = Number(appliedFilter.category_id) }
             const result = unwrapIPCResult<{ rows: Transaction[]; totalCount: number }>
-                (await globalThis.electronAPI.getTransactions(normalizeFilters(filters)), 'Failed to load transactions')
+                (await globalThis.electronAPI.finance.getTransactions(normalizeFilters(filters)), 'Failed to load transactions')
             setTransactions(result.rows)
             setTotalCount(result.totalCount)
         } catch (error) {
@@ -74,9 +74,14 @@ export default function Transactions() {
     const totalPages = Math.ceil(totalCount / itemsPerPage)
     const paginatedTransactions = transactions
 
+    const categoryMap = useMemo(() => {
+        const map = new Map<number, string>()
+        for (const c of categories) { map.set(c.id, c.category_name) }
+        return map
+    }, [categories])
+
     const getCategoryName = (categoryId: number): string => {
-        const cat = categories.find(c => c.id === categoryId)
-        return cat?.category_name || 'Uncategorized'
+        return categoryMap.get(categoryId) || 'Uncategorized'
     }
 
     const handleExport = () => {

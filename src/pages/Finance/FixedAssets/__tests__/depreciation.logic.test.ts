@@ -55,4 +55,9 @@ describe('depreciation logic', () => {
         expect(result.allowed).toBe(true)
         expect(result.reason).toBeUndefined()
     })
+
+    it('returns null when first period has no id', () => {
+        const result = getDefaultPeriodId([{ period_name: 'X', start_date: '', end_date: '', is_locked: false } as any])
+        expect(result).toBeNull()
+    })
 })

@@ -64,18 +64,18 @@ export function useProcurement() {
         }
     }, [])
 
-    const createRequisition = useCallback((data: RequisitionData) => handleRequest(() => window.electronAPI.finance.createRequisition(data)), [handleRequest])
-    const submitRequisition = useCallback((id: number) => handleRequest(() => window.electronAPI.finance.submitRequisition(id)), [handleRequest])
-    const approveRequisition = useCallback((id: number) => handleRequest(() => window.electronAPI.finance.approveRequisition(id)), [handleRequest])
-    const rejectRequisition = useCallback((id: number, reason: string) => handleRequest(() => window.electronAPI.finance.rejectRequisition(id, reason)), [handleRequest])
+    const createRequisition = useCallback((data: RequisitionData) => handleRequest(() => globalThis.electronAPI.finance.createRequisition(data)), [handleRequest])
+    const submitRequisition = useCallback((id: number) => handleRequest(() => globalThis.electronAPI.finance.submitRequisition(id)), [handleRequest])
+    const approveRequisition = useCallback((id: number) => handleRequest(() => globalThis.electronAPI.finance.approveRequisition(id)), [handleRequest])
+    const rejectRequisition = useCallback((id: number, reason: string) => handleRequest(() => globalThis.electronAPI.finance.rejectRequisition(id, reason)), [handleRequest])
     const getRequisitionsByStatus = useCallback((status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'COMMITTED' | 'CANCELLED') =>
-        handleRequest(() => window.electronAPI.finance.getRequisitionsByStatus(status)), [handleRequest])
+        handleRequest(() => globalThis.electronAPI.finance.getRequisitionsByStatus(status)), [handleRequest])
 
-    const commitBudget = useCallback((requisitionId: number) => handleRequest(() => window.electronAPI.finance.commitBudget(requisitionId)), [handleRequest])
-    const createPurchaseOrder = useCallback((data: PurchaseOrderData) => handleRequest(() => window.electronAPI.finance.createPurchaseOrder(data)), [handleRequest])
-    const createGrn = useCallback((data: GrnData) => handleRequest(() => window.electronAPI.finance.createGrn(data)), [handleRequest])
-    const createPaymentVoucher = useCallback((data: VoucherData) => handleRequest(() => window.electronAPI.finance.createPaymentVoucher(data)), [handleRequest])
-    const approvePaymentVoucher = useCallback((id: number) => handleRequest(() => window.electronAPI.finance.approvePaymentVoucher(id)), [handleRequest])
+    const commitBudget = useCallback((requisitionId: number) => handleRequest(() => globalThis.electronAPI.finance.commitBudget(requisitionId)), [handleRequest])
+    const createPurchaseOrder = useCallback((data: PurchaseOrderData) => handleRequest(() => globalThis.electronAPI.finance.createPurchaseOrder(data)), [handleRequest])
+    const createGrn = useCallback((data: GrnData) => handleRequest(() => globalThis.electronAPI.finance.createGrn(data)), [handleRequest])
+    const createPaymentVoucher = useCallback((data: VoucherData) => handleRequest(() => globalThis.electronAPI.finance.createPaymentVoucher(data)), [handleRequest])
+    const approvePaymentVoucher = useCallback((id: number) => handleRequest(() => globalThis.electronAPI.finance.approvePaymentVoucher(id)), [handleRequest])
 
     return {
         isLoading,

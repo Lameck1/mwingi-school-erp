@@ -5,7 +5,7 @@
  * Finance managers can activate/deactivate accounts and view account details
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
 import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb';
 import { useToast } from '../../../contexts/ToastContext';
@@ -55,6 +55,98 @@ const getResultMessage = (value: unknown, fallback: string): string => {
   return fallback
 }
 
+interface AccountDetailModalProps {
+  selectedAccount: GLAccount | null;
+  onClose: () => void;
+}
+
+function AccountDetailModal({ selectedAccount, onClose }: Readonly<AccountDetailModalProps>) {
+  if (!selectedAccount) { return null; }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <button
+        type="button"
+        className="absolute inset-0 bg-background/60 backdrop-blur-sm cursor-default"
+        onClick={onClose}
+        aria-label="Close modal"
+      />
+      <dialog
+        className="bg-card rounded-lg shadow-xl p-6 max-w-md w-full relative z-10"
+        open
+        aria-label="Account Details"
+      >
+        <h3 className="text-lg font-semibold text-foreground mb-4">
+          Account Details
+        </h3>
+
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-medium text-foreground/70">Code</p>
+            <p className="text-foreground font-mono">{selectedAccount.code}</p>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-foreground/70">Name</p>
+            <p className="text-foreground">{selectedAccount.name}</p>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-foreground/70">Type</p>
+            <p>
+              <span
+                className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getTypeColor(
+                  selectedAccount.type
+                )}`}
+              >
+                {selectedAccount.type}
+              </span>
+            </p>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-foreground/70">
+              Description
+            </p>
+            <p className="text-foreground">{selectedAccount.description}</p>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-foreground/70">
+              Current Balance
+            </p>
+            <p className="text-lg font-semibold text-foreground">
+              {formatCurrencyFromCents(selectedAccount.currentBalance)}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-foreground/70">Status</p>
+            <p>
+              <span
+                className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${selectedAccount.isActive
+                    ? 'bg-green-500/15 text-green-600 dark:text-green-400'
+                    : 'bg-secondary text-foreground'
+                  }`}
+              >
+                {selectedAccount.isActive ? 'Active' : 'Inactive'}
+              </span>
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-foreground/70 bg-card border border-border rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/50"
+          >
+            Close
+          </button>
+        </div>
+      </dialog>
+    </div>
+  );
+}
+
 export const GLAccountManagement: React.FC = () => {
   const { showToast } = useToast();
   const [accounts, setAccounts] = useState<GLAccount[]>([]);
@@ -66,14 +158,14 @@ export const GLAccountManagement: React.FC = () => {
   const loadAccounts = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await globalThis.electronAPI.getGLAccounts(
+      const result = await globalThis.electronAPI.finance.getGLAccounts(
         filterType === 'ALL' ? undefined : { type: filterType }
       );
-      if (!result || result.success !== true) {
+      if (result?.success !== true) {
         throw new Error(getResultMessage(result, 'Failed to load GL accounts'));
       }
       if (!Array.isArray(result.data)) {
-        throw new Error('Invalid GL accounts response payload');
+        throw new TypeError('Invalid GL accounts response payload');
       }
       const data = result.data;
       // Map backend response to local interface
@@ -99,14 +191,14 @@ export const GLAccountManagement: React.FC = () => {
     loadAccounts().catch((err: unknown) => console.error('Failed to load GL accounts', err));
   }, [loadAccounts]);
 
-  const filteredAccounts = accounts.filter((account) => {
+  const filteredAccounts = useMemo(() => accounts.filter((account) => {
     const matchesType = filterType === 'ALL' || account.type === filterType;
     const matchesSearch =
       searchQuery === '' ||
       account.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
       account.name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesType && matchesSearch;
-  });
+  }), [accounts, filterType, searchQuery]);
 
   return (
     <div className="p-6 space-y-6">
@@ -250,90 +342,7 @@ export const GLAccountManagement: React.FC = () => {
         )}
       </div>
 
-      {/* Account Detail Modal */}
-      {selectedAccount && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <button
-            type="button"
-            className="absolute inset-0 bg-background/60 backdrop-blur-sm cursor-default"
-            onClick={() => setSelectedAccount(null)}
-            aria-label="Close modal"
-          />
-          <dialog
-            className="bg-card rounded-lg shadow-xl p-6 max-w-md w-full relative z-10"
-            open
-            aria-label="Account Details"
-          >
-            <h3 className="text-lg font-semibold text-foreground mb-4">
-              Account Details
-            </h3>
-
-            <div className="space-y-3">
-              <div>
-                <p className="text-sm font-medium text-foreground/70">Code</p>
-                <p className="text-foreground font-mono">{selectedAccount.code}</p>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-foreground/70">Name</p>
-                <p className="text-foreground">{selectedAccount.name}</p>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-foreground/70">Type</p>
-                <p>
-                  <span
-                    className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getTypeColor(
-                      selectedAccount.type
-                    )}`}
-                  >
-                    {selectedAccount.type}
-                  </span>
-                </p>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-foreground/70">
-                  Description
-                </p>
-                <p className="text-foreground">{selectedAccount.description}</p>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-foreground/70">
-                  Current Balance
-                </p>
-                <p className="text-lg font-semibold text-foreground">
-                  {formatCurrencyFromCents(selectedAccount.currentBalance)}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-foreground/70">Status</p>
-                <p>
-                  <span
-                    className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${selectedAccount.isActive
-                        ? 'bg-green-500/15 text-green-600 dark:text-green-400'
-                        : 'bg-secondary text-foreground'
-                      }`}
-                  >
-                    {selectedAccount.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => setSelectedAccount(null)}
-                className="px-4 py-2 text-sm font-medium text-foreground/70 bg-card border border-border rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/50"
-              >
-                Close
-              </button>
-            </div>
-          </dialog>
-        </div>
-      )}
+      <AccountDetailModal selectedAccount={selectedAccount} onClose={() => setSelectedAccount(null)} />
     </div>
   );
 };

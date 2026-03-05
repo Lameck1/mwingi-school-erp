@@ -52,23 +52,23 @@ export function useVirement() {
     }
 
     const validateExpenditure = useCallback(async (expenseAccountType: JssAccountType, fundingCategoryId: number): Promise<VirementValidationResult | null> => {
-        return executeCall(() => window.electronAPI.validateExpenditure(expenseAccountType, fundingCategoryId))
+        return executeCall(() => globalThis.electronAPI.finance.validateExpenditure(expenseAccountType, fundingCategoryId))
     }, [])
 
     const requestVirement = useCallback(async (fromAccount: JssAccountType, toAccount: JssAccountType, amount: number, reason: string): Promise<number | null> => {
-        return executeCall(() => window.electronAPI.requestVirement(fromAccount, toAccount, amount, reason))
+        return executeCall(() => globalThis.electronAPI.finance.requestVirement(fromAccount, toAccount, amount, reason))
     }, [])
 
     const reviewVirement = useCallback(async (requestId: number, decision: 'APPROVED' | 'REJECTED', reviewNotes: string): Promise<boolean | null> => {
-        return executeCall(() => window.electronAPI.reviewVirement(requestId, decision, reviewNotes))
+        return executeCall(() => globalThis.electronAPI.finance.reviewVirement(requestId, decision, reviewNotes))
     }, [])
 
     const getPendingRequests = useCallback(async (): Promise<VirementRequest[] | null> => {
-        return executeCall(() => window.electronAPI.getPendingVirementRequests())
+        return executeCall(() => globalThis.electronAPI.finance.getPendingRequests())
     }, [])
 
     const getAccountSummaries = useCallback(async (): Promise<AccountSummary[] | null> => {
-        return executeCall(() => window.electronAPI.getVirementAccountSummaries())
+        return executeCall(() => globalThis.electronAPI.finance.getAccountSummaries())
     }, [])
 
     return {

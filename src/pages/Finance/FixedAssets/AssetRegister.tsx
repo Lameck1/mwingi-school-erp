@@ -11,8 +11,123 @@ import { type FixedAsset, type CreateAssetData, type AssetCategory } from '../..
 import { formatCurrencyFromCents, formatDate, shillingsToCents } from '../../../utils/format'
 import { unwrapArrayResult } from '../../../utils/ipc'
 
+interface CreateAssetModalProps {
+    isOpen: boolean
+    onClose: () => void
+    createForm: CreateAssetData
+    setCreateForm: React.Dispatch<React.SetStateAction<CreateAssetData>>
+    categories: { id: number; name: string }[]
+    onSubmit: (e: React.SyntheticEvent) => void
+}
+
+function CreateAssetModal({ isOpen, onClose, createForm, setCreateForm, categories, onSubmit }: Readonly<CreateAssetModalProps>) {
+    return (
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Register New Asset"
+        >
+            <form onSubmit={onSubmit} className="space-y-4">
+                <div className="space-y-2">
+                    <label htmlFor="field-172" className="label">Asset Name</label>
+                    <input id="field-172"
+                        type="text"
+                        value={createForm.asset_name}
+                        onChange={(e) => setCreateForm(prev => ({ ...prev, asset_name: e.target.value }))}
+                        className="input"
+                        required
+                        aria-label="Asset name"
+                    />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <label htmlFor="field-184" className="label">Category</label>
+                        <select id="field-184"
+                            value={createForm.category_id}
+                            onChange={(e) => setCreateForm(prev => ({ ...prev, category_id: Number(e.target.value) }))}
+                            className="input"
+                            required
+                            aria-label="Asset category"
+                        >
+                            <option value={0}>Select Category</option>
+                            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                    </div>
+                    <div className="space-y-2">
+                        <label htmlFor="field-197" className="label">Acquisition Cost</label>
+                        <input id="field-197"
+                            type="number"
+                            value={createForm.acquisition_cost || ''}
+                            onChange={(e) => setCreateForm(prev => ({ ...prev, acquisition_cost: Number(e.target.value) }))}
+                            className="input"
+                            required
+                            min="0"
+                            aria-label="Acquisition cost"
+                        />
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <label htmlFor="field-211" className="label">Date Acquired</label>
+                        <input id="field-211"
+                            type="date"
+                            value={createForm.acquisition_date}
+                            onChange={(e) => setCreateForm(prev => ({ ...prev, acquisition_date: e.target.value }))}
+                            className="input"
+                            required
+                            aria-label="Date acquired"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label htmlFor="field-acc-dep" className="label">Accumulated Depreciation (Ksh)</label>
+                        <input id="field-acc-dep"
+                            type="number"
+                            value={createForm.accumulated_depreciation || ''}
+                            onChange={(e) => setCreateForm(prev => ({ ...prev, accumulated_depreciation: Number(e.target.value) }))}
+                            className="input"
+                            placeholder="For legacy assets"
+                            min="0"
+                            aria-label="Accumulated depreciation"
+                        />
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <label htmlFor="field-222" className="label">Location</label>
+                    <input id="field-222"
+                        type="text"
+                        value={createForm.location || ''}
+                        onChange={(e) => setCreateForm(prev => ({ ...prev, location: e.target.value }))}
+                        className="input"
+                        placeholder="e.g. Computer Lab"
+                    />
+                </div>
+                <div className="space-y-2">
+                    <label htmlFor="field-233" className="label">Serial Number</label>
+                    <input id="field-233"
+                        type="text"
+                        value={createForm.serial_number || ''}
+                        onChange={(e) => setCreateForm(prev => ({ ...prev, serial_number: e.target.value }))}
+                        className="input"
+                        aria-label="Serial number"
+                    />
+                </div>
+
+                <div className="pt-4 flex justify-end gap-3">
+                    <button type="button" onClick={onClose} className="btn btn-secondary">
+                        Cancel
+                    </button>
+                    <button type="submit" className="btn btn-primary">
+                        Save Asset
+                    </button>
+                </div>
+            </form>
+        </Modal>
+    )
+}
+
 export default function AssetRegister() {
-    const { user } = useAuthStore()
+    const user = useAuthStore((s) => s.user)
     const { showToast } = useToast()
     const [assets, setAssets] = useState<FixedAsset[]>([])
     const [loading, setLoading] = useState(false)
@@ -35,7 +150,7 @@ export default function AssetRegister() {
         setLoading(true)
         try {
             const data = unwrapArrayResult(
-                await globalThis.electronAPI.getAssets({ search: searchQuery }),
+                await globalThis.electronAPI.finance.getAssets({ search: searchQuery }),
                 'Failed to load assets'
             )
             setAssets(data)
@@ -51,7 +166,7 @@ export default function AssetRegister() {
     const loadCategories = useCallback(async () => {
         try {
             const data = unwrapArrayResult(
-                await globalThis.electronAPI.getAssetCategories(),
+                await globalThis.electronAPI.finance.getAssetCategories(),
                 'Failed to load asset categories'
             )
             setCategories(data.map((c: AssetCategory) => ({ id: c.id, name: c.category_name })))
@@ -74,7 +189,7 @@ export default function AssetRegister() {
             return
         }
         try {
-            const result = await globalThis.electronAPI.createAsset({
+            const result = await globalThis.electronAPI.finance.createAsset({
                 ...createForm,
                 acquisition_cost: shillingsToCents(createForm.acquisition_cost),
                 accumulated_depreciation: shillingsToCents(createForm.accumulated_depreciation || 0),
@@ -184,107 +299,14 @@ export default function AssetRegister() {
                 </table>
             </div>
 
-            <Modal
+            <CreateAssetModal
                 isOpen={showCreateModal}
                 onClose={() => setShowCreateModal(false)}
-                title="Register New Asset"
-            >
-                <form onSubmit={handleCreate} className="space-y-4">
-                    <div className="space-y-2">
-                        <label htmlFor="field-172" className="label">Asset Name</label>
-                        <input id="field-172"
-                            type="text"
-                            value={createForm.asset_name}
-                            onChange={(e) => setCreateForm(prev => ({ ...prev, asset_name: e.target.value }))}
-                            className="input"
-                            required
-                            aria-label="Asset name"
-                        />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label htmlFor="field-184" className="label">Category</label>
-                            <select id="field-184"
-                                value={createForm.category_id}
-                                onChange={(e) => setCreateForm(prev => ({ ...prev, category_id: Number(e.target.value) }))}
-                                className="input"
-                                required
-                                aria-label="Asset category"
-                            >
-                                <option value={0}>Select Category</option>
-                                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                        </div>
-                        <div className="space-y-2">
-                            <label htmlFor="field-197" className="label">Acquisition Cost</label>
-                            <input id="field-197"
-                                type="number"
-                                value={createForm.acquisition_cost || ''}
-                                onChange={(e) => setCreateForm(prev => ({ ...prev, acquisition_cost: Number(e.target.value) }))}
-                                className="input"
-                                required
-                                min="0"
-                                aria-label="Acquisition cost"
-                            />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label htmlFor="field-211" className="label">Date Acquired</label>
-                            <input id="field-211"
-                                type="date"
-                                value={createForm.acquisition_date}
-                                onChange={(e) => setCreateForm(prev => ({ ...prev, acquisition_date: e.target.value }))}
-                                className="input"
-                                required
-                                aria-label="Date acquired"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label htmlFor="field-acc-dep" className="label">Accumulated Depreciation (Ksh)</label>
-                            <input id="field-acc-dep"
-                                type="number"
-                                value={createForm.accumulated_depreciation || ''}
-                                onChange={(e) => setCreateForm(prev => ({ ...prev, accumulated_depreciation: Number(e.target.value) }))}
-                                className="input"
-                                placeholder="For legacy assets"
-                                min="0"
-                                aria-label="Accumulated depreciation"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <label htmlFor="field-222" className="label">Location</label>
-                        <input id="field-222"
-                            type="text"
-                            value={createForm.location || ''}
-                            onChange={(e) => setCreateForm(prev => ({ ...prev, location: e.target.value }))}
-                            className="input"
-                            placeholder="e.g. Computer Lab"
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label htmlFor="field-233" className="label">Serial Number</label>
-                        <input id="field-233"
-                            type="text"
-                            value={createForm.serial_number || ''}
-                            onChange={(e) => setCreateForm(prev => ({ ...prev, serial_number: e.target.value }))}
-                            className="input"
-                            aria-label="Serial number"
-                        />
-                    </div>
-
-                    <div className="pt-4 flex justify-end gap-3">
-                        <button type="button" onClick={() => setShowCreateModal(false)} className="btn btn-secondary">
-                            Cancel
-                        </button>
-                        <button type="submit" className="btn btn-primary">
-                            Save Asset
-                        </button>
-                    </div>
-                </form>
-            </Modal>
+                createForm={createForm}
+                setCreateForm={setCreateForm}
+                categories={categories}
+                onSubmit={handleCreate}
+            />
         </div>
     )
 }

@@ -30,13 +30,13 @@ export default function CashFlow() {
         setLoading(true)
         try {
             const stmt = unwrapIPCResult<CashFlowStatement>(
-                await globalThis.electronAPI.getCashFlowStatement(dateRange.start, dateRange.end),
+                await globalThis.electronAPI.finance.getCashFlowStatement(dateRange.start, dateRange.end),
                 'Failed to load cash flow statement'
             )
             setStatement(stmt)
 
             const fc = unwrapIPCResult<FinancialForecast>(
-                await globalThis.electronAPI.getForecast(6),
+                await globalThis.electronAPI.finance.getForecast(6),
                 'Failed to load cash flow forecast'
             )
             setForecast(fc)

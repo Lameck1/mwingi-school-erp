@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 
 export interface MpesaTransaction {
     id: number
@@ -35,26 +35,32 @@ export function useMpesaReconciliation() {
     const [summary, setSummary] = useState<MpesaSummary | null>(null)
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const mountedRef = useRef(true)
+
+    useEffect(() => {
+        mountedRef.current = true
+        return () => { mountedRef.current = false }
+    }, [])
 
     const fetchUnmatched = useCallback(async () => {
         try {
             setIsLoading(true)
-            const data = await window.electronAPI.finance.getUnmatchedMpesaTransactions()
-            setUnmatchedData(data)
+            const data = await globalThis.electronAPI.finance.getUnmatchedMpesaTransactions()
+            if (mountedRef.current) { setUnmatchedData(data) }
         } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Failed to fetch unmatched transactions')
+            if (mountedRef.current) { setError(err instanceof Error ? err.message : 'Failed to fetch unmatched transactions') }
         } finally {
-            setIsLoading(false)
+            if (mountedRef.current) { setIsLoading(false) }
         }
     }, [])
 
     const fetchSummary = useCallback(async () => {
         try {
-            const data = await window.electronAPI.finance.getMpesaSummary()
-            setSummary(data)
+            const data = await globalThis.electronAPI.finance.getMpesaSummary()
+            if (mountedRef.current) { setSummary(data) }
         } catch (err: unknown) {
             console.error('Failed to fetch M-Pesa summary:', err)
-            setError(err instanceof Error ? err.message : 'Failed to fetch reconciliation summary')
+            if (mountedRef.current) { setError(err instanceof Error ? err.message : 'Failed to fetch reconciliation summary') }
         }
     }, [])
 
@@ -70,7 +76,7 @@ export function useMpesaReconciliation() {
     const importCsv = async (rows: ReadonlyArray<Record<string, unknown>>, fileName: string) => {
         try {
             setIsLoading(true)
-            await window.electronAPI.finance.importMpesaTransactions(rows, 'CSV', fileName)
+            await globalThis.electronAPI.finance.importMpesaTransactions(rows, 'CSV', fileName)
             void fetchUnmatched()
             void fetchSummary()
         } catch (err: unknown) {
@@ -84,7 +90,7 @@ export function useMpesaReconciliation() {
     const manualMatch = async (transactionId: number, studentId: number) => {
         try {
             setIsLoading(true)
-            await window.electronAPI.finance.manualMatchMpesaTransaction(transactionId, studentId)
+            await globalThis.electronAPI.finance.manualMatchMpesaTransaction(transactionId, studentId)
             void fetchUnmatched()
             void fetchSummary()
         } catch (err: unknown) {

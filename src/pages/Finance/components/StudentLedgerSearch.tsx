@@ -26,7 +26,7 @@ export const StudentLedgerSearch: React.FC<StudentLedgerSearchProps> = ({ onSele
         setLoading(true)
         try {
             const result = unwrapIPCResult<{ rows: Student[] }>(
-                await globalThis.electronAPI.getStudents({ search: searchTerm }),
+                await globalThis.electronAPI.students.getStudents({ search: searchTerm }),
                 'Student lookup failed'
             )
             setStudents(result.rows)

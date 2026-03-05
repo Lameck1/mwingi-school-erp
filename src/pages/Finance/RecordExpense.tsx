@@ -8,9 +8,63 @@ import { type TransactionCategory } from '../../types/electron-api/FinanceAPI'
 import { shillingsToCents } from '../../utils/format'
 import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
+interface ExpenseFormFooterProps {
+    description: string
+    onDescriptionChange: (value: string) => void
+    saving: boolean
+}
+
+function ExpenseFormFooter({ description, onDescriptionChange, saving }: Readonly<ExpenseFormFooterProps>) {
+    return (
+        <>
+            {/* Description */}
+            <div className="space-y-2">
+                <label htmlFor="description" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1 flex items-center gap-2">
+                    <FileText className="w-3 h-3" />
+                    Disbursement Narrative
+                </label>
+                <textarea
+                    id="description"
+                    rows={3}
+                    value={description}
+                    onChange={(e) => onDescriptionChange(e.target.value)}
+                    className="input w-full p-4 min-h-[100px] leading-relaxed italic"
+                    placeholder="Provide detailed narrative or payee identification for this expenditure entry..."
+                />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-8 border-t border-border/10">
+                <button
+                    type="button"
+                    onClick={() => globalThis.history.back()}
+                    className="btn btn-secondary px-8 py-3 font-bold uppercase tracking-widest text-[10px]"
+                >
+                    Discard Draft
+                </button>
+                <button
+                    type="submit"
+                    disabled={saving}
+                    className="btn btn-primary flex items-center gap-3 px-10 py-3 font-bold uppercase tracking-widest text-[10px] shadow-xl shadow-destructive/10 transition-all hover:-translate-y-1 bg-destructive hover:bg-destructive/80 border-none"
+                >
+                    {saving ? (
+                        <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Syncing Record...</span>
+                        </>
+                    ) : (
+                        <>
+                            <Check className="w-4 h-4" />
+                            <span>Commit Expenditure Entry</span>
+                        </>
+                    )}
+                </button>
+            </div>
+        </>
+    )
+}
 
 export default function RecordExpense() {
-    const { user } = useAuthStore()
+    const user = useAuthStore((s) => s.user)
     const { showToast } = useToast()
 
     const [categories, setCategories] = useState<TransactionCategory[]>([])
@@ -32,7 +86,7 @@ export default function RecordExpense() {
     const loadCategories = useCallback(async () => {
         try {
             const categories = unwrapArrayResult(
-                await globalThis.electronAPI.getTransactionCategories(),
+                await globalThis.electronAPI.finance.getTransactionCategories(),
                 'Failed to load transaction categories'
             )
             setCategories(categories.filter((c: TransactionCategory) => c.category_type === 'EXPENSE'))
@@ -56,7 +110,7 @@ export default function RecordExpense() {
         try {
             setLoading(true)
             unwrapIPCResult(
-                await globalThis.electronAPI.createTransactionCategory(categoryName, 'EXPENSE'),
+                await globalThis.electronAPI.finance.createTransactionCategory(categoryName, 'EXPENSE'),
                 'Failed to create transaction category'
             )
             await loadCategories()
@@ -85,7 +139,7 @@ export default function RecordExpense() {
         setSaving(true)
         try {
             unwrapIPCResult(
-                await globalThis.electronAPI.createTransaction({
+                await globalThis.electronAPI.finance.createTransaction({
                 transaction_date: formData.transaction_date,
                 transaction_type: formData.transaction_type,
                 amount: shillingsToCents(formData.amount), // Whole currency units
@@ -247,48 +301,11 @@ export default function RecordExpense() {
                         </div>
                     </div>
 
-                    {/* Description */}
-                    <div className="space-y-2">
-                        <label htmlFor="description" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1 flex items-center gap-2">
-                            <FileText className="w-3 h-3" />
-                            Disbursement Narrative
-                        </label>
-                        <textarea
-                            id="description"
-                            rows={3}
-                            value={formData.description}
-                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            className="input w-full p-4 min-h-[100px] leading-relaxed italic"
-                            placeholder="Provide detailed narrative or payee identification for this expenditure entry..."
-                        />
-                    </div>
-
-                    <div className="flex justify-end gap-3 pt-8 border-t border-border/10">
-                        <button
-                            type="button"
-                            onClick={() => globalThis.history.back()}
-                            className="btn btn-secondary px-8 py-3 font-bold uppercase tracking-widest text-[10px]"
-                        >
-                            Discard Draft
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={saving}
-                            className="btn btn-primary flex items-center gap-3 px-10 py-3 font-bold uppercase tracking-widest text-[10px] shadow-xl shadow-destructive/10 transition-all hover:-translate-y-1 bg-destructive hover:bg-destructive/80 border-none"
-                        >
-                            {saving ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    <span>Syncing Record...</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Check className="w-4 h-4" />
-                                    <span>Commit Expenditure Entry</span>
-                                </>
-                            )}
-                        </button>
-                    </div>
+                    <ExpenseFormFooter
+                        description={formData.description}
+                        onDescriptionChange={(value) => setFormData({ ...formData, description: value })}
+                        saving={saving}
+                    />
                 </form>
             </div>
         </div>

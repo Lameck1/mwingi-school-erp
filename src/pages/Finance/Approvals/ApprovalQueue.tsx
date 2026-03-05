@@ -54,8 +54,92 @@ const getResultMessage = (value: unknown, fallback: string): string => {
   return fallback
 }
 
+interface ReviewModalProps {
+  approval: ApprovalRequest
+  reviewNotes: string
+  processing: boolean
+  onReviewNotesChange: (notes: string) => void
+  onApprove: (id: number) => void
+  onReject: (id: number) => void
+  onCancel: () => void
+}
+
+function ReviewModal({
+  approval, reviewNotes, processing, onReviewNotesChange, onApprove, onReject, onCancel
+}: Readonly<ReviewModalProps>) {
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-card rounded-xl shadow-xl border border-border/40 max-w-2xl w-full p-6 animate-in fade-in zoom-in-95 duration-200">
+        <h2 className="text-2xl font-bold mb-4 text-foreground">Review Approval Request</h2>
+
+        <div className="space-y-3 mb-6">
+          <div className="text-foreground/80">
+            <span className="font-medium text-foreground">Entry Reference:</span> {approval.entry_ref}
+          </div>
+          <div className="text-foreground/80">
+            <span className="font-medium text-foreground">Type:</span> {approval.entry_type}
+          </div>
+          <div className="text-foreground/80">
+            <span className="font-medium text-foreground">Description:</span> {approval.description}
+          </div>
+          <div className="text-foreground/80">
+            <span className="font-medium text-foreground">Amount:</span> {formatCurrencyFromCents(approval.amount)}
+          </div>
+          {approval.student_name && (
+            <div className="text-foreground/80">
+              <span className="font-medium text-foreground">Student:</span> {approval.student_name}
+            </div>
+          )}
+          <div className="text-foreground/80">
+            <span className="font-medium text-foreground">Requested By:</span> {approval.requested_by_name}
+          </div>
+          <div className="text-foreground/80">
+            <span className="font-medium text-foreground">Reason for Approval:</span> {approval.rule_name}
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-foreground/70 mb-2">
+            Review Notes {approval.status === 'PENDING' && '(Required for rejection)'}
+          </label>
+          <textarea
+            value={reviewNotes}
+            onChange={(e) => onReviewNotesChange(e.target.value)}
+            rows={3}
+            className="input w-full"
+            placeholder="Enter your review notes..."
+          />
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={() => onApprove(approval.id)}
+            disabled={processing}
+            className="flex-1 btn bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500/20"
+          >
+            {processing ? 'Processing...' : 'Approve'}
+          </button>
+          <button
+            onClick={() => onReject(approval.id)}
+            disabled={processing}
+            className="flex-1 btn bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20"
+          >
+            {processing ? 'Processing...' : 'Reject'}
+          </button>
+          <button
+            onClick={onCancel}
+            className="flex-1 btn btn-secondary"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ApprovalQueuePage() {
-  const { user } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const { showToast } = useToast();
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [filter, setFilter] = useState<'PENDING' | 'ALL'>('PENDING');
@@ -80,14 +164,14 @@ export default function ApprovalQueuePage() {
     setReviewNotes('');
 
     try {
-      const result = await globalThis.electronAPI.getApprovalQueue(filter);
+      const result = await globalThis.electronAPI.finance.getApprovalQueue(filter);
 
       if (!isSuccessResult(result)) {
         throw new Error(getResultMessage(result, 'Failed to load approvals'))
       }
 
       if (!Array.isArray(result.data)) {
-        throw new Error('Invalid approval queue payload');
+        throw new TypeError('Invalid approval queue payload');
       }
 
       setApprovals(result.data as ApprovalRequest[]);
@@ -116,7 +200,7 @@ export default function ApprovalQueuePage() {
     }
     setProcessing(true);
     try {
-      const result = await globalThis.electronAPI.approveTransaction(
+      const result = await globalThis.electronAPI.finance.approveTransaction(
         approvalId,
         reviewNotes.trim() || 'Approved',
         user.id
@@ -158,7 +242,7 @@ export default function ApprovalQueuePage() {
 
     setProcessing(true);
     try {
-      const result = await globalThis.electronAPI.rejectTransaction(
+      const result = await globalThis.electronAPI.finance.rejectTransaction(
         approvalId,
         reviewNotes.trim(),
         user.id
@@ -295,78 +379,19 @@ export default function ApprovalQueuePage() {
         </div>
       )}
 
-      {/* Review Modal */}
       {selectedApproval && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-card rounded-xl shadow-xl border border-border/40 max-w-2xl w-full p-6 animate-in fade-in zoom-in-95 duration-200">
-            <h2 className="text-2xl font-bold mb-4 text-foreground">Review Approval Request</h2>
-
-            <div className="space-y-3 mb-6">
-              <div className="text-foreground/80">
-                <span className="font-medium text-foreground">Entry Reference:</span> {selectedApproval.entry_ref}
-              </div>
-              <div className="text-foreground/80">
-                <span className="font-medium text-foreground">Type:</span> {selectedApproval.entry_type}
-              </div>
-              <div className="text-foreground/80">
-                <span className="font-medium text-foreground">Description:</span> {selectedApproval.description}
-              </div>
-              <div className="text-foreground/80">
-                <span className="font-medium text-foreground">Amount:</span> {formatCurrencyFromCents(selectedApproval.amount)}
-              </div>
-              {selectedApproval.student_name && (
-                <div className="text-foreground/80">
-                  <span className="font-medium text-foreground">Student:</span> {selectedApproval.student_name}
-                </div>
-              )}
-              <div className="text-foreground/80">
-                <span className="font-medium text-foreground">Requested By:</span> {selectedApproval.requested_by_name}
-              </div>
-              <div className="text-foreground/80">
-                <span className="font-medium text-foreground">Reason for Approval:</span> {selectedApproval.rule_name}
-              </div>
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-foreground/70 mb-2">
-                Review Notes {selectedApproval.status === 'PENDING' && '(Required for rejection)'}
-              </label>
-              <textarea
-                value={reviewNotes}
-                onChange={(e) => setReviewNotes(e.target.value)}
-                rows={3}
-                className="input w-full"
-                placeholder="Enter your review notes..."
-              />
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => handleApprove(selectedApproval.id)}
-                disabled={processing}
-                className="flex-1 btn bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500/20"
-              >
-                {processing ? 'Processing...' : 'Approve'}
-              </button>
-              <button
-                onClick={() => handleReject(selectedApproval.id)}
-                disabled={processing}
-                className="flex-1 btn bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20"
-              >
-                {processing ? 'Processing...' : 'Reject'}
-              </button>
-              <button
-                onClick={() => {
-                  setSelectedApproval(null);
-                  setReviewNotes('');
-                }}
-                className="flex-1 btn btn-secondary"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
+        <ReviewModal
+          approval={selectedApproval}
+          reviewNotes={reviewNotes}
+          processing={processing}
+          onReviewNotesChange={setReviewNotes}
+          onApprove={handleApprove}
+          onReject={handleReject}
+          onCancel={() => {
+            setSelectedApproval(null);
+            setReviewNotes('');
+          }}
+        />
       )}
     </div>
   );

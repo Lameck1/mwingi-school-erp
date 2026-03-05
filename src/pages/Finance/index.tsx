@@ -130,7 +130,7 @@ const iconMap: Record<string, React.ElementType> = {
 
 export default function FinanceHub() {
     const navigate = useNavigate()
-    const { schoolSettings } = useAppStore()
+    const schoolSettings = useAppStore((s) => s.schoolSettings)
 
     return (
         <div className="space-y-8">

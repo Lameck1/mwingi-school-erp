@@ -5,280 +5,328 @@
  * Validates that debits = credits before posting
  */
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 
 import { HubBreadcrumb } from '../../../components/patterns/HubBreadcrumb';
-import { useToast } from '../../../contexts/ToastContext';
-import { useAuthStore, useAppStore } from '../../../stores';
-import { formatCurrency, shillingsToCents } from '../../../utils/format';
-import { getIPCFailureMessage, isIPCFailure } from '../../../utils/ipc'
+import { formatCurrency } from '../../../utils/format';
+import { type ImportedBalance } from './openingBalanceImport.helpers'
+import { useOpeningBalanceImport } from './useOpeningBalanceImport'
 
-
-interface ImportedBalance {
-  type: 'STUDENT' | 'GL_ACCOUNT';
-  identifier: string; // Student ID or GL Account Code
-  name: string;
-  amount: number;
-  debitCredit: 'DEBIT' | 'CREDIT';
+interface BalanceSummaryCardProps {
+  totalDebits: number
+  totalCredits: number
+  variance: number
+  isBalanced: boolean
+  verified: boolean
+  importing: boolean
+  handleVerify: () => void
+  handleImport: () => Promise<void>
 }
 
-const findFirstIndex = (values: string[], candidates: string[]): number => {
-  for (const candidate of candidates) {
-    const idx = values.indexOf(candidate);
-    if (idx >= 0) {
-      return idx;
-    }
-  }
-  return -1;
-};
+function BalanceSummaryCard({ totalDebits, totalCredits, variance, isBalanced, verified, importing, handleVerify, handleImport }: Readonly<BalanceSummaryCardProps>) {
+  return (
+    <div className="bg-card rounded-lg shadow p-6">
+      <h3 className="text-lg font-semibold text-foreground mb-4">Summary</h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="text-center p-4 bg-green-500/10 rounded-lg">
+          <p className="text-sm text-muted-foreground mb-1">Total Debits</p>
+          <p className="text-2xl font-bold text-green-700">
+            {formatCurrency(totalDebits)}
+          </p>
+        </div>
+        <div className="text-center p-4 bg-red-500/10 rounded-lg">
+          <p className="text-sm text-muted-foreground mb-1">Total Credits</p>
+          <p className="text-2xl font-bold text-red-700">
+            {formatCurrency(totalCredits)}
+          </p>
+        </div>
+        <div
+          className={`text-center p-4 rounded-lg ${isBalanced ? 'bg-blue-500/10' : 'bg-yellow-500/10'
+            }`}
+        >
+          <p className="text-sm text-muted-foreground mb-1">Variance</p>
+          <p
+            className={`text-2xl font-bold ${isBalanced ? 'text-blue-700' : 'text-yellow-700'
+              }`}
+          >
+            {formatCurrency(variance)}
+          </p>
+        </div>
+      </div>
 
-const parseCsvBalances = (text: string): { balances: ImportedBalance[]; error?: string } => {
-  const lines = text.split(/\r?\n/).filter(line => line.trim());
-  if (lines.length < 2) {
-    return { balances: [], error: 'CSV file must have a header row and at least one data row' };
-  }
+      <div className="mt-4 flex justify-center gap-4">
+        <button
+          onClick={handleVerify}
+          className="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/50"
+        >
+          Verify Balance
+        </button>
+        <button
+          onClick={handleImport}
+          disabled={!verified || importing}
+          className={`px-6 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${verified && !importing
+              ? 'bg-success text-white hover:bg-success/90 focus:ring-success/50'
+              : 'bg-gray-300 text-muted-foreground cursor-not-allowed'
+            }`}
+        >
+          {importing ? 'Importing...' : 'Import to System'}
+        </button>
+      </div>
 
-  const header = (lines[0] ?? '').split(',').map(h => h.trim().toLowerCase());
-  const typeIdx = header.indexOf('type');
-  const idIdx = findFirstIndex(header, ['identifier', 'id', 'code']);
-  const nameIdx = header.indexOf('name');
-  const amountIdx = header.indexOf('amount');
-  const dcIdx = findFirstIndex(header, ['debit_credit', 'debitcredit', 'dc']);
+      {verified && (
+        <div className="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-md text-center">
+          <p className="text-green-500 font-medium">
+            ✓ Verification successful! Ready to import.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
 
-  if (typeIdx === -1 || idIdx === -1 || amountIdx === -1) {
-    return { balances: [], error: 'CSV must have columns: type, identifier, amount (and optionally: name, debit_credit)' };
-  }
+interface BalancesTableProps {
+  balances: ImportedBalance[]
+  handleRemoveBalance: (index: number) => void
+}
 
-  const parsed: ImportedBalance[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const cols = (lines[i] ?? '').split(',').map(c => c.trim());
-    if (cols.length < Math.max(typeIdx, idIdx, amountIdx) + 1) {continue;}
+function BalancesTable({ balances, handleRemoveBalance }: Readonly<BalancesTableProps>) {
+  return (
+    <div className="bg-card rounded-lg shadow overflow-hidden">
+      <table className="min-w-full divide-y divide-border">
+        <thead className="bg-secondary">
+          <tr>
+            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Type
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Identifier
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Name
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Debit/Credit
+            </th>
+            <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Amount
+            </th>
+            <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Actions
+            </th>
+          </tr>
+        </thead>
+        <tbody className="bg-card divide-y divide-border">
+          {balances.map((balance, index) => (
+            <tr key={`${balance.type}-${balance.identifier}-${balance.debitCredit}-${balance.amount}`} className="hover:bg-secondary">
+              <td className="px-6 py-4 whitespace-nowrap">
+                <span
+                  className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${balance.type === 'STUDENT'
+                      ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
+                      : 'bg-purple-100 text-purple-800'
+                    }`}
+                >
+                  {balance.type}
+                </span>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-foreground">
+                {balance.identifier}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
+                {balance.name}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <span
+                  className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${balance.debitCredit === 'DEBIT'
+                      ? 'bg-green-500/15 text-green-600 dark:text-green-400'
+                      : 'bg-red-500/15 text-red-600 dark:text-red-400'
+                    }`}
+                >
+                  {balance.debitCredit}
+                </span>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-foreground font-medium">
+                {formatCurrency(balance.amount)}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                <button
+                  onClick={() => handleRemoveBalance(index)}
+                  className="text-destructive hover:text-destructive/80"
+                >
+                  Remove
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
-    const type = (cols[typeIdx] ?? '').toUpperCase() as 'STUDENT' | 'GL_ACCOUNT';
-    const amount = Number.parseFloat(cols[amountIdx] ?? '');
-    if (Number.isNaN(amount) || amount <= 0) {continue;}
+interface AddBalanceModalProps {
+  showAddModal: boolean
+  setShowAddModal: (show: boolean) => void
+  newBalance: ImportedBalance
+  setNewBalance: (balance: ImportedBalance) => void
+  handleAddBalance: () => void
+}
 
-    parsed.push({
-      type: type === 'GL_ACCOUNT' ? 'GL_ACCOUNT' : 'STUDENT',
-      identifier: cols[idIdx] ?? '',
-      name: nameIdx >= 0 ? (cols[nameIdx] ?? '') : (cols[idIdx] ?? ''),
-      amount,
-      debitCredit: dcIdx >= 0 && (cols[dcIdx] ?? '').toUpperCase().startsWith('C') ? 'CREDIT' : 'DEBIT'
-    });
-  }
+function ImportInstructions() {
+  return (
+    <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+      <h3 className="text-sm font-semibold text-blue-600 dark:text-blue-400 mb-2">
+        Important Instructions
+      </h3>
+      <ul className="text-sm text-blue-600 dark:text-blue-400 space-y-1 list-disc list-inside">
+        <li>Total debits must equal total credits before import</li>
+        <li>Student balances should be debits (receivables)</li>
+        <li>Verify all data before importing - this cannot be easily undone</li>
+        <li>
+          Use GL account 3000 (Retained Earnings) to balance if needed
+        </li>
+      </ul>
+    </div>
+  )
+}
 
-  return { balances: parsed };
-};
+function AddBalanceModal({ showAddModal, setShowAddModal, newBalance, setNewBalance, handleAddBalance }: Readonly<AddBalanceModalProps>) {
+  if (!showAddModal) { return null }
+  return (
+    <div
+      className="fixed inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center z-50 relative"
+    >
+      <button
+        type="button"
+        aria-label="Close add balance modal"
+        onClick={() => setShowAddModal(false)}
+        className="absolute inset-0"
+      />
+      <dialog
+        open
+        className="bg-card rounded-lg shadow-xl p-6 max-w-md w-full relative z-10"
+        aria-labelledby="opening-balance-modal-title"
+      >
+        <h3 id="opening-balance-modal-title" className="text-lg font-semibold text-foreground mb-4">
+          Add Balance Entry
+        </h3>
 
-const getResultMessage = (value: unknown, fallback: string): string => {
-  if (isIPCFailure(value)) {
-    return getIPCFailureMessage(value, fallback)
-  }
-  if (value && typeof value === 'object') {
-    const maybe = value as { error?: unknown; message?: unknown }
-    if (typeof maybe.error === 'string' && maybe.error.trim()) {
-      return maybe.error
-    }
-    if (typeof maybe.message === 'string' && maybe.message.trim()) {
-      return maybe.message
-    }
-  }
-  return fallback
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="opening-balance-type" className="block text-sm font-medium text-foreground/70 mb-1">
+              Type
+            </label>
+            <select
+              id="opening-balance-type"
+              value={newBalance.type}
+              onChange={(e) =>
+                setNewBalance({
+                  ...newBalance,
+                  type: e.target.value as 'STUDENT' | 'GL_ACCOUNT',
+                })
+              }
+              className="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            >
+              <option value="STUDENT">Student</option>
+              <option value="GL_ACCOUNT">GL Account</option>
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="opening-balance-identifier" className="block text-sm font-medium text-foreground/70 mb-1">
+              {newBalance.type === 'STUDENT'
+                ? 'Student ID'
+                : 'GL Account Code'}
+            </label>
+            <input
+              id="opening-balance-identifier"
+              type="text"
+              value={newBalance.identifier}
+              onChange={(e) =>
+                setNewBalance({ ...newBalance, identifier: e.target.value })
+              }
+              className="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="opening-balance-name" className="block text-sm font-medium text-foreground/70 mb-1">
+              Name
+            </label>
+            <input
+              id="opening-balance-name"
+              type="text"
+              value={newBalance.name}
+              onChange={(e) =>
+                setNewBalance({ ...newBalance, name: e.target.value })
+              }
+              className="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="opening-balance-debit-credit" className="block text-sm font-medium text-foreground/70 mb-1">
+              Debit/Credit
+            </label>
+            <select
+              id="opening-balance-debit-credit"
+              value={newBalance.debitCredit}
+              onChange={(e) =>
+                setNewBalance({
+                  ...newBalance,
+                  debitCredit: e.target.value as 'DEBIT' | 'CREDIT',
+                })
+              }
+              className="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            >
+              <option value="DEBIT">Debit</option>
+              <option value="CREDIT">Credit</option>
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="opening-balance-amount" className="block text-sm font-medium text-foreground/70 mb-1">
+              Amount (Kes)
+            </label>
+            <input
+              id="opening-balance-amount"
+              type="number"
+              value={newBalance.amount}
+              onChange={(e) =>
+                setNewBalance({
+                  ...newBalance,
+                  amount: Number.parseFloat(e.target.value) || 0,
+                })
+              }
+              className="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            />
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            onClick={() => setShowAddModal(false)}
+            className="px-4 py-2 text-sm font-medium text-foreground/70 bg-card border border-border rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleAddBalance}
+            className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/50"
+          >
+            Add Entry
+          </button>
+        </div>
+      </dialog>
+    </div>
+  )
 }
 
 export const OpeningBalanceImport: React.FC = () => {
-  const { showToast } = useToast();
-  const { user } = useAuthStore();
-  const { currentAcademicYear } = useAppStore();
-  const [balances, setBalances] = useState<ImportedBalance[]>([]);
-  const [importing, setImporting] = useState(false);
-  const [verified, setVerified] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newBalance, setNewBalance] = useState<ImportedBalance>({
-    type: 'STUDENT',
-    identifier: '',
-    name: '',
-    amount: 0,
-    debitCredit: 'DEBIT',
-  });
-
-  useEffect(() => {
-    if (!showAddModal) {return;}
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setShowAddModal(false);
-      }
-    };
-
-    globalThis.addEventListener('keydown', handleEscape);
-    return () => globalThis.removeEventListener('keydown', handleEscape);
-  }, [showAddModal]);
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {return;}
-    try {
-      const text = await file.text();
-      const { balances: parsed, error } = parseCsvBalances(text);
-      if (error) {
-        showToast(error, 'error');
-        return;
-      }
-
-      if (parsed.length === 0) {
-        showToast('No valid rows found in CSV file', 'warning');
-        return;
-      }
-
-      setBalances(parsed);
-      setVerified(false);
-      showToast(`Loaded ${parsed.length} balance row(s)`, 'success');
-    } catch (err) {
-      console.error('CSV parse error:', err);
-      showToast('Failed to parse CSV file. Ensure it is a valid CSV format.', 'error');
-    } finally {
-      event.target.value = '';
-    }
-  };
-
-  const handleAddBalance = () => {
-    if (!newBalance.identifier || !newBalance.name || newBalance.amount <= 0) {
-      showToast('Please fill all fields', 'warning');
-      return;
-    }
-
-    setBalances((prev) => [...prev, { ...newBalance }]);
-    setNewBalance({
-      type: 'STUDENT',
-      identifier: '',
-      name: '',
-      amount: 0,
-      debitCredit: 'DEBIT',
-    });
-    setShowAddModal(false);
-    setVerified(false);
-  };
-
-  const handleRemoveBalance = (index: number) => {
-    setBalances((prev) => prev.filter((_, i) => i !== index));
-    setVerified(false);
-  };
-
-  const handleVerify = () => {
-    if (balances.length === 0) {
-      showToast('Add balances before verification', 'warning');
-      return;
-    }
-
-    const totalDebits = balances
-      .filter((b) => b.debitCredit === 'DEBIT')
-      .reduce((sum, b) => sum + b.amount, 0);
-
-    const totalCredits = balances
-      .filter((b) => b.debitCredit === 'CREDIT')
-      .reduce((sum, b) => sum + b.amount, 0);
-
-    if (Math.abs(totalDebits - totalCredits) < 0.01) {
-      setVerified(true);
-      showToast('Verification successful. Debits equal credits.', 'success');
-    } else {
-      setVerified(false);
-      showToast(
-        `Verification failed. Debits: Kes ${totalDebits.toFixed(2)}, Credits: Kes ${totalCredits.toFixed(2)}, Variance: Kes ${Math.abs(totalDebits - totalCredits).toFixed(2)}`,
-        'error'
-      );
-    }
-  };
-
-  const handleImport = async () => {
-    if (balances.length === 0) {
-      showToast('Add balances before importing', 'warning');
-      return;
-    }
-    if (!verified) {
-      showToast('Please verify balances before importing', 'warning');
-      return;
-    }
-    if (!user?.id) {
-      showToast('You must be signed in to import opening balances', 'error');
-      return;
-    }
-    if (!currentAcademicYear?.id) {
-      showToast('Select an active academic year before importing balances', 'error');
-      return;
-    }
-
-    setImporting(true);
-    try {
-      // Split balances by type and call appropriate IPC handlers
-      const studentBalances = balances
-        .filter(b => b.type === 'STUDENT')
-        .map(b => ({
-          student_id: Number(b.identifier),
-          admission_number: b.identifier,
-          student_name: b.name,
-          opening_balance: shillingsToCents(b.amount),
-          balance_type: b.debitCredit
-        }));
-
-      const invalidStudent = studentBalances.find(b => !Number.isFinite(b.student_id) || b.student_id <= 0);
-      if (invalidStudent) {
-        showToast('Student balances must include a valid numeric student ID in the identifier field.', 'error');
-        return;
-      }
-
-      const glBalances = balances
-        .filter(b => b.type === 'GL_ACCOUNT')
-        .map(b => ({
-          academic_year_id: currentAcademicYear.id,
-          gl_account_code: b.identifier,
-          debit_amount: b.debitCredit === 'DEBIT' ? shillingsToCents(b.amount) : 0,
-          credit_amount: b.debitCredit === 'CREDIT' ? shillingsToCents(b.amount) : 0,
-          description: `Opening balance for ${b.identifier}`,
-          imported_from: 'csv_import',
-          imported_by_user_id: user.id
-        }));
-
-      if (studentBalances.length > 0) {
-        const studentImportResult = await globalThis.electronAPI.importStudentOpeningBalances(
-          studentBalances,
-          currentAcademicYear.id,
-          'csv_import',
-          user.id
-        );
-        if (!studentImportResult || studentImportResult.success !== true) {
-          throw new Error(getResultMessage(studentImportResult, 'Failed to import student opening balances'));
-        }
-      }
-      if (glBalances.length > 0) {
-        const glImportResult = await globalThis.electronAPI.importGLOpeningBalances(glBalances, user.id);
-        if (!glImportResult || glImportResult.success !== true) {
-          throw new Error(getResultMessage(glImportResult, 'Failed to import GL opening balances'));
-        }
-      }
-
-      showToast('Opening balances imported successfully', 'success');
-      setBalances([]);
-      setVerified(false);
-    } catch (error) {
-      console.error('Import failed:', error);
-      showToast(error instanceof Error ? error.message : 'Import failed. Please try again.', 'error');
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  const totalDebits = balances
-    .filter((b) => b.debitCredit === 'DEBIT')
-    .reduce((sum, b) => sum + b.amount, 0);
-
-  const totalCredits = balances
-    .filter((b) => b.debitCredit === 'CREDIT')
-    .reduce((sum, b) => sum + b.amount, 0);
-
-  const variance = Math.abs(totalDebits - totalCredits);
-  const isBalanced = variance < 0.01;
+  const {
+    balances, importing, verified, totalDebits, totalCredits, variance, isBalanced,
+    showAddModal, setShowAddModal, newBalance, setNewBalance,
+    handleFileUpload, handleAddBalance, handleRemoveBalance, handleVerify, handleImport,
+  } = useOpeningBalanceImport()
 
 
 
@@ -294,20 +342,7 @@ export const OpeningBalanceImport: React.FC = () => {
         </p>
       </div>
 
-      {/* Import Instructions */}
-      <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-blue-600 dark:text-blue-400 mb-2">
-          Important Instructions
-        </h3>
-        <ul className="text-sm text-blue-600 dark:text-blue-400 space-y-1 list-disc list-inside">
-          <li>Total debits must equal total credits before import</li>
-          <li>Student balances should be debits (receivables)</li>
-          <li>Verify all data before importing - this cannot be easily undone</li>
-          <li>
-            Use GL account 3000 (Retained Earnings) to balance if needed
-          </li>
-        </ul>
-      </div>
+      <ImportInstructions />
 
       {/* Import Controls */}
       <div className="bg-card rounded-lg shadow p-4">
@@ -335,137 +370,24 @@ export const OpeningBalanceImport: React.FC = () => {
         </div>
       </div>
 
-      {/* Summary Card */}
       {balances.length > 0 && (
-        <div className="bg-card rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-foreground mb-4">Summary</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center p-4 bg-green-500/10 rounded-lg">
-              <p className="text-sm text-muted-foreground mb-1">Total Debits</p>
-              <p className="text-2xl font-bold text-green-700">
-                {formatCurrency(totalDebits)}
-              </p>
-            </div>
-            <div className="text-center p-4 bg-red-500/10 rounded-lg">
-              <p className="text-sm text-muted-foreground mb-1">Total Credits</p>
-              <p className="text-2xl font-bold text-red-700">
-                {formatCurrency(totalCredits)}
-              </p>
-            </div>
-            <div
-              className={`text-center p-4 rounded-lg ${isBalanced ? 'bg-blue-500/10' : 'bg-yellow-500/10'
-                }`}
-            >
-              <p className="text-sm text-muted-foreground mb-1">Variance</p>
-              <p
-                className={`text-2xl font-bold ${isBalanced ? 'text-blue-700' : 'text-yellow-700'
-                  }`}
-              >
-                {formatCurrency(variance)}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 flex justify-center gap-4">
-            <button
-              onClick={handleVerify}
-              className="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/50"
-            >
-              Verify Balance
-            </button>
-            <button
-              onClick={handleImport}
-              disabled={!verified || importing}
-              className={`px-6 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${verified && !importing
-                  ? 'bg-success text-white hover:bg-success/90 focus:ring-success/50'
-                  : 'bg-gray-300 text-muted-foreground cursor-not-allowed'
-                }`}
-            >
-              {importing ? 'Importing...' : 'Import to System'}
-            </button>
-          </div>
-
-          {verified && (
-            <div className="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-md text-center">
-              <p className="text-green-500 font-medium">
-                ✓ Verification successful! Ready to import.
-              </p>
-            </div>
-          )}
-        </div>
+        <BalanceSummaryCard
+          totalDebits={totalDebits}
+          totalCredits={totalCredits}
+          variance={variance}
+          isBalanced={isBalanced}
+          verified={verified}
+          importing={importing}
+          handleVerify={handleVerify}
+          handleImport={handleImport}
+        />
       )}
 
-      {/* Balances Table */}
       {balances.length > 0 && (
-        <div className="bg-card rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-border">
-            <thead className="bg-secondary">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Type
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Identifier
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Debit/Credit
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Amount
-                </th>
-                <th className="px-6 py-3 text-center text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-card divide-y divide-border">
-              {balances.map((balance, index) => (
-                <tr key={`${balance.type}-${balance.identifier}-${balance.debitCredit}-${balance.amount}`} className="hover:bg-secondary">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${balance.type === 'STUDENT'
-                          ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
-                          : 'bg-purple-100 text-purple-800'
-                        }`}
-                    >
-                      {balance.type}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-foreground">
-                    {balance.identifier}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-foreground">
-                    {balance.name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${balance.debitCredit === 'DEBIT'
-                          ? 'bg-green-500/15 text-green-600 dark:text-green-400'
-                          : 'bg-red-500/15 text-red-600 dark:text-red-400'
-                        }`}
-                    >
-                      {balance.debitCredit}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-foreground font-medium">
-                    {formatCurrency(balance.amount)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                    <button
-                      onClick={() => handleRemoveBalance(index)}
-                      className="text-destructive hover:text-destructive/80"
-                    >
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <BalancesTable
+          balances={balances}
+          handleRemoveBalance={handleRemoveBalance}
+        />
       )}
 
       {balances.length === 0 && (
@@ -477,135 +399,13 @@ export const OpeningBalanceImport: React.FC = () => {
         </div>
       )}
 
-      {/* Add Balance Modal */}
-      {showAddModal && (
-        <div
-          className="fixed inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center z-50 relative"
-        >
-          <button
-            type="button"
-            aria-label="Close add balance modal"
-            onClick={() => setShowAddModal(false)}
-            className="absolute inset-0"
-          />
-          <dialog
-            open
-            className="bg-card rounded-lg shadow-xl p-6 max-w-md w-full relative z-10"
-            aria-labelledby="opening-balance-modal-title"
-          >
-            <h3 id="opening-balance-modal-title" className="text-lg font-semibold text-foreground mb-4">
-              Add Balance Entry
-            </h3>
-
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="opening-balance-type" className="block text-sm font-medium text-foreground/70 mb-1">
-                  Type
-                </label>
-                <select
-                  id="opening-balance-type"
-                  value={newBalance.type}
-                  onChange={(e) =>
-                    setNewBalance({
-                      ...newBalance,
-                      type: e.target.value as 'STUDENT' | 'GL_ACCOUNT',
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                >
-                  <option value="STUDENT">Student</option>
-                  <option value="GL_ACCOUNT">GL Account</option>
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="opening-balance-identifier" className="block text-sm font-medium text-foreground/70 mb-1">
-                  {newBalance.type === 'STUDENT'
-                    ? 'Student ID'
-                    : 'GL Account Code'}
-                </label>
-                <input
-                  id="opening-balance-identifier"
-                  type="text"
-                  value={newBalance.identifier}
-                  onChange={(e) =>
-                    setNewBalance({ ...newBalance, identifier: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="opening-balance-name" className="block text-sm font-medium text-foreground/70 mb-1">
-                  Name
-                </label>
-                <input
-                  id="opening-balance-name"
-                  type="text"
-                  value={newBalance.name}
-                  onChange={(e) =>
-                    setNewBalance({ ...newBalance, name: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="opening-balance-debit-credit" className="block text-sm font-medium text-foreground/70 mb-1">
-                  Debit/Credit
-                </label>
-                <select
-                  id="opening-balance-debit-credit"
-                  value={newBalance.debitCredit}
-                  onChange={(e) =>
-                    setNewBalance({
-                      ...newBalance,
-                      debitCredit: e.target.value as 'DEBIT' | 'CREDIT',
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                >
-                  <option value="DEBIT">Debit</option>
-                  <option value="CREDIT">Credit</option>
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="opening-balance-amount" className="block text-sm font-medium text-foreground/70 mb-1">
-                  Amount (Kes)
-                </label>
-                <input
-                  id="opening-balance-amount"
-                  type="number"
-                  value={newBalance.amount}
-                  onChange={(e) =>
-                    setNewBalance({
-                      ...newBalance,
-                      amount: Number.parseFloat(e.target.value) || 0,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-border rounded-md bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 text-sm font-medium text-foreground/70 bg-card border border-border rounded-md hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddBalance}
-                className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary/50"
-              >
-                Add Entry
-              </button>
-            </div>
-          </dialog>
-        </div>
-      )}
+      <AddBalanceModal
+        showAddModal={showAddModal}
+        setShowAddModal={setShowAddModal}
+        newBalance={newBalance}
+        setNewBalance={setNewBalance}
+        handleAddBalance={handleAddBalance}
+      />
     </div>
   );
 };

@@ -5,6 +5,17 @@ import { canGenerateStudentInvoice, findPendingInvoice, validateCreditPayment, v
 import type { Invoice } from '../../../types/electron-api/FinanceAPI'
 
 describe('finance validation logic', () => {
+    it('rejects payment submit when no student is selected', () => {
+        const result = validatePaymentSubmit({
+            selectedStudentId: undefined,
+            amountInput: '2500',
+            userId: 1,
+            isFormBlocked: false
+        })
+        expect(result.valid).toBe(false)
+        expect(result.error).toContain('Select a student')
+    })
+
     it('rejects payment submit when form is blocked by invoice guard', () => {
         const result = validatePaymentSubmit({
             selectedStudentId: 10,
@@ -25,6 +36,28 @@ describe('finance validation logic', () => {
         })
         expect(result.valid).toBe(false)
         expect(result.error).toContain('greater than zero')
+    })
+
+    it('rejects payment submit when userId is missing', () => {
+        const result = validatePaymentSubmit({
+            selectedStudentId: 10,
+            amountInput: '2500',
+            userId: undefined,
+            isFormBlocked: false
+        })
+        expect(result.valid).toBe(false)
+        expect(result.error).toContain('signed in')
+    })
+
+    it('rejects payment submit when amount input is empty', () => {
+        const result = validatePaymentSubmit({
+            selectedStudentId: 10,
+            amountInput: '   ',
+            userId: 1,
+            isFormBlocked: false
+        })
+        expect(result.valid).toBe(false)
+        expect(result.error).toContain('Payment amount is required')
     })
 
     it('returns amount cents on valid payment submit', () => {

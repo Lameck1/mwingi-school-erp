@@ -28,9 +28,170 @@ interface PaymentEntryFormProps {
     schoolSettings: SchoolSettings | null // Passed from parent or store
 }
 
+type PaymentFormData = {
+    amount: string
+    payment_method: string
+    payment_reference: string
+    transaction_date: string
+    description: string
+}
+
+interface PaymentSuccessBannerProps {
+    success: PaymentSuccess
+    sendingSms: boolean
+    onPrint: () => void
+    onSendSms: () => void
+}
+
+function PaymentSuccessBanner({ success, sendingSms, onPrint, onSendSms }: Readonly<PaymentSuccessBannerProps>) {
+    return (
+        <div className="mb-8 p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl animate-slide-up">
+            <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3 text-emerald-400 mb-4">
+                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                        <Check className="w-5 h-5" />
+                    </div>
+                    <span className="font-bold text-lg">Transaction Confirmed</span>
+                </div>
+                <p className="text-xs font-mono text-emerald-400/60 uppercase tracking-widest">#{success.receiptNumber}</p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+                <button
+                    onClick={onPrint}
+                    className="btn btn-secondary flex items-center gap-2 py-2 px-6 text-sm"
+                >
+                    <Printer className="w-4 h-4" />
+                    Print Official Receipt
+                </button>
+                <button
+                    onClick={onSendSms}
+                    disabled={sendingSms}
+                    className="btn btn-primary flex items-center gap-2 py-2 px-6 text-sm"
+                >
+                    {sendingSms ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+                    Dispatch SMS Confirmation
+                </button>
+            </div>
+        </div>
+    )
+}
+
+interface PaymentFormFieldsProps {
+    formData: PaymentFormData
+    setFormData: React.Dispatch<React.SetStateAction<PaymentFormData>>
+    selectedStudent: Student | null
+    useCredit: boolean
+    setUseCredit: React.Dispatch<React.SetStateAction<boolean>>
+    saving: boolean
+    onSubmit: (e: React.SyntheticEvent) => void
+}
+
+function PaymentFormFields({ formData, setFormData, selectedStudent, useCredit, setUseCredit, saving, onSubmit }: Readonly<PaymentFormFieldsProps>) {
+    return (
+        <form onSubmit={onSubmit} className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                    <label className="label" htmlFor="payment-amount">Amount Payable (KES)</label>
+                    <div className="relative">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-foreground/40 font-bold">KSh</div>
+                        <input
+                            id="payment-amount"
+                            type="number"
+                            value={formData.amount}
+                            onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                            className="input pl-14 text-xl font-bold border-border/20 focus:border-primary/50"
+                            required
+                            placeholder="0.00"
+                            min="1"
+                            disabled={!selectedStudent}
+                        />
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <label className="label" htmlFor="payment-date">Value Date</label>
+                    <input
+                        id="payment-date"
+                        type="date"
+                        value={formData.transaction_date}
+                        onChange={(e) => setFormData(prev => ({ ...prev, transaction_date: e.target.value }))}
+                        className="input border-border/20"
+                        required
+                        disabled={!selectedStudent}
+                    />
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                    <label className="label" htmlFor="payment-method">Payment Instrument</label>
+                    <select
+                        id="payment-method"
+                        value={formData.payment_method}
+                        onChange={(e) => setFormData(prev => ({ ...prev, payment_method: e.target.value }))}
+                        className="input border-border/20"
+                        disabled={!selectedStudent || useCredit}
+                    >
+                        <option value="CASH">Liquid Cash</option>
+                        <option value="MPESA">M-PESA / Mobile Money</option>
+                        <option value="BANK_TRANSFER">Direct EFT/Transfer</option>
+                        <option value="CHEQUE">Banker's Cheque</option>
+                    </select>
+                    {(selectedStudent?.credit_balance || 0) > 0 && (
+                        <label className="flex items-center gap-2 mt-2 text-sm font-medium text-foreground cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={useCredit}
+                                onChange={e => setUseCredit(e.target.checked)}
+                                className="checkbox checkbox-primary w-4 h-4 rounded"
+                            />
+                            <span>Use Credit ({formatCurrencyFromCents(selectedStudent?.credit_balance || 0)})</span>
+                        </label>
+                    )}
+                </div>
+
+                <div className="space-y-2">
+                    <label className="label" htmlFor="payment-reference">Reference / Slip Number</label>
+                    <input
+                        id="payment-reference"
+                        type="text"
+                        value={formData.payment_reference}
+                        onChange={(e) => setFormData(prev => ({ ...prev, payment_reference: e.target.value }))}
+                        className="input border-border/20"
+                        disabled={!selectedStudent}
+                        placeholder="e.g., M-PESA Code"
+                    />
+                </div>
+            </div>
+
+            <div className="space-y-2">
+                <label className="label" htmlFor="payment-description">Transaction Narrative</label>
+                <textarea
+                    id="payment-description"
+                    value={formData.description}
+                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                    className="input border-border/20 min-h-[100px]"
+                    rows={3}
+                    disabled={!selectedStudent}
+                    placeholder="Optional notes for this payment..."
+                />
+            </div>
+
+            <button
+                type="submit"
+                disabled={saving || !selectedStudent}
+                className="w-full btn btn-primary py-5 rounded-2xl flex items-center justify-center gap-3 text-lg font-bold shadow-xl shadow-primary/20 transition-all hover:-translate-y-1 active:scale-95 disabled:hover:translate-y-0"
+            >
+                {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <Check className="w-6 h-6" />}
+                <span>{saving ? 'Processing Ledger...' : 'Finalize Payment'}</span>
+            </button>
+        </form>
+    )
+}
+
 export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStudent, onPaymentComplete, schoolSettings }) => {
-    const { user } = useAuthStore()
-    const { currentTerm } = useAppStore()
+    const user = useAuthStore((s) => s.user)
+    const currentTerm = useAppStore((s) => s.currentTerm)
     const { showToast } = useToast()
 
     const [formData, setFormData] = useState({
@@ -59,7 +220,7 @@ export const PaymentEntryForm: React.FC<PaymentEntryFormProps> = ({ selectedStud
 
 const processCreditPayment = async (amount: number, studentId: number, userId: number): Promise<PaymentSuccess> => {
         const invoices = unwrapArrayResult(
-            await globalThis.electronAPI.getInvoicesByStudent(studentId),
+            await globalThis.electronAPI.finance.getInvoicesByStudent(studentId),
             'Failed to load student invoices'
         )
         const pending = invoices.find((inv: { id: number, balance: number }) => inv.balance > 0)
@@ -71,7 +232,7 @@ const processCreditPayment = async (amount: number, studentId: number, userId: n
             throw new Error('Insufficient credit balance')
         }
 
-        const result = await globalThis.electronAPI.payWithCredit({
+        const result = await globalThis.electronAPI.finance.payWithCredit({
             studentId, invoiceId: pending.id, amount
         }, userId)
 
@@ -87,12 +248,12 @@ const processCreditPayment = async (amount: number, studentId: number, userId: n
     }
 
     const processStandardPayment = async (amount: number, studentId: number, userId: number): Promise<PaymentSuccess> => {
-        const result = await globalThis.electronAPI.recordPayment({
+        const result = await globalThis.electronAPI.finance.recordPayment({
             student_id: studentId, amount, payment_method: formData.payment_method,
             payment_reference: formData.payment_reference, transaction_date: formData.transaction_date,
             description: formData.description, term_id: currentTerm?.id || 0,
             idempotency_key: crypto.randomUUID()
-        } as Parameters<typeof globalThis.electronAPI.recordPayment>[0], userId)
+        } as Parameters<typeof globalThis.electronAPI.finance.recordPayment>[0], userId)
 
         if (!result.success) {
             throw new Error(result.errors?.[0] || result.error || 'Payment failed')
@@ -206,7 +367,7 @@ const processCreditPayment = async (amount: number, studentId: number, userId: n
         try {
             const message = `Payment Received: ${selectedStudent.first_name} ${selectedStudent.last_name}. Amount: ${formatCurrencyFromCents(success.amount)}. Receipt: ${success.receiptNumber}. Bal: ${formatCurrencyFromCents(selectedStudent.balance || 0)}. Thank you.`
 
-            const result = await globalThis.electronAPI.sendSMS({
+            const result = await globalThis.electronAPI.communications.sendSMS({
                 to: selectedStudent.guardian_phone,
                 message,
                 recipientId: selectedStudent.id,
@@ -239,134 +400,23 @@ const processCreditPayment = async (amount: number, studentId: number, userId: n
             </div>
 
             {success && (
-                <div className="mb-8 p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl animate-slide-up">
-                    <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3 text-emerald-400 mb-4">
-                            <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                                <Check className="w-5 h-5" />
-                            </div>
-                            <span className="font-bold text-lg">Transaction Confirmed</span>
-                        </div>
-                        <p className="text-xs font-mono text-emerald-400/60 uppercase tracking-widest">#{success.receiptNumber}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                        <button
-                            onClick={handlePrint}
-                            className="btn btn-secondary flex items-center gap-2 py-2 px-6 text-sm"
-                        >
-                            <Printer className="w-4 h-4" />
-                            Print Official Receipt
-                        </button>
-                        <button
-                            onClick={handleSendSms}
-                            disabled={sendingSms}
-                            className="btn btn-primary flex items-center gap-2 py-2 px-6 text-sm"
-                        >
-                            {sendingSms ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
-                            Dispatch SMS Confirmation
-                        </button>
-                    </div>
-                </div>
+                <PaymentSuccessBanner
+                    success={success}
+                    sendingSms={sendingSms}
+                    onPrint={handlePrint}
+                    onSendSms={handleSendSms}
+                />
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-2">
-                        <label className="label" htmlFor="payment-amount">Amount Payable (KES)</label>
-                        <div className="relative">
-                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-foreground/40 font-bold">KSh</div>
-                            <input
-                                id="payment-amount"
-                                type="number"
-                                value={formData.amount}
-                                onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-                                className="input pl-14 text-xl font-bold border-border/20 focus:border-primary/50"
-                                required
-                                placeholder="0.00"
-                                min="1"
-                                disabled={!selectedStudent}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="label" htmlFor="payment-date">Value Date</label>
-                        <input
-                            id="payment-date"
-                            type="date"
-                            value={formData.transaction_date}
-                            onChange={(e) => setFormData(prev => ({ ...prev, transaction_date: e.target.value }))}
-                            className="input border-border/20"
-                            required
-                            disabled={!selectedStudent}
-                        />
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-2">
-                        <label className="label" htmlFor="payment-method">Payment Instrument</label>
-                        <select
-                            id="payment-method"
-                            value={formData.payment_method}
-                            onChange={(e) => setFormData(prev => ({ ...prev, payment_method: e.target.value }))}
-                            className="input border-border/20"
-                            disabled={!selectedStudent || useCredit}
-                        >
-                            <option value="CASH">Liquid Cash</option>
-                            <option value="MPESA">M-PESA / Mobile Money</option>
-                            <option value="BANK_TRANSFER">Direct EFT/Transfer</option>
-                            <option value="CHEQUE">Banker's Cheque</option>
-                        </select>
-                        {(selectedStudent?.credit_balance || 0) > 0 && (
-                            <label className="flex items-center gap-2 mt-2 text-sm font-medium text-foreground cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={useCredit}
-                                    onChange={e => setUseCredit(e.target.checked)}
-                                    className="checkbox checkbox-primary w-4 h-4 rounded"
-                                />
-                                <span>Use Credit ({formatCurrencyFromCents(selectedStudent?.credit_balance || 0)})</span>
-                            </label>
-                        )}
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="label" htmlFor="payment-reference">Reference / Slip Number</label>
-                        <input
-                            id="payment-reference"
-                            type="text"
-                            value={formData.payment_reference}
-                            onChange={(e) => setFormData(prev => ({ ...prev, payment_reference: e.target.value }))}
-                            className="input border-border/20"
-                            disabled={!selectedStudent}
-                            placeholder="e.g., M-PESA Code"
-                        />
-                    </div>
-                </div>
-
-                <div className="space-y-2">
-                    <label className="label" htmlFor="payment-description">Transaction Narrative</label>
-                    <textarea
-                        id="payment-description"
-                        value={formData.description}
-                        onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                        className="input border-border/20 min-h-[100px]"
-                        rows={3}
-                        disabled={!selectedStudent}
-                        placeholder="Optional notes for this payment..."
-                    />
-                </div>
-
-                <button
-                    type="submit"
-                    disabled={saving || !selectedStudent}
-                    className="w-full btn btn-primary py-5 rounded-2xl flex items-center justify-center gap-3 text-lg font-bold shadow-xl shadow-primary/20 transition-all hover:-translate-y-1 active:scale-95 disabled:hover:translate-y-0"
-                >
-                    {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <Check className="w-6 h-6" />}
-                    <span>{saving ? 'Processing Ledger...' : 'Finalize Payment'}</span>
-                </button>
-            </form>
+            <PaymentFormFields
+                formData={formData}
+                setFormData={setFormData}
+                selectedStudent={selectedStudent}
+                useCredit={useCredit}
+                setUseCredit={setUseCredit}
+                saving={saving}
+                onSubmit={handleSubmit}
+            />
         </div>
     )
 }

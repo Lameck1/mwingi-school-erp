@@ -37,7 +37,7 @@ export default function BankAccounts() {
     const loadAccounts = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await globalThis.electronAPI.getBankAccounts()
+            const data = await globalThis.electronAPI.finance.getBankAccounts()
             setAccounts(unwrapArrayResult(data, 'Failed to load bank accounts'))
         } catch (error) {
             console.error('Failed to load bank accounts:', error)
@@ -57,7 +57,7 @@ export default function BankAccounts() {
         setSaving(true)
         try {
             unwrapIPCResult(
-                await globalThis.electronAPI.createBankAccount({
+                await globalThis.electronAPI.finance.createBankAccount({
                 ...formData,
                 opening_balance: shillingsToCents(formData.opening_balance) // Whole currency units -> cents
                 }),

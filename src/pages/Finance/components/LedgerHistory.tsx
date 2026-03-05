@@ -44,7 +44,7 @@ const getResultMessage = (value: unknown, fallback: string): string => {
 
 export const LedgerHistory: React.FC<LedgerHistoryProps> = ({ payments, student, schoolSettings, onPaymentVoided }) => {
     const { showToast } = useToast()
-    const { user } = useAuthStore()
+    const user = useAuthStore((s) => s.user)
     const [voidingId, setVoidingId] = useState<number | null>(null)
     const [voidReason, setVoidReason] = useState('')
     const [voidModalPayment, setVoidModalPayment] = useState<Payment | null>(null)
@@ -67,7 +67,7 @@ export const LedgerHistory: React.FC<LedgerHistoryProps> = ({ payments, student,
 
         setVoidingId(voidModalPayment.id)
         try {
-            const result = await globalThis.electronAPI.voidPayment(
+            const result = await globalThis.electronAPI.finance.voidPayment(
                 voidModalPayment.id,
                 voidReason.trim(),
                 user.id

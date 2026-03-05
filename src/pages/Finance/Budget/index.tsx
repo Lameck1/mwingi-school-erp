@@ -26,7 +26,7 @@ const statusConfig = {
 
 export default function BudgetList() {
     const navigate = useNavigate()
-    const { currentAcademicYear } = useAppStore()
+    const currentAcademicYear = useAppStore((s) => s.currentAcademicYear)
     const { showToast } = useToast()
 
     const [budgets, setBudgets] = useState<Budget[]>([])
@@ -43,7 +43,7 @@ export default function BudgetList() {
         setLoading(true)
         try {
             const data = unwrapArrayResult(
-                await globalThis.electronAPI.getBudgets({
+                await globalThis.electronAPI.finance.getBudgets({
                     ...(currentAcademicYear?.id ? { academic_year_id: currentAcademicYear.id } : {})
                 }),
                 'Failed to load budgets'

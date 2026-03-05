@@ -14,7 +14,7 @@ import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 export default function FeePayment() {
     const [searchParams] = useSearchParams()
-    const { schoolSettings } = useAppStore()
+    const schoolSettings = useAppStore((s) => s.schoolSettings)
     const { showToast } = useToast()
 
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
@@ -23,15 +23,15 @@ export default function FeePayment() {
     const loadStudent = useCallback(async (studentId: number) => {
         try {
             const studentRes = unwrapIPCResult<Student>(
-                await globalThis.electronAPI.getStudentById(studentId),
+                await globalThis.electronAPI.students.getStudentById(studentId),
                 'Failed to load student profile'
             )
             const balance = unwrapIPCResult<number>(
-                await globalThis.electronAPI.getStudentBalance(studentId),
+                await globalThis.electronAPI.finance.getStudentBalance(studentId),
                 'Failed to load student balance'
             )
             const studentPayments = unwrapArrayResult(
-                await globalThis.electronAPI.getPaymentsByStudent(studentId),
+                await globalThis.electronAPI.finance.getPaymentsByStudent(studentId),
                 'Failed to load payment history'
             )
 

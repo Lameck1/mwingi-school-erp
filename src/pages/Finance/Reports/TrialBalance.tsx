@@ -53,7 +53,7 @@ export default function TrialBalancePage() {
     setError(null);
 
     try {
-      const data = parseTrialBalanceResponse(await globalThis.electronAPI.getTrialBalance(startDate, endDate))
+      const data = parseTrialBalanceResponse(await globalThis.electronAPI.finance.getTrialBalance(startDate, endDate))
       setTrialBalance(data);
     } catch (err) {
       setTrialBalance(null);

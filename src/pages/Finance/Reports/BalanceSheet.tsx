@@ -50,7 +50,7 @@ export default function BalanceSheetPage() {
     setError(null);
 
     try {
-      const data = parseBalanceSheetResponse(await globalThis.electronAPI.getBalanceSheet(asOfDate))
+      const data = parseBalanceSheetResponse(await globalThis.electronAPI.finance.getBalanceSheet(asOfDate))
       setBalanceSheet(data);
     } catch (err) {
       setBalanceSheet(null);

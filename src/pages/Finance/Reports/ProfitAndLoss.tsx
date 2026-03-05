@@ -55,7 +55,7 @@ export default function ProfitAndLossPage() {
     setError(null);
 
     try {
-      const data = parseProfitAndLossResponse(await globalThis.electronAPI.getProfitAndLoss(startDate, endDate))
+      const data = parseProfitAndLossResponse(await globalThis.electronAPI.finance.getProfitAndLoss(startDate, endDate))
       setProfitAndLoss(data);
     } catch (err) {
       setProfitAndLoss(null);

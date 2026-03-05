@@ -1,5 +1,5 @@
 import { TrendingUp, TrendingDown, DollarSign, Download, Filter, Calendar, Activity, BarChart3, PieChart as PieIcon } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 
 import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
@@ -23,6 +23,70 @@ interface ChartData {
 }
 
 
+interface NetAssetsStatementProps {
+    netAssetsData: ChangesInNetAssetsReport
+}
+
+function NetAssetsStatement({ netAssetsData }: Readonly<NetAssetsStatementProps>) {
+    return (
+        <div className="premium-card">
+            <div className="flex items-center justify-between mb-6">
+                <div>
+                    <h3 className="text-2xl font-bold text-foreground font-heading">Statement of Changes in Net Assets</h3>
+                    <p className="text-sm text-foreground/50 font-medium">As per IPSAS reporting guidelines</p>
+                </div>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                        <tr className="border-b-2 border-border/60">
+                            <th className="py-3 px-4 font-bold text-xs uppercase tracking-wider text-foreground/60 w-1/3">Category</th>
+                            <th className="py-3 px-4 font-bold text-xs uppercase tracking-wider text-right text-foreground/60">Opening Bal.</th>
+                            <th className="py-3 px-4 font-bold text-xs uppercase tracking-wider text-right text-foreground/60">Additions</th>
+                            <th className="py-3 px-4 font-bold text-xs uppercase tracking-wider text-right text-foreground/60">Disposals</th>
+                            <th className="py-3 px-4 font-bold text-xs uppercase tracking-wider text-right text-foreground/60">Closing Bal.</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/20">
+                        <tr className="bg-primary/5">
+                            <td colSpan={5} className="py-3 px-4 font-bold text-primary">ASSETS</td>
+                        </tr>
+                        {netAssetsData.asset_changes.map((row) => (
+                            <tr key={`asset-${row.category}`} className="hover:bg-foreground/5 transition-colors">
+                                <td className="py-3 px-4 text-sm font-medium">{row.category}</td>
+                                <td className="py-3 px-4 text-sm text-right font-mono">{formatCurrencyFromCents(row.opening_balance)}</td>
+                                <td className="py-3 px-4 text-sm text-right font-mono text-emerald-500">{formatCurrencyFromCents(row.additions)}</td>
+                                <td className="py-3 px-4 text-sm text-right font-mono text-destructive">{formatCurrencyFromCents(row.disposals)}</td>
+                                <td className="py-3 px-4 text-sm text-right font-mono font-bold">{formatCurrencyFromCents(row.closing_balance)}</td>
+                            </tr>
+                        ))}
+                        <tr className="bg-orange-500/5">
+                            <td colSpan={5} className="py-3 px-4 font-bold text-orange-500">LIABILITIES</td>
+                        </tr>
+                        {netAssetsData.liability_changes.map((row) => (
+                            <tr key={`liability-${row.category}`} className="hover:bg-foreground/5 transition-colors">
+                                <td className="py-3 px-4 text-sm font-medium">{row.category}</td>
+                                <td className="py-3 px-4 text-sm text-right font-mono">{formatCurrencyFromCents(row.opening_balance)}</td>
+                                <td className="py-3 px-4 text-sm text-right font-mono text-emerald-500">{formatCurrencyFromCents(row.additions)}</td>
+                                <td className="py-3 px-4 text-sm text-right font-mono text-destructive">{formatCurrencyFromCents(row.disposals)}</td>
+                                <td className="py-3 px-4 text-sm text-right font-mono font-bold">{formatCurrencyFromCents(row.closing_balance)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                    <tfoot className="border-t-2 border-border/60 bg-foreground/5 font-bold">
+                        <tr>
+                            <td className="py-4 px-4 text-sm uppercase tracking-wider">Total Net Assets</td>
+                            <td className="py-4 px-4 text-sm text-right font-mono">{formatCurrencyFromCents(netAssetsData.opening_net_assets)}</td>
+                            <td colSpan={2} className="py-4 px-4 text-sm text-center font-mono">Surplus/Deficit for Period: <span className={netAssetsData.surplus_deficit >= 0 ? 'text-emerald-500' : 'text-destructive'}>{formatCurrencyFromCents(netAssetsData.surplus_deficit)}</span></td>
+                            <td className="py-4 px-4 text-sm text-right font-mono text-primary">{formatCurrencyFromCents(netAssetsData.closing_net_assets)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    )
+}
+
 export default function FinancialReports() {
     const { showToast } = useToast()
 
@@ -42,13 +106,13 @@ export default function FinancialReports() {
     const COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444']
     const COLOR_BG_CLASSES = ['bg-emerald-500', 'bg-blue-500', 'bg-violet-500', 'bg-amber-500', 'bg-red-500']
 
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         setLoading(true)
         try {
             const [summaryData, revenue, expenses, netAssetsRes] = await Promise.all([
-                globalThis.electronAPI.getTransactionSummary(dateRange.startDate, dateRange.endDate),
-                globalThis.electronAPI.getRevenueByCategory(dateRange.startDate, dateRange.endDate),
-                globalThis.electronAPI.getExpenseByCategory(dateRange.startDate, dateRange.endDate),
+                globalThis.electronAPI.finance.getTransactionSummary(dateRange.startDate, dateRange.endDate),
+                globalThis.electronAPI.reports.getRevenueByCategory(dateRange.startDate, dateRange.endDate),
+                globalThis.electronAPI.reports.getExpenseByCategory(dateRange.startDate, dateRange.endDate),
                 fetchChangesInNetAssets(dateRange.startDate, dateRange.endDate)
             ])
             setSummary(unwrapIPCResult<TransactionSummary>(summaryData, 'Failed to load transaction summary'))
@@ -65,12 +129,11 @@ export default function FinancialReports() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [dateRange, showToast, fetchChangesInNetAssets])
 
     useEffect(() => {
         void loadData()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [dateRange, showToast])
+    }, [loadData])
 
     const { totalIncome, totalExpense, netBalance } = summary
 
@@ -274,64 +337,7 @@ export default function FinancialReports() {
                 </div>
             </div>
 
-            {/* IPSAS Statement of Changes in Net Assets */}
-            {netAssetsData && (
-                <div className="premium-card">
-                    <div className="flex items-center justify-between mb-6">
-                        <div>
-                            <h3 className="text-2xl font-bold text-foreground font-heading">Statement of Changes in Net Assets</h3>
-                            <p className="text-sm text-foreground/50 font-medium">As per IPSAS reporting guidelines</p>
-                        </div>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="border-b-2 border-border/60">
-                                    <th className="py-3 px-4 font-bold text-xs uppercase tracking-wider text-foreground/60 w-1/3">Category</th>
-                                    <th className="py-3 px-4 font-bold text-xs uppercase tracking-wider text-right text-foreground/60">Opening Bal.</th>
-                                    <th className="py-3 px-4 font-bold text-xs uppercase tracking-wider text-right text-foreground/60">Additions</th>
-                                    <th className="py-3 px-4 font-bold text-xs uppercase tracking-wider text-right text-foreground/60">Disposals</th>
-                                    <th className="py-3 px-4 font-bold text-xs uppercase tracking-wider text-right text-foreground/60">Closing Bal.</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/20">
-                                <tr className="bg-primary/5">
-                                    <td colSpan={5} className="py-3 px-4 font-bold text-primary">ASSETS</td>
-                                </tr>
-                                {netAssetsData.asset_changes.map((row) => (
-                                    <tr key={`asset-${row.category}`} className="hover:bg-foreground/5 transition-colors">
-                                        <td className="py-3 px-4 text-sm font-medium">{row.category}</td>
-                                        <td className="py-3 px-4 text-sm text-right font-mono">{formatCurrencyFromCents(row.opening_balance)}</td>
-                                        <td className="py-3 px-4 text-sm text-right font-mono text-emerald-500">{formatCurrencyFromCents(row.additions)}</td>
-                                        <td className="py-3 px-4 text-sm text-right font-mono text-destructive">{formatCurrencyFromCents(row.disposals)}</td>
-                                        <td className="py-3 px-4 text-sm text-right font-mono font-bold">{formatCurrencyFromCents(row.closing_balance)}</td>
-                                    </tr>
-                                ))}
-                                <tr className="bg-orange-500/5">
-                                    <td colSpan={5} className="py-3 px-4 font-bold text-orange-500">LIABILITIES</td>
-                                </tr>
-                                {netAssetsData.liability_changes.map((row) => (
-                                    <tr key={`liability-${row.category}`} className="hover:bg-foreground/5 transition-colors">
-                                        <td className="py-3 px-4 text-sm font-medium">{row.category}</td>
-                                        <td className="py-3 px-4 text-sm text-right font-mono">{formatCurrencyFromCents(row.opening_balance)}</td>
-                                        <td className="py-3 px-4 text-sm text-right font-mono text-emerald-500">{formatCurrencyFromCents(row.additions)}</td>
-                                        <td className="py-3 px-4 text-sm text-right font-mono text-destructive">{formatCurrencyFromCents(row.disposals)}</td>
-                                        <td className="py-3 px-4 text-sm text-right font-mono font-bold">{formatCurrencyFromCents(row.closing_balance)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                            <tfoot className="border-t-2 border-border/60 bg-foreground/5 font-bold">
-                                <tr>
-                                    <td className="py-4 px-4 text-sm uppercase tracking-wider">Total Net Assets</td>
-                                    <td className="py-4 px-4 text-sm text-right font-mono">{formatCurrencyFromCents(netAssetsData.opening_net_assets)}</td>
-                                    <td colSpan={2} className="py-4 px-4 text-sm text-center font-mono">Surplus/Deficit for Period: <span className={netAssetsData.surplus_deficit >= 0 ? 'text-emerald-500' : 'text-destructive'}>{formatCurrencyFromCents(netAssetsData.surplus_deficit)}</span></td>
-                                    <td className="py-4 px-4 text-sm text-right font-mono text-primary">{formatCurrencyFromCents(netAssetsData.closing_net_assets)}</td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                </div>
-            )}
+            {netAssetsData && <NetAssetsStatement netAssetsData={netAssetsData} />}
         </div>
     )
 }

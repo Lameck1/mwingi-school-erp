@@ -38,9 +38,147 @@ function renderActionCell(row: Grant, onUtilize: (grant: Grant) => void) {
     )
 }
 
+type CreateGrantFormData = {
+    grant_name: string
+    grant_type: string
+    fiscal_year: number
+    amount_allocated: string
+    amount_received: string
+    nemis_reference_number: string
+}
+
+interface CreateGrantModalProps {
+    isOpen: boolean
+    onClose: () => void
+    formData: CreateGrantFormData
+    setFormData: React.Dispatch<React.SetStateAction<CreateGrantFormData>>
+    onSubmit: (e: React.SyntheticEvent) => void
+}
+
+function CreateGrantModal({ isOpen, onClose, formData, setFormData, onSubmit }: Readonly<CreateGrantModalProps>) {
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Register New Grant">
+            <form onSubmit={onSubmit} className="space-y-4">
+                <div className="space-y-1.5">
+                    <label htmlFor="field-249" className="text-xs font-bold text-foreground/60 px-1">Grant Name</label>
+                    <Input id="field-249"
+                        value={formData.grant_name}
+                        onChange={(e) => setFormData({...formData, grant_name: e.target.value})}
+                        required
+                    />
+                </div>
+                <Select
+                    label="Grant Type"
+                    value={formData.grant_type}
+                    onChange={(val) => setFormData({ ...formData, grant_type: String(val) })}
+                    options={[
+                        { value: 'CAPITATION', label: 'Capitation' },
+                        { value: 'FREE_DAY_SECONDARY', label: 'Free Day Secondary' },
+                        { value: 'SPECIAL_NEEDS', label: 'Special Needs' },
+                        { value: 'INFRASTRUCTURE', label: 'Infrastructure' },
+                        { value: 'FEEDING_PROGRAM', label: 'Feeding Program' },
+                        { value: 'OTHER', label: 'Other' }
+                    ]}
+                />
+                <div className="space-y-1.5">
+                    <label htmlFor="field-270" className="text-xs font-bold text-foreground/60 px-1">NEMIS Reference Number</label>
+                    <Input id="field-270"
+                        value={formData.nemis_reference_number}
+                        onChange={(e) => setFormData({...formData, nemis_reference_number: e.target.value})}
+                    />
+                </div>
+                <div className="space-y-1.5">
+                    <label htmlFor="field-277" className="text-xs font-bold text-foreground/60 px-1">Amount Allocated (KES)</label>
+                    <Input id="field-277"
+                        type="number"
+                        value={formData.amount_allocated}
+                        onChange={(e) => setFormData({...formData, amount_allocated: e.target.value})}
+                        required
+                    />
+                </div>
+                <div className="space-y-1.5">
+                    <label htmlFor="field-286" className="text-xs font-bold text-foreground/60 px-1">Amount Received (KES)</label>
+                    <Input id="field-286"
+                        type="number"
+                        value={formData.amount_received}
+                        onChange={(e) => setFormData({...formData, amount_received: e.target.value})}
+                        required
+                    />
+                </div>
+                <div className="flex justify-end gap-2 pt-4">
+                    <button type="button" onClick={onClose} className="btn btn-secondary">
+                        Cancel
+                    </button>
+                    <button type="submit" className="btn btn-primary">
+                        Register Grant
+                    </button>
+                </div>
+            </form>
+        </Modal>
+    )
+}
+
+type UtilizationFormData = {
+    amount: string
+    description: string
+    utilizationDate: string
+}
+
+interface RecordUtilizationModalProps {
+    isOpen: boolean
+    onClose: () => void
+    grantName: string
+    formData: UtilizationFormData
+    setFormData: React.Dispatch<React.SetStateAction<UtilizationFormData>>
+    onSubmit: (e: React.SyntheticEvent) => void
+}
+
+function RecordUtilizationModal({ isOpen, onClose, grantName, formData, setFormData, onSubmit }: Readonly<RecordUtilizationModalProps>) {
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={`Record Utilization: ${grantName}`}>
+            <form onSubmit={onSubmit} className="space-y-4">
+                <div className="space-y-1.5">
+                    <label htmlFor="field-313" className="text-xs font-bold text-foreground/60 px-1">Amount Used (KES)</label>
+                    <Input id="field-313"
+                        type="number"
+                        value={formData.amount}
+                        onChange={(e) => setFormData({...formData, amount: e.target.value})}
+                        required
+                    />
+                </div>
+                <div className="space-y-1.5">
+                    <label htmlFor="field-322" className="text-xs font-bold text-foreground/60 px-1">Description</label>
+                    <Input id="field-322"
+                        value={formData.description}
+                        onChange={(e) => setFormData({...formData, description: e.target.value})}
+                        required
+                    />
+                </div>
+                <div className="space-y-1.5">
+                    <label htmlFor="field-330" className="text-xs font-bold text-foreground/60 px-1">Date</label>
+                    <Input id="field-330"
+                        type="date"
+                        value={formData.utilizationDate}
+                        onChange={(e) => setFormData({...formData, utilizationDate: e.target.value})}
+                        required
+                    />
+                </div>
+                <div className="flex justify-end gap-2 pt-4">
+                    <button type="button" onClick={onClose} className="btn btn-secondary">
+                        Cancel
+                    </button>
+                    <button type="submit" className="btn btn-primary">
+                        Record Usage
+                    </button>
+                </div>
+            </form>
+        </Modal>
+    )
+}
+
 export default function GrantTracking() {
     const { showToast } = useToast()
-    const { user } = useAuthStore()
+    const user = useAuthStore((s) => s.user)
     const [loading, setLoading] = useState(false)
     const [grants, setGrants] = useState<Grant[]>([])
     const [filterStatus, setFilterStatus] = useState<'ACTIVE' | 'EXPIRED' | 'FULLY_UTILIZED'>('ACTIVE')
@@ -79,7 +217,7 @@ export default function GrantTracking() {
     const loadData = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await globalThis.electronAPI.getGrantsByStatus(filterStatus)
+            const data = await globalThis.electronAPI.operations.getGrantsByStatus(filterStatus)
             setGrants(unwrapArrayResult(data, 'Failed to load grants'))
         } catch (error) {
             console.error(error)
@@ -102,7 +240,7 @@ export default function GrantTracking() {
         }
         try {
             unwrapIPCResult(
-                await globalThis.electronAPI.createGrant({
+                await globalThis.electronAPI.operations.createGrant({
                 ...createForm,
                 amount_allocated: shillingsToCents(createForm.amount_allocated),
                 amount_received: shillingsToCents(createForm.amount_received)
@@ -127,7 +265,7 @@ export default function GrantTracking() {
         }
         try {
             unwrapIPCResult(
-                await globalThis.electronAPI.recordGrantUtilization({
+                await globalThis.electronAPI.operations.recordGrantUtilization({
                 grantId: selectedGrant.id,
                 amount: shillingsToCents(utilizationForm.amount),
                 description: utilizationForm.description,
@@ -149,7 +287,7 @@ export default function GrantTracking() {
 
     const handleExportNEMIS = async () => {
         try {
-            const csv = await globalThis.electronAPI.generateNEMISExport(new Date().getFullYear())
+            const csv = await globalThis.electronAPI.operations.generateNEMISExport(new Date().getFullYear())
             const blob = new Blob([csv], { type: 'text/csv' })
             const url = globalThis.URL.createObjectURL(blob)
             const a = globalThis.document.createElement('a')
@@ -245,113 +383,22 @@ export default function GrantTracking() {
                 />
             </div>
 
-            {/* Create Grant Modal */}
-            <Modal
+            <CreateGrantModal
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
-                title="Register New Grant"
-            >
-                <form onSubmit={handleCreateGrant} className="space-y-4">
-                    <div className="space-y-1.5">
-                        <label htmlFor="field-249" className="text-xs font-bold text-foreground/60 px-1">Grant Name</label>
-                        <Input id="field-249"
-                            value={createForm.grant_name}
-                            onChange={(e) => setCreateForm({...createForm, grant_name: e.target.value})}
-                            required
-                        />
-                    </div>
-                    <Select
-                        label="Grant Type"
-                        value={createForm.grant_type}
-                        onChange={(val) => setCreateForm({ ...createForm, grant_type: String(val) })}
-                        options={[
-                            { value: 'CAPITATION', label: 'Capitation' },
-                            { value: 'FREE_DAY_SECONDARY', label: 'Free Day Secondary' },
-                            { value: 'SPECIAL_NEEDS', label: 'Special Needs' },
-                            { value: 'INFRASTRUCTURE', label: 'Infrastructure' },
-                            { value: 'FEEDING_PROGRAM', label: 'Feeding Program' },
-                            { value: 'OTHER', label: 'Other' }
-                        ]}
-                    />
-                    <div className="space-y-1.5">
-                        <label htmlFor="field-270" className="text-xs font-bold text-foreground/60 px-1">NEMIS Reference Number</label>
-                        <Input id="field-270"
-                            value={createForm.nemis_reference_number}
-                            onChange={(e) => setCreateForm({...createForm, nemis_reference_number: e.target.value})}
-                        />
-                    </div>
-                    <div className="space-y-1.5">
-                        <label htmlFor="field-277" className="text-xs font-bold text-foreground/60 px-1">Amount Allocated (KES)</label>
-                        <Input id="field-277"
-                            type="number"
-                            value={createForm.amount_allocated}
-                            onChange={(e) => setCreateForm({...createForm, amount_allocated: e.target.value})}
-                            required
-                        />
-                    </div>
-                    <div className="space-y-1.5">
-                        <label htmlFor="field-286" className="text-xs font-bold text-foreground/60 px-1">Amount Received (KES)</label>
-                        <Input id="field-286"
-                            type="number"
-                            value={createForm.amount_received}
-                            onChange={(e) => setCreateForm({...createForm, amount_received: e.target.value})}
-                            required
-                        />
-                    </div>
-                    <div className="flex justify-end gap-2 pt-4">
-                        <button type="button" onClick={() => setIsCreateModalOpen(false)} className="btn btn-secondary">
-                            Cancel
-                        </button>
-                        <button type="submit" className="btn btn-primary">
-                            Register Grant
-                        </button>
-                    </div>
-                </form>
-            </Modal>
+                formData={createForm}
+                setFormData={setCreateForm}
+                onSubmit={handleCreateGrant}
+            />
 
-            {/* Record Utilization Modal */}
-            <Modal
+            <RecordUtilizationModal
                 isOpen={isUtilizeModalOpen}
                 onClose={() => setIsUtilizeModalOpen(false)}
-                title={`Record Utilization: ${selectedGrant?.grant_name}`}
-            >
-                <form onSubmit={handleRecordUtilization} className="space-y-4">
-                    <div className="space-y-1.5">
-                        <label htmlFor="field-313" className="text-xs font-bold text-foreground/60 px-1">Amount Used (KES)</label>
-                        <Input id="field-313"
-                            type="number"
-                            value={utilizationForm.amount}
-                            onChange={(e) => setUtilizationForm({...utilizationForm, amount: e.target.value})}
-                            required
-                        />
-                    </div>
-                    <div className="space-y-1.5">
-                        <label htmlFor="field-322" className="text-xs font-bold text-foreground/60 px-1">Description</label>
-                        <Input id="field-322"
-                            value={utilizationForm.description}
-                            onChange={(e) => setUtilizationForm({...utilizationForm, description: e.target.value})}
-                            required
-                        />
-                    </div>
-                    <div className="space-y-1.5">
-                        <label htmlFor="field-330" className="text-xs font-bold text-foreground/60 px-1">Date</label>
-                        <Input id="field-330"
-                            type="date"
-                            value={utilizationForm.utilizationDate}
-                            onChange={(e) => setUtilizationForm({...utilizationForm, utilizationDate: e.target.value})}
-                            required
-                        />
-                    </div>
-                    <div className="flex justify-end gap-2 pt-4">
-                        <button type="button" onClick={() => setIsUtilizeModalOpen(false)} className="btn btn-secondary">
-                            Cancel
-                        </button>
-                        <button type="submit" className="btn btn-primary">
-                            Record Usage
-                        </button>
-                    </div>
-                </form>
-            </Modal>
+                grantName={selectedGrant?.grant_name ?? ''}
+                formData={utilizationForm}
+                setFormData={setUtilizationForm}
+                onSubmit={handleRecordUtilization}
+            />
         </div>
     )
 }

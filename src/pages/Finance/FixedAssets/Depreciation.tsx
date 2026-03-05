@@ -11,8 +11,8 @@ import { formatCurrencyFromCents } from '../../../utils/format'
 import { unwrapArrayResult } from '../../../utils/ipc'
 
 export default function Depreciation() {
-    const { user } = useAuthStore()
-    const { currentAcademicYear } = useAppStore()
+    const user = useAuthStore((s) => s.user)
+    const currentAcademicYear = useAppStore((s) => s.currentAcademicYear)
     const { showToast } = useToast()
     const [assets, setAssets] = useState<FixedAsset[]>([])
     const [periods, setPeriods] = useState<FinancialPeriod[]>([])
@@ -23,7 +23,7 @@ export default function Depreciation() {
     const loadAssets = useCallback(async () => {
         try {
             const data = unwrapArrayResult(
-                await globalThis.electronAPI.getAssets({ status: 'ACTIVE' }),
+                await globalThis.electronAPI.finance.getAssets({ status: 'ACTIVE' }),
                 'Failed to load fixed assets'
             )
             setAssets(data)
@@ -37,7 +37,7 @@ export default function Depreciation() {
     const loadPeriods = useCallback(async () => {
         try {
             const allPeriods = unwrapArrayResult(
-                await globalThis.electronAPI.getFinancialPeriods(),
+                await globalThis.electronAPI.finance.getFinancialPeriods(),
                 'Failed to load financial periods'
             )
             const unlocked = getUnlockedPeriods(allPeriods)
@@ -80,7 +80,7 @@ export default function Depreciation() {
 
         setProcessing(assetToConfirm.id)
         try {
-            const result = await globalThis.electronAPI.runDepreciation(assetToConfirm.id, selectedPeriodId, user.id)
+            const result = await globalThis.electronAPI.finance.runDepreciation(assetToConfirm.id, selectedPeriodId, user.id)
 
             if (result.success) {
                 showToast(`Depreciation posted for ${assetToConfirm.asset_name}`, 'success')

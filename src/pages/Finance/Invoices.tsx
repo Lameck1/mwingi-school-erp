@@ -35,7 +35,7 @@ export default function Invoices() {
     const loadInvoices = useCallback(async () => {
         setLoading(true)
         try {
-            const data = await globalThis.electronAPI.getInvoices(normalizeFilters({}))
+            const data = await globalThis.electronAPI.finance.getInvoices(normalizeFilters({}))
             setInvoices(unwrapArrayResult(data, 'Failed to load invoices'))
         } catch (error) {
             console.error('Failed to load invoices:', error)
@@ -52,7 +52,7 @@ export default function Invoices() {
 
     const viewInvoice = async (invoice: Invoice) => {
         try {
-            const items = await globalThis.electronAPI.getInvoiceItems(invoice.id)
+            const items = await globalThis.electronAPI.finance.getInvoiceItems(invoice.id)
             setInvoiceItems(unwrapArrayResult(items, 'Failed to load invoice items'))
             setSelectedInvoice(invoice)
         } catch (error) {

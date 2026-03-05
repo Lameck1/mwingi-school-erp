@@ -42,7 +42,7 @@ export function useFinancialKPIs() {
         try {
             setIsLoading(true)
             setError(null)
-            const res = await window.electronAPI.reports.getKpiDashboard()
+            const res = await globalThis.electronAPI.reports.getKpiDashboard()
             if (res.success) {
                 return res.data
             } else {
@@ -61,7 +61,7 @@ export function useFinancialKPIs() {
         try {
             setIsLoading(true)
             setError(null)
-            const res = await window.electronAPI.reports.getChangesInNetAssets(startDate, endDate)
+            const res = await globalThis.electronAPI.reports.getChangesInNetAssets(startDate, endDate)
             if (res.success) {
                 return res.data
             } else {

@@ -10,9 +10,178 @@ import { useFeePolicies } from '../../../hooks/useFeePolicies'
 import type { InstallmentPolicy, InstallmentSchedule } from '../../../hooks/useFeePolicies'
 import { useAppStore } from '../../../stores'
 
+type ScheduleDetailsPaneProps = Readonly<{
+    selectedPolicySchedules: InstallmentSchedule[];
+}>;
+
+function ScheduleDetailsPane({ selectedPolicySchedules }: ScheduleDetailsPaneProps) {
+    return (
+        <div>
+            <div className="flex items-center gap-3 mb-4">
+                <FileText className="w-5 h-5 text-amber-500" />
+                <h2 className="text-lg font-bold">Installment Details</h2>
+            </div>
+
+            <div className="card !p-5 bg-gradient-to-br from-background to-secondary/30">
+                {selectedPolicySchedules.length === 0 ? (
+                    <div className="py-10 text-center">
+                        <p className="text-[11px] font-bold tracking-widest uppercase text-foreground/40">Select a policy to view</p>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        {selectedPolicySchedules.map((schedule) => (
+                            <div key={schedule.installment_number} className="p-3 bg-background border border-border/40 rounded-xl relative overflow-hidden group">
+                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500"></div>
+                                <div className="flex justify-between items-center pl-3">
+                                    <div>
+                                        <p className="text-xs font-bold text-foreground/50 uppercase">Inst {schedule.installment_number}</p>
+                                        <p className="font-bold text-foreground mt-0.5">{schedule.description || `Installment ${schedule.installment_number}`}</p>
+                                        <p className="text-[11px] font-medium text-foreground/60 flex items-center gap-1 mt-1">
+                                            <Calendar className="w-3 h-3" /> Due: {schedule.due_date || 'N/A'}
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-lg font-bold text-amber-500">{schedule.percentage}%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+type CreatePolicyModalProps = Readonly<{
+    isOpen: boolean;
+    onClose: () => void;
+    policyName: string;
+    onPolicyNameChange: (name: string) => void;
+    studentType: 'DAY_SCHOLAR' | 'BOARDER' | 'ALL';
+    onStudentTypeChange: (type: 'DAY_SCHOLAR' | 'BOARDER' | 'ALL') => void;
+    schedules: Omit<InstallmentSchedule, 'id'>[];
+    onUpdateSchedule: (index: number, field: keyof InstallmentSchedule, value: string | number) => void;
+    onAddScheduleRow: () => void;
+    onRemoveScheduleRow: (index: number) => void;
+    isLoading: boolean;
+    onSubmit: (e: React.SyntheticEvent<HTMLFormElement>) => void;
+}>;
+
+function CreatePolicyModal({
+    isOpen, onClose, policyName, onPolicyNameChange,
+    studentType, onStudentTypeChange, schedules,
+    onUpdateSchedule, onAddScheduleRow, onRemoveScheduleRow,
+    isLoading, onSubmit,
+}: CreatePolicyModalProps) {
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Create Installment Policy" size="lg">
+            <form onSubmit={onSubmit} className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <label className="label" htmlFor="policy-name">Policy Name</label>
+                        <input
+                            id="policy-name"
+                            required
+                            value={policyName}
+                            onChange={e => onPolicyNameChange(e.target.value)}
+                            className="input"
+                            placeholder="e.g. Standard 3-Term Split"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="label" htmlFor="student-application">Student Application</label>
+                        <select
+                            id="student-application"
+                            value={studentType}
+                            onChange={e => onStudentTypeChange(e.target.value as 'DAY_SCHOLAR' | 'BOARDER' | 'ALL')}
+                            className="input"
+                        >
+                            <option value="ALL">All Students</option>
+                            <option value="DAY_SCHOLAR">Day Scholars Only</option>
+                            <option value="BOARDER">Boarders Only</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                        <span className="label mb-0">Installment Schedule Tracking</span>
+                        <button
+                            type="button"
+                            onClick={onAddScheduleRow}
+                            className="text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+                        >
+                            <Plus className="w-3.5 h-3.5" /> Add Row
+                        </button>
+                    </div>
+
+                    <div className="space-y-2">
+                        {schedules.map((schedule, idx) => (
+                            <div key={schedule.installment_number} className="flex items-center gap-3 p-3 bg-secondary/10 rounded-xl border border-secondary/20">
+                                <div className="w-10 text-center font-bold text-foreground/40 flex-shrink-0">#{schedule.installment_number}</div>
+                                <input
+                                    type="number"
+                                    required
+                                    min="1"
+                                    max="100"
+                                    step="0.01"
+                                    value={schedule.percentage}
+                                    onChange={e => onUpdateSchedule(idx, 'percentage', e.target.value)}
+                                    className="input py-2 text-sm w-24 flex-shrink-0"
+                                    placeholder="%"
+                                    aria-label="Installment percentage"
+                                />
+                                <input
+                                    type="date"
+                                    value={schedule.due_date}
+                                    onChange={e => onUpdateSchedule(idx, 'due_date', e.target.value)}
+                                    className="input py-2 text-sm flex-shrink-0 w-36"
+                                    aria-label="Installment due date"
+                                />
+                                <input
+                                    type="text"
+                                    value={schedule.description}
+                                    onChange={e => onUpdateSchedule(idx, 'description', e.target.value)}
+                                    className="input py-2 text-sm flex-grow"
+                                    placeholder="Description (optional)"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => onRemoveScheduleRow(idx)}
+                                    className="p-2 text-destructive/50 hover:text-destructive hover:bg-destructive/10 rounded-lg"
+                                    title="Remove row"
+                                    aria-label="Remove installment row"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="flex items-center justify-between bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20">
+                        <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400">Total Percentage</div>
+                        <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                            {schedules.reduce((acc, curr) => acc + (Number(curr.percentage) || 0), 0)}%
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4">
+                    <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
+                    <button type="submit" disabled={isLoading} className="btn btn-primary flex items-center gap-2">
+                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                        Save Policy
+                    </button>
+                </div>
+            </form>
+        </Modal>
+    );
+}
+
 export default function FeePoliciesConfig() {
     const { getPoliciesForTerm, createInstallmentPolicy, deactivatePolicy, getInstallmentSchedule, isLoading } = useFeePolicies()
-    const { currentAcademicYear } = useAppStore()
+    const currentAcademicYear = useAppStore((s) => s.currentAcademicYear)
     const { showToast } = useToast()
 
     const [policies, setPolicies] = useState<InstallmentPolicy[]>([])
@@ -171,7 +340,7 @@ export default function FeePoliciesConfig() {
                         return (
                             <div className="grid grid-cols-1 gap-4">
                                 {policies.map(policy => (
-                                    <div key={policy.id} className="card !p-5 hover:border-primary/50 transition-colors group cursor-pointer" onClick={() => handleViewSchedules(policy.id)}>
+                                    <button type="button" key={policy.id} className="card !p-5 hover:border-primary/50 transition-colors group cursor-pointer text-left w-full" onClick={() => handleViewSchedules(policy.id)}>
                                         <div className="flex justify-between items-start">
                                             <div>
                                                 <h3 className="font-bold text-lg text-foreground group-hover:text-primary transition-colors">{policy.policy_name}</h3>
@@ -196,7 +365,7 @@ export default function FeePoliciesConfig() {
                                                 </button>
                                             </div>
                                         </div>
-                                    </div>
+                                    </button>
                                 ))}
                             </div>
                         )
@@ -204,143 +373,24 @@ export default function FeePoliciesConfig() {
                 </div>
 
                 {/* Schedule Details Pane */}
-                <div>
-                    <div className="flex items-center gap-3 mb-4">
-                        <FileText className="w-5 h-5 text-amber-500" />
-                        <h2 className="text-lg font-bold">Installment Details</h2>
-                    </div>
-
-                    <div className="card !p-5 bg-gradient-to-br from-background to-secondary/30">
-                        {selectedPolicySchedules.length === 0 ? (
-                            <div className="py-10 text-center">
-                                <p className="text-[11px] font-bold tracking-widest uppercase text-foreground/40">Select a policy to view</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                {selectedPolicySchedules.map((schedule, idx) => (
-                                    <div key={idx} className="p-3 bg-background border border-border/40 rounded-xl relative overflow-hidden group">
-                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500"></div>
-                                        <div className="flex justify-between items-center pl-3">
-                                            <div>
-                                                <p className="text-xs font-bold text-foreground/50 uppercase">Inst {schedule.installment_number}</p>
-                                                <p className="font-bold text-foreground mt-0.5">{schedule.description || `Installment ${schedule.installment_number}`}</p>
-                                                <p className="text-[11px] font-medium text-foreground/60 flex items-center gap-1 mt-1">
-                                                    <Calendar className="w-3 h-3" /> Due: {schedule.due_date || 'N/A'}
-                                                </p>
-                                            </div>
-                                            <div className="text-right">
-                                                <span className="text-lg font-bold text-amber-500">{schedule.percentage}%</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
+                <ScheduleDetailsPane selectedPolicySchedules={selectedPolicySchedules} />
             </div>
 
             {/* Create Policy Modal */}
-            <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title="Create Installment Policy" size="lg">
-                <form onSubmit={handleCreatePolicy} className="space-y-6">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label className="label">Policy Name</label>
-                            <input
-                                required
-                                value={policyName}
-                                onChange={e => setPolicyName(e.target.value)}
-                                className="input"
-                                placeholder="e.g. Standard 3-Term Split"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="label" htmlFor="student-application">Student Application</label>
-                            <select
-                                id="student-application"
-                                value={studentType}
-                                onChange={e => setStudentType(e.target.value as 'DAY_SCHOLAR' | 'BOARDER' | 'ALL')}
-                                className="input"
-                            >
-                                <option value="ALL">All Students</option>
-                                <option value="DAY_SCHOLAR">Day Scholars Only</option>
-                                <option value="BOARDER">Boarders Only</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <label className="label mb-0">Installment Schedule Tracking</label>
-                            <button
-                                type="button"
-                                onClick={addScheduleRow}
-                                className="text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5"
-                            >
-                                <Plus className="w-3.5 h-3.5" /> Add Row
-                            </button>
-                        </div>
-
-                        <div className="space-y-2">
-                            {schedules.map((schedule, idx) => (
-                                <div key={idx} className="flex items-center gap-3 p-3 bg-secondary/10 rounded-xl border border-secondary/20">
-                                    <div className="w-10 text-center font-bold text-foreground/40 flex-shrink-0">#{schedule.installment_number}</div>
-                                    <input
-                                        type="number"
-                                        required
-                                        min="1"
-                                        max="100"
-                                        step="0.01"
-                                        value={schedule.percentage}
-                                        onChange={e => updateSchedule(idx, 'percentage', e.target.value)}
-                                        className="input py-2 text-sm w-24 flex-shrink-0"
-                                        placeholder="%"
-                                        aria-label="Installment percentage"
-                                    />
-                                    <input
-                                        type="date"
-                                        value={schedule.due_date}
-                                        onChange={e => updateSchedule(idx, 'due_date', e.target.value)}
-                                        className="input py-2 text-sm flex-shrink-0 w-36"
-                                        aria-label="Installment due date"
-                                    />
-                                    <input
-                                        type="text"
-                                        value={schedule.description}
-                                        onChange={e => updateSchedule(idx, 'description', e.target.value)}
-                                        className="input py-2 text-sm flex-grow"
-                                        placeholder="Description (optional)"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => removeScheduleRow(idx)}
-                                        className="p-2 text-destructive/50 hover:text-destructive hover:bg-destructive/10 rounded-lg"
-                                        title="Remove row"
-                                        aria-label="Remove installment row"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="flex items-center justify-between bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/20">
-                            <div className="text-sm font-bold text-emerald-600 dark:text-emerald-400">Total Percentage</div>
-                            <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                                {schedules.reduce((acc, curr) => acc + (Number(curr.percentage) || 0), 0)}%
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex justify-end gap-3 pt-4">
-                        <button type="button" onClick={() => setIsCreateModalOpen(false)} className="btn btn-secondary">Cancel</button>
-                        <button type="submit" disabled={isLoading} className="btn btn-primary flex items-center gap-2">
-                            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                            Save Policy
-                        </button>
-                    </div>
-                </form>
-            </Modal>
+            <CreatePolicyModal
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
+                policyName={policyName}
+                onPolicyNameChange={setPolicyName}
+                studentType={studentType}
+                onStudentTypeChange={setStudentType}
+                schedules={schedules}
+                onUpdateSchedule={updateSchedule}
+                onAddScheduleRow={addScheduleRow}
+                onRemoveScheduleRow={removeScheduleRow}
+                isLoading={isLoading}
+                onSubmit={handleCreatePolicy}
+            />
 
             <ConfirmDialog
                 isOpen={policyToDelete !== null}

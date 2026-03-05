@@ -15,7 +15,8 @@ import { unwrapIPCResult } from '../../../utils/ipc'
 
 export default function StudentCostAnalysis() {
     const { showToast } = useToast()
-    const { currentAcademicYear, currentTerm } = useAppStore()
+    const currentAcademicYear = useAppStore((s) => s.currentAcademicYear)
+    const currentTerm = useAppStore((s) => s.currentTerm)
     const [students, setStudents] = useState<Student[]>([])
     const [selectedStudent, setSelectedStudent] = useState<number | ''>('')
     const [costData, setCostData] = useState<StudentCostResult | null>(null)
@@ -23,7 +24,7 @@ export default function StudentCostAnalysis() {
 
     const loadStudents = useCallback(async () => {
         try {
-            const data = await globalThis.electronAPI.getStudents({ is_active: true })
+            const data = await globalThis.electronAPI.students.getStudents({ is_active: true })
             const result = unwrapIPCResult<{ rows: Student[] }>(data, 'Failed to load students')
             setStudents(result.rows)
         } catch (error) {
@@ -43,13 +44,13 @@ export default function StudentCostAnalysis() {
             }
 
             const breakdown = unwrapIPCResult(
-                await globalThis.electronAPI.calculateStudentCost(studentId, currentTerm.id, currentAcademicYear.id),
+                await globalThis.electronAPI.operations.calculateStudentCost(studentId, currentTerm.id, currentAcademicYear.id),
                 'Failed to calculate student cost breakdown'
             )
             setCostData(breakdown)
 
             const vsRevenue = unwrapIPCResult(
-                await globalThis.electronAPI.getStudentCostVsRevenue(studentId, currentTerm.id),
+                await globalThis.electronAPI.operations.getStudentCostVsRevenue(studentId, currentTerm.id),
                 'Failed to load cost vs revenue data'
             )
             setCostVsRevenue(vsRevenue)

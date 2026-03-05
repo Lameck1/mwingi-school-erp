@@ -26,7 +26,7 @@ const statusConfig = {
 export default function BudgetDetails() {
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
-    const { user } = useAuthStore()
+    const user = useAuthStore((s) => s.user)
     const { showToast } = useToast()
 
     const [budget, setBudget] = useState<Budget | null>(null)
@@ -45,7 +45,7 @@ export default function BudgetDetails() {
         setLoading(true)
         try {
             const data = unwrapIPCResult<Budget | null>(
-                await globalThis.electronAPI.getBudgetById(budgetId),
+                await globalThis.electronAPI.finance.getBudgetById(budgetId),
                 'Failed to load budget details'
             )
             if (!data) {
@@ -78,13 +78,13 @@ export default function BudgetDetails() {
         }
         setActionLoading(true)
         try {
-            const result = await globalThis.electronAPI.submitBudgetForApproval(budget.id, user.id)
+            const result = await globalThis.electronAPI.finance.submitBudgetForApproval(budget.id, user.id)
             if (result.success) {
                 await loadBudget()
                 showToast('Budget submitted for approval', 'success')
                 return
             }
-            showToast((result.errors && result.errors[0]) || 'Failed to submit budget for approval', 'error')
+            showToast(result.errors?.[0] || 'Failed to submit budget for approval', 'error')
         } catch (error) {
             console.error('Failed to submit budget:', error)
             showToast(error instanceof Error ? error.message : 'Failed to submit budget for approval', 'error')
@@ -104,13 +104,13 @@ export default function BudgetDetails() {
         }
         setActionLoading(true)
         try {
-            const result = await globalThis.electronAPI.approveBudget(budget.id, user.id)
+            const result = await globalThis.electronAPI.finance.approveBudget(budget.id, user.id)
             if (result.success) {
                 await loadBudget()
                 showToast('Budget approved', 'success')
                 return
             }
-            showToast((result.errors && result.errors[0]) || 'Failed to approve budget', 'error')
+            showToast(result.errors?.[0] || 'Failed to approve budget', 'error')
         } catch (error) {
             console.error('Failed to approve budget:', error)
             showToast(error instanceof Error ? error.message : 'Failed to approve budget', 'error')

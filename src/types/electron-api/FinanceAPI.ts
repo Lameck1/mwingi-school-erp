@@ -1,3 +1,5 @@
+import type { BalanceSheetReport, ProfitAndLossReport, TrialBalanceReport } from './ReportsAPI'
+
 export interface FeeCategory {
   id: number
   category_name: string
@@ -131,10 +133,13 @@ export interface FinanceApprovalRequest {
   requested_by_name: string;
   requested_at: string;
   rule_name: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  status: FinanceApprovalStatus;
 }
 
-type IPCResult<T> = T | { success: false; error: string; errors?: string[] };
+type FinanceApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+interface IPCError { success: false; error: string; errors?: string[] }
+type IPCResult<T> = T | IPCError;
 
 // M-Pesa reconciliation types
 export interface MpesaTransaction {
@@ -256,6 +261,18 @@ export interface FinanceAPI {
   approveTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) => Promise<{ success: boolean; error?: string; message?: string }>
   rejectTransaction: (approvalId: number, reviewNotes: string, reviewerUserId: number) => Promise<{ success: boolean; error?: string; message?: string }>
   // Manual Fixes
+
+  // Student Balance (cross-domain convenience)
+  getStudentBalance: (studentId: number) => Promise<number>
+
+  // Virement runtime aliases
+  getPendingRequests: () => Promise<{ success: boolean; data?: Array<{ id: number; from_account_type: JssAccountType; to_account_type: JssAccountType; amount: number; reason: string; status: 'PENDING' | 'APPROVED' | 'REJECTED'; requested_by_user_id: number; reviewed_by_user_id: number | null; created_at: string }>; error?: string }>
+  getAccountSummaries: () => Promise<{ success: boolean; data?: Array<{ account_type: JssAccountType; total_invoiced: number; total_collected: number; total_expenditure: number; balance: number }>; error?: string }>
+
+  // Financial Reports
+  getBalanceSheet: (asOfDate: string) => Promise<{ success: boolean; data: BalanceSheetReport; error?: string }>
+  getProfitAndLoss: (startDate: string, endDate: string) => Promise<{ success: boolean; data: ProfitAndLossReport; error?: string }>
+  getTrialBalance: (startDate: string, endDate: string) => Promise<{ success: boolean; data: TrialBalanceReport; error?: string }>
 
   // M-Pesa Reconciliation
   importMpesaTransactions: (rows: ReadonlyArray<Record<string, unknown>>, source: 'CSV' | 'API' | 'MANUAL', fileName?: string) => Promise<{ success: boolean; batchId?: number; summary?: MpesaSummary; error?: string }>

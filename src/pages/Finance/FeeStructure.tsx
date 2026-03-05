@@ -1,268 +1,13 @@
-import { Save, Plus, Loader2 } from 'lucide-react'
-import { useEffect, useState, useCallback } from 'react'
+import { Save, Loader2 } from 'lucide-react'
 
 import { HubBreadcrumb } from '../../components/patterns/HubBreadcrumb'
-import { useToast } from '../../contexts/ToastContext'
-import { useAuthStore } from '../../stores'
-import { type AcademicYear, type Term, type Stream } from '../../types/electron-api/AcademicAPI'
-import { type FeeCategory, type FeeStructureCreateData } from '../../types/electron-api/FinanceAPI'
-import { STUDENT_TYPES_LIST } from '../../utils/constants'
-import { centsToShillings, formatCurrencyFromCents, shillingsToCents } from '../../utils/format'
-import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
+
+import { FeeMatrixSection } from './FeeStructure/FeeMatrixSection'
+import { FeeStructureFilters } from './FeeStructure/FeeStructureFilters'
+import { useFeeStructure } from './FeeStructure/useFeeStructure'
 
 export default function FeeStructure() {
-    const { showToast } = useToast()
-    const { user } = useAuthStore()
-
-    const [years, setYears] = useState<AcademicYear[]>([])
-    const [terms, setTerms] = useState<Term[]>([])
-    const [streams, setStreams] = useState<Stream[]>([])
-    const [categories, setCategories] = useState<FeeCategory[]>([])
-
-    const [selectedYear, setSelectedYear] = useState('')
-    const [selectedTerm, setSelectedTerm] = useState('')
-
-    const [structure, setStructure] = useState<Record<string, number>>({})
-    const [loading, setLoading] = useState(false)
-    const [saving, setSaving] = useState(false)
-    const [generating, setGenerating] = useState(false)
-
-    // For new category
-    const [showNewCategory, setShowNewCategory] = useState(false)
-    const [newCategoryName, setNewCategoryName] = useState('')
-
-    const loadInitialData = useCallback(async () => {
-        try {
-            const [yearsRes, streamsRes, catsRes] = await Promise.all([
-                globalThis.electronAPI.getAcademicYears(),
-                globalThis.electronAPI.getStreams(),
-                globalThis.electronAPI.getFeeCategories()
-            ])
-
-            const safeYears = unwrapArrayResult(yearsRes, 'Failed to load academic years')
-            const safeStreams = unwrapArrayResult(streamsRes, 'Failed to load streams')
-            const safeCategories = unwrapArrayResult(catsRes, 'Failed to load fee categories')
-            setYears(safeYears)
-            setStreams(safeStreams)
-            setCategories(safeCategories)
-
-            const currentYear = unwrapIPCResult<AcademicYear>(
-                await globalThis.electronAPI.getCurrentAcademicYear(),
-                'Failed to load current academic year'
-            )
-            if (currentYear) {
-                setSelectedYear(currentYear.id.toString())
-                const safeTermList = unwrapArrayResult(
-                    await globalThis.electronAPI.getTermsByYear(currentYear.id),
-                    'Failed to load terms for current academic year'
-                )
-                setTerms(safeTermList)
-                const currentTerm = unwrapIPCResult<Term>(
-                    await globalThis.electronAPI.getCurrentTerm(),
-                    'Failed to load current term'
-                )
-                if (currentTerm) {
-                    setSelectedTerm(currentTerm.id.toString())
-                } else if (safeTermList.length > 0 && safeTermList[0]) {
-                    setSelectedTerm(safeTermList[0].id.toString())
-                }
-            }
-        } catch (error) {
-            console.error(error)
-            showToast(error instanceof Error ? error.message : 'Failed to load initial data', 'error')
-        }
-    }, [showToast])
-
-
-
-    useEffect(() => {
-        loadInitialData().catch((err: unknown) => console.error('Failed to load fee structure data', err))
-    }, [loadInitialData])
-
-    useEffect(() => {
-        const loadStructure = async () => {
-            setLoading(true)
-            try {
-                const data = unwrapArrayResult(
-                    await globalThis.electronAPI.getFeeStructure(Number(selectedYear), Number(selectedTerm)),
-                    'Failed to load fee structure'
-                )
-                const map: Record<string, number> = {}
-                data.forEach((item) => {
-                    const streamId = item.stream_id
-                    const studentType = item.student_type
-                    const categoryId = item.fee_category_id
-                    const amount = item.amount
-
-                    if (streamId && studentType && categoryId) {
-                        const key = `${streamId}-${studentType}-${categoryId}`
-                        map[key] = centsToShillings(amount)
-                    }
-                })
-                setStructure(map)
-            } catch (error) {
-                console.error(error)
-                setStructure({})
-                showToast(error instanceof Error ? error.message : 'Failed to load fee structure', 'error')
-            } finally {
-                setLoading(false)
-            }
-        }
-
-        if (selectedYear && selectedTerm) {
-            void loadStructure()
-        } else {
-            setStructure({})
-            setLoading(false)
-        }
-    }, [selectedYear, selectedTerm, showToast])
-
-
-
-    const handleAmountChange = (streamId: number, studentType: string, categoryId: number, value: string) => {
-        const key = `${streamId}-${studentType}-${categoryId}`
-        setStructure(prev => ({ ...prev, [key]: Number(value) || 0 }))
-    }
-
-    const calculateRowTotal = (streamId: number, studentType: string): number => {
-        let total = 0
-        for (const category of categories) {
-            const key = `${streamId}-${studentType}-${category.id}`
-            total += structure[key] || 0
-        }
-        return total
-    }
-
-    const renderAmountCells = (streamId: number, studentType: string) => {
-        return categories.map(category => {
-            const key = `${streamId}-${studentType}-${category.id}`
-            return (
-                <td key={category.id} className="px-2 py-3 whitespace-nowrap">
-                    <input
-                        type="number"
-                        min="0"
-                        value={structure[key] || ''}
-                        onChange={event => handleAmountChange(streamId, studentType, category.id, event.target.value)}
-                        className="w-full text-right bg-secondary/30 border border-border/20 rounded-lg px-2 py-1.5 text-sm font-mono text-foreground focus:ring-2 focus:ring-primary/20 transition-all"
-                        placeholder="0"
-                    />
-                </td>
-            )
-        })
-    }
-
-    const renderTableRows = () => {
-        const rows: Array<ReturnType<typeof renderAmountCells>[number]> = []
-        for (const stream of streams) {
-            for (const [index, studentType] of STUDENT_TYPES_LIST.entries()) {
-                rows.push(
-                    <tr key={`${stream.id}-${studentType}`} className={`${index === 0 ? 'bg-background' : 'bg-card'} hover:bg-accent/10 transition-colors`}>
-                        {index === 0 && (
-                            <td
-                                rowSpan={2}
-                                className="px-4 py-3 whitespace-nowrap text-sm font-bold text-foreground sticky left-0 z-30 border-r border-border/20 bg-background"
-                            >
-                                {stream.stream_name}
-                            </td>
-                        )}
-                        <td
-                            className={`px-4 py-3 whitespace-nowrap text-[10px] font-bold text-foreground/40 uppercase sticky left-[140px] z-30 border-r border-border/20 ${index === 0 ? 'bg-background' : 'bg-card'}`}
-                        >
-                            {studentType.replace('_', ' ')}
-                        </td>
-                        {renderAmountCells(stream.id, studentType)}
-                        <td
-                            className={`px-4 py-3 whitespace-nowrap text-sm font-bold text-emerald-400 text-right sticky right-0 z-30 border-l border-border/20 ${index === 0 ? 'bg-background' : 'bg-card'}`}
-                        >
-                            {formatCurrencyFromCents(shillingsToCents(calculateRowTotal(stream.id, studentType)))}
-                        </td>
-                    </tr>
-                )
-            }
-        }
-        return rows
-    }
-
-    const handleSave = async () => {
-        if (!selectedYear || !selectedTerm) {
-            showToast('Please select academic year and term', 'error')
-            return
-        }
-
-        setSaving(true)
-        try {
-            const data: FeeStructureCreateData[] = []
-            for (const [key, amount] of Object.entries(structure)) {
-                if (amount >= 0) {
-                    const [streamId, studentType, categoryId] = key.split('-')
-                    data.push({
-                        stream_id: Number(streamId),
-                        student_type: studentType ?? '',
-                        fee_category_id: Number(categoryId),
-                        // Convert shillings from UI back to cents for DB storage
-                        amount: shillingsToCents(amount),
-                        academic_year_id: Number(selectedYear),
-                        term_id: Number(selectedTerm)
-                    })
-                }
-            }
-
-            const result = await globalThis.electronAPI.saveFeeStructure(data, Number(selectedYear), Number(selectedTerm))
-            unwrapIPCResult(result, 'Failed to save fee structure')
-            showToast('Fee structure saved successfully', 'success')
-        } catch (error) {
-            console.error(error)
-            showToast(error instanceof Error ? error.message : 'Failed to save fee structure', 'error')
-        } finally {
-            setSaving(false)
-        }
-    }
-
-    const handleCreateCategory = async () => {
-        if (!newCategoryName.trim()) {
-            showToast('Category name is required', 'warning')
-            return
-        }
-        try {
-            unwrapIPCResult(await globalThis.electronAPI.createFeeCategory(newCategoryName, ''), 'Failed to create category')
-            setNewCategoryName('')
-            setShowNewCategory(false)
-            const cats = unwrapArrayResult(await globalThis.electronAPI.getFeeCategories(), 'Failed to reload fee categories')
-            setCategories(cats)
-            showToast('Category created', 'success')
-        } catch (error) {
-            console.error(error)
-            showToast(error instanceof Error ? error.message : 'Failed to create category', 'error')
-        }
-    }
-
-    const handleGenerateInvoices = async () => {
-        if (!selectedYear || !selectedTerm) {
-            showToast('Please select academic year and term before generating invoices', 'error')
-            return
-        }
-        setGenerating(true)
-        try {
-            if (!user?.id) {
-                showToast('You must be signed in to generate invoices', 'error')
-                return
-            }
-
-            const result = await globalThis.electronAPI.generateBatchInvoices(Number(selectedYear), Number(selectedTerm), user.id)
-
-            if (result.success) {
-                showToast(`Successfully generated ${result.count} invoices`, 'success')
-            } else {
-                showToast('Failed to generate invoices', 'error')
-            }
-        } catch (error: unknown) {
-            console.error('Generation Error:', error)
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-            showToast(`Error: ${errorMessage}`, 'error')
-        } finally {
-            setGenerating(false)
-        }
-    }
+    const d = useFeeStructure()
 
     return (
         <div className="p-6">
@@ -274,137 +19,46 @@ export default function FeeStructure() {
                 </div>
                 <div className="flex gap-2">
                     <button
-                        onClick={handleGenerateInvoices}
-                        disabled={generating}
+                        onClick={d.handleGenerateInvoices}
+                        disabled={d.generating}
                         className="btn btn-secondary flex items-center gap-2"
                         title="Generate invoices for all students based on this structure"
                     >
-                        {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        {d.generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                         Batch Invoice
                     </button>
                     <button
-                        onClick={handleSave}
-                        disabled={saving}
+                        onClick={d.handleSave}
+                        disabled={d.saving}
                         className="btn btn-primary flex items-center gap-2"
                     >
-                        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        {d.saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                         Save Changes
                     </button>
                 </div>
             </div>
 
-            <div className="premium-card mb-6 p-4">
-                <div className="flex flex-wrap gap-4 items-end">
-                    <div className="flex-1 min-w-[200px]">
-                        <label htmlFor="field-220" className="block text-[10px] font-bold text-foreground/40 uppercase tracking-widest mb-1.5 ml-1">Academic Year</label>
-                        <select id="field-220"
-                            value={selectedYear}
-                            onChange={async e => {
-                                const yearId = Number(e.target.value)
-                                const nextYear = e.target.value
-                                setSelectedYear(nextYear)
-                                if (!yearId) {
-                                    setTerms([])
-                                    setSelectedTerm('')
-                                    setStructure({})
-                                    return
-                                }
+            <FeeStructureFilters
+                years={d.years}
+                terms={d.terms}
+                selectedYear={d.selectedYear}
+                selectedTerm={d.selectedTerm}
+                onYearChange={d.handleYearChange}
+                onTermChange={d.setSelectedTerm}
+            />
 
-                                try {
-                                    const terms = unwrapArrayResult(
-                                        await globalThis.electronAPI.getTermsByYear(yearId),
-                                        'Failed to load terms'
-                                    )
-                                    setTerms(terms)
-                                    setSelectedTerm((prev) => {
-                                        if (terms.some((term) => term.id.toString() === prev)) {
-                                            return prev
-                                        }
-                                        return terms[0]?.id.toString() || ''
-                                    })
-                                } catch (error) {
-                                    console.error('Failed to load terms:', error)
-                                    showToast(error instanceof Error ? error.message : 'Failed to load terms', 'error')
-                                    setTerms([])
-                                    setSelectedTerm('')
-                                    setStructure({})
-                                }
-                            }}
-                            className="input w-full border-border/20 focus:border-primary/50 transition-all font-medium py-2.5"
-                        >
-                            <option value="" className="bg-background">Select Year</option>
-                            {years.map(y => (
-                                <option key={y.id} value={y.id} className="bg-background">{y.year_name}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="flex-1 min-w-[200px]">
-                        <label htmlFor="field-236" className="block text-[10px] font-bold text-foreground/40 uppercase tracking-widest mb-1.5 ml-1">Term</label>
-                        <select id="field-236"
-                            value={selectedTerm}
-                            onChange={e => setSelectedTerm(e.target.value)}
-                            className="input w-full border-border/20 focus:border-primary/50 transition-all font-medium py-2.5"
-                            disabled={!selectedYear}
-                        >
-                            <option value="" className="bg-background">Select Term</option>
-                            {terms.map(t => (
-                                <option key={t.id} value={t.id} className="bg-background">{t.term_name}</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            {loading ? (
-                <div className="text-center py-12">Loading...</div>
-            ) : (
-                <div className="premium-card">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-lg font-bold text-foreground">Fee Matrix</h3>
-                        <button
-                            onClick={() => setShowNewCategory(true)}
-                            className="text-sm text-primary hover:text-primary p-2 hover:bg-primary/10 rounded-xl transition-all font-bold flex items-center gap-1.5"
-                        >
-                            <Plus className="w-4 h-4" /> Add Category
-                        </button>
-                    </div>
-
-                    {showNewCategory && (
-                        <div className="mb-6 flex gap-2 items-center bg-primary/5 border border-primary/10 p-4 rounded-xl animate-in slide-in-from-top-2 duration-300">
-                            <input
-                                type="text"
-                                value={newCategoryName}
-                                onChange={e => setNewCategoryName(e.target.value)}
-                                placeholder="New Category Name (e.g. Swimming)"
-                                className="input flex-1 h-10"
-                            />
-                            <button onClick={handleCreateCategory} className="btn btn-primary h-10 px-4">Add</button>
-                            <button onClick={() => setShowNewCategory(false)} className="btn btn-secondary h-10 px-4">Cancel</button>
-                        </div>
-                    )}
-
-                    {/* Scrollable Table Container - max height with hidden scrollbar */}
-                    <div className="overflow-auto no-scrollbar max-h-[60vh] rounded-xl border border-border/20">
-                        <table className="min-w-full divide-y divide-border/20">
-                            <thead className="sticky top-0 z-40">
-                                <tr className="bg-card">
-                                    <th className="px-4 py-4 text-left text-[10px] font-bold text-foreground/40 uppercase tracking-widest sticky left-0 bg-card z-50 min-w-[140px] border-r border-border/20">Class / Stream</th>
-                                    <th className="px-4 py-4 text-left text-[10px] font-bold text-foreground/40 uppercase tracking-widest sticky left-[140px] bg-card z-50 min-w-[100px] border-r border-border/20">Type</th>
-                                    {categories.map(cat => (
-                                        <th key={cat.id} className="px-4 py-4 text-left text-[10px] font-bold text-foreground/40 uppercase tracking-widest min-w-[120px] bg-card">
-                                            {cat.category_name}
-                                        </th>
-                                    ))}
-                                    <th className="px-4 py-4 text-left text-[10px] font-bold text-emerald-500/80 uppercase tracking-widest sticky right-0 bg-card z-50 border-l border-border/20">Total</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/20">
-                                {renderTableRows()}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
+            <FeeMatrixSection
+                loading={d.loading}
+                categories={d.categories}
+                streams={d.streams}
+                structure={d.structure}
+                onAmountChange={d.handleAmountChange}
+                showNewCategory={d.showNewCategory}
+                onToggleNewCategory={d.setShowNewCategory}
+                newCategoryName={d.newCategoryName}
+                onNewCategoryNameChange={d.setNewCategoryName}
+                onCreateCategory={d.handleCreateCategory}
+            />
         </div>
     )
 }

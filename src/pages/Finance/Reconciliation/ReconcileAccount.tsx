@@ -1,32 +1,22 @@
-import { Upload, ArrowRightLeft, CreditCard } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { parseStatementCSV, validateMatchSelection } from './reconcile.logic'
+import { AccountSelectorGrid, ReconciliationPanels, ImportStatementModal } from './ReconcileAccount.components'
 import { PageHeader } from '../../../components/patterns/PageHeader'
-import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../contexts/ToastContext'
 import { type BankAccount, type BankStatement, type BankStatementLine, type UnmatchedTransaction } from '../../../types/electron-api/BankReconciliationAPI'
-import { formatCurrencyFromCents, shillingsToCents } from '../../../utils/format'
+import { shillingsToCents } from '../../../utils/format'
 import { unwrapArrayResult, unwrapIPCResult } from '../../../utils/ipc'
 
 const IMPORT_FILE_ERROR = 'Select a CSV file to import'
 
-export default function ReconcileAccount() {
-    const { showToast } = useToast()
-    const navigate = useNavigate()
-
-    const [accounts, setAccounts] = useState<BankAccount[]>([])
-    const [selectedAccount, setSelectedAccount] = useState<number | null>(null)
-    const [statements, setStatements] = useState<BankStatement[]>([])
-    const [selectedStatement, setSelectedStatement] = useState<BankStatement | null>(null)
-    const [lines, setLines] = useState<BankStatementLine[]>([])
-    const [unmatchedTransactions, setUnmatchedTransactions] = useState<UnmatchedTransaction[]>([])
-
-    const [selectedLineId, setSelectedLineId] = useState<number | null>(null)
-    const [selectedTransactionId, setSelectedTransactionId] = useState<number | null>(null)
-    const [matching, setMatching] = useState(false)
-
+function useImportForm(
+    selectedAccount: number | null,
+    loadStatements: (accountId: number) => Promise<void>,
+    setSelectedStatement: (statement: BankStatement | null) => void,
+    showToast: (message: string, type: 'success' | 'error' | 'info') => void
+) {
     const [showImportModal, setShowImportModal] = useState(false)
     const [importFile, setImportFile] = useState<File | null>(null)
     const [importStatementDate, setImportStatementDate] = useState('')
@@ -35,123 +25,6 @@ export default function ReconcileAccount() {
     const [importReference, setImportReference] = useState('')
     const [importErrors, setImportErrors] = useState<string[]>([])
     const [importing, setImporting] = useState(false)
-
-    const loadAccounts = useCallback(async () => {
-        try {
-            const data = unwrapArrayResult(await globalThis.electronAPI.getAccounts(), 'Failed to load bank accounts')
-            setAccounts(data)
-            if (data.length > 0 && !selectedAccount && data[0]) {
-                setSelectedAccount(data[0].id)
-            }
-        } catch (error) {
-            console.error('Failed to load accounts', error)
-            setAccounts([])
-            setSelectedAccount(null)
-            setStatements([])
-            setSelectedStatement(null)
-            setLines([])
-            setUnmatchedTransactions([])
-            showToast(error instanceof Error ? error.message : 'Failed to load bank accounts', 'error')
-        }
-    }, [selectedAccount, showToast])
-
-    const loadStatements = useCallback(async (accountId: number) => {
-        try {
-            const data = unwrapArrayResult(
-                await globalThis.electronAPI.getStatements(accountId),
-                'Failed to load statements'
-            )
-            setStatements(data)
-            setSelectedStatement((current) => {
-                if (!current) {
-                    return data[0] || null
-                }
-                return data.find((statement) => statement.id === current.id) || data[0] || null
-            })
-        } catch (error) {
-            console.error('Failed to load statements', error)
-            setStatements([])
-            setSelectedStatement(null)
-            showToast(error instanceof Error ? error.message : 'Failed to load statements', 'error')
-        }
-    }, [showToast])
-
-    const loadStatementDetails = useCallback(async (statementId: number) => {
-        try {
-            const result = unwrapIPCResult(
-                await globalThis.electronAPI.getStatementWithLines(statementId),
-                'Failed to load statement details'
-            )
-            if (result) {
-                setLines(Array.isArray(result.lines) ? result.lines : [])
-                return
-            }
-            setLines([])
-        } catch (error) {
-            console.error('Failed to load statement lines', error)
-            setLines([])
-            showToast(error instanceof Error ? error.message : 'Failed to load statement details', 'error')
-        }
-    }, [showToast])
-
-    const loadUnmatchedTransactions = useCallback(async () => {
-        if (!selectedStatement) {
-            setUnmatchedTransactions([])
-            return
-        }
-        try {
-            const start = new Date(selectedStatement.statement_date)
-            start.setDate(1)
-            const end = new Date(start)
-            end.setMonth(end.getMonth() + 1)
-            end.setDate(0)
-
-            const data = unwrapArrayResult(
-                await globalThis.electronAPI.getUnmatchedTransactions(
-                    start.toISOString().slice(0, 10),
-                    end.toISOString().slice(0, 10),
-                    selectedAccount || undefined
-                ),
-                'Failed to load unmatched ledger entries'
-            )
-            setUnmatchedTransactions(data)
-        } catch (error) {
-            console.error('Failed to load ledger transactions', error)
-            setUnmatchedTransactions([])
-            showToast(error instanceof Error ? error.message : 'Failed to load unmatched ledger entries', 'error')
-        }
-    }, [selectedAccount, selectedStatement, showToast])
-
-    const refreshSelectedStatement = useCallback(async () => {
-        if (!selectedStatement) {
-            return
-        }
-        await Promise.all([
-            loadStatementDetails(selectedStatement.id),
-            loadUnmatchedTransactions()
-        ])
-    }, [loadStatementDetails, loadUnmatchedTransactions, selectedStatement])
-
-    useEffect(() => {
-        void loadAccounts()
-    }, [loadAccounts])
-
-    useEffect(() => {
-        setSelectedStatement(null)
-        setLines([])
-        setSelectedLineId(null)
-        if (selectedAccount) {
-            void loadStatements(selectedAccount)
-        }
-    }, [selectedAccount, loadStatements])
-
-    useEffect(() => {
-        setSelectedLineId(null)
-        setSelectedTransactionId(null)
-        if (selectedStatement) {
-            void refreshSelectedStatement()
-        }
-    }, [refreshSelectedStatement, selectedStatement])
 
     const resetImportState = () => {
         setImportFile(null)
@@ -218,7 +91,7 @@ export default function ReconcileAccount() {
                 return
             }
 
-            const statementResult = await globalThis.electronAPI.createStatement(
+            const statementResult = await globalThis.electronAPI.finance.createStatement(
                 selectedAccount,
                 importStatementDate,
                 openingBalanceCents,
@@ -231,15 +104,15 @@ export default function ReconcileAccount() {
             }
 
             for (const line of parsed.lines) {
-                const lineResult = await globalThis.electronAPI.addStatementLine(statementResult.id, line)
+                const lineResult = await globalThis.electronAPI.finance.addStatementLine(statementResult.id, line)
                 if (!lineResult.success) {
-                    throw new Error((lineResult.errors && lineResult.errors[0]) || 'Failed to import statement line')
+                    throw new Error(lineResult.errors?.[0] || 'Failed to import statement line')
                 }
             }
 
             await loadStatements(selectedAccount)
             const updatedStatements = unwrapArrayResult(
-                await globalThis.electronAPI.getStatements(selectedAccount),
+                await globalThis.electronAPI.finance.getStatements(selectedAccount),
                 'Failed to reload statements after import'
             )
             const importedStatement = updatedStatements.find((statement) => statement.id === statementResult.id) || null
@@ -254,6 +127,157 @@ export default function ReconcileAccount() {
         }
     }
 
+    return {
+        showImportModal, openImportModal, closeImportModal,
+        importStatementDate, setImportStatementDate,
+        importReference, setImportReference,
+        importOpeningBalance, setImportOpeningBalance,
+        importClosingBalance, setImportClosingBalance,
+        setImportFile, importErrors, importing, handleCSVImport,
+    }
+}
+
+function useReconciliationPage() {
+    const { showToast } = useToast()
+    const navigate = useNavigate()
+
+    const [accounts, setAccounts] = useState<BankAccount[]>([])
+    const [selectedAccount, setSelectedAccount] = useState<number | null>(null)
+    const [statements, setStatements] = useState<BankStatement[]>([])
+    const [selectedStatement, setSelectedStatement] = useState<BankStatement | null>(null)
+    const [lines, setLines] = useState<BankStatementLine[]>([])
+    const [unmatchedTransactions, setUnmatchedTransactions] = useState<UnmatchedTransaction[]>([])
+
+    const [selectedLineId, setSelectedLineId] = useState<number | null>(null)
+    const [selectedTransactionId, setSelectedTransactionId] = useState<number | null>(null)
+    const [matching, setMatching] = useState(false)
+
+    const loadAccounts = useCallback(async () => {
+        try {
+            const data = unwrapArrayResult(await globalThis.electronAPI.finance.getAccounts(), 'Failed to load bank accounts')
+            setAccounts(data)
+            if (data.length > 0 && !selectedAccount && data[0]) {
+                setSelectedAccount(data[0].id)
+            }
+        } catch (error) {
+            console.error('Failed to load accounts', error)
+            setAccounts([])
+            setSelectedAccount(null)
+            setStatements([])
+            setSelectedStatement(null)
+            setLines([])
+            setUnmatchedTransactions([])
+            showToast(error instanceof Error ? error.message : 'Failed to load bank accounts', 'error')
+        }
+    }, [selectedAccount, showToast])
+
+    const loadStatements = useCallback(async (accountId: number) => {
+        try {
+            const data = unwrapArrayResult(
+                await globalThis.electronAPI.finance.getStatements(accountId),
+                'Failed to load statements'
+            )
+            setStatements(data)
+            setSelectedStatement((current) => {
+                if (!current) {
+                    return data[0] || null
+                }
+                return data.find((statement) => statement.id === current.id) || data[0] || null
+            })
+        } catch (error) {
+            console.error('Failed to load statements', error)
+            setStatements([])
+            setSelectedStatement(null)
+            showToast(error instanceof Error ? error.message : 'Failed to load statements', 'error')
+        }
+    }, [showToast])
+
+    const loadStatementDetails = useCallback(async (statementId: number) => {
+        try {
+            const result = unwrapIPCResult(
+                await globalThis.electronAPI.finance.getStatementWithLines(statementId),
+                'Failed to load statement details'
+            )
+            if (result) {
+                setLines(Array.isArray(result.lines) ? result.lines : [])
+                return
+            }
+            setLines([])
+        } catch (error) {
+            console.error('Failed to load statement lines', error)
+            setLines([])
+            showToast(error instanceof Error ? error.message : 'Failed to load statement details', 'error')
+        }
+    }, [showToast])
+
+    const loadUnmatchedTransactions = useCallback(async () => {
+        if (!selectedStatement) {
+            setUnmatchedTransactions([])
+            return
+        }
+        try {
+            const start = new Date(selectedStatement.statement_date)
+            start.setDate(1)
+            const end = new Date(start)
+            end.setMonth(end.getMonth() + 1)
+            end.setDate(0)
+
+            const data = unwrapArrayResult(
+                await globalThis.electronAPI.finance.getUnmatchedTransactions(
+                    start.toISOString().slice(0, 10),
+                    end.toISOString().slice(0, 10),
+                    selectedAccount || undefined
+                ),
+                'Failed to load unmatched ledger entries'
+            )
+            setUnmatchedTransactions(data)
+        } catch (error) {
+            console.error('Failed to load ledger transactions', error)
+            setUnmatchedTransactions([])
+            showToast(error instanceof Error ? error.message : 'Failed to load unmatched ledger entries', 'error')
+        }
+    }, [selectedAccount, selectedStatement, showToast])
+
+    const refreshSelectedStatement = useCallback(async () => {
+        if (!selectedStatement) {
+            return
+        }
+        await Promise.all([
+            loadStatementDetails(selectedStatement.id),
+            loadUnmatchedTransactions()
+        ])
+    }, [loadStatementDetails, loadUnmatchedTransactions, selectedStatement])
+
+    useEffect(() => {
+        void loadAccounts()
+    }, [loadAccounts])
+
+    useEffect(() => {
+        setSelectedStatement(null)
+        setLines([])
+        setSelectedLineId(null)
+        if (selectedAccount) {
+            void loadStatements(selectedAccount)
+        }
+    }, [selectedAccount, loadStatements])
+
+    useEffect(() => {
+        setSelectedLineId(null)
+        setSelectedTransactionId(null)
+        if (selectedStatement) {
+            void refreshSelectedStatement()
+        }
+    }, [refreshSelectedStatement, selectedStatement])
+
+    const {
+        showImportModal, openImportModal, closeImportModal,
+        importStatementDate, setImportStatementDate,
+        importReference, setImportReference,
+        importOpeningBalance, setImportOpeningBalance,
+        importClosingBalance, setImportClosingBalance,
+        setImportFile, importErrors, importing, handleCSVImport,
+    } = useImportForm(selectedAccount, loadStatements, setSelectedStatement, showToast)
+
     const handleMatch = async () => {
         const selectedLine = lines.find((line) => line.id === selectedLineId) || null
         const selectedTransaction = unmatchedTransactions.find((transaction) => transaction.id === selectedTransactionId) || null
@@ -265,7 +289,7 @@ export default function ReconcileAccount() {
 
         setMatching(true)
         try {
-            const result = await globalThis.electronAPI.matchTransaction(selectedLine!.id, selectedTransaction!.id)
+            const result = await globalThis.electronAPI.finance.matchTransaction(selectedLine!.id, selectedTransaction!.id)
             if (!result.success) {
                 showToast(result.error || 'Failed to match transactions', 'error')
                 return
@@ -284,6 +308,38 @@ export default function ReconcileAccount() {
     }
 
     const unmatchedLines = lines.filter((line) => !line.is_matched)
+
+    return {
+        navigate,
+        accounts, selectedAccount, setSelectedAccount,
+        statements, selectedStatement, setSelectedStatement,
+        unmatchedLines, selectedLineId, setSelectedLineId,
+        unmatchedTransactions, selectedTransactionId, setSelectedTransactionId,
+        matching, handleMatch, openImportModal,
+        showImportModal, closeImportModal,
+        importStatementDate, setImportStatementDate,
+        importReference, setImportReference,
+        importOpeningBalance, setImportOpeningBalance,
+        importClosingBalance, setImportClosingBalance,
+        setImportFile, importErrors, importing, handleCSVImport,
+    }
+}
+
+export default function ReconcileAccount() {
+    const {
+        navigate,
+        accounts, selectedAccount, setSelectedAccount,
+        statements, selectedStatement, setSelectedStatement,
+        unmatchedLines, selectedLineId, setSelectedLineId,
+        unmatchedTransactions, selectedTransactionId, setSelectedTransactionId,
+        matching, handleMatch, openImportModal,
+        showImportModal, closeImportModal,
+        importStatementDate, setImportStatementDate,
+        importReference, setImportReference,
+        importOpeningBalance, setImportOpeningBalance,
+        importClosingBalance, setImportClosingBalance,
+        setImportFile, importErrors, importing, handleCSVImport,
+    } = useReconciliationPage()
 
     return (
         <div className="space-y-8 pb-10 h-full flex flex-col">
@@ -313,248 +369,47 @@ export default function ReconcileAccount() {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="space-y-2">
-                    <label htmlFor="field-107" className="label">Bank Account</label>
-                    <select
-                        id="field-107"
-                        value={selectedAccount || ''}
-                        onChange={(event) => {
-                            const value = event.target.value
-                            setSelectedAccount(value ? Number(value) : null)
-                        }}
-                        className="input"
-                        disabled={accounts.length === 0}
-                    >
-                        {accounts.map((account) => (
-                            <option key={account.id} value={account.id}>{account.account_name} ({account.bank_name})</option>
-                        ))}
-                    </select>
-                </div>
-                <div className="space-y-2">
-                    <label htmlFor="field-119" className="label">Statement Period</label>
-                    <select
-                        id="field-119"
-                        value={selectedStatement?.id || ''}
-                        onChange={(event) => {
-                            const statement = statements.find((item) => item.id === Number(event.target.value))
-                            setSelectedStatement(statement || null)
-                        }}
-                        className="input"
-                        disabled={!selectedAccount || statements.length === 0}
-                    >
-                        <option value="">Select Statement</option>
-                        {statements.map((statement) => (
-                            <option key={statement.id} value={statement.id}>
-                                {new Date(statement.statement_date).toLocaleDateString()} - {statement.status}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-                <div className="flex items-end">
-                    <button
-                        type="button"
-                        className="btn btn-secondary w-full flex items-center justify-center gap-2"
-                        onClick={openImportModal}
-                        disabled={!selectedAccount}
-                    >
-                        <Upload className="w-4 h-4" />
-                        Import Statement (CSV)
-                    </button>
-                </div>
-                <div className="flex items-end">
-                    <button
-                        type="button"
-                        className="btn btn-primary w-full"
-                        onClick={() => { void handleMatch() }}
-                        disabled={matching || !selectedLineId || !selectedTransactionId}
-                    >
-                        {matching ? 'Matching...' : 'Match Selected'}
-                    </button>
-                </div>
-            </div>
+            <AccountSelectorGrid
+                accounts={accounts}
+                selectedAccount={selectedAccount}
+                setSelectedAccount={setSelectedAccount}
+                statements={statements}
+                selectedStatement={selectedStatement}
+                setSelectedStatement={setSelectedStatement}
+                openImportModal={openImportModal}
+                matching={matching}
+                selectedLineId={selectedLineId}
+                selectedTransactionId={selectedTransactionId}
+                handleMatch={handleMatch}
+            />
 
             {selectedStatement && (
-                <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-8 min-h-[500px]">
-                    <div className="card flex flex-col h-full">
-                        <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
-                            <CreditCard className="w-5 h-5 text-primary" />
-                            Bank Statement Lines
-                        </h3>
-                        <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 pr-2">
-                            {unmatchedLines.map((line) => {
-                                const isSelected = line.id === selectedLineId
-                                return (
-                                    <button
-                                        key={line.id}
-                                        type="button"
-                                        onClick={() => setSelectedLineId(line.id)}
-                                        aria-label={`Select statement line ${line.description}`}
-                                        className={`w-full text-left p-3 border rounded-lg transition-all ${
-                                            isSelected
-                                                ? 'border-primary bg-primary/10'
-                                                : 'bg-white/[0.02] border-border/20 hover:border-primary/20'
-                                        }`}
-                                    >
-                                        <div className="flex justify-between items-start gap-3">
-                                            <div>
-                                                <p className="text-sm font-medium text-foreground">{line.description}</p>
-                                                <p className="text-xs text-foreground/50">
-                                                    #{line.id} • {new Date(line.transaction_date).toLocaleDateString()}
-                                                </p>
-                                            </div>
-                                            <p className={`font-mono font-bold ${line.credit_amount > 0 ? 'text-emerald-400' : 'text-foreground'}`}>
-                                                {formatCurrencyFromCents(line.credit_amount || -line.debit_amount)}
-                                            </p>
-                                        </div>
-                                    </button>
-                                )
-                            })}
-                            {unmatchedLines.length === 0 && (
-                                <p className="text-center text-foreground/30 py-10">All lines matched</p>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="card flex flex-col h-full">
-                        <h3 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
-                            <ArrowRightLeft className="w-5 h-5 text-amber-400" />
-                            Unmatched Ledger Entries
-                        </h3>
-                        <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 pr-2">
-                            {unmatchedTransactions.map((transaction) => {
-                                const isSelected = transaction.id === selectedTransactionId
-                                return (
-                                    <button
-                                        key={transaction.id}
-                                        type="button"
-                                        onClick={() => setSelectedTransactionId(transaction.id)}
-                                        aria-label={`Select ledger entry ${transaction.transaction_ref || transaction.description}`}
-                                        className={`w-full text-left p-3 border rounded-lg transition-all ${
-                                            isSelected
-                                                ? 'border-amber-400 bg-amber-400/10'
-                                                : 'bg-white/[0.02] border-border/20 hover:border-amber-400/20'
-                                        }`}
-                                    >
-                                        <div className="flex justify-between items-start gap-3">
-                                            <div>
-                                                <p className="text-sm font-medium text-foreground">{transaction.description}</p>
-                                                <p className="text-xs text-foreground/50">
-                                                    {transaction.transaction_ref} • {new Date(transaction.transaction_date).toLocaleDateString()}
-                                                </p>
-                                            </div>
-                                            <p className="font-mono font-bold text-foreground">
-                                                {formatCurrencyFromCents(transaction.amount)}
-                                            </p>
-                                        </div>
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    </div>
-                </div>
+                <ReconciliationPanels
+                    unmatchedLines={unmatchedLines}
+                    selectedLineId={selectedLineId}
+                    setSelectedLineId={setSelectedLineId}
+                    unmatchedTransactions={unmatchedTransactions}
+                    selectedTransactionId={selectedTransactionId}
+                    setSelectedTransactionId={setSelectedTransactionId}
+                />
             )}
 
-            <Modal
-                isOpen={showImportModal}
-                onClose={closeImportModal}
-                title="Import Bank Statement CSV"
-                size="md"
-            >
-                <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label htmlFor="import-statement-date" className="label">Statement Date</label>
-                            <input
-                                id="import-statement-date"
-                                type="date"
-                                className="input"
-                                value={importStatementDate}
-                                onChange={(event) => setImportStatementDate(event.target.value)}
-                                disabled={importing}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label htmlFor="import-reference" className="label">Reference</label>
-                            <input
-                                id="import-reference"
-                                type="text"
-                                className="input"
-                                placeholder="Optional statement reference"
-                                value={importReference}
-                                onChange={(event) => setImportReference(event.target.value)}
-                                disabled={importing}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label htmlFor="import-opening-balance" className="label">Opening Balance (Ksh)</label>
-                            <input
-                                id="import-opening-balance"
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                className="input"
-                                value={importOpeningBalance}
-                                onChange={(event) => setImportOpeningBalance(event.target.value)}
-                                disabled={importing}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label htmlFor="import-closing-balance" className="label">Closing Balance (Ksh)</label>
-                            <input
-                                id="import-closing-balance"
-                                type="number"
-                                step="0.01"
-                                className="input"
-                                value={importClosingBalance}
-                                onChange={(event) => setImportClosingBalance(event.target.value)}
-                                disabled={importing}
-                            />
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <label htmlFor="import-csv-file" className="label">CSV File</label>
-                        <input
-                            id="import-csv-file"
-                            type="file"
-                            accept=".csv,text/csv"
-                            className="input"
-                            onChange={(event) => {
-                                const file = event.target.files?.[0] || null
-                                setImportFile(file)
-                            }}
-                            disabled={importing}
-                        />
-                    </div>
-                    {importErrors.length > 0 && (
-                        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
-                            <ul className="text-sm text-red-200 list-disc pl-5 space-y-1">
-                                {importErrors.map((error, index) => (
-                                    <li key={`import-error-${index}`}>{error}</li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-                    <div className="flex justify-end gap-2">
-                        <button
-                            type="button"
-                            className="btn btn-secondary"
-                            onClick={closeImportModal}
-                            disabled={importing}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="button"
-                            className="btn btn-primary"
-                            onClick={() => { void handleCSVImport() }}
-                            disabled={importing}
-                        >
-                            {importing ? 'Importing...' : 'Import Statement'}
-                        </button>
-                    </div>
-                </div>
-            </Modal>
+            <ImportStatementModal
+                showImportModal={showImportModal}
+                closeImportModal={closeImportModal}
+                importStatementDate={importStatementDate}
+                setImportStatementDate={setImportStatementDate}
+                importReference={importReference}
+                setImportReference={setImportReference}
+                importOpeningBalance={importOpeningBalance}
+                setImportOpeningBalance={setImportOpeningBalance}
+                importClosingBalance={importClosingBalance}
+                setImportClosingBalance={setImportClosingBalance}
+                setImportFile={setImportFile}
+                importErrors={importErrors}
+                importing={importing}
+                handleCSVImport={handleCSVImport}
+            />
         </div>
     )
 }

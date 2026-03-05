@@ -43,25 +43,29 @@ function parseCsvRow(row: string): string[] {
     const values: string[] = []
     let current = ''
     let inQuotes = false
+    let index = 0
 
-    for (let index = 0; index < row.length; index += 1) {
+    while (index < row.length) {
         const char = row[index]
         if (char === '"') {
             const nextChar = row[index + 1]
             if (inQuotes && nextChar === '"') {
                 current += '"'
-                index += 1
+                index += 2
                 continue
             }
             inQuotes = !inQuotes
+            index += 1
             continue
         }
         if (char === ',' && !inQuotes) {
             values.push(current.trim())
             current = ''
+            index += 1
             continue
         }
         current += char
+        index += 1
     }
 
     values.push(current.trim())
@@ -88,8 +92,8 @@ function normalizeHeader(value: string): string {
 }
 
 function findColumnIndex(headers: string[], candidates: string[]): number {
-    const normalizedCandidates = candidates.map((candidate) => normalizeHeader(candidate))
-    return headers.findIndex((header) => normalizedCandidates.includes(header))
+    const normalizedCandidates = new Set(candidates.map((candidate) => normalizeHeader(candidate)))
+    return headers.findIndex((header) => normalizedCandidates.has(header))
 }
 
 function parseStatementRow(values: string[], rowLabel: string, indexes: StatementColumnIndexes): ParsedRowResult {

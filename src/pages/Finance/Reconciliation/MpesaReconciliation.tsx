@@ -152,9 +152,9 @@ export default function MpesaReconciliation() {
                                         <td className="whitespace-nowrap px-4 py-4 text-sm">
                                             <button
                                                 onClick={() => {
-                                                    const id = window.prompt('Enter Student ID to match with:');
-                                                    if (id && !isNaN(parseInt(id, 10))) {
-                                                        void manualMatch(txn.id, parseInt(id, 10));
+                                                    const id = globalThis.prompt('Enter Student ID to match with:');
+                                                    if (id && !Number.isNaN(Number.parseInt(id, 10))) {
+                                                        void manualMatch(txn.id, Number.parseInt(id, 10));
                                                     }
                                                 }}
                                                 className="btn btn-secondary text-xs px-3 py-1.5"

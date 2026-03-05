@@ -9,9 +9,179 @@ import { type TransactionCategory } from '../../types/electron-api/FinanceAPI'
 import { shillingsToCents } from '../../utils/format'
 import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
+type IncomeFormState = {
+    transaction_date: string
+    amount: string
+    category_id: string
+    transaction_type: string
+    payment_method: string
+    payment_reference: string
+    description: string
+}
+
+interface IncomeFormFieldsGridProps {
+    formData: IncomeFormState
+    setFormData: React.Dispatch<React.SetStateAction<IncomeFormState>>
+    categories: TransactionCategory[]
+    showNewCategoryInput: boolean
+    setShowNewCategoryInput: React.Dispatch<React.SetStateAction<boolean>>
+    newCategory: string
+    setNewCategory: React.Dispatch<React.SetStateAction<string>>
+    onCreateCategory: () => void
+    categoryLoading: boolean
+}
+
+function IncomeFormFieldsGrid({
+    formData,
+    setFormData,
+    categories,
+    showNewCategoryInput,
+    setShowNewCategoryInput,
+    newCategory,
+    setNewCategory,
+    onCreateCategory,
+    categoryLoading,
+}: Readonly<IncomeFormFieldsGridProps>) {
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Date */}
+            <div className="space-y-2">
+                <label htmlFor="transaction_date" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1 flex items-center gap-2">
+                    <Calendar className="w-3 h-3" />
+                    Transaction Timestamp <span className="text-destructive">*</span>
+                </label>
+                <input
+                    id="transaction_date"
+                    type="date"
+                    required
+                    value={formData.transaction_date}
+                    onChange={(e) => setFormData({ ...formData, transaction_date: e.target.value })}
+                    className="input w-full h-12 font-bold text-xs uppercase tracking-tight"
+                />
+            </div>
+
+            {/* Amount */}
+            <div className="space-y-2">
+                <label htmlFor="amount" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1 flex items-center gap-2">
+                    <Tag className="w-3 h-3" />
+                    Aggregate Amount (KES) <span className="text-destructive">*</span>
+                </label>
+                <input
+                    id="amount"
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    value={formData.amount}
+                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                    className="input w-full h-12 text-lg font-bold"
+                    placeholder="0.00"
+                />
+            </div>
+
+            {/* Income Type */}
+            <div className="space-y-2">
+                <label htmlFor="transaction_type" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Protocol Type <span className="text-destructive">*</span></label>
+                <select
+                    id="transaction_type"
+                    required
+                    value={formData.transaction_type}
+                    onChange={(e) => setFormData({ ...formData, transaction_type: e.target.value })}
+                    className="input w-full h-12 font-bold text-xs uppercase tracking-tight"
+                >
+                    <option value="DONATION">General Donation</option>
+                    <option value="GRANT">Institutional Grant</option>
+                    <option value="LOAN">Capital Loan</option>
+                    <option value="OTHER_INCOME">Miscellaneous Revenue</option>
+                </select>
+            </div>
+
+            {/* Category */}
+            <div className="space-y-2">
+                <label htmlFor="category_id" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Revenue Vector <span className="text-destructive">*</span></label>
+                <div className="flex gap-2">
+                    <select
+                        id="category_id"
+                        required
+                        value={formData.category_id}
+                        onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
+                        className="input w-full h-12 font-bold text-xs uppercase tracking-tight"
+                    >
+                        <option value="">Select Category</option>
+                        {categories.map(cat => (
+                            <option key={cat.id} value={cat.id}>{cat.category_name}</option>
+                        ))}
+                    </select>
+                    <button
+                        type="button"
+                        onClick={() => setShowNewCategoryInput(!showNewCategoryInput)}
+                        className="p-3 bg-secondary/50 border border-border/40 hover:bg-primary/10 hover:border-primary/40 rounded-xl transition-all"
+                        title="Add New Category"
+                    >
+                        <Plus className="w-5 h-5 text-foreground/60" />
+                    </button>
+                </div>
+                {showNewCategoryInput && (
+                    <div className="mt-3 flex gap-2 animate-in slide-in-from-top-2 duration-300">
+                        <input
+                            type="text"
+                            aria-label="New Category Name"
+                            value={newCategory}
+                            onChange={(e) => setNewCategory(e.target.value)}
+                            className="input flex-1 h-12"
+                            placeholder="New Category Identifier"
+                        />
+                        <button
+                            type="button"
+                            onClick={onCreateCategory}
+                            disabled={categoryLoading || !newCategory}
+                            className="btn btn-primary px-4 h-12"
+                            title="Confirm Vector"
+                        >
+                            {categoryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {/* Payment Method */}
+            <div className="space-y-2">
+                <label htmlFor="payment_method" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1 flex items-center gap-2">
+                    <CreditCard className="w-3 h-3" />
+                    Settlement Instrument <span className="text-destructive">*</span>
+                </label>
+                <select
+                    id="payment_method"
+                    required
+                    value={formData.payment_method}
+                    onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
+                    className="input w-full h-12 font-bold text-xs uppercase tracking-tight"
+                >
+                    <option value="CASH">Liquid Cash</option>
+                    <option value="MPESA">M-Pesa Mobile</option>
+                    <option value="BANK_TRANSFER">Direct EFT/Bank</option>
+                    <option value="CHEQUE">Banker's Cheque</option>
+                </select>
+            </div>
+
+            {/* Reference */}
+            <div className="space-y-2">
+                <label htmlFor="payment_reference" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Reference Artifact Identifier</label>
+                <input
+                    id="payment_reference"
+                    type="text"
+                    value={formData.payment_reference}
+                    onChange={(e) => setFormData({ ...formData, payment_reference: e.target.value })}
+                    className="input w-full h-12 font-mono text-xs tracking-wider"
+                    placeholder="e.g. TXN-XJ72, CHQ#00124"
+                />
+            </div>
+        </div>
+    )
+}
 
 export default function RecordIncome() {
-    const { user } = useAuthStore()
+    const user = useAuthStore((s) => s.user)
     const { showToast } = useToast()
 
     const [categories, setCategories] = useState<TransactionCategory[]>([])
@@ -33,7 +203,7 @@ export default function RecordIncome() {
     const loadCategories = useCallback(async () => {
         try {
             const categories = unwrapArrayResult(
-                await globalThis.electronAPI.getTransactionCategories(),
+                await globalThis.electronAPI.finance.getTransactionCategories(),
                 'Failed to load transaction categories'
             )
             setCategories(categories.filter((c: TransactionCategory) => c.category_type === 'INCOME'))
@@ -57,7 +227,7 @@ export default function RecordIncome() {
         try {
             setLoading(true)
             unwrapIPCResult(
-                await globalThis.electronAPI.createTransactionCategory(categoryName, 'INCOME'),
+                await globalThis.electronAPI.finance.createTransactionCategory(categoryName, 'INCOME'),
                 'Failed to create transaction category'
             )
             await loadCategories()
@@ -86,7 +256,7 @@ export default function RecordIncome() {
         setSaving(true)
         try {
             unwrapIPCResult(
-                await globalThis.electronAPI.createTransaction({
+                await globalThis.electronAPI.finance.createTransaction({
                 transaction_date: formData.transaction_date,
                 transaction_type: formData.transaction_type,
                 amount: shillingsToCents(formData.amount), // Whole currency units
@@ -145,140 +315,17 @@ export default function RecordIncome() {
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-8 relative z-10">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        {/* Date */}
-                        <div className="space-y-2">
-                            <label htmlFor="transaction_date" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1 flex items-center gap-2">
-                                <Calendar className="w-3 h-3" />
-                                Transaction Timestamp <span className="text-destructive">*</span>
-                            </label>
-                            <input
-                                id="transaction_date"
-                                type="date"
-                                required
-                                value={formData.transaction_date}
-                                onChange={(e) => setFormData({ ...formData, transaction_date: e.target.value })}
-                                className="input w-full h-12 font-bold text-xs uppercase tracking-tight"
-                            />
-                        </div>
-
-                        {/* Amount */}
-                        <div className="space-y-2">
-                            <label htmlFor="amount" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1 flex items-center gap-2">
-                                <Tag className="w-3 h-3" />
-                                Aggregate Amount (KES) <span className="text-destructive">*</span>
-                            </label>
-                            <input
-                                id="amount"
-                                type="number"
-                                required
-                                min="0"
-                                step="0.01"
-                                value={formData.amount}
-                                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                className="input w-full h-12 text-lg font-bold"
-                                placeholder="0.00"
-                            />
-                        </div>
-
-                        {/* Income Type */}
-                        <div className="space-y-2">
-                            <label htmlFor="transaction_type" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Protocol Type <span className="text-destructive">*</span></label>
-                            <select
-                                id="transaction_type"
-                                required
-                                value={formData.transaction_type}
-                                onChange={(e) => setFormData({ ...formData, transaction_type: e.target.value })}
-                                className="input w-full h-12 font-bold text-xs uppercase tracking-tight"
-                            >
-                                <option value="DONATION">General Donation</option>
-                                <option value="GRANT">Institutional Grant</option>
-                                <option value="LOAN">Capital Loan</option>
-                                <option value="OTHER_INCOME">Miscellaneous Revenue</option>
-                            </select>
-                        </div>
-
-                        {/* Category */}
-                        <div className="space-y-2">
-                            <label htmlFor="category_id" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Revenue Vector <span className="text-destructive">*</span></label>
-                            <div className="flex gap-2">
-                                <select
-                                    id="category_id"
-                                    required
-                                    value={formData.category_id}
-                                    onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                                    className="input w-full h-12 font-bold text-xs uppercase tracking-tight"
-                                >
-                                    <option value="">Select Category</option>
-                                    {categories.map(cat => (
-                                        <option key={cat.id} value={cat.id}>{cat.category_name}</option>
-                                    ))}
-                                </select>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowNewCategoryInput(!showNewCategoryInput)}
-                                    className="p-3 bg-secondary/50 border border-border/40 hover:bg-primary/10 hover:border-primary/40 rounded-xl transition-all"
-                                    title="Add New Category"
-                                >
-                                    <Plus className="w-5 h-5 text-foreground/60" />
-                                </button>
-                            </div>
-                            {showNewCategoryInput && (
-                                <div className="mt-3 flex gap-2 animate-in slide-in-from-top-2 duration-300">
-                                    <input
-                                        type="text"
-                                        aria-label="New Category Name"
-                                        value={newCategory}
-                                        onChange={(e) => setNewCategory(e.target.value)}
-                                        className="input flex-1 h-12"
-                                        placeholder="New Category Identifier"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={handleCreateCategory}
-                                        disabled={loading || !newCategory}
-                                        className="btn btn-primary px-4 h-12"
-                                        title="Confirm Vector"
-                                    >
-                                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Payment Method */}
-                        <div className="space-y-2">
-                            <label htmlFor="payment_method" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1 flex items-center gap-2">
-                                <CreditCard className="w-3 h-3" />
-                                Settlement Instrument <span className="text-destructive">*</span>
-                            </label>
-                            <select
-                                id="payment_method"
-                                required
-                                value={formData.payment_method}
-                                onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                                className="input w-full h-12 font-bold text-xs uppercase tracking-tight"
-                            >
-                                <option value="CASH">Liquid Cash</option>
-                                <option value="MPESA">M-Pesa Mobile</option>
-                                <option value="BANK_TRANSFER">Direct EFT/Bank</option>
-                                <option value="CHEQUE">Banker's Cheque</option>
-                            </select>
-                        </div>
-
-                        {/* Reference */}
-                        <div className="space-y-2">
-                            <label htmlFor="payment_reference" className="text-[10px] font-bold text-foreground/40 uppercase tracking-widest ml-1">Reference Artifact Identifier</label>
-                            <input
-                                id="payment_reference"
-                                type="text"
-                                value={formData.payment_reference}
-                                onChange={(e) => setFormData({ ...formData, payment_reference: e.target.value })}
-                                className="input w-full h-12 font-mono text-xs tracking-wider"
-                                placeholder="e.g. TXN-XJ72, CHQ#00124"
-                            />
-                        </div>
-                    </div>
+                    <IncomeFormFieldsGrid
+                        formData={formData}
+                        setFormData={setFormData}
+                        categories={categories}
+                        showNewCategoryInput={showNewCategoryInput}
+                        setShowNewCategoryInput={setShowNewCategoryInput}
+                        newCategory={newCategory}
+                        setNewCategory={setNewCategory}
+                        onCreateCategory={handleCreateCategory}
+                        categoryLoading={loading}
+                    />
 
                     {/* Description */}
                     <div className="space-y-2">
