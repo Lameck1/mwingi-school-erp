@@ -127,4 +127,37 @@ describe('PayslipGenerationService', () => {
         expect(ids).toHaveLength(2)
         expect(ids).toEqual([1, 2])
     })
+
+    it('throws when payroll record is not found', () => {
+        expect(() => service.generatePayslip(999)).toThrow('Payroll record 999 not found')
+    })
+
+    it('defaults to N/A for null id_number, kra_pin, department, job_title', () => {
+        // Insert staff with null optional fields
+        db.exec(`
+          INSERT INTO staff (staff_number, first_name, last_name, basic_salary) VALUES
+            ('EMP-003', 'Charlie', 'Clerk', 25000);
+          INSERT INTO payroll (period_id, staff_id, basic_salary, gross_salary, total_deductions, net_salary) VALUES
+            (1, 3, 25000, 25000, 0, 25000);
+        `)
+        const payslip = service.generatePayslip(3)
+        expect(payslip.employee.id_number).toBe('N/A')
+        expect(payslip.employee.kra_pin).toBe('N/A')
+        expect(payslip.employee.department).toBe('N/A')
+        expect(payslip.employee.job_title).toBe('N/A')
+    })
+
+    it('defaults school name to Mwingi School when setting is missing', () => {
+        db.exec("DELETE FROM system_settings WHERE setting_key = 'SCHOOL_NAME'")
+        const payslip = service.generatePayslip(1)
+        expect(payslip.school_name).toBe('Mwingi School')
+    })
+})
+
+// ── Branch coverage: constructor getDatabase() fallback (L47) ──
+describe('PayslipGenerationService – constructor fallback', () => {
+    it('falls back to getDatabase() when no db is provided', () => {
+        // Exercises the || getDatabase() branch in the constructor
+        expect(() => new PayslipGenerationService()).toThrow()
+    })
 })

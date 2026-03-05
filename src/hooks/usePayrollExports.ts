@@ -39,7 +39,7 @@ export function usePayrollExports() {
         try {
             setIsExportingP10(true)
             setError(null)
-            const res = await window.electronAPI.generateP10Csv(periodId)
+            const res = await globalThis.electronAPI.staff.generateP10Csv(periodId)
             if (res.success && res.data) {
                 return res.data
             } else {
@@ -56,7 +56,7 @@ export function usePayrollExports() {
 
     const getPayrollIds = useCallback(async (periodId: number): Promise<number[] | null> => {
         try {
-            const res = await window.electronAPI.getPayrollIdsForPeriod(periodId)
+            const res = await globalThis.electronAPI.staff.getPayrollIdsForPeriod(periodId)
             if (res.success && res.data) {
                 return res.data
             } else {
@@ -71,7 +71,7 @@ export function usePayrollExports() {
 
     const generatePayslip = useCallback(async (payrollId: number): Promise<PayslipData | null> => {
         try {
-            const res = await window.electronAPI.generatePayslip(payrollId)
+            const res = await globalThis.electronAPI.staff.generatePayslip(payrollId)
             if (res.success && res.data) {
                 return res.data as PayslipData
             } else {
