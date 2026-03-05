@@ -14,7 +14,7 @@ import type { MessageTemplate } from '../../types/electron-api/MessagingAPI'
 type Template = MessageTemplate
 
 export default function MessageTemplates() {
-    const { user } = useAuthStore()
+    const user = useAuthStore((s) => s.user)
     const { showToast } = useToast()
     const [templates, setTemplates] = useState<Template[]>([])
     const [loading, setLoading] = useState(true)
@@ -28,7 +28,7 @@ export default function MessageTemplates() {
     const loadTemplates = useCallback(async () => {
         setLoading(true)
         try {
-            const data = unwrapArrayResult(await globalThis.electronAPI.getNotificationTemplates(), 'Failed to load templates')
+            const data = unwrapArrayResult(await globalThis.electronAPI.communications.getNotificationTemplates(), 'Failed to load templates')
             setTemplates(data)
         } catch (error) {
             console.error('Failed to load templates:', error)
@@ -64,7 +64,7 @@ export default function MessageTemplates() {
             }
 
             unwrapIPCResult(
-                await globalThis.electronAPI.createNotificationTemplate(payload, user.id),
+                await globalThis.electronAPI.communications.createNotificationTemplate(payload, user.id),
                 'Failed to create template'
             )
             setShowTemplateModal(false)

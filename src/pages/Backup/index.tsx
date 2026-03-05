@@ -14,7 +14,7 @@ export default function Backup() {
 
     const loadBackups = useCallback(async () => {
         try {
-            const data = await globalThis.electronAPI.getBackupList()
+            const data = await globalThis.electronAPI.system.getBackupList()
             setBackups(unwrapArrayResult(data, 'Failed to load backup list'))
         } catch (error) {
             console.error('Failed to load backups:', error)
@@ -31,7 +31,7 @@ export default function Backup() {
         setBacking(true)
         setResult(null)
         try {
-            const res = unwrapIPCResult(await globalThis.electronAPI.createBackup(), 'Backup orchestration failed')
+            const res = unwrapIPCResult(await globalThis.electronAPI.system.createBackup(), 'Backup orchestration failed')
             if (res.cancelled) {
                 setResult(null)
             } else if (res.success) {
@@ -61,7 +61,7 @@ export default function Backup() {
         setRestoring(true)
         setResult(null)
         try {
-            const res = unwrapIPCResult(await globalThis.electronAPI.restoreBackup(filename), 'Restoration orchestration failed')
+            const res = unwrapIPCResult(await globalThis.electronAPI.system.restoreBackup(filename), 'Restoration orchestration failed')
             if (res.cancelled) {
                 setResult(null)
             } else if (res.success) {

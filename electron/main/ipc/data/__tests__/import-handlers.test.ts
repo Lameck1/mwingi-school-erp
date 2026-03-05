@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearSessionCache } from '../../../security/session'
 
 type IpcHandler = (event: unknown, ...args: unknown[]) => Promise<unknown>
 
@@ -11,6 +12,7 @@ const mockState = vi.hoisted(() => ({
   selectedPath: 'C:/tmp/students.xlsx',
   importToken: '11111111-1111-4111-8111-111111111111',
   readFileSyncMock: vi.fn(() => Buffer.from('id,name\n1,Test')),
+  readFileMock: vi.fn(async () => Buffer.from('id,name\n1,Test')),
   statSyncMock: vi.fn(() => ({ isFile: () => true, size: 120 })),
   showOpenDialogMock: vi.fn(async () => ({ canceled: false, filePaths: ['C:/tmp/students.xlsx'] })),
   showSaveDialogMock: vi.fn(async () => ({ filePath: 'C:/tmp/template.xlsx' }))
@@ -54,6 +56,12 @@ vi.mock('node:fs', () => ({
   statSync: mockState.statSyncMock,
 }))
 
+vi.mock('node:fs/promises', () => ({
+  stat: vi.fn(async () => ({ isFile: () => true, size: 120 })),
+  readFile: mockState.readFileMock,
+  writeFile: vi.fn(async () => {})
+}))
+
 vi.mock('../../../electron-env', () => ({
   ipcMain: {
     handle: vi.fn((channel: string, handler: IpcHandler) => {
@@ -78,6 +86,7 @@ import { registerDataImportHandlers } from '../import-handlers'
 
 describe('data import IPC handlers', () => {
   beforeEach(() => {
+    clearSessionCache()
     handlerMap.clear()
     sessionUserId = 21
     sessionRole = 'ADMIN'
@@ -169,7 +178,7 @@ describe('data import IPC handlers', () => {
     ) as { success: boolean }
 
     expect(result.success).toBe(true)
-    const firstReadArg = mockState.readFileSyncMock.mock.calls[0]?.[0]
+    const firstReadArg = mockState.readFileMock.mock.calls[0]?.[0]
     expect(String(firstReadArg)).toContain('students.xlsx')
     expect(importServiceMock.importFromFile).toHaveBeenCalledWith(
       expect.any(Buffer),
@@ -177,5 +186,107 @@ describe('data import IPC handlers', () => {
       expect.objectContaining({ entityType: 'STUDENT' }),
       21
     )
+  })
+
+  // ── data:pickImportFile edge cases ────────────────────────────
+  it('data:pickImportFile returns cancelled when dialog cancelled', async () => {
+    mockState.showOpenDialogMock.mockResolvedValueOnce({ canceled: true, filePaths: [] })
+    const handler = handlerMap.get('data:pickImportFile')!
+    const result = await handler({}) as { success: boolean; cancelled: boolean }
+    expect(result.success).toBe(false)
+    expect(result.cancelled).toBe(true)
+  })
+
+  it('data:pickImportFile rejects invalid extension', async () => {
+    mockState.showOpenDialogMock.mockResolvedValueOnce({ canceled: false, filePaths: ['C:/tmp/data.txt'] })
+    const handler = handlerMap.get('data:pickImportFile')!
+    const result = await handler({}) as { success: boolean; error?: string }
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('Invalid file type')
+  })
+
+  // ── data:getTemplate ──────────────────────────────────────────
+  it('data:getTemplate returns template for entity type', async () => {
+    importServiceMock.getImportTemplate.mockReturnValueOnce([{ field: 'name', required: true }])
+    const handler = handlerMap.get('data:getTemplate')!
+    const result = await handler({}, 'STUDENT')
+    expect(result).toEqual([{ field: 'name', required: true }])
+  })
+
+  // ── data:downloadTemplate ─────────────────────────────────────
+  it('data:downloadTemplate saves file on success', async () => {
+    const handler = handlerMap.get('data:downloadTemplate')!
+    const result = await handler({}, 'STUDENT') as { success: boolean; filePath?: string }
+    expect(result.success).toBe(true)
+    expect(result.filePath).toBe('C:/tmp/template.xlsx')
+  })
+
+  it('data:downloadTemplate returns error when user cancels', async () => {
+    mockState.showSaveDialogMock.mockResolvedValueOnce({ filePath: undefined })
+    const handler = handlerMap.get('data:downloadTemplate')!
+    const result = await handler({}, 'STUDENT') as { success: boolean; error?: string }
+    expect(result.success).toBe(false)
+    expect(result.error).toBe('Cancelled')
+  })
+
+  it('data:downloadTemplate returns error on generation failure', async () => {
+    importServiceMock.generateTemplateFile.mockRejectedValueOnce(new Error('Generation failed'))
+    const handler = handlerMap.get('data:downloadTemplate')!
+    const result = await handler({}, 'STUDENT') as { success: boolean; error?: string }
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('Generation failed')
+  })
+
+  // ── data:import with config normalization ─────────────────────
+  it('data:import normalizes config with optional fields', async () => {
+    const pickHandler = handlerMap.get('data:pickImportFile')!
+    const importHandler = handlerMap.get('data:import')!
+
+    const picked = await pickHandler({}) as { token: string }
+    await importHandler(
+      {},
+      picked.token,
+      {
+        entityType: 'STUDENT',
+        mappings: [{ sourceColumn: 'Name', targetField: 'first_name', required: true }],
+        skipDuplicates: true,
+        duplicateKey: 'admission_number',
+      },
+      21
+    )
+    expect(importServiceMock.importFromFile).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      'students.xlsx',
+      expect.objectContaining({
+        skipDuplicates: true,
+        duplicateKey: 'admission_number',
+        mappings: [{ sourceColumn: 'Name', targetField: 'first_name', required: true }],
+      }),
+      21
+    )
+  })
+
+  // ── data:import token is single-use ───────────────────────────
+  it('data:import deletes token after use (single-use)', async () => {
+    const pickHandler = handlerMap.get('data:pickImportFile')!
+    const importHandler = handlerMap.get('data:import')!
+
+    const picked = await pickHandler({}) as { token: string }
+    await importHandler({}, picked.token, { entityType: 'STUDENT', mappings: [] }, 21)
+
+    // Second use should fail
+    const result2 = await importHandler({}, picked.token, { entityType: 'STUDENT', mappings: [] }, 21) as { success: boolean; errors?: Array<{ message: string }> }
+    expect(result2.success).toBe(false)
+    expect(result2.errors?.[0]?.message).toContain('invalid or has expired')
+  })
+
+  it('data:import returns validation failure when file read throws', async () => {
+    mockState.readFileMock.mockRejectedValueOnce(new Error('ENOENT: no such file'))
+    const pickHandler = handlerMap.get('data:pickImportFile')!
+    const importHandler = handlerMap.get('data:import')!
+    const picked = await pickHandler({}) as { token: string }
+    const result = await importHandler({}, picked.token, { entityType: 'STUDENT', mappings: [] }, 21) as { success: boolean; errors?: Array<{ message: string }> }
+    expect(result.success).toBe(false)
+    expect(result.errors?.[0]?.message).toContain('ENOENT')
   })
 })

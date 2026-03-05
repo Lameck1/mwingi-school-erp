@@ -14,7 +14,7 @@ export class EmailService {
             case 'SMTP':
                 return this.sendSMTP(to, subject, body)
             case 'MAILGUN':
-                return { success: false, error: EMAIL_PROVIDER_UNSUPPORTED }
+                return this.sendMailgun(to, subject, body)
             default:
                 return { success: false, error: `Unknown email provider: ${String(this.config.provider)}` }
         }
@@ -47,6 +47,39 @@ export class EmailService {
                 success: false,
                 error: error instanceof Error ? error.message : API_REQUEST_FAILED,
                 provider: 'SENDGRID'
+            }
+        }
+    }
+
+    private async sendMailgun(to: string, subject: string, body: string): Promise<NotificationResult> {
+        try {
+            const domain = this.config.fromEmail.split('@')[1]
+            const response = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Basic ' + Buffer.from(`api:${this.config.apiKey}`).toString('base64'),
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({
+                    from: `"${this.config.fromName}" <${this.config.fromEmail}>`,
+                    to,
+                    subject,
+                    html: body
+                })
+            })
+
+            if (response.ok) {
+                const data = await response.json() as { id?: string; message?: string }
+                return { success: true, ...(data.id ? { messageId: data.id } : {}), provider: 'MAILGUN' }
+            }
+
+            const data = await response.json() as { message?: string }
+            return { success: false, error: data.message || UNKNOWN_ERROR, provider: 'MAILGUN' }
+        } catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : API_REQUEST_FAILED,
+                provider: 'MAILGUN'
             }
         }
     }

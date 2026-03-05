@@ -95,23 +95,4 @@ const namespacedAPI = {
   auth: authAPI
 }
 
-// Compatibility bridge:
-// renderer code relies on both flat and namespaced API shapes.
-const flatAPI = {
-  ...namespacedAPI.auth,
-  ...namespacedAPI.settings,
-  ...namespacedAPI.academic,
-  ...namespacedAPI.finance,
-  ...namespacedAPI.students,
-  ...namespacedAPI.staff,
-  ...namespacedAPI.operations,
-  ...namespacedAPI.reports,
-  ...namespacedAPI.communications,
-  ...namespacedAPI.system,
-  ...namespacedAPI.menuEvents
-}
-
-contextBridge.exposeInMainWorld('electronAPI', {
-  ...flatAPI,
-  ...namespacedAPI
-})
+contextBridge.exposeInMainWorld('electronAPI', namespacedAPI)

@@ -9,7 +9,7 @@ export const AuthSessionSchema = z.object({
     id: z.number().int().positive(),
     username: z.string().min(1).max(255),
     full_name: z.string().min(1).max(255),
-    email: z.string().email().max(255).nullish(),
+    email: z.email().max(255).nullish(),
     role: UserRoleSchema,
     is_active: z.union([z.number(), z.boolean()]),
     last_login: z.string().nullish(),
@@ -31,6 +31,12 @@ const ACCOUNT = 'session'
 let cachedSession: AuthSession | null = null
 let cacheTimestamp = 0
 const SESSION_CACHE_TTL_MS = 30_000
+
+/** Reset the in-memory session cache (used in tests). */
+export function clearSessionCache(): void {
+  cachedSession = null
+  cacheTimestamp = 0
+}
 
 export async function getSession(): Promise<AuthSession | null> {
   const now = Date.now()

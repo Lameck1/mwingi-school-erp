@@ -101,7 +101,7 @@ function registerSessionHandlers(db: ReturnType<typeof getDatabase>): void {
         const dbUser = db.prepare('SELECT id, username, full_name, email, role, is_active, last_login, created_at, updated_at FROM user WHERE id = ?').get(existingSession.user.id) as
             User | undefined
 
-        if (!dbUser || dbUser.is_active !== 1) {
+        if (dbUser?.is_active !== 1) {
             await clearSession()
             return { success: false, error: 'Session user is inactive or missing' }
         }

@@ -110,7 +110,9 @@ export class BackupService {
                 log.info(`Last backup was ${hoursSinceLast.toFixed(1)}h ago. Creating auto-backup...`)
                 await this.createBackup('auto')
             }
-            })()
+            })().catch((error: unknown) => {
+                log.error('Backup scheduler error:', error)
+            })
         }, 1000 * 60 * 60) // 1 hour
     }
 
@@ -249,9 +251,12 @@ export class BackupService {
         try {
             const cipherModule = await import('better-sqlite3-multiple-ciphers')
             return cipherModule.default || cipherModule
-        } catch {
-            const fallback = await import('better-sqlite3')
-            return fallback.default || fallback
+        } catch (error: unknown) {
+            // better-sqlite3 is a devDependency only — do not attempt fallback in production.
+            // Propagate the original error so callers can report it properly.
+            throw new Error(
+                `Database cipher module failed to load: ${error instanceof Error ? error.message : String(error)}`
+            )
         }
     }
 
@@ -286,7 +291,7 @@ export class BackupService {
 
     private static async verifyBackupIntegrity(backupPath: string): Promise<boolean> {
         try {
-            const key = getEncryptionKey()
+            const key = await getEncryptionKey()
             if (await this.tryIntegrityCheck(backupPath, key)) {
                 return true
             }

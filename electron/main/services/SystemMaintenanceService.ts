@@ -321,20 +321,7 @@ export class SystemMaintenanceService {
 
         // 2. Seed Subject Allocations
         if (teacher) {
-            const allocationInsert = db.prepare(`
-                INSERT OR IGNORE INTO subject_allocation (academic_year_id, term_id, stream_id, subject_id, teacher_id)
-                VALUES (?, ?, ?, ?, ?)
-            `)
-            for (const stream of streams) {
-                const levelSubjects = CBC_SUBJECTS.filter(s => s.levels.includes(stream.stream_code))
-                const levelSubjectCodes = new Set(levelSubjects.map(s => s.code))
-
-                for (const subject of subjects) {
-                    if (levelSubjectCodes.has(subject.code)) {
-                        allocationInsert.run(period.yearId, period.termId, stream.id, subject.id, teacher.id)
-                    }
-                }
-            }
+            this.seedSubjectAllocations(db, streams, subjects, period, teacher.id)
         }
 
         const students = db.prepare(`
@@ -375,6 +362,29 @@ export class SystemMaintenanceService {
         }
     }
 
+    private seedSubjectAllocations(
+        db: ReturnType<typeof getDatabase>,
+        streams: Array<{ id: number; stream_code: string }>,
+        subjects: Array<{ id: number; name: string; code: string }>,
+        period: AcademicPeriod,
+        teacherId: number
+    ): void {
+        const allocationInsert = db.prepare(`
+            INSERT OR IGNORE INTO subject_allocation (academic_year_id, term_id, stream_id, subject_id, teacher_id)
+            VALUES (?, ?, ?, ?, ?)
+        `)
+        for (const stream of streams) {
+            const levelSubjectCodes = new Set(
+                CBC_SUBJECTS.filter(s => s.levels.includes(stream.stream_code)).map(s => s.code)
+            )
+            for (const subject of subjects) {
+                if (levelSubjectCodes.has(subject.code)) {
+                    allocationInsert.run(period.yearId, period.termId, stream.id, subject.id, teacherId)
+                }
+            }
+        }
+    }
+
     private seedStudentResults(
         db: ReturnType<typeof getDatabase>,
         examId: number,
@@ -407,7 +417,7 @@ export class SystemMaintenanceService {
                 if (!subject) { continue }
 
                 const score = 20 + Math.floor(Math.random() * 81) // 20-100
-                let level = 8
+                let level = 7
                 let remarks = 'Below Expectations'
                 if (score >= 90) { level = 1; remarks = 'Exceeding Expectations' }
                 else if (score >= 75) { level = 2; remarks = 'Exceeding Expectations' }
@@ -415,7 +425,6 @@ export class SystemMaintenanceService {
                 else if (score >= 41) { level = 4; remarks = 'Meeting Expectations' }
                 else if (score >= 31) { level = 5; remarks = 'Approaching Expectations' }
                 else if (score >= 21) { level = 6; remarks = 'Approaching Expectations' }
-                else if (score >= 11) { level = 7; }
 
                 resultInsert.run(examId, student.student_id, subject.id, score, level, `${remarks} in ${subject.name}`, userId)
             }

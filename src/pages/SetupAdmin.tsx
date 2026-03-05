@@ -21,7 +21,7 @@ const SetupAdmin: React.FC = () => {
     const checkExistingUsers = async () => {
       try {
         const hasUsers = unwrapIPCResult<boolean>(
-          await globalThis.electronAPI.hasUsers(),
+          await globalThis.electronAPI.auth.hasUsers(),
           'Failed to determine setup state'
         )
         if (hasUsers) {
@@ -51,7 +51,7 @@ const SetupAdmin: React.FC = () => {
     }
     setLoading(true)
     try {
-      const result = await globalThis.electronAPI.setupAdmin({
+      const result = await globalThis.electronAPI.auth.setupAdmin({
         username: form.username,
         password: form.password,
         full_name: form.full_name,

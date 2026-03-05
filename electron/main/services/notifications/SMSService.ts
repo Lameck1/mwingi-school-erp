@@ -16,8 +16,9 @@ export class SMSService {
             case 'TWILIO':
                 return this.sendTwilio(normalizedPhone, message)
             case 'NEXMO':
+                return this.sendNexmo(normalizedPhone, message)
             case 'CUSTOM':
-                return { success: false, error: SMS_PROVIDER_UNSUPPORTED }
+                return this.sendCustom(normalizedPhone, message)
             default:
                 return { success: false, error: `Unknown SMS provider: ${String(this.config.provider)}` }
         }
@@ -30,7 +31,7 @@ export class SMSService {
             return {
                 success: true,
                 provider: 'AFRICASTALKING',
-                ...(firstRecipient.messageId !== undefined ? { messageId: firstRecipient.messageId } : {})
+                ...(firstRecipient.messageId == null ? {} : { messageId: firstRecipient.messageId })
             }
         }
 
@@ -102,6 +103,74 @@ export class SMSService {
                 success: false,
                 error: error instanceof Error ? error.message : API_REQUEST_FAILED,
                 provider: 'TWILIO'
+            }
+        }
+    }
+
+    private async sendNexmo(to: string, message: string): Promise<NotificationResult> {
+        try {
+            const response = await fetch('https://rest.nexmo.com/sms/json', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({
+                    api_key: this.config.apiKey,
+                    api_secret: this.config.apiSecret || '',
+                    to,
+                    from: this.config.senderId || '',
+                    text: message
+                })
+            })
+
+            const data = await response.json() as { messages?: Array<{ status?: string; 'message-id'?: string; 'error-text'?: string }> }
+            const first = data.messages?.[0]
+
+            if (first?.status === '0') {
+                return { success: true, ...(first['message-id'] ? { messageId: first['message-id'] } : {}), provider: 'NEXMO' }
+            }
+
+            return { success: false, error: first?.['error-text'] || UNKNOWN_ERROR, provider: 'NEXMO' }
+        } catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : API_REQUEST_FAILED,
+                provider: 'NEXMO'
+            }
+        }
+    }
+
+    private async sendCustom(to: string, message: string): Promise<NotificationResult> {
+        if (!this.config.baseUrl) {
+            return { success: false, error: 'Custom provider requires baseUrl', provider: 'CUSTOM' }
+        }
+
+        try {
+            const response = await fetch(this.config.baseUrl, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.config.apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    to,
+                    message,
+                    from: this.config.senderId || ''
+                })
+            })
+
+            if (response.ok) {
+                const data = await response.json() as { messageId?: string }
+                return { success: true, ...(data.messageId ? { messageId: data.messageId } : {}), provider: 'CUSTOM' }
+            }
+
+            const data = await response.json() as { error?: string }
+            return { success: false, error: data.error || UNKNOWN_ERROR, provider: 'CUSTOM' }
+        } catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : API_REQUEST_FAILED,
+                provider: 'CUSTOM'
             }
         }
     }

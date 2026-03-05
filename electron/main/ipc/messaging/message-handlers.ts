@@ -22,9 +22,9 @@ export function registerMessageHandlers(): void {
             template_name: template.template_name,
             body: template.body,
             template_type: template.template_type,
-            ...(template.id !== undefined ? { id: template.id } : {}),
-            ...(template.subject !== undefined ? { subject: template.subject } : {}),
-            ...(template.placeholders !== undefined ? { placeholders: template.placeholders } : {})
+            ...(template.id === undefined ? {} : { id: template.id }),
+            ...(template.subject === undefined ? {} : { subject: template.subject }),
+            ...(template.placeholders === undefined ? {} : { placeholders: template.placeholders })
         });
     });
 
@@ -33,7 +33,7 @@ export function registerMessageHandlers(): void {
             to: options.to,
             message: options.message,
             userId: actor.id,
-            ...(options.recipientId !== undefined ? { recipientId: options.recipientId } : {})
+            ...(options.recipientId === undefined ? {} : { recipientId: options.recipientId })
         });
     });
 

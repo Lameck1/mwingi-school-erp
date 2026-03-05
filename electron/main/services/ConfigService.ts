@@ -40,7 +40,7 @@ function shouldEncryptAtRest(key: string): boolean {
 }
 
 export class ConfigService {
-    private static cache = new Map<string, string | null>()
+    private static readonly cache = new Map<string, string | null>()
 
     static clearCache(): void {
         this.cache.clear()
@@ -72,6 +72,19 @@ export class ConfigService {
         return true
     }
 
+    private static decryptConfigValue(key: string, base64Value: string): string | null {
+        if (!safeStorage.isEncryptionAvailable()) {
+            console.warn(`SafeStorage unavailable, cannot decrypt ${key}`)
+            return null
+        }
+        try {
+            return safeStorage.decryptString(Buffer.from(base64Value, 'base64'))
+        } catch (e) {
+            console.error(`Failed to decrypt config for ${key}:`, e)
+            return null
+        }
+    }
+
     // Get configuration
     static getConfig(key: string): string | null {
         const canonicalKey = toCanonicalConfigKey(key)
@@ -97,19 +110,11 @@ export class ConfigService {
         }
 
         if (row.is_encrypted) {
-            if (safeStorage.isEncryptionAvailable()) {
-                try {
-                    const decrypted = safeStorage.decryptString(Buffer.from(row.value, 'base64'))
-                    this.cache.set(canonicalKey, decrypted)
-                    return decrypted
-                } catch (e) {
-                    console.error(`Failed to decrypt config for ${key}:`, e)
-                    return null
-                }
-            } else {
-                console.warn(`SafeStorage unavailable, cannot decrypt ${key}`)
-                return null
+            const decrypted = this.decryptConfigValue(key, row.value)
+            if (decrypted !== null) {
+                this.cache.set(canonicalKey, decrypted)
             }
+            return decrypted
         }
 
         if (shouldEncryptAtRest(canonicalKey) && safeStorage.isEncryptionAvailable()) {

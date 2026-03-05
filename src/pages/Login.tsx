@@ -9,7 +9,9 @@ import { unwrapIPCResult } from '../utils/ipc'
 export default function Login() {
     const navigate = useNavigate()
     const login = useAuthStore((state) => state.login)
-    const { setSchoolSettings, setCurrentAcademicYear, setCurrentTerm } = useAppStore()
+    const setSchoolSettings = useAppStore((s) => s.setSchoolSettings)
+    const setCurrentAcademicYear = useAppStore((s) => s.setCurrentAcademicYear)
+    const setCurrentTerm = useAppStore((s) => s.setCurrentTerm)
 
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
@@ -21,7 +23,7 @@ export default function Login() {
         const checkSetup = async () => {
             try {
                 const hasUsers = unwrapIPCResult<boolean>(
-                    await globalThis.electronAPI.hasUsers(),
+                    await globalThis.electronAPI.auth.hasUsers(),
                     'Failed to determine setup state'
                 )
                 if (!hasUsers) {
@@ -40,7 +42,7 @@ export default function Login() {
         setLoading(true)
 
         try {
-            const result = await globalThis.electronAPI.login(username, password)
+            const result = await globalThis.electronAPI.auth.login(username, password)
 
             if (result.success && result.user) {
                 login(result.user)
@@ -50,15 +52,15 @@ export default function Login() {
                 void (async () => {
                     try {
                         const settingsRes = unwrapIPCResult<SchoolSettings>(
-                            await globalThis.electronAPI.getSettings(),
+                            await globalThis.electronAPI.settings.getSettings(),
                             'Failed to load school settings'
                         )
                         const yearRes = unwrapIPCResult<AcademicYear>(
-                            await globalThis.electronAPI.getCurrentAcademicYear(),
+                            await globalThis.electronAPI.academic.getCurrentAcademicYear(),
                             'Failed to load active academic year'
                         )
                         const termRes = unwrapIPCResult<Term>(
-                            await globalThis.electronAPI.getCurrentTerm(),
+                            await globalThis.electronAPI.academic.getCurrentTerm(),
                             'Failed to load active term'
                         )
 

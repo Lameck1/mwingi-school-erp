@@ -24,6 +24,101 @@ interface LogEntry {
     created_at: string
 }
 
+function renderDeliveryStatus(status: LogEntry['status']) {
+    if (status === 'SENT') {
+        return (
+            <span className="inline-flex items-center gap-1 text-green-400 text-xs font-bold">
+                <CheckCircle className="w-3 h-3" /> Sent
+            </span>
+        )
+    }
+
+    if (status === 'FAILED') {
+        return (
+            <span className="inline-flex items-center gap-1 text-red-400 text-xs font-bold">
+                <XCircle className="w-3 h-3" /> Failed
+            </span>
+        )
+    }
+
+    return (
+        <span className="inline-flex items-center gap-1 text-amber-400 text-xs font-bold">
+            <MessageSquare className="w-3 h-3" /> Pending
+        </span>
+    )
+}
+
+interface CommunicationLogsTableProps {
+    logs: LogEntry[]
+    loading: boolean
+}
+
+function CommunicationLogsTable({ logs, loading }: Readonly<CommunicationLogsTableProps>) {
+    return (
+        <div className="premium-card">
+            {loading && (
+                <div className="text-center py-16 text-foreground/40">Loading history...</div>
+            )}
+            {!loading && logs.length === 0 && (
+                <div className="text-center py-16 text-foreground/40">No communication history found</div>
+            )}
+            {!loading && logs.length > 0 && (
+                <div className="overflow-x-auto">
+                    <table className="w-full">
+                        <thead>
+                            <tr className="text-xs font-bold text-foreground/40 uppercase border-b border-border/20">
+                                <th className="text-left py-3 px-4">Time</th>
+                                <th className="text-left py-3 px-4">Channel</th>
+                                <th className="text-left py-3 px-4">Recipient</th>
+                                <th className="text-left py-3 px-4">Message</th>
+                                <th className="text-left py-3 px-4">Status</th>
+                                <th className="text-left py-3 px-4">Sent By</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/20">
+                            {logs.map(log => (
+                                <tr key={log.id} className="hover:bg-secondary/40 transition-colors duration-200">
+                                    <td className="py-3 px-4 text-sm font-mono text-foreground/60 whitespace-nowrap">
+                                        {new Date(log.created_at).toLocaleString()}
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-bold ${log.message_type === 'SMS'
+                                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                            : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                                            }`}>
+                                            {log.message_type === 'SMS' ? <MessageSquare className="w-3 h-3" /> : <Mail className="w-3 h-3" />}
+                                            {log.message_type}
+                                        </span>
+                                    </td>
+                                    <td className="py-3 px-4 text-sm">
+                                        <div className="font-bold text-foreground">{log.recipient_type}</div>
+                                        <div className="text-xs text-foreground/50">ID: {log.recipient_id}</div>
+                                    </td>
+                                    <td className="py-3 px-4 text-sm max-w-md truncate">
+                                        {log.subject && (
+                                            <div className="font-bold text-foreground mb-1">{log.subject}</div>
+                                        )}
+                                        <div className="text-foreground/70 line-clamp-2">{log.message_body}</div>
+                                        {log.error_message && (
+                                            <div className="text-red-400 text-xs mt-1">{log.error_message}</div>
+                                        )}
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        {renderDeliveryStatus(log.status)}
+                                    </td>
+                                    <td className="py-3 px-4 text-sm text-foreground/60">
+                                        {log.sent_by_name}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    )
+}
+
 export default function CommunicationLog() {
     const { showToast } = useToast()
     const [logs, setLogs] = useState<LogEntry[]>([])
@@ -44,7 +139,7 @@ export default function CommunicationLog() {
         try {
             // Use existing getMessageLogs API which takes a limit parameter
             const data = unwrapArrayResult(
-                await globalThis.electronAPI.getMessageLogs(100),
+                await globalThis.electronAPI.communications.getMessageLogs(100),
                 'Failed to load communication logs'
             )
 
@@ -117,30 +212,6 @@ export default function CommunicationLog() {
         return status === 'FAILED'
             ? 'bg-red-500 text-white shadow-lg'
             : 'bg-green-500 text-white shadow-lg'
-    }
-
-    const renderDeliveryStatus = (status: LogEntry['status']) => {
-        if (status === 'SENT') {
-            return (
-                <span className="inline-flex items-center gap-1 text-green-400 text-xs font-bold">
-                    <CheckCircle className="w-3 h-3" /> Sent
-                </span>
-            )
-        }
-
-        if (status === 'FAILED') {
-            return (
-                <span className="inline-flex items-center gap-1 text-red-400 text-xs font-bold">
-                    <XCircle className="w-3 h-3" /> Failed
-                </span>
-            )
-        }
-
-        return (
-            <span className="inline-flex items-center gap-1 text-amber-400 text-xs font-bold">
-                <MessageSquare className="w-3 h-3" /> Pending
-            </span>
-        )
     }
 
     return (
@@ -237,67 +308,7 @@ export default function CommunicationLog() {
                     </div>
 
                     {/* Logs Table */}
-                    <div className="premium-card">
-                        {loading && (
-                            <div className="text-center py-16 text-foreground/40">Loading history...</div>
-                        )}
-                        {!loading && logs.length === 0 && (
-                            <div className="text-center py-16 text-foreground/40">No communication history found</div>
-                        )}
-                        {!loading && logs.length > 0 && (
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead>
-                                        <tr className="text-xs font-bold text-foreground/40 uppercase border-b border-border/20">
-                                            <th className="text-left py-3 px-4">Time</th>
-                                            <th className="text-left py-3 px-4">Channel</th>
-                                            <th className="text-left py-3 px-4">Recipient</th>
-                                            <th className="text-left py-3 px-4">Message</th>
-                                            <th className="text-left py-3 px-4">Status</th>
-                                            <th className="text-left py-3 px-4">Sent By</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-border/20">
-                                        {logs.map(log => (
-                                            <tr key={log.id} className="hover:bg-secondary/40 transition-colors duration-200">
-                                                <td className="py-3 px-4 text-sm font-mono text-foreground/60 whitespace-nowrap">
-                                                    {new Date(log.created_at).toLocaleString()}
-                                                </td>
-                                                <td className="py-3 px-4">
-                                                    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-bold ${log.message_type === 'SMS'
-                                                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                                                        : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
-                                                        }`}>
-                                                        {log.message_type === 'SMS' ? <MessageSquare className="w-3 h-3" /> : <Mail className="w-3 h-3" />}
-                                                        {log.message_type}
-                                                    </span>
-                                                </td>
-                                                <td className="py-3 px-4 text-sm">
-                                                    <div className="font-bold text-foreground">{log.recipient_type}</div>
-                                                    <div className="text-xs text-foreground/50">ID: {log.recipient_id}</div>
-                                                </td>
-                                                <td className="py-3 px-4 text-sm max-w-md truncate">
-                                                    {log.subject && (
-                                                        <div className="font-bold text-foreground mb-1">{log.subject}</div>
-                                                    )}
-                                                    <div className="text-foreground/70 line-clamp-2">{log.message_body}</div>
-                                                    {log.error_message && (
-                                                        <div className="text-red-400 text-xs mt-1">{log.error_message}</div>
-                                                    )}
-                                                </td>
-                                                <td className="py-3 px-4">
-                                                    {renderDeliveryStatus(log.status)}
-                                                </td>
-                                                <td className="py-3 px-4 text-sm text-foreground/60">
-                                                    {log.sent_by_name}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
+                    <CommunicationLogsTable logs={logs} loading={loading} />
 
                 </div>
             )}

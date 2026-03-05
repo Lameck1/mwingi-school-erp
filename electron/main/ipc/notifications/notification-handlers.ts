@@ -15,7 +15,7 @@ import type { MessageTemplate, NotificationRequest } from '../../services/notifi
 const getService = () => container.resolve('NotificationService')
 type TemplateCategory = MessageTemplate['category']
 
-function normalizeTemplateCategory(category: string): TemplateCategory {
+export function normalizeTemplateCategory(category: string): TemplateCategory {
     if (category === 'ACADEMIC') {
         return 'ATTENDANCE'
     }
@@ -50,9 +50,9 @@ export function registerNotificationHandlers(): void {
             channel: request.channel,
             to: request.to,
             message: request.message,
-            ...(request.subject !== undefined ? { subject: request.subject } : {}),
-            ...(request.templateId !== undefined ? { templateId: request.templateId } : {}),
-            ...(request.variables !== undefined ? { variables: request.variables } : {})
+            ...(request.subject === undefined ? {} : { subject: request.subject }),
+            ...(request.templateId === undefined ? {} : { templateId: request.templateId }),
+            ...(request.variables === undefined ? {} : { variables: request.variables })
         }
         return getService().send(normalizedRequest, actorCtx.id)
     })

@@ -133,11 +133,15 @@ function buildUpdateParams(data: StaffUpdateData, id: number): Array<number | st
   ]
 }
 
+const STAFF_LIST_COLUMNS = `id, staff_number, first_name, middle_name, last_name,
+    phone, email, department, job_title, employment_date, basic_salary,
+    is_active, created_at, updated_at`
+
 function registerStaffQueryHandlers(db: ReturnType<typeof getDatabase>): void {
   validatedHandler('staff:getAll', ROLES.STAFF, z.boolean().optional(), (_event, activeOnly = true) => {
     const query = activeOnly
-      ? 'SELECT * FROM staff WHERE is_active = 1 ORDER BY staff_number'
-      : 'SELECT * FROM staff ORDER BY staff_number'
+      ? `SELECT ${STAFF_LIST_COLUMNS} FROM staff WHERE is_active = 1 ORDER BY staff_number`
+      : `SELECT ${STAFF_LIST_COLUMNS} FROM staff ORDER BY staff_number`
     return db.prepare(query).all() as StaffMember[]
   })
 

@@ -26,7 +26,7 @@ export default function AuditLog() {
             if (appliedFilter.table) { params.table = appliedFilter.table }
             if (appliedFilter.search) { params.search = appliedFilter.search }
             const raw = unwrapIPCResult<AuditLogEntry[] | PaginatedAuditLogs>(
-                await globalThis.electronAPI.getAuditLog(params), 'Failed to load audit logs')
+                await globalThis.electronAPI.reports.getAuditLog(params), 'Failed to load audit logs')
             if (Array.isArray(raw)) {
                 setLogs(raw)
                 setTotalCount(raw.length)
