@@ -27,7 +27,6 @@ interface StaffMember {
   basic_salary: number
   is_active: boolean
   created_at: string
-  updated_at: string
 }
 
 type StaffCreateData = z.infer<typeof StaffCreateSchema>
@@ -135,7 +134,7 @@ function buildUpdateParams(data: StaffUpdateData, id: number): Array<number | st
 
 const STAFF_LIST_COLUMNS = `id, staff_number, first_name, middle_name, last_name,
     phone, email, department, job_title, employment_date, basic_salary,
-    is_active, created_at, updated_at`
+    is_active, created_at`
 
 function registerStaffQueryHandlers(db: ReturnType<typeof getDatabase>): void {
   validatedHandler('staff:getAll', ROLES.STAFF, z.boolean().optional(), (_event, activeOnly = true) => {

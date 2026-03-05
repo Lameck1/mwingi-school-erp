@@ -66,8 +66,7 @@ function createSchema(targetDb: Database.Database): void {
       employment_date TEXT,
       basic_salary INTEGER DEFAULT 0,
       is_active INTEGER DEFAULT 1,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
     INSERT INTO staff (id, staff_number, first_name, last_name, basic_salary, is_active)

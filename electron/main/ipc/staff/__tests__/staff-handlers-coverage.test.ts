@@ -66,8 +66,7 @@ describe('staff-handlers coverage expansion', () => {
         employment_date TEXT,
         basic_salary INTEGER DEFAULT 0,
         is_active INTEGER DEFAULT 1,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `)
 
