@@ -290,9 +290,7 @@ function registerNemisExportHandlers(): void {
         try {
             let extractedData: unknown[] = []
             let normalizedFilters: Record<string, unknown> | null = null
-            if (!filters) {
-                extractedData = await nemisService.extractStudentData() as unknown[]
-            } else {
+            if (filters) {
                 const mappedFilters: {
                     class_id?: number
                     academic_year?: string
@@ -309,6 +307,8 @@ function registerNemisExportHandlers(): void {
                 }
                 normalizedFilters = mappedFilters
                 extractedData = await nemisService.extractStudentData(mappedFilters) as unknown[]
+            } else {
+                extractedData = await nemisService.extractStudentData() as unknown[]
             }
 
             logAudit(actor.id, 'NEMIS_EXTRACT_STUDENT_DATA', 'nemis_export', null, null, {

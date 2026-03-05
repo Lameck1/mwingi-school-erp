@@ -1,8 +1,12 @@
 import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../../../database', () => ({
-    getDatabase: () => { throw new Error('Must inject db') }
+const { mockGetDb } = vi.hoisted(() => ({
+    mockGetDb: vi.fn((): Database.Database => { throw new Error('Must inject db') })
+}))
+
+vi.mock('../../../database', () => ({
+    getDatabase: mockGetDb
 }))
 
 import { KpiDashboardService } from '../KpiDashboardService'
@@ -172,12 +176,90 @@ describe('KpiDashboardService', () => {
         expect(budget?.value).toBe(60) // 900k / 1.5M
 
         const arDays = getMetric('aged_receivables_days')
-        expect(arDays?.value).toBe(60) // Invoice created 60 days ago
+        // Allow ±1 day tolerance for timezone / rounding between JS Date and SQLite julianday
+        expect(arDays?.value).toBeGreaterThanOrEqual(59)
+        expect(arDays?.value).toBeLessThanOrEqual(61)
 
         const revPerStudent = getMetric('revenue_per_student')
         expect(revPerStudent?.value).toBe(10000) // 50k / 5 students
 
         const costPerStudent = getMetric('cost_per_student')
         expect(costPerStudent?.value).toBe(5000) // 25k / 5 students
+    })
+
+    it('returns 0 FCE when no invoices exist', () => {
+        db.exec('DELETE FROM fee_invoice')
+        const dashboard = service.generateDashboard()
+        const fce = dashboard.metrics.find(m => m.name === 'fee_collection_efficiency')
+        expect(fce?.value).toBe(0)
+    })
+
+    it('returns 999 current_ratio when assets > 0 and liabilities = 0', () => {
+        // Remove all liability journal entries
+        const emptyDb = createTestDb()
+        const svc = new KpiDashboardService(emptyDb)
+        // Add only asset entries, no liabilities
+        createJournalEntry(emptyDb, '2026-01-01', 'OPENING_BALANCE', [
+            { accountId: 1, debit: 50000, credit: 0 },
+        ])
+        const dashboard = svc.generateDashboard()
+        const cr = dashboard.metrics.find(m => m.name === 'current_ratio')
+        expect(cr?.value).toBe(999)
+        emptyDb.close()
+    })
+
+    it('returns 0 current_ratio when both assets and liabilities are 0', () => {
+        const emptyDb = createTestDb()
+        const svc = new KpiDashboardService(emptyDb)
+        // No journal entries at all
+        const dashboard = svc.generateDashboard()
+        const cr = dashboard.metrics.find(m => m.name === 'current_ratio')
+        expect(cr?.value).toBe(0)
+        emptyDb.close()
+    })
+
+    it('returns 0 admin_cost_ratio when total expenses are 0', () => {
+        const emptyDb = createTestDb()
+        const svc = new KpiDashboardService(emptyDb)
+        const dashboard = svc.generateDashboard()
+        const admin = dashboard.metrics.find(m => m.name === 'admin_cost_ratio')
+        expect(admin?.value).toBe(0)
+        emptyDb.close()
+    })
+
+    it('returns 0 budget_utilization when no budget allocations exist', () => {
+        db.exec('DELETE FROM budget_allocation')
+        const dashboard = service.generateDashboard()
+        const budget = dashboard.metrics.find(m => m.name === 'budget_utilization')
+        expect(budget?.value).toBe(0)
+    })
+
+    it('returns 0 revenue_per_student and cost_per_student when no active students', () => {
+        db.exec('DELETE FROM student')
+        const dashboard = service.generateDashboard()
+        const rev = dashboard.metrics.find(m => m.name === 'revenue_per_student')
+        const cost = dashboard.metrics.find(m => m.name === 'cost_per_student')
+        expect(rev?.value).toBe(0)
+        expect(cost?.value).toBe(0)
+    })
+
+    it('returns 0 aged_receivables_days when all invoices are paid', () => {
+        db.exec("UPDATE fee_invoice SET amount_paid = total_amount, status = 'PAID'")
+        const dashboard = service.generateDashboard()
+        const arDays = dashboard.metrics.find(m => m.name === 'aged_receivables_days')
+        expect(arDays?.value).toBe(0)
+    })
+
+    it('generates dashboard with generated_at timestamp', () => {
+        const dashboard = service.generateDashboard()
+        expect(dashboard.generated_at).toBeDefined()
+        expect(new Date(dashboard.generated_at).getTime()).not.toBeNaN()
+    })
+
+    it('uses getDatabase fallback when no db is injected into constructor', () => {
+        mockGetDb.mockReturnValueOnce(db)
+        const svc = new KpiDashboardService()
+        const dashboard = svc.generateDashboard()
+        expect(dashboard.metrics).toHaveLength(7)
     })
 })

@@ -121,12 +121,31 @@ export class ReportScheduler {
             case 'MONTHLY':
                 return now.getDate() === (schedule.day_of_month ?? 1)
             case 'TERM_END':
+                return this.isTodayTermEnd(now)
             case 'YEAR_END':
-                // Academic calendar constraints are intentionally deferred to the academic scheduling service.
-                return false
+                return this.isTodayYearEnd(now)
             default:
                 return false
         }
+    }
+
+    private isTodayTermEnd(now: Date): boolean {
+        const today = this.formatLocalDate(now)
+        const row = this.db.prepare(`
+            SELECT t.end_date FROM term t
+            JOIN academic_year ay ON t.academic_year_id = ay.id
+            WHERE ay.is_current = 1 AND t.is_current = 1
+            LIMIT 1
+        `).get() as { end_date: string } | undefined
+        return row?.end_date === today
+    }
+
+    private isTodayYearEnd(now: Date): boolean {
+        const today = this.formatLocalDate(now)
+        const row = this.db.prepare(`
+            SELECT end_date FROM academic_year WHERE is_current = 1 LIMIT 1
+        `).get() as { end_date: string } | undefined
+        return row?.end_date === today
     }
 
     /**
@@ -424,9 +443,7 @@ export class ReportScheduler {
         if (data.schedule_type === 'MONTHLY' && (data.day_of_month == null || data.day_of_month < 1 || data.day_of_month > 31)) {
             errors.push('Monthly schedules require day_of_month between 1 and 31')
         }
-        if (data.schedule_type === 'TERM_END' || data.schedule_type === 'YEAR_END') {
-            errors.push('TERM_END and YEAR_END schedules are not supported in this release')
-        }
+
         if (data.recipients) {
             const recipients = this.parseRecipients(data.recipients)
             if (recipients.length === 0) {

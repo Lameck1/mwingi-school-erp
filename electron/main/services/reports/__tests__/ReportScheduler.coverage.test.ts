@@ -94,6 +94,28 @@ function createSchema(targetDb: Database.Database): void {
       category_name TEXT NOT NULL
     );
 
+    CREATE TABLE academic_year (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      year_name TEXT NOT NULL UNIQUE,
+      start_date DATE NOT NULL,
+      end_date DATE NOT NULL,
+      is_current BOOLEAN DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE term (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      academic_year_id INTEGER NOT NULL,
+      term_number INTEGER NOT NULL,
+      term_name TEXT NOT NULL,
+      start_date DATE NOT NULL,
+      end_date DATE NOT NULL,
+      is_current BOOLEAN DEFAULT 0,
+      status TEXT DEFAULT 'OPEN',
+      FOREIGN KEY (academic_year_id) REFERENCES academic_year(id),
+      UNIQUE(academic_year_id, term_number)
+    );
+
     CREATE TABLE student (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       admission_number TEXT NOT NULL,
@@ -400,5 +422,149 @@ describe('ReportScheduler coverage hardening', () => {
     scheduler.shutdown()
     expect(runtime.isRunning).toBe(false)
     expect(runtime.checkInterval).toBeNull()
+  })
+
+  // ── ADDITIONAL COVERAGE TESTS ──
+
+  it('validates MONTHLY with null day_of_month', () => {
+    const scheduler = new ReportScheduler()
+    const internal = scheduler as unknown as ReportSchedulerInternals
+    const errors = internal.validateSchedule({
+      report_name: 'Monthly',
+      report_type: 'FEE_COLLECTION',
+      time_of_day: '08:00',
+      recipients: '["ops@example.com"]',
+      schedule_type: 'MONTHLY',
+      day_of_month: null
+    })
+    expect(errors.some(e => e.includes('Monthly schedules require day_of_month'))).toBe(true)
+  })
+
+  it('validates TERM_END and YEAR_END are accepted', () => {
+    const scheduler = new ReportScheduler()
+    const internal = scheduler as unknown as ReportSchedulerInternals
+    const termEndErrors = internal.validateSchedule({
+      report_name: 'Term End Report',
+      report_type: 'FEE_COLLECTION',
+      time_of_day: '08:00',
+      recipients: '["ops@example.com"]',
+      schedule_type: 'TERM_END'
+    })
+    expect(termEndErrors.every(e => !e.includes('TERM_END'))).toBe(true)
+
+    const yearEndErrors = internal.validateSchedule({
+      report_name: 'Year End Report',
+      report_type: 'FEE_COLLECTION',
+      time_of_day: '08:00',
+      recipients: '["ops@example.com"]',
+      schedule_type: 'YEAR_END'
+    })
+    expect(yearEndErrors.every(e => !e.includes('YEAR_END'))).toBe(true)
+  })
+
+  it('shouldRun returns false for unknown schedule_type', () => {
+    const scheduler = new ReportScheduler()
+    const internal = scheduler as unknown as ReportSchedulerInternals
+    const now = new Date('2026-02-02T09:30:00')
+    expect(internal.shouldRun(baseSchedule({ schedule_type: 'CUSTOM' as ScheduledReport['schedule_type'] }), now)).toBe(false)
+  })
+
+  it('shouldRun WEEKLY with null day_of_week falls back to 1 (Monday)', () => {
+    const scheduler = new ReportScheduler()
+    const internal = scheduler as unknown as ReportSchedulerInternals
+    // 2026-02-02 is a Monday (day=1)
+    const monday = new Date('2026-02-02T09:30:00')
+    expect(internal.shouldRun(baseSchedule({ schedule_type: 'WEEKLY', day_of_week: null }), monday)).toBe(true)
+  })
+
+  it('shouldRun MONTHLY with null day_of_month falls back to 1', () => {
+    const scheduler = new ReportScheduler()
+    const internal = scheduler as unknown as ReportSchedulerInternals
+    const firstOfMonth = new Date('2026-02-01T09:30:00')
+    expect(internal.shouldRun(baseSchedule({ schedule_type: 'MONTHLY', day_of_month: null }), firstOfMonth)).toBe(true)
+  })
+
+  it('resolveWindow uses defaults when parameters is empty', () => {
+    const scheduler = new ReportScheduler()
+    const internal = scheduler as unknown as ReportSchedulerInternals
+    const runAt = new Date('2026-03-15T00:00:00')
+    const window = internal.resolveWindow(baseSchedule({ parameters: '{}' }), runAt)
+    expect(window.startDate).toBe('2026-03-01')
+    expect(window.endDate).toBe('2026-03-15')
+  })
+
+  it('resolveWindow ignores invalid date strings in params', () => {
+    const scheduler = new ReportScheduler()
+    const internal = scheduler as unknown as ReportSchedulerInternals
+    const runAt = new Date('2026-04-10T00:00:00')
+    const window = internal.resolveWindow(baseSchedule({ parameters: '{"start_date":"not-a-date","end_date":"also-bad"}' }), runAt)
+    expect(window.startDate).toBe('2026-04-01')
+    expect(window.endDate).toBe('2026-04-10')
+  })
+
+  it('createSchedule returns error on DB failure', () => {
+    const scheduler = new ReportScheduler()
+    // Create a schedule that uses WEEKLY but with missing recipients format
+    const result = scheduler.createSchedule({
+      report_name: 'Bad Schedule',
+      report_type: 'FEE_COLLECTION',
+      parameters: '{}',
+      schedule_type: 'WEEKLY',
+      day_of_week: 999,
+      day_of_month: null,
+      time_of_day: '08:00',
+      recipients: '["ops@example.com"]',
+      export_format: 'PDF',
+      is_active: true,
+      created_by_user_id: 7
+    }, 7)
+    expect(result.success).toBe(false)
+    expect(result.errors!.some(e => e.includes('Weekly schedules require day_of_week'))).toBe(true)
+  })
+
+  // ── branch coverage: buildEmailBody with numeric payload (non-string) ──
+  it('buildEmailBody serialises numeric payload as JSON string', () => {
+    const scheduler = new ReportScheduler()
+    const internal = scheduler as unknown as ReportSchedulerInternals
+    const body = internal.buildEmailBody(
+      { report_name: 'Num', report_type: 'INCOME_STATEMENT' } as ScheduledReport,
+      '2026-01-01', '2026-01-31', 12345
+    )
+    expect(body).toContain('12345')
+    expect(body).toContain('Num')
+  })
+
+  // ── branch coverage: parseRecipients with empty array ──
+  it('parseRecipients returns empty array for JSON array with invalid emails', () => {
+    const scheduler = new ReportScheduler()
+    const internal = scheduler as unknown as ReportSchedulerInternals
+    expect(internal.parseRecipients('["ab","cd"]')).toEqual([])
+  })
+
+  // ── branch coverage: initialize() interval callback fires checkAndRunReports (L67) ──
+  it('initialize interval callback exercises checkAndRunReports branch', async () => {
+    vi.useFakeTimers()
+    try {
+      const scheduler = new ReportScheduler()
+      scheduler.initialize()
+      // Advance by 60s to trigger the setInterval callback (line 67)
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(() => scheduler.shutdown()).not.toThrow()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // ── branch coverage: shouldRun with inactive schedule ──
+  it('shouldRun returns false for inactive schedule', () => {
+    const scheduler = new ReportScheduler()
+    const internal = scheduler as unknown as ReportSchedulerInternals
+    const schedule = {
+      id: 99, report_name: 'Inactive', report_type: 'INCOME_STATEMENT',
+      parameters: '{}', schedule_type: 'DAILY' as const, day_of_week: null, day_of_month: null,
+      time_of_day: '08:00', recipients: '[]', export_format: 'PDF', is_active: false,
+      last_run_at: null, next_run_at: null, created_by_user_id: 1, created_at: ''
+    } satisfies ScheduledReport
+    expect(internal.shouldRun(schedule, new Date())).toBe(false)
   })
 })

@@ -181,4 +181,98 @@ describe('ChangesInNetAssetsService', () => {
         expect(ict?.disposals).toBe(0)
         expect(ict?.closing_balance).toBe(65000)
     })
+
+    it('tracks liability changes', () => {
+        const report = service.generateReport('2026-01-01', '2026-03-31')
+
+        const liabilities = report.liability_changes
+        // AP = 5,000 opening, no new liabilities during period
+        const ap = liabilities.find(l => l.category === 'Current Liabilities')
+        expect(ap).toBeDefined()
+        expect(ap?.opening_balance).toBe(5000)
+        expect(ap?.closing_balance).toBe(5000)
+    })
+
+    it('returns zero balances when no journal entries exist', () => {
+        const emptyDb = createTestDb()
+        const emptySvc = new ChangesInNetAssetsService(emptyDb)
+        const report = emptySvc.generateReport('2026-01-01', '2026-12-31')
+
+        expect(report.opening_net_assets).toBe(0)
+        expect(report.surplus_deficit).toBe(0)
+        expect(report.closing_net_assets).toBe(0)
+        expect(report.asset_changes).toEqual([])
+        expect(report.liability_changes).toEqual([])
+        emptyDb.close()
+    })
+
+    it('correctly calculates surplus_deficit from revenue minus expenses', () => {
+        const report = service.generateReport('2026-01-01', '2026-03-31')
+        // Revenue = 30K, Expense = 20K → surplus = 10K
+        expect(report.surplus_deficit).toBe(10000)
+    })
+
+    it('handles periods with expenses exceeding revenue (deficit)', () => {
+        // Add more expense entries during the period
+        createJournalEntry(db, '2026-03-15', 'PAYMENT', [
+            { accountId: 5, debit: 25000, credit: 0 },  // More salaries
+            { accountId: 1, debit: 0, credit: 25000 },
+        ])
+
+        const report = service.generateReport('2026-01-01', '2026-03-31')
+        // Revenue = 30K, Expense = 20K + 25K = 45K → deficit = -15K
+        expect(report.surplus_deficit).toBe(-15000)
+    })
+
+    it('includes voided entries exclusion', () => {
+        // Add a voided entry that should be excluded
+        const result = db.prepare(`
+            INSERT INTO journal_entry (entry_number, entry_date, entry_type, description, is_posted, is_voided, created_by_user_id)
+            VALUES (?, ?, ?, 'Voided', 1, 1, 1)
+        `).run(`JE-VOID-${Math.random().toString().slice(2, 8)}`, '2026-02-20', 'RECEIPT')
+
+        const jeId = result.lastInsertRowid as number
+        db.prepare('INSERT INTO journal_entry_line (journal_entry_id, gl_account_id, debit_amount, credit_amount) VALUES (?, ?, ?, ?)').run(jeId, 1, 100000, 0)
+        db.prepare('INSERT INTO journal_entry_line (journal_entry_id, gl_account_id, debit_amount, credit_amount) VALUES (?, ?, ?, ?)').run(jeId, 4, 0, 100000)
+
+        const report = service.generateReport('2026-01-01', '2026-03-31')
+        // Voided entry should not affect surplus
+        expect(report.surplus_deficit).toBe(10000)
+    })
+
+    it('handles asset disposals', () => {
+        // Dispose of ICT equipment
+        createJournalEntry(db, '2026-03-20', 'ASSET_DISPOSAL', [
+            { accountId: 1, debit: 10000, credit: 0 },   // Cash from disposal
+            { accountId: 2, debit: 0, credit: 10000 },    // Remove from ICT
+        ])
+
+        const report = service.generateReport('2026-01-01', '2026-03-31')
+        const ict = report.asset_changes.find(a => a.category === 'ICT Equipment')
+        expect(ict).toBeDefined()
+        expect(ict?.disposals).toBe(10000)
+        // ICT: opening 50K + additions 15K - disposals accounted → closing = 55K
+        expect(ict?.closing_balance).toBe(55000)
+    })
+
+    it('includes report_date and period fields', () => {
+        const report = service.generateReport('2026-01-01', '2026-03-31')
+        expect(report.report_date).toBeDefined()
+        expect(report.period_start).toBe('2026-01-01')
+        expect(report.period_end).toBe('2026-03-31')
+    })
+
+    it('falls back to getDatabase() when no db argument is provided', () => {
+        // Without an explicit db arg the constructor calls getDatabase(), which throws
+        expect(() => new ChangesInNetAssetsService()).toThrow()
+    })
+
+    it('handles multiple asset categories in changes', () => {
+        const report = service.generateReport('2026-01-01', '2026-03-31')
+        // Cash and ICT Equipment should both appear
+        expect(report.asset_changes.length).toBeGreaterThanOrEqual(2)
+        const cash = report.asset_changes.find(a => a.category === 'Cash')
+        expect(cash).toBeDefined()
+        expect(cash?.opening_balance).toBe(10000) // Opening cash
+    })
 })

@@ -15,9 +15,96 @@ import { generateReportCardHTML } from '../../utils/reportCardGenerator'
 import type { Stream } from '../../types/electron-api/AcademicAPI'
 import type { ReportCardData, ReportCardStudentEntry } from '../../types/electron-api/ReportsAPI'
 
+interface ReportCardPreviewModalProps {
+    isOpen: boolean
+    onClose: () => void
+    previewData: ReportCardData | null
+    onPrintPreview: () => void
+}
+
+function ReportCardPreviewModal({ isOpen, onClose, previewData, onPrintPreview }: Readonly<ReportCardPreviewModalProps>) {
+    return (
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Student Report Card Summary"
+        >
+            {previewData && (
+                <div className="space-y-6">
+                    <div className="text-center pb-4 border-b border-border/20">
+                        {previewData.student.photo && (
+                            <img
+                                src={previewData.student.photo}
+                                alt="Student"
+                                className="w-24 h-24 rounded-full mx-auto mb-3 object-cover border border-border/30"
+                            />
+                        )}
+                        <h2 className="text-xl font-bold text-foreground">{previewData.student.first_name} {previewData.student.last_name}</h2>
+                        <p className="text-sm text-foreground/50">{previewData.student.admission_number} • {previewData.student.stream_name}</p>
+                        <p className="text-xs text-foreground/40">{previewData.term} - {previewData.academic_year}</p>
+                    </div>
+
+                    {previewData.grades.length > 0 ? (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="text-left text-foreground/50 text-xs uppercase">
+                                        <th className="pb-2">Subject</th>
+                                        <th className="pb-2 text-center">Avg</th>
+                                        <th className="pb-2 text-center">Grade</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {previewData.grades.map((g) => (
+                                        <tr key={`${g.subject_name}-${g.grade_letter}`} className="border-t border-border/20">
+                                            <td className="py-2 text-foreground font-medium">{g.subject_name}</td>
+                                            <td className="py-2 text-center font-mono">{g.average}%</td>
+                                            <td className="py-2 text-center font-bold text-primary">{g.grade_letter}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <p className="text-center text-foreground/40 py-4">No grades recorded yet</p>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-4 text-sm border-t border-border/20 pt-4">
+                        <div className="p-3 bg-secondary/30 rounded-lg">
+                            <p className="text-foreground/50 text-xs uppercase font-bold">Performance</p>
+                            <div className="flex justify-between items-end mt-1">
+                                <div>
+                                    <span className="text-2xl font-bold text-foreground">{previewData.summary.average}%</span>
+                                    <span className="text-sm text-foreground/50 ml-1">Mean</span>
+                                </div>
+                                <div className="text-right">
+                                    <span className="text-2xl font-bold text-primary">{previewData.summary.grade}</span>
+                                    <span className="text-sm text-foreground/50 ml-1">Grade</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-3 bg-secondary/30 rounded-lg">
+                            <p className="text-foreground/50 text-xs uppercase font-bold">Attendance</p>
+                            <p className="text-2xl font-bold text-foreground mt-1">{previewData.attendance.attendance_rate}%</p>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4 border-t border-border/10">
+                        <button onClick={onClose} className="btn btn-secondary">Close</button>
+                        <button onClick={onPrintPreview} className="btn btn-primary flex items-center gap-2">
+                            <Printer className="w-4 h-4" />
+                            Preview / Print PDF
+                        </button>
+                    </div>
+                </div>
+            )}
+        </Modal>
+    )
+}
 
 export default function ReportCards() {
-    const { currentAcademicYear, currentTerm } = useAppStore()
+    const currentAcademicYear = useAppStore((s) => s.currentAcademicYear)
+    const currentTerm = useAppStore((s) => s.currentTerm)
     const { showToast } = useToast()
 
     const [streams, setStreams] = useState<Stream[]>([])
@@ -38,7 +125,7 @@ export default function ReportCards() {
 
     const loadStreams = async () => {
         try {
-            const data = unwrapArrayResult(await globalThis.electronAPI.getStreams(), 'Failed to load streams')
+            const data = unwrapArrayResult(await globalThis.electronAPI.academic.getStreams(), 'Failed to load streams')
             setStreams(data)
         } catch (error) {
             console.error('Failed to load streams:', error)
@@ -55,7 +142,7 @@ export default function ReportCards() {
         setLoading(true)
         try {
             const data = unwrapArrayResult(
-                await globalThis.electronAPI.getStudentsForReportCards(
+                await globalThis.electronAPI.academic.getStudentsForReportCards(
                     selectedStream, currentAcademicYear.id, currentTerm.id
                 ),
                 'Failed to load students for report cards'
@@ -87,7 +174,7 @@ export default function ReportCards() {
         setGenerating(true)
         try {
             const result = unwrapIPCResult<ReportCardData | null>(
-                await globalThis.electronAPI.generateReportCard(
+                await globalThis.electronAPI.academic.generateReportCard(
                     studentId, currentAcademicYear.id, currentTerm.id
                 ),
                 'Failed to generate report card'
@@ -230,82 +317,12 @@ export default function ReportCards() {
                 })()}
             </div>
 
-            {/* View Student Modal (HTML Summary) */}
-            <Modal
+            <ReportCardPreviewModal
                 isOpen={showPreview}
                 onClose={() => setShowPreview(false)}
-                title="Student Report Card Summary"
-            >
-                {previewData && (
-                    <div className="space-y-6">
-                        <div className="text-center pb-4 border-b border-border/20">
-                            {previewData.student.photo && (
-                                <img
-                                    src={previewData.student.photo}
-                                    alt="Student"
-                                    className="w-24 h-24 rounded-full mx-auto mb-3 object-cover border border-border/30"
-                                />
-                            )}
-                            <h2 className="text-xl font-bold text-foreground">{previewData.student.first_name} {previewData.student.last_name}</h2>
-                            <p className="text-sm text-foreground/50">{previewData.student.admission_number} • {previewData.student.stream_name}</p>
-                            <p className="text-xs text-foreground/40">{previewData.term} - {previewData.academic_year}</p>
-                        </div>
-
-                        {previewData.grades.length > 0 ? (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="text-left text-foreground/50 text-xs uppercase">
-                                            <th className="pb-2">Subject</th>
-                                            <th className="pb-2 text-center">Avg</th>
-                                            <th className="pb-2 text-center">Grade</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {previewData.grades.map((g) => (
-                                            <tr key={`${g.subject_name}-${g.grade_letter}`} className="border-t border-border/20">
-                                                <td className="py-2 text-foreground font-medium">{g.subject_name}</td>
-                                                <td className="py-2 text-center font-mono">{g.average}%</td>
-                                                <td className="py-2 text-center font-bold text-primary">{g.grade_letter}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        ) : (
-                            <p className="text-center text-foreground/40 py-4">No grades recorded yet</p>
-                        )}
-
-                        <div className="grid grid-cols-2 gap-4 text-sm border-t border-border/20 pt-4">
-                            <div className="p-3 bg-secondary/30 rounded-lg">
-                                <p className="text-foreground/50 text-xs uppercase font-bold">Performance</p>
-                                <div className="flex justify-between items-end mt-1">
-                                    <div>
-                                        <span className="text-2xl font-bold text-foreground">{previewData.summary.average}%</span>
-                                        <span className="text-sm text-foreground/50 ml-1">Mean</span>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className="text-2xl font-bold text-primary">{previewData.summary.grade}</span>
-                                        <span className="text-sm text-foreground/50 ml-1">Grade</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="p-3 bg-secondary/30 rounded-lg">
-                                <p className="text-foreground/50 text-xs uppercase font-bold">Attendance</p>
-                                <p className="text-2xl font-bold text-foreground mt-1">{previewData.attendance.attendance_rate}%</p>
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end gap-3 pt-4 border-t border-border/10">
-                            <button onClick={() => setShowPreview(false)} className="btn btn-secondary">Close</button>
-                            <button onClick={handlePrintPreview} className="btn btn-primary flex items-center gap-2">
-                                <Printer className="w-4 h-4" />
-                                Preview / Print PDF
-                            </button>
-                        </div>
-                    </div>
-                )}
-            </Modal>
+                previewData={previewData}
+                onPrintPreview={handlePrintPreview}
+            />
         </div>
     )
 }

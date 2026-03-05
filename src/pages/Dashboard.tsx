@@ -22,8 +22,149 @@ import { unwrapArrayResult, unwrapIPCResult } from '../utils/ipc'
 const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#334155', '#ec4899']
 const COLOR_CLASSES = ['bg-indigo-500', 'bg-emerald-500', 'bg-amber-500', 'bg-slate-700', 'bg-pink-500']
 
+interface FinancialKpiGridProps {
+    kpiData: KpiDashboard
+}
+
+function FinancialKpiGrid({ kpiData }: Readonly<FinancialKpiGridProps>) {
+    return (
+        <div className="mt-8">
+            <h2 className="text-xl font-bold text-foreground mb-4">Financial Performance Indicators</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {kpiData.metrics.map(metric => {
+                    let displayValue: string | number = metric.value
+                    if (metric.unit === '%') {
+                        displayValue = `${metric.value}%`
+                    } else if (metric.unit === 'KES') {
+                        displayValue = formatCurrencyFromCents(metric.value * 100)
+                    } else if (metric.unit === ':1') {
+                        displayValue = `${metric.value}:1`
+                    }
+                    return (
+                        <div key={metric.name} className="card p-5 border-l-4 border-primary">
+                            <p className="text-sm text-foreground/60 font-medium">{metric.label}</p>
+                            <div className="mt-2 flex items-baseline gap-2">
+                                <span className="text-2xl font-bold text-foreground">{displayValue}</span>
+                            </div>
+                            {metric.target && (
+                                <p className="mt-1 text-xs text-foreground/50">Target: {metric.target}{metric.unit === '%' ? '%' : ''}</p>
+                            )}
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
+interface AuditTrailCardProps {
+    recentActivities: AuditLogEntry[]
+}
+
+function AuditTrailCard({ recentActivities }: Readonly<AuditTrailCardProps>) {
+    return (
+        <div className="card">
+            <div className="flex items-center justify-between mb-8">
+                <div>
+                    <h3 className="text-lg font-bold text-foreground">Audit Trail</h3>
+                    <p className="text-xs text-foreground/40 font-medium">Recent security & system logs</p>
+                </div>
+                <Link to="/audit-log" className="p-2 rounded-lg bg-background/50 hover:bg-primary/20 text-primary transition-all">
+                    <BarChart3 className="w-4 h-4" />
+                </Link>
+            </div>
+            <div className="space-y-6">
+                {recentActivities.length === 0 ? (
+                    <div className="text-center py-12">
+                        <Shield className="w-12 h-12 mx-auto mb-4 text-border" />
+                        <p className="text-sm text-foreground/40">Secure & Silent</p>
+                    </div>
+                ) : (
+                    recentActivities.map((log) => (
+                        <div key={log.id} className="relative pl-6 pb-6 last:pb-0 group">
+                            {/* Timeline line */}
+                            <div className="absolute left-0 top-0 bottom-0 w-px bg-border group-last:h-2"></div>
+                            <div className="absolute left-[-4px] top-1.5 w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(99,102,241,0.5)]"></div>
+
+                            <div className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-foreground">{log.action_type}</p>
+                                    <span className="text-[9px] font-medium text-foreground/40">{formatDateTime(log.created_at)}</span>
+                                </div>
+                                <p className="text-xs text-foreground/60 leading-relaxed">
+                                    Targeted <span className="text-primary font-medium">{log.table_name}</span> record <span className="text-foreground font-mono">#{log.record_id}</span>
+                                </p>
+                                <p className="text-[10px] text-foreground/40 italic">Agent ID: {log.user_id}</p>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div>
+    )
+}
+
+interface RevenueDistributionCardProps {
+    feeCategories: { name: string; value: number }[]
+    feeCollected: number
+}
+
+function RevenueDistributionCard({ feeCategories, feeCollected }: Readonly<RevenueDistributionCardProps>) {
+    return (
+        <div className="card">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                <div className="max-w-xs">
+                    <h3 className="text-lg font-bold text-foreground">Revenue Distribution</h3>
+                    <p className="text-xs text-foreground/40 font-medium leading-relaxed mt-2">
+                        A breakdown of the current term's financial allocation across all established fee categories.
+                    </p>
+                    <div className="mt-8 space-y-3">
+                        {feeCategories.slice(0, 4).map((cat, i) => (
+                            <div key={cat.name} className="flex items-center justify-between text-[11px]">
+                                <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${COLOR_CLASSES[i % COLOR_CLASSES.length]}`}></div>
+                                    <span className="text-foreground/70">{cat.name}</span>
+                                </div>
+                                <span className="text-foreground font-bold">{((cat.value / (feeCollected || 1)) * 100).toFixed(1)}%</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="flex-1 h-72">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie
+                                data={feeCategories}
+                                innerRadius={70}
+                                outerRadius={110}
+                                paddingAngle={5}
+                                dataKey="value"
+                                stroke="none"
+                            >
+                                {feeCategories.map((cat, index) => (
+                                    <Cell key={cat.name} fill={COLORS[index % COLORS.length]} />
+                                ))}
+                            </Pie>
+                            <Tooltip
+                                contentStyle={{ backgroundColor: 'var(--popover)', border: '1px solid var(--border)', borderRadius: '12px' }}
+                                itemStyle={{ color: 'var(--foreground)' }}
+                                formatter={(value: number) => [formatCurrencyFromCents(value), 'Allocation']}
+                            />
+                        </PieChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 export default function Dashboard() {
-    const { currentTerm, currentAcademicYear, dashboardCache, isDashboardCacheValid, setDashboardCache } = useAppStore()
+    const currentTerm = useAppStore((s) => s.currentTerm)
+    const currentAcademicYear = useAppStore((s) => s.currentAcademicYear)
+    const dashboardCache = useAppStore((s) => s.dashboardCache)
+    const isDashboardCacheValid = useAppStore((s) => s.isDashboardCacheValid)
+    const setDashboardCache = useAppStore((s) => s.setDashboardCache)
     const { showToast } = useToast()
     const [dashboardData, setDashboardData] = useState<{
         totalStudents: number
@@ -52,13 +193,13 @@ export default function Dashboard() {
         const loadDashboardData = async () => {
             try {
                 const [data, feeData, categoryData, logs, kpis] = await Promise.all([
-                    globalThis.electronAPI.getDashboardData(),
-                    globalThis.electronAPI.getFeeCollectionReport(
+                    globalThis.electronAPI.reports.getDashboardData(),
+                    globalThis.electronAPI.reports.getFeeCollectionReport(
                         new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
                         new Date().toISOString().slice(0, 10)
                     ),
-                    globalThis.electronAPI.getFeeCategoryBreakdown(),
-                    globalThis.electronAPI.getAuditLog(6),
+                    globalThis.electronAPI.reports.getFeeCategoryBreakdown(),
+                    globalThis.electronAPI.reports.getAuditLog(6),
                     fetchKpiDashboard()
                 ])
 
@@ -198,34 +339,7 @@ export default function Dashboard() {
             </div>
 
             {/* Financial Performance KPIs */}
-            {kpiData && (
-                <div className="mt-8">
-                    <h2 className="text-xl font-bold text-foreground mb-4">Financial Performance Indicators</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {kpiData.metrics.map(metric => {
-                            let displayValue: string | number = metric.value
-                            if (metric.unit === '%') {
-                                displayValue = `${metric.value}%`
-                            } else if (metric.unit === 'KES') {
-                                displayValue = formatCurrencyFromCents(metric.value * 100)
-                            } else if (metric.unit === ':1') {
-                                displayValue = `${metric.value}:1`
-                            }
-                            return (
-                                <div key={metric.name} className="card p-5 border-l-4 border-primary">
-                                    <p className="text-sm text-foreground/60 font-medium">{metric.label}</p>
-                                    <div className="mt-2 flex items-baseline gap-2">
-                                        <span className="text-2xl font-bold text-foreground">{displayValue}</span>
-                                    </div>
-                                    {metric.target && (
-                                        <p className="mt-1 text-xs text-foreground/50">Target: {metric.target}{metric.unit === '%' ? '%' : ''}</p>
-                                    )}
-                                </div>
-                            )
-                        })}
-                    </div>
-                </div>
-            )}
+            {kpiData && <FinancialKpiGrid kpiData={kpiData} />}
 
             {/* Analytics Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -281,92 +395,11 @@ export default function Dashboard() {
                 </div>
 
                 {/* Audit Trail / Activities */}
-                <div className="card">
-                    <div className="flex items-center justify-between mb-8">
-                        <div>
-                            <h3 className="text-lg font-bold text-foreground">Audit Trail</h3>
-                            <p className="text-xs text-foreground/40 font-medium">Recent security & system logs</p>
-                        </div>
-                        <Link to="/audit-log" className="p-2 rounded-lg bg-background/50 hover:bg-primary/20 text-primary transition-all">
-                            <BarChart3 className="w-4 h-4" />
-                        </Link>
-                    </div>
-                    <div className="space-y-6">
-                        {recentActivities.length === 0 ? (
-                            <div className="text-center py-12">
-                                <Shield className="w-12 h-12 mx-auto mb-4 text-border" />
-                                <p className="text-sm text-foreground/40">Secure & Silent</p>
-                            </div>
-                        ) : (
-                            recentActivities.map((log) => (
-                                <div key={log.id} className="relative pl-6 pb-6 last:pb-0 group">
-                                    {/* Timeline line */}
-                                    <div className="absolute left-0 top-0 bottom-0 w-px bg-border group-last:h-2"></div>
-                                    <div className="absolute left-[-4px] top-1.5 w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_rgba(99,102,241,0.5)]"></div>
-
-                                    <div className="space-y-1">
-                                        <div className="flex items-center justify-between">
-                                            <p className="text-[11px] font-bold uppercase tracking-wider text-foreground">{log.action_type}</p>
-                                            <span className="text-[9px] font-medium text-foreground/40">{formatDateTime(log.created_at)}</span>
-                                        </div>
-                                        <p className="text-xs text-foreground/60 leading-relaxed">
-                                            Targeted <span className="text-primary font-medium">{log.table_name}</span> record <span className="text-foreground font-mono">#{log.record_id}</span>
-                                        </p>
-                                        <p className="text-[10px] text-foreground/40 italic">Agent ID: {log.user_id}</p>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
+                <AuditTrailCard recentActivities={recentActivities} />
             </div>
 
             {/* Distribution Analysis */}
-            <div className="card">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                    <div className="max-w-xs">
-                        <h3 className="text-lg font-bold text-foreground">Revenue Distribution</h3>
-                        <p className="text-xs text-foreground/40 font-medium leading-relaxed mt-2">
-                            A breakdown of the current term's financial allocation across all established fee categories.
-                        </p>
-                        <div className="mt-8 space-y-3">
-                            {feeCategories.slice(0, 4).map((cat, i) => (
-                                <div key={cat.name} className="flex items-center justify-between text-[11px]">
-                                    <div className="flex items-center gap-2">
-                                        <div className={`w-2 h-2 rounded-full ${COLOR_CLASSES[i % COLOR_CLASSES.length]}`}></div>
-                                        <span className="text-foreground/70">{cat.name}</span>
-                                    </div>
-                                    <span className="text-foreground font-bold">{((cat.value / (dashboardData?.feeCollected || 1)) * 100).toFixed(1)}%</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="flex-1 h-72">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={feeCategories}
-                                    innerRadius={70}
-                                    outerRadius={110}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                    stroke="none"
-                                >
-                                    {feeCategories.map((cat, index) => (
-                                        <Cell key={cat.name} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: 'var(--popover)', border: '1px solid var(--border)', borderRadius: '12px' }}
-                                    itemStyle={{ color: 'var(--foreground)' }}
-                                    formatter={(value: number) => [formatCurrencyFromCents(value), 'Allocation']}
-                                />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-            </div>
+            <RevenueDistributionCard feeCategories={feeCategories} feeCollected={dashboardData?.feeCollected || 0} />
         </div>
     )
 }
