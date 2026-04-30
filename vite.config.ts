@@ -36,6 +36,10 @@ export default defineConfig({
                         outDir: 'dist-electron/main',
                         rollupOptions: {
                             external: ['electron', 'better-sqlite3-multiple-ciphers', 'better-sqlite3', 'bcryptjs', 'nodemailer', 'keytar'],
+                            output: {
+                                entryFileNames: '[name].js',
+                                inlineDynamicImports: true,
+                            },
                         },
                         commonjsOptions: {
                             ignoreDynamicRequires: true,
@@ -74,7 +78,7 @@ export default defineConfig({
         },
     },
     esbuild: {
-        drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
+        drop: process.env['NODE_ENV'] === 'production' ? ['console', 'debugger'] : [],
     },
     build: {
         target: 'esnext',
