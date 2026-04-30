@@ -4,29 +4,22 @@
 
 1. [Getting Started](./getting-started.md)
    - Installation
-   - Initial Setup
-   - First Login
+   - Initial setup
+   - First login
 
-2. [User Guide](./user-guide/README.md)
-   - [Dashboard Overview](./user-guide/dashboard.md)
-   - [Student Management](./user-guide/students.md)
-   - [Fee Management](./user-guide/fees.md)
-   - [Reports](./user-guide/reports.md)
-   - [Payroll](./user-guide/payroll.md)
-   - [Inventory](./user-guide/inventory.md)
+2. [Linux Development](./LINUX_DEV.md)
+   - Local Electron launch flow
+   - Native module rebuilds
+   - Packaging notes
 
-3. [Administrator Guide](./admin-guide/README.md)
-   - [User Management](./admin-guide/users.md)
-   - [System Settings](./admin-guide/settings.md)
-   - [Backup & Restore](./admin-guide/backup.md)
-   - [Academic Year Setup](./admin-guide/academic-setup.md)
+3. [IPC Domain Ownership](./ipc-domain-owners.md)
+   - Namespace ownership map
+   - Manifest generation and checks
 
 4. [Developer Guide](./developer-guide/README.md)
    - [Architecture Overview](./developer-guide/architecture.md)
-   - [Database Schema](./developer-guide/database.md)
-   - [API Reference](./developer-guide/api.md)
-   - [Contributing](./developer-guide/contributing.md)
+   - [Migration Rollback Policy](./developer-guide/migration-rollback-policy.md)
 
-5. [Troubleshooting](./troubleshooting.md)
+5. [Migration Rollback Strategy](./MIGRATION_ROLLBACK_STRATEGY.md)
 
-6. [Changelog](./CHANGELOG.md)
+6. [Troubleshooting / runbook](../OPERATIONS_RUNBOOK.md)

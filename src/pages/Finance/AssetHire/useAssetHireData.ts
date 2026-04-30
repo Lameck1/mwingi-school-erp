@@ -203,7 +203,7 @@ export function useAssetHireData() {
                 {
                     ...paymentForm,
                     amount: shillingsToCents(paymentForm.amount),
-                } as Parameters<typeof globalThis.electronAPI.finance.recordHirePayment>[1],
+                },
                 user.id,
             )
             if (result.success) {

@@ -528,7 +528,7 @@ function DataTableContent<T extends { id: number | string }>({ controller, props
 
     return (
         <div className="w-full">
-            <DataTableToolbar controller={controller} {...(onExport ? { onExport: onExport as (format: 'csv' | 'excel' | 'pdf') => void } : {})} />
+            <DataTableToolbar controller={controller} {...(onExport ? { onExport } : {})} />
             <DataTableGrid
                 controller={controller}
                 data={data}

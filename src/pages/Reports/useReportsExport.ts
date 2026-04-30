@@ -124,7 +124,7 @@ export function useReportsExport(data: ReportsData) {
                     { key: 'payment_reference', header: 'Reference' },
                     { key: 'amount', header: 'Amount', format: 'currency' },
                 ],
-                data: dailyCollections.map((item) => ({ ...item } as Record<string, unknown>)),
+                data: dailyCollections.map((item) => ({ ...item })),
             })
             return
         }

@@ -52,7 +52,7 @@ vi.mock('../../../utils/ipc', () => ({
     }
     return value
   },
-  // eslint-disable-next-line sonarjs/function-return-type
+   
   unwrapArrayResult: <T,>(value: T) => {
     if (value && typeof value === 'object' && 'success' in (value as any) && !(value as any).success) {
       throw new Error((value as any).error || 'Failed')

@@ -270,7 +270,7 @@ export class BackupService {
 
         let handle: SqliteHandle | null = null
         try {
-            handle = new DatabaseDriver(backupPath, { readonly: true }) as SqliteHandle
+            handle = new DatabaseDriver(backupPath, { readonly: true })
             if (key) {
                 try {
                     handle.pragma(`key="x'${key}'"`)

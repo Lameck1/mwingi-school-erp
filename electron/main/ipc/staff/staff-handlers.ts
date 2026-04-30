@@ -7,28 +7,6 @@ import { ROLES } from '../ipc-result'
 import { StaffCreateSchema, StaffUpdateSchema, StaffSetActiveSchema } from '../schemas/staff-schemas'
 import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
-interface StaffMember {
-  id: number
-  staff_number: string
-  first_name: string
-  middle_name: string
-  last_name: string
-  id_number: string
-  kra_pin: string
-  nhif_number: string
-  nssf_number: string
-  phone: string
-  email: string
-  bank_name: string
-  bank_account: string
-  department: string
-  job_title: string
-  employment_date: string
-  basic_salary: number
-  is_active: boolean
-  created_at: string
-}
-
 type StaffCreateData = z.infer<typeof StaffCreateSchema>
 type StaffUpdateData = z.infer<typeof StaffUpdateSchema>[1]
 
@@ -141,11 +119,11 @@ function registerStaffQueryHandlers(db: ReturnType<typeof getDatabase>): void {
     const query = activeOnly
       ? `SELECT ${STAFF_LIST_COLUMNS} FROM staff WHERE is_active = 1 ORDER BY staff_number`
       : `SELECT ${STAFF_LIST_COLUMNS} FROM staff ORDER BY staff_number`
-    return db.prepare(query).all() as StaffMember[]
+    return db.prepare(query).all()
   })
 
   validatedHandler('staff:getById', ROLES.STAFF, z.number(), (_event, id) => {
-    return db.prepare('SELECT * FROM staff WHERE id = ?').get(id) as StaffMember | undefined
+    return db.prepare('SELECT * FROM staff WHERE id = ?').get(id)
   })
 }
 

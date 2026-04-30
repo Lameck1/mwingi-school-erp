@@ -253,7 +253,7 @@ const processCreditPayment = async (amount: number, studentId: number, userId: n
             payment_reference: formData.payment_reference, transaction_date: formData.transaction_date,
             description: formData.description, term_id: currentTerm?.id || 0,
             idempotency_key: crypto.randomUUID()
-        } as Parameters<typeof globalThis.electronAPI.finance.recordPayment>[0], userId)
+        }, userId)
 
         if (!result.success) {
             throw new Error(result.errors?.[0] || result.error || 'Payment failed')

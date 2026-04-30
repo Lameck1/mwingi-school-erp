@@ -600,7 +600,7 @@ export class DoubleEntryJournalService {
       this.db.prepare(`
         INSERT INTO approval_history (approval_request_id, action, action_by, previous_status, new_status, notes)
         VALUES (?, 'REQUESTED', ?, NULL, 'PENDING', ?)
-      `).run(requestResult.lastInsertRowid as number, userId, `Void requires approval: ${rule.rule_name}`);
+      `).run(requestResult.lastInsertRowid, userId, `Void requires approval: ${rule.rule_name}`);
     }
 
     return { success: true, message: 'Void request submitted for approval', requires_approval: true };

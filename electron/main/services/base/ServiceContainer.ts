@@ -101,7 +101,7 @@ class ServiceContainer {
      * Register a service factory (lazy instantiation).
      */
     register<K extends keyof ServiceMap>(name: K, factory: ServiceFactory<ServiceMap[K]>): void {
-        this.factories.set(name, factory as ServiceFactory<unknown>)
+        this.factories.set(name, factory)
     }
 
     /**

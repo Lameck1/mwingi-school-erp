@@ -174,7 +174,7 @@ export default function ApprovalQueuePage() {
         throw new TypeError('Invalid approval queue payload');
       }
 
-      setApprovals(result.data as ApprovalRequest[]);
+      setApprovals(result.data);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load approvals';
       setApprovals([]);

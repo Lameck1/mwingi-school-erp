@@ -35,7 +35,7 @@ function useProcurementPage() {
                     globalThis.electronAPI.finance.getAssetCategories()
                 ])
                 setBudgets((budgetRes || []) as unknown as Array<{ id: number, budget_name: string, line_items: Array<{ id: number, category_name: string, description: string, available_balance: number }> }>)
-                setAssetCategories((catRes || []) as unknown as Array<{ id: number, category_name: string }>)
+                setAssetCategories(catRes || [])
             } catch (err) {
                 console.error(err)
             }
@@ -179,7 +179,7 @@ function useProcurementPage() {
             received_date: new Date().toISOString().slice(0, 10),
             items
         }
-        const res = await createGrn(payload as { purchase_order_id: number; received_date: string; items: Array<{ po_item_id: number; quantity_received: number; quantity_accepted: number; quantity_rejected: number }> }) as { success?: boolean; id?: number; error?: string }
+        const res = await createGrn(payload) as { success?: boolean; id?: number; error?: string }
         if (!res || res.success === false || !res.id) {
             showToast(res?.error || 'Failed to create GRN', 'error')
             return
@@ -227,7 +227,7 @@ function useProcurementPage() {
             grn_id: voucherContext.grnId,
             supplier_id: voucherContext.supplierId,
             amount: voucherContext.amount
-        } as { purchase_order_id: number; grn_id: number; supplier_id: number; amount: number }) as { success?: boolean; id?: number; error?: string }
+        }) as { success?: boolean; id?: number; error?: string }
         if (!res || res.success === false || !res.id) {
             showToast(res?.error || 'Failed to create voucher', 'error')
             return

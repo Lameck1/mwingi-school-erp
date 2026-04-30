@@ -13,7 +13,7 @@ let page: Page | null = null
 
 async function loginAsAdmin(activePage: Page): Promise<void> {
   const adminUsername = 'admin'
-  // eslint-disable-next-line sonarjs/no-hardcoded-passwords -- deterministic local E2E credential
+   
   const adminPassword = 'Admin123!'
 
   const initialSetupHeading = activePage.locator('h1:has-text("Initial Setup")')

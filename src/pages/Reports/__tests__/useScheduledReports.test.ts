@@ -25,7 +25,7 @@ vi.mock('../../../stores', () => {
 })
 
 vi.mock('../../../utils/ipc', () => ({
-    // eslint-disable-next-line sonarjs/function-return-type
+     
     unwrapArrayResult: <T,>(value: T) => {
         if (value && typeof value === 'object' && 'success' in (value as Record<string, unknown>) && !(value as Record<string, unknown>).success) {
             throw new Error(((value as Record<string, unknown>).error as string) || 'Failed')

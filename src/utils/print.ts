@@ -75,7 +75,7 @@ function safeString(value: unknown): string {
   if (typeof value === 'string') { return value }
   if (value == null) { return '' }
   if (typeof value === 'object') { return JSON.stringify(value) }
-  return String(value as string | number | boolean)
+  return String(value)
 }
 
 function buildHtmlDocument(params: {

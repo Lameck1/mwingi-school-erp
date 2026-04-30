@@ -17,7 +17,7 @@ import {
 } from '../schemas/finance-transaction-schemas'
 import { validatedHandler, validatedHandlerMulti } from '../validated-handler'
 
-import type { InvoiceItem, FeeInvoiceDB, FeeInvoiceWithDetails, FeeStructureWithDetails } from './types'
+import type { InvoiceItem, FeeInvoiceWithDetails } from './types'
 import type { getDatabase } from '../../database'
 import type { FeeStructureItemSchema, InvoiceDataSchema, InvoiceItemSchema } from '../schemas/finance-transaction-schemas'
 
@@ -179,7 +179,7 @@ export const registerInvoiceHandlers = (context: FinanceContext): void => {
     })
 
     validatedHandler('invoice:getByStudent', ROLES.STAFF, z.number().int().positive(), (_event, studentId) => {
-        return db.prepare('SELECT * FROM fee_invoice WHERE student_id = ? ORDER BY invoice_date DESC').all(studentId) as FeeInvoiceDB[]
+        return db.prepare('SELECT * FROM fee_invoice WHERE student_id = ? ORDER BY invoice_date DESC').all(studentId)
     })
 
     validatedHandler('invoice:getAll', ROLES.STAFF, z.void(), (_event) => {
@@ -245,7 +245,7 @@ export const registerFeeStructureHandlers = (context: FinanceContext): void => {
             JOIN fee_category fc ON fs.fee_category_id = fc.id
             JOIN stream s ON fs.stream_id = s.id
             WHERE fs.academic_year_id = ? AND fs.term_id = ?
-        `).all(academicYearId, termId) as FeeStructureWithDetails[]
+        `).all(academicYearId, termId)
     })
 
     validatedHandlerMulti('fee:saveStructure', ROLES.FINANCE, SaveFeeStructureTuple, (event, [data, academicYearId, termId, legacyUserId], actor) => {

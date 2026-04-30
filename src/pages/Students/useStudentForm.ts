@@ -245,7 +245,7 @@ export function useStudentForm() {
                 mutationResult = await globalThis.electronAPI.students.updateStudent(
                     Number.parseInt(id, 10),
                     studentPayload
-                ) as StudentMutationResult
+                )
             } else {
                 if (!user?.id) {
                     throw new Error('User session not found. Please log in again.')
@@ -254,7 +254,7 @@ export function useStudentForm() {
                 mutationResult = await globalThis.electronAPI.students.createStudent(
                     studentPayload,
                     user.id
-                ) as StudentMutationResult & { id?: number }
+                )
 
                 if (mutationResult.success && mutationResult.id && pendingPhoto) {
                     await globalThis.electronAPI.students.uploadStudentPhoto(mutationResult.id, pendingPhoto)

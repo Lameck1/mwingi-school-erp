@@ -33,7 +33,7 @@ vi.mock('../../../utils/ipc', () => ({
   isIPCFailure: (v: unknown) =>
     v && typeof v === 'object' && 'success' in (v as any) && !(v as any).success,
   getIPCFailureMessage: (v: any, fallback: string) => v?.error || fallback,
-  // eslint-disable-next-line sonarjs/function-return-type
+   
   unwrapArrayResult: <T,>(value: T) => {
     if (value && typeof value === 'object' && 'success' in (value as any) && !(value as any).success) {
       throw new Error((value as any).error || 'Failed')

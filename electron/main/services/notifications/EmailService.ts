@@ -2,7 +2,6 @@ import type { EmailProviderConfig, NotificationResult } from './notification-typ
 
 const UNKNOWN_ERROR = 'Unknown error'
 const API_REQUEST_FAILED = 'API request failed'
-const EMAIL_PROVIDER_UNSUPPORTED = 'Unsupported email provider'
 
 export class EmailService {
     constructor(private readonly config: EmailProviderConfig) {}

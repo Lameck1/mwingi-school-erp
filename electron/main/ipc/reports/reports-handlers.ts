@@ -306,9 +306,9 @@ function registerNemisExportHandlers(): void {
                     mappedFilters.status = filters.status
                 }
                 normalizedFilters = mappedFilters
-                extractedData = await nemisService.extractStudentData(mappedFilters) as unknown[]
+                extractedData = await nemisService.extractStudentData(mappedFilters)
             } else {
-                extractedData = await nemisService.extractStudentData() as unknown[]
+                extractedData = await nemisService.extractStudentData()
             }
 
             logAudit(actor.id, 'NEMIS_EXTRACT_STUDENT_DATA', 'nemis_export', null, null, {

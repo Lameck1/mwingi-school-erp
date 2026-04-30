@@ -7,7 +7,7 @@ import { Select } from '../../components/ui/Select'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore } from '../../stores'
 import { type SubjectDifficulty, type SubjectMeritListRow } from '../../types/electron-api/AcademicAPI'
-import { type IPCFailure, unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 interface SubjectRanking {
   position: number
@@ -107,7 +107,7 @@ const SubjectMeritLists = () => {
       setRankings(scored)
       setDifficulty(
         unwrapIPCResult<SubjectDifficulty>(
-          difficulty_ as SubjectDifficulty | IPCFailure,
+          difficulty_,
           'Failed to load subject difficulty metrics'
         )
       )

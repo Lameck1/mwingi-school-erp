@@ -40,8 +40,8 @@ export function useAwardsManagement() {
         try {
             const status = filterStatus === 'all' ? undefined : filterStatus
             const awardData = await globalThis.electronAPI.academic.getAwards({
-                academicYearId: (currentAcademicYear?.id as number) || undefined,
-                termId: (currentTerm?.id as number) || undefined,
+                academicYearId: (currentAcademicYear?.id) || undefined,
+                termId: (currentTerm?.id) || undefined,
                 status
             })
             const parsedAwards = unwrapArrayResult(awardData, 'Failed to load awards')

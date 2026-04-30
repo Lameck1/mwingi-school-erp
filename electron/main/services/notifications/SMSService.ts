@@ -2,7 +2,6 @@ import type { NotificationResult, SMSProviderConfig } from './notification-types
 
 const UNKNOWN_ERROR = 'Unknown error'
 const API_REQUEST_FAILED = 'API request failed'
-const SMS_PROVIDER_UNSUPPORTED = 'Unsupported SMS provider'
 
 export class SMSService {
     constructor(private readonly config: SMSProviderConfig) {}

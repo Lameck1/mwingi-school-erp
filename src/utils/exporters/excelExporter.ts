@@ -83,7 +83,7 @@ export function downloadCSV(options: ExcelExportOptions): void {
 function escapeCSV(value: unknown): string {
     if (value === null || value === undefined) {return ''}
     if (typeof value === 'object') {return JSON.stringify(value)}
-    const str = String(value as string | number | boolean | bigint)
+    const str = String(value)
     // Escape quotes and wrap in quotes if contains comma, quote, or newline
     if (str.includes(',') || str.includes('"') || str.includes('\n')) {
         return `"${str.replaceAll('"', '""')}"`

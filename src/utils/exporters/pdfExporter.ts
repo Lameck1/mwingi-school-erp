@@ -319,6 +319,6 @@ function formatValue(value: unknown, format?: PDFColumn['format']): string {
             if (typeof value === 'object') {
                 return JSON.stringify(value)
             }
-            return String(value as string | number | boolean)
+            return String(value)
     }
 }

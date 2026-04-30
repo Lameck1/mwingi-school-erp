@@ -9,7 +9,7 @@ import { Select } from '../../components/ui/Select'
 import { useToast } from '../../contexts/ToastContext'
 import { useAppStore } from '../../stores'
 import { exportToPDF } from '../../utils/exporters'
-import { type IPCFailure, unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
+import { unwrapArrayResult, unwrapIPCResult } from '../../utils/ipc'
 
 interface PerformanceSummary {
   mean_score: number
@@ -194,7 +194,7 @@ const ReportCardAnalytics = () => {
 
       setPerformanceSummary(
         unwrapIPCResult<PerformanceSummary>(
-          summary as PerformanceSummary | IPCFailure,
+          summary,
           'Failed to load performance summary'
         )
       )

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 
 import { type AcademicYear, type Term } from '../types/electron-api/AcademicAPI'
 import { type SchoolSettings } from '../types/electron-api/SettingsAPI'
-import { type User, type AuthSession } from '../types/electron-api/UserAPI'
+import { type User } from '../types/electron-api/UserAPI'
 
 // Session expires after 8 hours of inactivity
 const SESSION_TIMEOUT_MS = 8 * 60 * 60 * 1000
@@ -100,7 +100,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
             return
         }
 
-        const session = sessionResponse as AuthSession
+        const session = sessionResponse
         const lastActivity = session.lastActivity
         const elapsed = lastActivity ? Date.now() - lastActivity : Infinity
 

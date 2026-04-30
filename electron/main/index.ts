@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { platform } from 'node:os'
 
 import { closeDatabase, initializeDatabase } from './database'
 import { verifyMigrations } from './database/verify_migrations'
@@ -16,7 +17,7 @@ import { RetentionService } from './services/RetentionService'
 import { installConsoleOverrides, log } from './utils/logger'
 import { WindowStateManager } from './utils/windowState'
 
-import type { BrowserWindow as BrowserWindowType, Event as ElectronEvent, HandlerDetails } from 'electron'
+import type { BrowserWindow as BrowserWindowType, BrowserWindowConstructorOptions, Event as ElectronEvent, HandlerDetails } from 'electron'
 
 // ESM __dirname polyfill
 const __filename = fileURLToPath(import.meta.url)
@@ -47,14 +48,18 @@ async function createWindow() {
     const windowState = await WindowStateManager.create('main')
     const state = windowState.getState()
 
-    const win = new BrowserWindow({
-        x: state.x,
-        y: state.y,
+    // Use platform-specific icon: PNG on Linux, ICO on Windows, ICNS on macOS
+    const iconExt = platform() === 'linux' ? 'png' : 'ico'
+    const iconPath = path.join(app.isPackaged ? process.resourcesPath : path.join(__dirname, '../../'), 'assets', `icon.${iconExt}`)
+    const isLinux = platform() === 'linux'
+
+    // Platform-specific window options
+    const baseWindowOptions: BrowserWindowConstructorOptions = {
         width: state.width,
         height: state.height,
         minWidth: 1200,
         minHeight: 700,
-        icon: path.join(app.isPackaged ? process.resourcesPath : path.join(__dirname, '../../'), 'assets', 'icon.ico'),
+        icon: iconPath,
         webPreferences: {
             preload: path.join(__dirname, '../preload/index.cjs'),
             nodeIntegration: false,
@@ -67,8 +72,17 @@ async function createWindow() {
             plugins: false
         },
         show: false,
-        titleBarStyle: 'default',
-    })
+        // Only set titleBarStyle on macOS
+        ...(platform() === 'darwin' && { titleBarStyle: 'default' }),
+    }
+
+    // Only set x/y on non-Linux platforms to avoid potential issues
+    if (!isLinux) {
+        baseWindowOptions.x = state.x
+        baseWindowOptions.y = state.y
+    }
+
+    const win = new BrowserWindow(baseWindowOptions)
     mainWindow = win
 
     windowState.manage(win)
